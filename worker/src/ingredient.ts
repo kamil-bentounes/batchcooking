@@ -71,7 +71,9 @@ function normaliseUnite(u: string): string {
 }
 
 /** Une ligne comme « Pour la pâte : » n'est pas un ingrédient, c'est un intertitre. */
-const SECTION = /^(pour\s+(?:la|le|les|l['’])|garniture|assaisonnement|d[ée]coration|sauce)\b.*:\s*$|^[^:]{3,40}:\s*$/i
+// « Pour la pâte : » mais aussi « Pour le glaçage » sans deux-points, rencontré
+// tel quel dans le corpus.
+const SECTION = /^pour\s+(?:la|le|les|l['’])\s*\S/i
 
 /** Précisions de préparation à retirer du nom de l'aliment. */
 const PREPARATION =
@@ -80,7 +82,7 @@ const PREPARATION =
 export function analyser(brut: string): LigneAnalysee {
   const t = brut.replace(/\s+/g, ' ').trim()
 
-  if (SECTION.test(t) && !/\d/.test(t)) {
+  if ((SECTION.test(t) || /^[^:]{3,40}\s*:\s*$/.test(t)) && !/\d/.test(t)) {
     return { brut, qte: null, unite: null, aliment: t.replace(/:\s*$/, '').trim(),
              forme: 'section', preparation: null }
   }
