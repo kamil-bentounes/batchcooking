@@ -48,3 +48,26 @@ remettrait `current_household()` à `NULL` et lui permettrait de créer un secon
 `create_household()` n'est ouverte que si `instance_setting.allow_household_creation` vaut `true`
 (valeur d'amorçage). **La refermer une fois les comptes créés**, sinon toute personne qui s'inscrit
 peut se créer un foyer.
+
+## Référentiels chargés (lot 0a-2)
+
+| Table | Lignes | Source |
+|---|---|---|
+| `food` | **3 185** | CIQUAL 2020 (ANSES) — 14 nutriments retenus sur ~60, groupes et sous-groupes, état cru/cuit déduit du nom |
+| `unit_conversion` | 29 | Construite à la main. Cuillères, pincées, poignées → grammes, avec surcharges par sous-groupe (huile 13,5 g la c. à soupe contre 15 g par défaut) |
+| `default_duration` | 35 | Construite à la main. (verbe, appareil) → durée, `load_type`, `scaling` |
+| `default_temperature` | 12 | Construite à la main |
+| `typical_quantity` | 9 | Construite à la main. Borne haute des lignes d'ingrédients sans quantité |
+| `density` | 6 | Construite à la main, rattachée à un code CIQUAL |
+| `appliance_catalog` | 8 | Four, plaques, air fryer, micro-ondes, robot cuiseur, autocuiseur, blender, batteur |
+
+```bash
+npm run seed            # base locale
+node scripts/seed.mjs --prod   # production
+```
+
+Idempotent : rejouable sans effet de bord, tout passe par des `upsert`.
+
+**Attribution obligatoire** : ANSES-CIQUAL, Licence Ouverte Etalab.
+La conversion du `.xls` d'origine est un geste ponctuel — `scripts/ciqual-to-json.py`,
+à rejouer seulement si l'ANSES publie une nouvelle table.
