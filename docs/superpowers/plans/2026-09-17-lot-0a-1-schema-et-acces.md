@@ -334,6 +334,38 @@ describe('classe C — données de foyer', () => {
     expect(data, 'un membre a supprimé le profil d’un autre').toHaveLength(1)
   })
 
+  // ↓↓↓ Portée PERSONNE : le foyer partage la lecture, pas l'écriture. ↓↓↓
+  it("un membre ne peut PAS supprimer les cibles d'un autre membre", async () => {
+    const a = admin()
+    const { data: colo } = await a.auth.admin.createUser({
+      email: `colo2-${Date.now()}@test.local`, password: 'test-password-12345', email_confirm: true })
+    await a.from('user_profile').insert({
+      id: colo.user!.id, household_id: alice.householdId, display_name: 'colo2' })
+    const { data: cible, error: seed } = await a.from('nutrition_target').insert({
+      user_profile_id: colo.user!.id,
+      kcal: 2400, protein_g: 180, fiber_g: 30, carb_g: 250, fat_g: 70,
+    }).select().single()
+    expect(seed, "l'amorce a échoué : le test serait vert à vide").toBeNull()
+
+    await alice.client.from('nutrition_target').delete().eq('id', cible!.id)
+    const { data } = await a.from('nutrition_target').select('id').eq('id', cible!.id)
+    expect(data, "un membre a effacé l'historique d'objectifs d'un autre").toHaveLength(1)
+  })
+
+  it("un membre ne peut PAS renommer un autre membre", async () => {
+    const a = admin()
+    const { data: colo } = await a.auth.admin.createUser({
+      email: `colo3-${Date.now()}@test.local`, password: 'test-password-12345', email_confirm: true })
+    await a.from('user_profile').insert({
+      id: colo.user!.id, household_id: alice.householdId, display_name: 'intact' })
+
+    await alice.client.from('user_profile')
+      .update({ display_name: 'renommé de force' }).eq('id', colo.user!.id)
+    const { data } = await a.from('user_profile')
+      .select('display_name').eq('id', colo.user!.id).single()
+    expect(data!.display_name, 'un membre a renommé un autre').toBe('intact')
+  })
+
   it('un authentifié SANS profil ne voit aucune donnée de foyer', async () => {
     const { client: orphan } = await makeOrphan()
     for (const t of ['household', 'user_profile', 'nutrition_target', 'invitation']) {
@@ -896,13 +928,16 @@ create policy household_update on public.household
 alter table public.user_profile enable row level security;
 create policy user_profile_select on public.user_profile
   for select to authenticated using (household_id = public.current_household());
+-- Mise à jour : SON PROPRE profil seulement. Cadrée sur le foyer, un membre
+-- pourrait renommer son conjoint (mesuré). Le WITH CHECK interdit en outre de
+-- se déplacer vers un autre foyer.
 create policy user_profile_update on public.user_profile
   for update to authenticated
-  using (household_id = public.current_household())
-  with check (household_id = public.current_household());
+  using (id = auth.uid())
+  with check (id = auth.uid() and household_id = public.current_household());
 -- Ni INSERT ni DELETE : rattachement par accept-invite, départ par delete_my_account().
 
--- L'invitation, elle, se révoque légitimement : DELETE autorisé.
+-- L'invitation, elle, se révoque légitimement : DELETE autorisé, portée foyer.
 alter table public.invitation enable row level security;
 create policy invitation_all on public.invitation
   for all to authenticated
@@ -910,12 +945,21 @@ create policy invitation_all on public.invitation
   with check (household_id = public.current_household());
 
 -- ── Classe C, forme 3 : household_id dénormalisé (rempli par trigger, Task 7).
--- Données propres au foyer : suppression d'une saisie erronée autorisée.
+--
+-- ⚠️ PORTÉE PERSONNE, PAS FOYER. Mesuré : une policy cadrée sur le foyer laisse
+--    un membre SUPPRIMER les cibles de son conjoint et les modifier. Or D4 dit
+--    « cibles PAR PERSONNE ». La lecture reste au foyer — le bilan nutritionnel
+--    du lot 1 en a besoin — mais toute écriture est limitée à soi.
 alter table public.nutrition_target enable row level security;
-create policy nutrition_target_all on public.nutrition_target
-  for all to authenticated
-  using (household_id = public.current_household())
-  with check (household_id = public.current_household());
+create policy nutrition_target_select on public.nutrition_target
+  for select to authenticated using (household_id = public.current_household());
+create policy nutrition_target_insert on public.nutrition_target
+  for insert to authenticated with check (user_profile_id = auth.uid());
+create policy nutrition_target_update on public.nutrition_target
+  for update to authenticated
+  using (user_profile_id = auth.uid()) with check (user_profile_id = auth.uid());
+create policy nutrition_target_delete on public.nutrition_target
+  for delete to authenticated using (user_profile_id = auth.uid());
 ```
 
 - [ ] **Step 5 : Appliquer**
@@ -950,8 +994,10 @@ psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
       alter table public.household disable row level security;"
 npm run test -- tests/isolation.test.ts
 ```
-Attendu : **« REFUSE l'insertion », « REFUSE la suppression » et « un membre ne peut PAS
-supprimer son foyer » ÉCHOUENT tous les trois.**
+Attendu : **au moins** « REFUSE l'insertion », « REFUSE la suppression » et « un membre ne peut
+PAS supprimer son foyer » ÉCHOUENT.
+D'autres rougiront aussi dans ce passage — supprimer une ligne `household` emporte ses profils et
+leurs cibles en cascade. **C'est normal, ne pas chercher une régression ailleurs.**
 S'ils passent encore, la suite ne prouve rien : ne pas continuer, corriger les tests.
 Puis `npm run db:reset` pour revenir à l'état sain.
 
@@ -1561,6 +1607,16 @@ Ajouter à `tests/isolation.test.ts` :
 
 ```typescript
 describe('création du premier foyer', () => {
+  // ⚠️ Indispensable : makeActor() a déjà créé des foyers dans le beforeAll global,
+  // donc le repli `not exists (household)` vaut false et l'instance serait fermée.
+  // Sans ce réglage, le test d'évasion ci-dessous passe À VIDE — il resterait vert
+  // même si l'on remettait `for all` sur user_profile, c'est-à-dire exactement la
+  // régression qu'il est censé interdire.
+  beforeAll(async () => {
+    await admin().from('instance_setting')
+      .upsert({ key: 'allow_household_creation', value: { enabled: true } })
+  })
+
   it('un authentifié sans profil peut créer son foyer, une seule fois', async () => {
     const { client: solo } = await makeOrphan()
     const { data, error } = await solo.rpc('create_household', { p_name: 'Chez nous' })
@@ -1581,7 +1637,9 @@ describe('création du premier foyer', () => {
     // nouveau — il s'échappe de son foyer. La Task 6 retire cette policy ; ce test
     // garantit qu'on ne la réintroduira pas.
     const { client: evade } = await makeOrphan()
-    const { data: hh1 } = await evade.rpc('create_household', { p_name: 'Premier' })
+    const { data: hh1, error: e1 } = await evade.rpc('create_household', { p_name: 'Premier' })
+    expect(e1, "l'amorce a échoué : tout le test dégénérerait en expect(null).toBe(null)").toBeNull()
+    expect(hh1).toBeTruthy()
     const { data: me } = await evade.auth.getUser()
 
     await evade.from('user_profile').delete().eq('id', me.user!.id)
@@ -1590,6 +1648,9 @@ describe('création du premier foyer', () => {
 
     const { error } = await evade.rpc('create_household', { p_name: 'Évasion' })
     expect(error, 'évasion réussie vers un second foyer').not.toBeNull()
+    // Et l'erreur doit venir du garde « déjà rattaché », pas du verrou d'instance :
+    // sinon le test ne prouverait rien sur l'absence de policy DELETE.
+    expect(String((error as any).message)).toContain('rattaché')
   })
 
   it("refuse la création quand l'instance est verrouillée (D7)", async () => {
@@ -1651,6 +1712,13 @@ end $$;
 
 revoke execute on function public.create_household(text) from public, anon;
 grant   execute on function public.create_household(text) to authenticated;
+
+-- Semé explicitement à TRUE : ne pas dépendre du repli `not exists (household)`,
+-- qui bascule dès le premier foyer créé et rendrait l'amorçage imprévisible.
+-- ⚠️ À passer à false une fois vos deux comptes en place (Task 12, Step 3bis).
+insert into public.instance_setting (key, value)
+values ('allow_household_creation', '{"enabled": true}'::jsonb)
+on conflict (key) do nothing;
 ```
 
 - [ ] **Step 4 : Vérifier**
@@ -1658,7 +1726,7 @@ grant   execute on function public.create_household(text) to authenticated;
 ```bash
 npm run db:reset && npm run test -- tests/isolation.test.ts
 ```
-Attendu : les deux assertions de création du foyer PASSENT.
+Attendu : les **quatre** tests du describe PASSENT — création, refus du second appel, non-contournement par suppression du profil, et refus quand l'instance est verrouillée.
 
 - [ ] **Step 5 : Écran de connexion**
 
@@ -1950,6 +2018,7 @@ export default function App() {
 - [ ] **Step 11 : Vérification manuelle du parcours complet**
 
 ```bash
+npm run db:reset   # sinon les foyers laissés par les tests ferment l'amorçage (D7)
 npm run dev
 ```
 1. `/` → écran de connexion. Récupérer le lien magique dans le serveur SMTP local — **Mailpit**, section `[local_smtp]` de `config.toml` (`http://127.0.0.1:54324`).
@@ -2146,6 +2215,22 @@ psql "<DB_URL_PROD>" -c "
   where schemaname='public' order by tablename;"
 ```
 Attendu : **`rowsecurity = true` sur les 20 tables.** Aucune exception.
+
+- [ ] **Step 3bis : Fermer la création de foyer une fois vos comptes en place**
+
+L'instance est livrée ouverte pour permettre l'amorçage. Une fois votre foyer créé et votre
+invitation acceptée, **la refermer** — sans quoi toute personne qui s'inscrit peut se créer un
+foyer, ce qui contredit D7 :
+
+```bash
+psql "<DB_URL_PROD>" -c "
+  update public.instance_setting
+  set value = '{\"enabled\": false}'::jsonb
+  where key = 'allow_household_creation';"
+```
+
+Vérifier ensuite qu'un nouveau compte se voit refuser la création. Les invitations, elles,
+continuent de fonctionner : elles passent par `accept-invite`, pas par `create_household()`.
 
 - [ ] **Step 4 : Écrire le `README.md`**
 
