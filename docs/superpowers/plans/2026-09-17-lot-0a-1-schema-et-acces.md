@@ -6,7 +6,7 @@
 
 **Architecture:** Postgres (Supabase) porte trois classes d'isolation — A référentiel en lecture seule, B catalogue partagé en écriture tracée, C données de foyer sous RLS stricte. `current_household()` en `SECURITY DEFINER` contourne la RLS de `user_profile` **par ownership de table** et évite la récursion. Un trigger `BEFORE UPDATE` porte ce que RLS ne sait pas exprimer. Le front est une PWA React minimale : une porte d'entrée et trois écrans.
 
-**Tech Stack:** Supabase CLI (installé en devDependency) · PostgreSQL 15 · React + TypeScript + Vite (versions du template `react-ts` courant) · Vitest · `@supabase/supabase-js` · Edge Functions Deno · Resend
+**Tech Stack:** Supabase CLI (installé en devDependency) · **PostgreSQL 15+** (le CLI 2.x provisionne du 17 en local ; `unique nulls not distinct` exige ≥ 15, donc le projet distant aussi) · React + TypeScript + Vite (versions du template `react-ts` courant) · Vitest · `@supabase/supabase-js` · Edge Functions Deno · Resend
 
 **Spec de référence :** `docs/superpowers/specs/2026-09-17-batch-cooking-app-design.md` **(v9)** — §5.0, §5.0.1, §5.1, §5.2, §5.3, §10, §11.
 
@@ -33,6 +33,8 @@
 | `supabase/migrations/0006_triggers.sql` | Garde classe B · dénormalisation · `updated_at` |
 | `supabase/migrations/0007_llm_budget.sql` | `llm_usage`, les deux plafonds, les deux fonctions |
 | `supabase/migrations/0008_rgpd.sql` | Export et suppression de compte (§11 q. 1) |
+| `supabase/migrations/0009_create_household.sql` | Création du premier foyer, **bridée** pour rester sur invitation (D7) |
+| `supabase/config.toml` | **À éditer, pas seulement à générer** : `site_url`, redirections, `verify_jwt`, auto-inscription |
 | `supabase/functions/_shared/cors.ts` | En-têtes CORS et préflight — sans quoi le front ne peut rien appeler |
 | `supabase/functions/invite/index.ts` | Crée une invitation, l'envoie via Resend |
 | `supabase/functions/accept-invite/index.ts` | Consomme un token, rattache l'utilisateur au foyer |
@@ -105,6 +107,39 @@ cp supabase/functions/.env.example supabase/functions/.env
 ```
 
 Renseigner `.env` avec les clés du Step 3. **`supabase/functions/.env` est lu automatiquement par `supabase functions serve`.**
+
+- [ ] **Step 4bis : Corriger `supabase/config.toml` — sans quoi rien ne fonctionne**
+
+`supabase init` génère trois réglages incompatibles avec ce projet. **Vérifié** :
+
+| Réglage généré | Problème | Valeur à poser |
+|---|---|---|
+| `site_url = "http://127.0.0.1:3000"` | L'app tourne sur `:5173`. Le lien magique **retombe sur un port où rien n'écoute** : tout le parcours du Step 11 de la Task 10 est bloqué. | `site_url = "http://localhost:5173"` |
+| `additional_redirect_urls = ["https://127.0.0.1:3000"]` | `emailRedirectTo` n'est pas en liste blanche, GoTrue l'ignore. | y ajouter `"http://localhost:5173"` et `"http://localhost:5173/**"` |
+| aucune section `[functions]` → `verify_jwt = true` | Le préflight CORS `OPTIONS` **ne porte pas d'`Authorization`** : il reçoit 401 et n'atteint jamais le code de la fonction. | ajouter les deux sections ci-dessous |
+
+```toml
+[auth]
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173", "http://localhost:5173/**"]
+
+# Les deux fonctions valident elles-mêmes le JWT via admin.auth.getUser(jwt).
+# Désactiver la vérification de la passerelle est donc sans danger, et c'est
+# la seule façon de laisser passer le préflight OPTIONS.
+[functions.invite]
+verify_jwt = false
+[functions.accept-invite]
+verify_jwt = false
+```
+
+⚠️ **`enable_signup = true` est la valeur par défaut** : n'importe qui pourrait s'inscrire et créer
+un foyer, ce qui contredit D7 (« multi-tenant **sur invitation** »). Le verrou est posé dans la
+fonction `create_household()` de la Task 10, pas ici — on garde l'auto-inscription active parce
+que les invités doivent pouvoir créer leur compte avant d'accepter.
+
+```bash
+npx supabase stop && npx supabase start   # config.toml n'est relu qu'au démarrage
+```
 
 - [ ] **Step 5 : Ajouter les scripts — FUSIONNER, ne pas remplacer le `package.json`**
 
@@ -238,10 +273,14 @@ describe('classe C — données de foyer', () => {
   })
 
   it("un foyer ne voit jamais les cibles d'un autre", async () => {
-    await admin().from('nutrition_target').insert({
+    // ⚠️ Assertion indispensable : sans elle, si l'amorce échoue (elle échoue
+    // avant la Task 7, household_id étant NOT NULL sans trigger), alice voit 0
+    // ligne et le test passe SANS RIEN AVOIR TESTÉ.
+    const { error: seed } = await admin().from('nutrition_target').insert({
       user_profile_id: bob.userId,
       kcal: 2400, protein_g: 180, fiber_g: 30, carb_g: 250, fat_g: 70,
     })
+    expect(seed, "l'amorce du test a échoué : le test serait vert à vide").toBeNull()
     const { data } = await alice.client
       .from('nutrition_target').select('*').eq('user_profile_id', bob.userId)
     expect(data ?? [], 'fuite entre foyers').toHaveLength(0)
@@ -267,6 +306,32 @@ describe('classe C — données de foyer', () => {
       kcal: 1, protein_g: 1, fiber_g: 1, carb_g: 1, fat_g: 1,
     })
     expect(error, 'écriture croisée acceptée').not.toBeNull()
+  })
+
+  // ↓↓↓ Les trois tests de SUPPRESSION. Sans eux, `for all` laissait un membre
+  //     effacer son foyer entier, profils et cibles compris — mesuré. ↓↓↓
+  it('un membre ne peut PAS supprimer son foyer', async () => {
+    await alice.client.from('household').delete().eq('id', alice.householdId)
+    const { data } = await admin().from('household').select('id').eq('id', alice.householdId)
+    expect(data, 'un membre a effacé son foyer et tout ce qui cascade derrière').toHaveLength(1)
+  })
+
+  it('un membre ne peut PAS supprimer un profil, pas même le sien', async () => {
+    await alice.client.from('user_profile').delete().eq('id', alice.userId)
+    const { data } = await admin().from('user_profile').select('id').eq('id', alice.userId)
+    expect(data, 'supprimer son profil permettrait de s’échapper du foyer').toHaveLength(1)
+  })
+
+  it('un membre ne peut PAS supprimer le profil de son colocataire', async () => {
+    const a = admin()
+    const { data: colo } = await a.from('user_profile')
+      .insert({ id: (await a.auth.admin.createUser({
+        email: `colo-${Date.now()}@test.local`, password: 'test-password-12345', email_confirm: true,
+      })).data.user!.id, household_id: alice.householdId, display_name: 'colo' })
+      .select().single()
+    await alice.client.from('user_profile').delete().eq('id', colo!.id)
+    const { data } = await a.from('user_profile').select('id').eq('id', colo!.id)
+    expect(data, 'un membre a supprimé le profil d’un autre').toHaveLength(1)
   })
 
   it('un authentifié SANS profil ne voit aucune donnée de foyer', async () => {
@@ -375,20 +440,30 @@ const TABLES_A = [
   'appliance_catalog', 'ingestion_job', 'instance_setting',
 ] as const
 
-// Une ligne minimale valide par table, pour tenter une écriture qui DOIT être refusée.
-const LIGNE_A: Record<string, Record<string, unknown>> = {
-  food: { source: 'ciqual', source_code: 'x1', name: 'pirate' },
-  food_yield_factor: { food_id: '00000000-0000-0000-0000-000000000001', factor: 1 },
+// Une ligne RÉELLEMENT valide par table. ⚠️ Mesuré : avec un food_id inexistant,
+// food_yield_factor et density échouent sur la clé étrangère même sans RLS —
+// le test resterait vert alors qu'il ne teste rien. Il faut un vrai food_id.
+let foodId: string
+beforeAll(async () => {
+  const { data } = await admin().from('food')
+    .insert({ source: 'ciqual', source_code: `seed-${Date.now()}`, name: 'témoin' })
+    .select().single()
+  foodId = data!.id
+})
+
+const LIGNE_A = (): Record<string, Record<string, unknown>> => ({
+  food: { source: 'ciqual', source_code: `pirate-${Date.now()}`, name: 'pirate' },
+  food_yield_factor: { food_id: foodId, factor: 1 },
   unit_weight: { label: 'pirate', grams: 1 },
-  unit_conversion: { unit_label: 'pirate', grams: 1 },
-  density: { food_id: '00000000-0000-0000-0000-000000000001', grams_per_ml: 1 },
+  unit_conversion: { unit_label: `pirate-${Date.now()}`, grams: 1 },
+  density: { food_id: foodId, grams_per_ml: 1 },
   default_temperature: { preparation: 'pirate', temperature_c: 180 },
   default_duration: { verb: 'pirate', base_minutes: 1, load_type: 'actif' },
   typical_quantity: { ciqual_subgroup: 'pirate', grams: 1 },
-  appliance_catalog: { code: 'pirate', label: 'Pirate' },
-  ingestion_job: { url: 'https://pirate.test' },
-  instance_setting: { key: 'pirate', value: {} },
-}
+  appliance_catalog: { code: `pirate-${Date.now()}`, label: 'Pirate' },
+  ingestion_job: { url: `https://pirate.test/${Date.now()}` },
+  instance_setting: { key: `pirate-${Date.now()}`, value: {} },
+})
 
 describe('classe A — référentiel', () => {
   it('est lisible par tout utilisateur authentifié', async () => {
@@ -399,8 +474,9 @@ describe('classe A — référentiel', () => {
   })
 
   it("n'est inscriptible par AUCUN utilisateur authentifié, sur les 11 tables", async () => {
+    const lignes = LIGNE_A()
     for (const t of TABLES_A) {
-      const { error } = await alice.client.from(t).insert(LIGNE_A[t])
+      const { error } = await alice.client.from(t).insert(lignes[t])
       expect(error, `${t} accepte une écriture authentifiée`).not.toBeNull()
     }
   })
@@ -683,6 +759,12 @@ create table public.recipe_step_dependency (
 
 ```bash
 npm run db:reset && npm run test -- tests/isolation.test.ts
+```
+Attendu : **ROUGE, et c'est normal** — aucune RLS n'existe encore, donc tout ce qui doit être
+*refusé* passe : écriture en classe A, INSERT et DELETE en classe B, lecture croisée en classe C.
+Seuls les tests de lecture et de traçabilité sont verts. La Task 6 referme tout cela.
+
+```bash
 git add supabase/migrations/0003_class_b.sql tests/isolation.test.ts
 git commit -m "feat(0a-1): schéma classe B, catalogue partagé et tracé"
 ```
@@ -791,29 +873,46 @@ begin
   end loop;
 end $$;
 
--- ── Classe C, forme 1 : la clé EST le foyer.
+-- ⚠️⚠️ NE JAMAIS écrire `for all` sur household ni user_profile. Mesuré :
+--    `for all` inclut DELETE, donc un simple membre peut envoyer
+--    DELETE /rest/v1/household?id=eq.<son foyer> et la cascade efface TOUS les
+--    profils et TOUTES les cibles du foyer. Et en supprimant son propre profil,
+--    current_household() repasse à NULL, ce qui lui permet de recréer un foyer
+--    et de s'échapper du sien. La suppression passe EXCLUSIVEMENT par
+--    delete_my_account() (Task 11), qui est SECURITY DEFINER et contrôlée.
+
+-- ── Classe C, forme 1 : la clé EST le foyer. Lecture et mise à jour seulement.
 alter table public.household enable row level security;
-create policy household_rw on public.household
-  for all to authenticated
+create policy household_select on public.household
+  for select to authenticated using (id = public.current_household());
+create policy household_update on public.household
+  for update to authenticated
   using (id = public.current_household())
   with check (id = public.current_household());
+-- Pas de policy INSERT : la création passe par create_household() (Task 10).
+-- Pas de policy DELETE : la suppression passe par delete_my_account() (Task 11).
 
 -- ── Classe C, forme 2 : colonne household_id directe.
 alter table public.user_profile enable row level security;
-create policy user_profile_rw on public.user_profile
-  for all to authenticated
+create policy user_profile_select on public.user_profile
+  for select to authenticated using (household_id = public.current_household());
+create policy user_profile_update on public.user_profile
+  for update to authenticated
   using (household_id = public.current_household())
   with check (household_id = public.current_household());
+-- Ni INSERT ni DELETE : rattachement par accept-invite, départ par delete_my_account().
 
+-- L'invitation, elle, se révoque légitimement : DELETE autorisé.
 alter table public.invitation enable row level security;
-create policy invitation_rw on public.invitation
+create policy invitation_all on public.invitation
   for all to authenticated
   using (household_id = public.current_household())
   with check (household_id = public.current_household());
 
 -- ── Classe C, forme 3 : household_id dénormalisé (rempli par trigger, Task 7).
+-- Données propres au foyer : suppression d'une saisie erronée autorisée.
 alter table public.nutrition_target enable row level security;
-create policy nutrition_target_rw on public.nutrition_target
+create policy nutrition_target_all on public.nutrition_target
   for all to authenticated
   using (household_id = public.current_household())
   with check (household_id = public.current_household());
@@ -824,7 +923,14 @@ create policy nutrition_target_rw on public.nutrition_target
 ```bash
 npm run db:reset && npm run test -- tests/isolation.test.ts
 ```
-Attendu : **tout passe sauf les tests qui dépendent du trigger de dénormalisation** (`historisées`, `écriture croisée`) — ils tombent en Task 7. Tous les autres, y compris les quatre tests anti-faux-vert, doivent être verts.
+Attendu, **précisément** :
+- **Vert** : les quatre tests anti-faux-vert (classe A × 11, classe B INSERT et DELETE), les trois
+  tests de suppression en classe C, l'orphelin, `current_household()`, et — mesuré —
+  `écriture croisée`, qui passe **déjà** ici : l'insert est rejeté par le `WITH CHECK` de la
+  policy (`household_id` NULL ≠ `current_household()`), pas par l'absence de trigger.
+- **Rouge, et c'est normal** : `historisées` et `ne voit jamais les cibles d'un autre` — leur
+  amorce insère dans `nutrition_target` sans `household_id`, ce que seul le trigger de la
+  Task 7 rendra possible.
 
 - [ ] **Step 6 : Commit**
 
@@ -835,13 +941,17 @@ git commit -m "feat(0a-1): current_household en SECURITY DEFINER et les 3 formes
 
 - [ ] **Step 7 : Prouver que les tests ne sont pas creux**
 
+Prérequis : `psql` installé. L'URL locale est fixe — port `[db]` de `config.toml`, `54322` par défaut.
+
 ```bash
 npx supabase db reset
-psql "$(npx supabase status -o json | python3 -c 'import sys,json;print(json.load(sys.stdin)["DB_URL"])')" \
-  -c "alter table public.recipe disable row level security;"
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+  -c "alter table public.recipe disable row level security;
+      alter table public.household disable row level security;"
 npm run test -- tests/isolation.test.ts
 ```
-Attendu : **les tests « REFUSE l'insertion » et « REFUSE la suppression » ÉCHOUENT.**
+Attendu : **« REFUSE l'insertion », « REFUSE la suppression » et « un membre ne peut PAS
+supprimer son foyer » ÉCHOUENT tous les trois.**
 S'ils passent encore, la suite ne prouve rien : ne pas continuer, corriger les tests.
 Puis `npm run db:reset` pour revenir à l'état sain.
 
@@ -1080,9 +1190,12 @@ describe('budget LLM', () => {
     const { data: before, error: e1 } = await a.rpc('llm_global_budget_remaining')
     expect(e1, 'service_role doit pouvoir appeler cette fonction').toBeNull()
 
+    // ⚠️ upsert() résout le conflit sur la clé PRIMAIRE (id, généré) et non sur
+    // llm_usage_unique : sans onConflict, c'est un INSERT simple qui violera la
+    // contrainte au second passage sans db:reset.
     await a.from('llm_usage').upsert({
       household_id: null, month: month(), kind: 'generation', calls: 1, cost_eur: 7,
-    })
+    }, { onConflict: 'household_id,month,kind' })
     const { data: after } = await a.rpc('llm_global_budget_remaining')
     expect(Number(before) - Number(after)).toBeCloseTo(7, 2)
   })
@@ -1457,9 +1570,37 @@ describe('création du premier foyer', () => {
     const { data: hh } = await solo.rpc('current_household')
     expect(hh).toBe(data)
 
-    // Deuxième appel : refusé, sinon on pourrait s'échapper de son foyer.
+    // Deuxième appel : refusé.
     const { error: e2 } = await solo.rpc('create_household', { p_name: 'Évasion' })
     expect(e2, 'un utilisateur déjà rattaché ne doit pas pouvoir créer un foyer').not.toBeNull()
+  })
+
+  it("ne peut PAS être contournée en supprimant son propre profil", async () => {
+    // Mesuré : avec une policy DELETE sur user_profile, l'utilisateur efface son
+    // profil, current_household() repasse à NULL, et create_household() réussit à
+    // nouveau — il s'échappe de son foyer. La Task 6 retire cette policy ; ce test
+    // garantit qu'on ne la réintroduira pas.
+    const { client: evade } = await makeOrphan()
+    const { data: hh1 } = await evade.rpc('create_household', { p_name: 'Premier' })
+    const { data: me } = await evade.auth.getUser()
+
+    await evade.from('user_profile').delete().eq('id', me.user!.id)
+    const { data: still } = await evade.rpc('current_household')
+    expect(still, 'le profil a pu être supprimé : évasion possible').toBe(hh1)
+
+    const { error } = await evade.rpc('create_household', { p_name: 'Évasion' })
+    expect(error, 'évasion réussie vers un second foyer').not.toBeNull()
+  })
+
+  it("refuse la création quand l'instance est verrouillée (D7)", async () => {
+    const a = admin()
+    await a.from('instance_setting')
+      .upsert({ key: 'allow_household_creation', value: { enabled: false } })
+    const { client: tard } = await makeOrphan()
+    const { error } = await tard.rpc('create_household', { p_name: 'Trop tard' })
+    expect(error, "l'instance est sur invitation : la création doit être refusée").not.toBeNull()
+    await a.from('instance_setting')
+      .upsert({ key: 'allow_household_creation', value: { enabled: true } })
   })
 })
 ```
@@ -1477,13 +1618,27 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare v_uid uuid := auth.uid(); v_id uuid;
+declare v_uid uuid := auth.uid(); v_id uuid; v_open boolean;
 begin
   if v_uid is null then
     raise exception 'non authentifié' using errcode = 'insufficient_privilege';
   end if;
   if exists (select 1 from public.user_profile where id = v_uid) then
     raise exception 'déjà rattaché à un foyer' using errcode = 'unique_violation';
+  end if;
+
+  -- D7 : l'instance est sur invitation. L'auto-inscription reste active (un
+  -- invité doit pouvoir créer son compte), mais la création d'un FOYER est
+  -- bridée par un réglage d'instance. Ouverte tant qu'aucun foyer n'existe
+  -- (amorçage), puis fermable d'un UPDATE. Sans ce garde, n'importe qui
+  -- s'inscrirait et se créerait un foyer, ce qui contredirait D7.
+  select coalesce((select (value ->> 'enabled')::boolean from public.instance_setting
+                   where key = 'allow_household_creation'),
+                  not exists (select 1 from public.household))
+    into v_open;
+  if not v_open then
+    raise exception 'création de foyer fermée : cette instance est sur invitation'
+      using errcode = 'insufficient_privilege';
   end if;
 
   insert into public.household (name) values (coalesce(nullif(p_name,''), 'Mon foyer'))
@@ -1797,7 +1952,7 @@ export default function App() {
 ```bash
 npm run dev
 ```
-1. `/` → écran de connexion. Récupérer le lien magique dans **Inbucket** (`http://127.0.0.1:54324`).
+1. `/` → écran de connexion. Récupérer le lien magique dans le serveur SMTP local — **Mailpit**, section `[local_smtp]` de `config.toml` (`http://127.0.0.1:54324`).
 2. Après connexion → écran d'amorçage. Créer le foyer.
 3. → Écran des objectifs. Enregistrer, vérifier que l'historique s'allonge.
 4. `/settings` → régler le plafond, inviter une seconde adresse.
@@ -1928,6 +2083,12 @@ revoke execute on function public.delete_my_account() from public, anon;
 grant   execute on function public.delete_my_account() to authenticated;
 ```
 
+> **Si le test de suppression du compte d'authentification échoue** : `delete from auth.users`
+> court-circuite GoTrue et suppose que `postgres` a le DELETE et que toutes les tables filles du
+> schéma `auth` cascadent. C'est le cas sous Supabase, mais si ce n'est pas vérifié, la voie
+> supportée est `auth.admin.deleteUser()` depuis une Edge Function. Ne pas laisser un profil
+> supprimé et un compte orphelin.
+
 - [ ] **Step 4 : Appliquer, vérifier**
 
 ```bash
@@ -1953,7 +2114,7 @@ git commit -m "feat(0a-1): export et suppression de compte (RGPD)"
 
 - [ ] **Step 1 : Créer les projets en région européenne**
 
-Dans le tableau de bord Supabase, créer **deux** projets en région UE (`eu-west-3` Paris ou `eu-central-1` Francfort) : `batchcooking-recette` et `batchcooking-prod`.
+Dans le tableau de bord Supabase, créer **deux** projets en région UE (`eu-west-3` Paris ou `eu-central-1` Francfort) : `batchcooking-recette` et `batchcooking-prod`. **Vérifier que la version de PostgreSQL est ≥ 15** : `unique nulls not distinct` (Task 8) n'existe pas avant.
 **La région n'est pas modifiable après coup** — c'est une contrainte du spec (§11 q. 1).
 
 - [ ] **Step 2 : Pousser sur la recette et y rejouer toute la suite**
