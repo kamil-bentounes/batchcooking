@@ -1,7 +1,7 @@
 # Design — Application de batch cooking, diet et budget
 
 - **Date** : 2026-09-17
-- **Version** : 5 — routage par tâche, `ExtractionBackend` interchangeable, leviers de coût avant tout auto-hébergement
+- **Version** : 6 — ancrage prouvé sur `cookTime`/`prepTime`, décomposition en actions, RLS de classe C rendue applicable
 - **Statut** : design validé, en attente du plan d'implémentation du **lot 0a-1**
 - **Utilisateurs** : un foyer de 2 personnes au départ, puis d'autres foyers **sur invitation**
 
@@ -45,7 +45,7 @@ Le différenciateur est le point 2 : l'ordonnancement de la session sous contrai
 | D13 | **Extraction mutualisée** : une recette est extraite une fois pour tous les foyers | Extraction par foyer | Sinon chaque foyer repaie l'extraction. |
 | D14 | **Précédences : ordre total par défaut**, relaxations proposées par le LLM et confirmées | Parallélisme deviné | Un parallélisme faux fait rater un plat. Défaut sûr, gain opt-in. |
 | D15 | **Durées pré-remplies en trois couches** : `default_duration` déterministe → raffinement LLM ancré sur `prepTime`/`cookTime` → **confirmation humaine à la sélection** (D17). **Aucune contrainte d'égalité.** | Contrainte `Σ durées = totalTime` — **testée et infirmée** ; durée NULL tolérée | **Mesuré** : 77,6 % des étapes sans durée. La contrainte de somme a été testée sur l'échantillon : ratio médian `Σ/totalTime` = **0,66**, et **8 %** seulement des recettes dans ±10 %. L'égalité est fausse. Le repli « n'ordonnancer que les recettes entièrement datées » l'est aussi : **1 recette sur 55**. |
-| D19 | **`default_duration` par (verbe, appareil)** — l'analogue déterministe de `default_temperature` | Tout confier au LLM | Hors ligne, auditable, corrigeable, indépendant de la qualité du modèle. C'est l'ossature ; le LLM n'est qu'un raffinement. |
+| D19 | **`default_duration` par (verbe, `appliance_type`), appliqué aux *actions* et mis à l'échelle des quantités**. L'extraction **décompose chaque étape en actions**. | Table indexée sur l'étape ; tout confier au LLM | Hors ligne, auditable, corrigeable. **Mesuré** : 28,2 % seulement des étapes exposent un verbe unique — la clé ne peut pas être l'étape. Et sans mise à l'échelle, D4 met les ingrédients à l'échelle sans toucher aux durées. |
 | D16 | **Trois classes d'isolation** (§5.0) | Binaire partagé/isolé | Le binaire interdisait la relecture, la résolution par foyer (D3) et les recettes créées par un foyer. |
 | D17 | **Catalogue large, relecture paresseuse** : ~5 000 recettes ingérées, relecture humaine déclenchée **à la sélection** d'une recette | Tout relire à l'ingestion ; catalogue de 500 | Relire 5 000 recettes est impossible pour un couple ; 500 recettes tuent l'argument du filtre macro. La charge devient proportionnelle à l'usage. |
 | D18 | **Macros en intervalle `[min, max]`**, filtres sur la borne défavorable | Macros ponctuelles | 16 % des lignes sont irrésolubles (§4.2). Une macro ponctuelle ferait passer pour « 35 g de protéines » un plat dont l'ingrédient protéique est la ligne sans quantité. |
@@ -143,7 +143,11 @@ Sab'n'Pepper — uniquement du texte d'article.
 | **Recettes avec `totalTime`** | **100 %** |
 | Recettes avec `prepTime` | **100 %** |
 | Recettes avec `cookTime` | **87,3 %** |
-| **`Σ durées déclarées / totalTime` — médiane** | **0,66** — **8 %** seulement des recettes dans ±10 % |
+| **Recettes où `Σ durées partielles` > `totalTime`** | **35 %** — *une somme partielle ne peut pas dépasser le tout* : **preuve irréfutable** que `totalTime` n'est pas la somme des étapes. 8 des 14 cas n'ont aucun repos passif. |
+| **`Σ durées déclarées / cookTime` — médiane** | **1,00** · 56 % à ±25 % — **les durées déclarées somment au temps de cuisson** |
+| Corrélation couverture / ratio (`r`) | +0,30 (faible) ; au-delà de 50 % de couverture, ratio médian **2,34** |
+| **Étapes avec un seul verbe reconnaissable** | **28,2 %** (56,5 % en ont plusieurs, 15,3 % aucun) |
+| Étapes à appareil par recette | **1,95**, pour **un seul** `cookTime` |
 | **Recettes dont *toutes* les étapes sont datées** | **1 sur 55 = 1,8 %** |
 | Recettes sans **aucune** étape datée | 27,3 % |
 
@@ -151,22 +155,41 @@ Sab'n'Pepper — uniquement du texte d'article.
 > du RCPSP : sans durée, une tâche n'est **pas ordonnançable du tout**, alors qu'une
 > température manquante ne dégrade que l'arbitrage du four.
 >
-> **Une première version de D15 contraignait `Σ durées = totalTime`. Elle a été mesurée et
-> infirmée** : ratio médian réel **0,66**, 8 % des recettes dans ±10 %. Les sites annoncent un
-> temps qui n'est pas la somme de leurs étapes, et les repos passifs (levée, réfrigération)
-> font exploser le rapport dans l'autre sens — une recette de l'échantillon affiche 195 min
-> d'étapes pour 60 min annoncées.
+> **Une première version de D15 contraignait `Σ durées = totalTime`. Elle est réfutée** :
+> **35 % des recettes ont déjà une somme *partielle* supérieure à leur `totalTime`** — et une
+> somme partielle ne peut pas dépasser le tout. 8 de ces 14 cas n'ont aucun repos passif, donc
+> ce n'est pas l'explication. Au-delà de 50 % de couverture, le ratio médian atteint 2,34.
+>
+> *(Une mesure antérieure comparait `Σ durées déclarées` à `totalTime` et concluait à 0,66.
+> Cette comparaison était invalide — une somme portant sur 22 % des étapes divisée par un temps
+> total — et elle est remplacée par le test ci-dessus. La conclusion tenait, la preuve non.)*
 >
 > Pire : une contrainte d'égalité aurait rejeté **précisément les recettes parallélisables**,
 > puisque `Σ durées > makespan` dès qu'une relaxation de D14 est acceptée. Sélection adverse
 > sur exactement les recettes qui intéressent un optimiseur de batch cooking.
 >
+> **Ce que la mesure fournit à la place : deux ancres distinctes, et non une.**
+> `Σ durées déclarées / cookTime` a une **médiane de 1,00** (56 % à ±25 %). C'est cohérent :
+> un auteur date ses cuissons, pas ses découpes. Donc `cookTime` ancre les **actions à
+> appareil** et `prepTime` les **actions actives** — les deux ne sont pas interchangeables.
+>
 > **Ce qui referme réellement le trou (D15 + D19)**, en trois couches :
-> 1. **`default_duration` par (verbe, appareil)** — déterministe, hors ligne, auditable :
->    « émincer » 3 min actif, « enfourner » → `cookTime`, « laisser reposer » → passif.
-> 2. **Raffinement LLM**, avec `prepTime` (100 %) et `cookTime` (87 %) fournis **en contexte
->    comme ancres indicatives**, jamais comme contrainte. Rejet des seules aberrations
->    (une étape > `totalTime` ; somme active > 3 × (`prepTime` + `cookTime`)).
+> 1. **`default_duration` par (verbe, `appliance_type`) appliqué aux *actions***, pas aux
+>    étapes : **28,2 % seulement** des étapes exposent un verbe unique, 56,5 % en ont plusieurs.
+>    L'extraction doit donc **décomposer chaque étape en actions** — ce dont l'optimiseur a
+>    besoin de toute façon, « Émincez l'oignon et faites-le revenir 5 min » étant une action
+>    `actif` puis une action `bloquant`.
+> 2. **Raffinement LLM à double ancrage** : les actions à appareil sont réparties au prorata de
+>    leurs priors sur `cookTime` (**1,95 action à appareil par recette pour un seul `cookTime`**
+>    — l'affecter à chacune double-compterait), les actions actives sur `prepTime`. Rejet des
+>    seules aberrations **relatives à leur prior** (> 3 × `default_duration`), jamais par
+>    comparaison à `totalTime` : 35 % des recettes le dépassent légitimement. `Σ` contre
+>    `cookTime` sert de **contrôle a posteriori**, pas de contrainte.
+> 2bis. **Mise à l'échelle par les quantités** : `default_duration.scaling` ∈
+>    `{ lineaire_plafonne, constant }`. Éplucher 2 kg d'oignons n'est pas éplucher un oignon,
+>    alors qu'une cuisson au four ne dépend pas du nombre de portions. Sans cela, D4 met les
+>    ingrédients à l'échelle et laisse les durées inchangées — biais systématique sur les
+>    actions actives, celles qui saturent la ressource `mains`.
 > 3. **Confirmation humaine à la sélection** (D17, §7.5) — 5,6 étapes pré-remplies à valider
 >    d'un coup d'œil, une seule fois, pour une recette qu'on va réellement cuisiner. Les
 >    corrections enrichissent `default_duration`, exactement comme les pesées enrichissent
@@ -189,7 +212,8 @@ Sab'n'Pepper — uniquement du texte d'article.
 | # | À mesurer | Go | Si échec |
 |---|---|---|---|
 | R1 | Extraction des attributs d'étape (appareil, température, `load_type`) sur 20 recettes, **deux bras comparés : API rapide vs modèle local quantifié** (D20) | ≥ 85 % pour l'API. Le local est retenu s'il est **à moins de 5 points** de l'API — l'écart se paie alors 20 € une fois, contre plusieurs jours de calcul. | 70-85 % : lot 1 construit, relecture systématique des étapes four. < 70 % : lot 1 reporté. Local en deçà : `ExtractionBackend` reste sur l'API, l'interface ne change pas. |
-| R1b | **Qualité des durées pré-remplies (D15/D19)**, sur données **masquées** : on cache les 69 durées déclarées de l'échantillon, on pré-remplit par `default_duration` + LLM, on mesure l'**erreur absolue médiane par étape en minutes**, séparément pour **étapes actives** et **étapes à appareil** (112/308) | **≤ 5 min d'erreur médiane sur les étapes à appareil** — ce sont elles qui occupent une ressource et dont l'erreur se paie sur le Gantt. Étapes actives : ±10 min tolérés. | > 5 min : `default_duration` est réduite à des classes grossières (< 5 / 5-15 / 15-45 / > 45 min) et la confirmation à la sélection devient obligatoire au lieu d'optionnelle. Le Gantt perd en précision, **le projet ne s'arrête pas** — c'était le défaut du repli précédent. |
+| R1b | **Qualité des durées pré-remplies (D15/D19)** sur un jeu **non biaisé** : les 69 durées déclarées portent sur des étapes longues et passives, donc les masquer testerait la population facile. Il faut **étiqueter à la main 30-50 actions non datées** (une heure sur des données déjà en main) et mesurer l'erreur **absolue ET relative**, stratifiée, séparément pour actions actives et actions à appareil. | Actions à appareil : **≤ 5 min d'erreur médiane absolue**. Actions actives : **≤ 50 % d'erreur relative médiane** — ±10 min sur une action de 3 min ferait 300 %, un seuil absolu n'a aucun sens à cette échelle. | Au-delà : `default_duration` réduite à des classes grossières (< 5 / 5-15 / 15-45 / > 45 min), confirmation à la sélection obligatoire au lieu d'optionnelle. Le Gantt perd en précision, **le projet ne s'arrête pas**. |
+| R1c | **Décomposition étape → actions** sur 20 recettes : part des actions correctement isolées avec leur `load_type` | ≥ 90 % | < 90 % : retour à « une étape = une action » avec le `load_type` dominant ; le parallélisme intra-recette est abandonné, l'inter-recettes suffit à l'essentiel du gain. |
 | R2 | Relaxations de précédence (D14) sur 20 recettes | **0 faux positif** | ≥ 1 faux positif : relaxations désactivées, ordre total strict, parallélisme inter-recettes seulement. |
 | R3 | Vision sur 5 photos réelles du frigo | ≥ 70 % identifiés, **0 hallucination** | Hallucination : la photo ne préremplit plus, elle suggère, et tout est confirmé. |
 | R4 | Couverture d'Open Prices sur 30 produits courants | ≥ 40 % | < 40 % : `OpenPricesSource` reste branché mais le lot 5 démarre sur les tickets seuls. |
@@ -202,9 +226,28 @@ Sab'n'Pepper — uniquement du texte d'article.
 
 | Classe | Tables | Règle |
 |---|---|---|
-| **A — Référentiel immuable et infrastructure** | `food`, `food_yield_factor`, `unit_weight`, `unit_conversion`, `density`, `default_temperature`, **`default_duration`**, `appliance_catalog`, **`ingestion_job`**, **`instance_setting`** | Lecture pour tout utilisateur authentifié. Écriture réservée au **rôle de service**. |
+| **A — Référentiel immuable et infrastructure** | `food`, `food_yield_factor`, `unit_weight`, `unit_conversion`, `density`, `default_temperature`, `default_duration`, **`typical_quantity`**, `appliance_catalog`, `ingestion_job`, `instance_setting` | Lecture pour tout utilisateur authentifié. Écriture réservée au **rôle de service**. |
 | **B — Catalogue partagé, écriture authentifiée et tracée** | `recipe`, `recipe_ingredient`, `recipe_step`, `recipe_step_dependency` | Lecture par tous. **Écriture par tout foyer authentifié**, limitée aux champs de confiance faible ou moyenne. **Les quatre tables portent `edited_by_household_id` et `edited_at`.** Conflit : dernier écrivain gagne, **et une session planifiée fige un instantané de ses recettes** (`session_recipe` copie les étapes retenues), pour qu'une correction d'un foyer ne modifie pas un plan déjà calculé chez un autre. |
-| **C — Données de foyer** | `household`, `user_profile`, `nutrition_target`, `invitation`, `household_appliance`, `household_unit_weight`, **`household_ingredient_resolution`**, `weighing`, `session`, `session_recipe`, `session_portion`, `session_appliance_override`, `session_plan`, `plan_conflict`, `fridge_inventory`, `fridge_item`, `shopping_list`, `shopping_item`, `product`, `price_point`, `receipt`, `llm_usage` | RLS stricte `household_id = current_household()`. |
+| **C — Données de foyer** | `household`, `user_profile`, `nutrition_target`, `invitation`, `household_appliance`, `household_unit_weight`, `household_ingredient_resolution`, **`household_duration_override`**, `weighing`, `session`, `session_recipe`, `session_portion`, `session_appliance_override`, `session_plan`, `plan_conflict`, `fridge_inventory`, `fridge_item`, `shopping_list`, `shopping_item`, `product`, `price_point`, `receipt`, `llm_usage` | RLS stricte — **trois formes de prédicat, pas une** (§5.0.1). |
+
+#### 5.0.1 Mécanique des policies — livrable 0a-1
+
+« `household_id = current_household()` » n'est applicable qu'à une partie des tables.
+Trois cas, tous présents dès 0a-1 :
+
+| Cas | Tables | Prédicat |
+|---|---|---|
+| Colonne directe | `user_profile`, `invitation`, `household_appliance`, et toutes les tables des lots 1-6 | `household_id = current_household()` |
+| **La clé *est* le foyer** | `household` | `id = current_household()` |
+| **Pas de colonne** | `nutrition_target` (clé `user_profile_id`) | **On dénormalise** : ajout de `household_id` maintenu par trigger. Une colonne coûte moins qu'une jointure dans chaque policy, et supprime un risque de récursion. |
+
+Deux mécanismes que RLS **ne peut pas** porter, et qui sont des livrables 0a-1 à part entière :
+
+- **La restriction d'écriture de la classe B** (« champs de confiance faible ou moyenne
+  seulement ») dépend de la valeur de `confidence` de la ligne : c'est un trigger
+  `BEFORE UPDATE` comparant `OLD`/`NEW`, qui pose aussi `edited_by_household_id` et `edited_at`.
+- **`current_household()`** doit être `SECURITY DEFINER` ou adossée à un claim JWT : si elle lit
+  `user_profile`, elle-même sous RLS, elle provoque la récursion de policy classique de Postgres.
 
 **Point corrigé par rapport à la v2** : la résolution des poids est **par foyer** (D3), donc elle
 ne peut pas vivre dans `recipe_ingredient` qui est partagée. Deux foyers qui pèsent le même
@@ -251,8 +294,11 @@ sont affichés (§11 q. 4) mais ne font l'objet d'aucune cible. Décision explic
 | `unit_conversion` | Cuillères, pincées, poignées → grammes, **par famille d'aliment**. Couvre les 23 % de §4.2. |
 | `density` | g/ml par aliment, pour les 9 % de volumes |
 | `default_temperature` | Température par défaut par type de préparation, **marquée estimée**. Répond aux 35,7 % de §4.3. |
-| **`default_duration`** | **(verbe, `appliance_type`) → durée et `load_type` par défaut** (D19). Ossature déterministe des durées, enrichie par les confirmations de §7.5. |
+| **`default_duration`** | Classe A. **(verbe, `appliance_type`) → durée de base, `load_type`, et `scaling` ∈ { lineaire_plafonne, constant }** (D19). Ossature déterministe, appliquée aux **actions**. |
+| **`household_duration_override`** | **Classe C.** Corrections de durée du foyer, par (verbe, `appliance_type`). C'est **ici** qu'écrit la confirmation de §7.5 — pas dans `default_duration`, qui est en classe A. Promotion périodique vers la table partagée par le worker quand plusieurs foyers convergent. Symétrie exacte de `household_unit_weight`. |
 | **`instance_setting`** | `key` / `value` — porte **`llm_global_monthly_cap_eur`**, plafond du budget global d'ingestion (D11). |
+| **`typical_quantity`** | Par `ciqual_subgroup` → quantité typique en grammes. **Fournit la borne haute de D18** pour les 16 % de lignes sans quantité. Sans elle, `macro_max` n'est pas calculable et le filtre du lot 4 n'a pas de borne défavorable. |
+| **`ingestion_job`** | Classe A. `url`, `state`, `attempts`, `error`, `content_hash`. |
 | `household_unit_weight` | Poids unitaires appris des pesées du foyer (classe C) |
 | **`household_ingredient_resolution`** | Classe C. `recipe_ingredient_id`, `household_id`, `grams`, `resolution_source ∈ { pesé, foyer }`. Porte les priorités 1 et 2 de la cascade §7.3. |
 | `weighing` | §5.2.1 |
@@ -294,7 +340,7 @@ weighing(id, household_id, recipe_ingredient_id, food_id,
 ingestion** (D15/D19) : la couche `default_duration` garantit une valeur pour toute étape, même
 grossière. Aucune recette n'est donc « morte en base ».
 
-**`recipe.plannable`** (dérivé) est vrai quand chaque étape a une durée de source `déclarée` ou
+**`recipe.plannable`** — **colonne maintenue par trigger** (ni vue ni calcul client : elle est filtrée massivement au lot 4) — est vraie quand chaque action a une durée de source `déclarée` ou
 `confirmée`. Une recette non `plannable` **reste sélectionnable pour relecture** — c'est
 précisément par là qu'elle le devient — mais l'optimiseur refuse de la planifier tant que ses
 durées ne sont pas confirmées, et l'affiche comme telle. `ingestion_job` est en classe A
@@ -344,8 +390,9 @@ compatible, et le reste est séquencé.
 **Dépassement de `target_duration_min`** : jamais d'échec silencieux. Le plan est produit, le
 dépassement affiché en minutes, une éviction proposée par coût marginal décroissant.
 
-**Recette non ordonnançable** (durées non bouclées) : exclue de la sélection avec le motif
-affiché, jamais planifiée avec une durée inventée.
+**Recette non `plannable`** : **reste sélectionnable** — c'est par la sélection que passe la
+relecture (§7.5) — mais l'optimiseur ne la planifie pas tant que ses durées ne sont pas
+confirmées, et l'affiche comme telle. Elle n'est jamais planifiée sur une durée non confirmée.
 
 ### 6.2 Algorithme
 
@@ -425,10 +472,16 @@ ligne sans quantité ne peut donc pas passer le filtre par accident.
 
 ### 7.5 Confirmation des durées à la sélection
 
-À la sélection d'une recette, ses ~5,6 étapes sont présentées avec leur durée pré-remplie et sa
-source (`defaut` / `llm`). Confirmer d'un geste passe `duration_source` à `confirmée` ; corriger
-met à jour l'étape **et** enrichit `default_duration` pour le couple (verbe, appareil).
-Symétrie exacte de la boucle de pesée §5.2.1 : l'application apprend, la friction décroît.
+À la sélection d'une recette, ses actions sont présentées avec leur durée pré-remplie et sa
+source (`defaut` / `llm`). Corriger met à jour l'action **et** écrit dans
+**`household_duration_override`** (classe C) — jamais dans `default_duration`, qui est en
+classe A. Le worker promeut périodiquement vers la table partagée quand plusieurs foyers
+convergent. Symétrie exacte de la boucle de pesée §5.2.1, classe d'isolation comprise.
+
+**Exigence d'ergonomie, pas un détail** : à 5 recettes par session, cela fait ~28 actions à
+confirmer juste avant la session du dimanche. **« Confirmer toute la recette » doit être un
+seul geste**, la correction restant possible action par action. Sinon la friction tombe au
+pire moment.
 
 Une recette devient `plannable` quand toutes ses étapes sont `déclarée` ou `confirmée`.
 
@@ -523,8 +576,8 @@ interface PriceSource {
 | Lot | Contenu | Livre |
 |---|---|---|
 | **0a-1 · Schéma et accès** | Projet Supabase UE · schéma des classes A, B et des tables foyer de §5.1 **uniquement** (les tables des lots 1-5 arrivent avec leur lot) · `current_household()` + policies des 3 classes + rôle de service · flux d'invitation complet **via Resend** · CRUD profils et cibles historisées · compteur `llm_usage` et plafonds. **UI** : accepter une invitation, saisir ses cibles, régler le plafond. | Deux comptes, un foyer, l'isolation prouvée. |
-| **0a-2 · Référentiels** | Import CIQUAL intégral, **groupes et sous-groupes compris** · accès OFF à la demande avec cache · **constitution à la main de `unit_conversion`, `density`, `default_temperature`, `default_duration`** (~200 lignes de seed versionnées) | Le socle nutritionnel. Ne bloque que 0b et 0c. |
-| **0b · Ingestion** | Précédé de **R1b, R1, R2**. Politique de sélection des 5 000 recettes figée (§7.1). Worker MCP, découverte sitemap, extraction, durées contraintes (D15), normalisation, calcul en intervalle (D18), file de relecture paresseuse (D17). **UI** : écran de relecture à la sélection. | ~5 000 recettes structurées et filtrables. |
+| **0a-2 · Référentiels** | Import CIQUAL intégral, **groupes et sous-groupes compris** · accès OFF à la demande avec cache · **constitution à la main de `unit_conversion`, `density`, `default_temperature`, `default_duration` (avec `scaling`), `typical_quantity`** (~250 lignes de seed versionnées) | Le socle nutritionnel. Ne bloque que 0b et 0c. |
+| **0b · Ingestion** | Précédé de **R1b, R1, R2**. Politique de sélection des 5 000 recettes figée (§7.1). Worker MCP, découverte sitemap, extraction, durées pré-remplies à double ancrage (D15/D19), normalisation, calcul en intervalle (D18), file de relecture paresseuse (D17). **UI** : écran de relecture à la sélection. | ~5 000 recettes structurées et filtrables. |
 | **0c · Pesée** | Boucle d'apprentissage §5.2.1. **UI** : saisie des poids. | La promesse « strict » devient vraie. |
 | **1 · Cuisiner** | Optimiseur, équipement par session, Gantt, arbitrage du four, bilan par personne | **La session du dimanche fonctionne.** |
 | **2 · Courses** | Agrégation, édition, envoi par e-mail | La liste arrive le samedi. |
