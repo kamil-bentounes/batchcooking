@@ -1,7 +1,7 @@
 # Design — Application de batch cooking, diet et budget
 
 - **Date** : 2026-09-17
-- **Version** : 11 — stack d'interface arrêtée : Tailwind v4, shadcn/ui, Motion, TanStack Query, PWA
+- **Version** : 12 — la barquette devient l'unité de suivi ; portions et complément protéiné tranchés
 - **Statut** : design validé, en attente du plan d'implémentation du **lot 0a-1**
 - **Utilisateurs** : un foyer de 2 personnes au départ, puis d'autres foyers **sur invitation**
 
@@ -39,6 +39,10 @@ Le différenciateur est le point 2 : l'ordonnancement de la session sous contrai
 | D9 | **LLM en API pour tout ce qui est en ligne** ; **serveur loué exclu** | Auto-hébergement sur serveur | Le VPS le moins cher capable de faire tourner un 7B quantifié coûte 6-14 €/mois ; la facture API qu'il remplacerait est de **1,30 €/mois**. Le plancher tarifaire d'un serveur est au-dessus de toute la dépense. |
 | D20 | **`ExtractionBackend` interchangeable** (§8.1) : fournisseur choisi par R1 parmi API de référence, **API à bas coût** et **modèle local quantifié**. Tranché par mesure, pas par opinion. | Choisir API ou local dans l'architecture | L'ingestion est le seul poste où le local pourrait gagner. Mais **le prix à battre est de ~4 €** (§8.3, DeepSeek V4 Flash sur du contenu public), pas de 20 € : contre 4 à 11 jours de machine et la plus faible qualité des options, le local ne rapporte plus rien. L'interface reste, pour ne pas dépendre d'un fournisseur. |
 | D21 | **Routage par tâche** (§8.1) : aucun modèle quand une table suffit, modèle rapide pour l'extraction et la vision, modèle capable pour la création | Un seul modèle partout | Le plus gros levier de coût n'est pas un modèle moins cher, c'est **ne pas appeler de modèle** : le JSON-LD couvre 98 % des recettes, D19 couvre les durées. En régime permanent il reste **~56 appels par mois**. |
+| D24 | **La session produit des BARQUETTES, pas des recettes.** Chaque part est nommée, porte ses macros, son coût et sa date limite. **Manger = cocher une barquette.** | Journal alimentaire saisi à la main | C'est la seule forme de suivi qui tient dans la durée : personne ne saisit ses repas pendant trois mois. Tout est déjà calculé le dimanche, il ne reste qu'un geste. Et le tableau de bord (lot 6) se remplit tout seul. |
+| D25 | **Portions inégales pour des cibles inégales, sauf si l'écart est protéique** : 2 000 contre 1 700 kcal → 54/46, annoncé à la dernière étape du plan (« 5 × 340 g, 5 × 290 g »). **Mais si l'écart porte surtout sur les protéines, parts égales + complément dense** (100 g de skyr, deux œufs) | Portions égales pour tous ; deux plats distincts | Une part plus grosse donne plus de **tout**, pas plus de protéines : elle ajoute glucides et lipides dont la personne n'a pas besoin. L'application dit lequel des deux gestes s'applique, au moment du dressage. |
+| D26 | **Le petit-déjeuner et le midi sont saisis, en un geste** (habitudes mémorisées) | Ne suivre que les dîners | Le batch cooking couvre les dîners. Sans les deux autres repas, le tableau de bord **ment de ~900 kcal par jour** — il vaudrait mieux ne rien afficher. |
+| D27 | **Les barquettes ont une DLC** : 3-4 jours au frigo, au-delà congélation proposée | Pas de suivi de fraîcheur | L'écran le plus consulté de la semaine ne sera pas le planning mais « il reste 4 parts de dahl, à manger avant mercredi ». Évite le gâchis, donc sert aussi le budget. |
 | D23 | **Stack d'interface : Tailwind v4 + shadcn/ui + Motion + TanStack Query**, sur React/Vite | SvelteKit ; Next.js ; CSS maison | Exigence explicite : une application moderne, rapide, fluide, et **modifiable simplement**. SvelteKit est plus agréable à écrire mais prive de shadcn/ui et d'une large part de l'écosystème d'animation. Next.js apporte un rendu serveur sans objet pour une PWA hors ligne adossée à Supabase. Le choix ne concerne **que l'interface** : il n'a aucun effet sur les lots 0a-1, 0a-2 et 0b. |
 | D22 | **Le fournisseur est choisi par la sensibilité de la donnée, pas par le prix** (§8.2) : contenu web public → le moins cher ; **image du logement → fournisseur de confiance**, jamais le moins-disant | Fournisseur unique ; choix au prix seul | Le texte d'une recette est public. Une photo de l'intérieur d'un frigo ne l'est pas. Ce n'est pas une obligation réglementaire en usage domestique (§11 q. 1) — c'est que l'écart de prix en jeu est de 0,003 € par photo, donc qu'il n'y a rien à arbitrer. |
 | D10 | **PWA** | Application native | 99 $/an + review pour un usage sur invitation. |
@@ -619,10 +623,26 @@ interface PriceSource {
 | **3 · Frigo** | Autocomplétion, puis photo + vision (R3), soustraction à la liste | Plus d'achats en double. |
 | **4 · Envies et propositions** | Le parcours de §10.1, en trois temps : recherche par ingrédients du frigo → filtres → **génération IA sur demande explicite uniquement**. | Le moteur de suggestion. |
 | **5 · Prix** | `PriceSource` + 4 adaptateurs, estimation du panier, veille nouveautés | Budget prévisible. |
-| **6 · Suivi** | Consommé et dépensé, courbes, comparaison aux cibles | Le recul sur 3 mois. |
+| **6 · Suivi** | Tableau de bord mensuel : calories et protéines par jour contre objectif (**deux graphiques, jamais deux axes**), budget en chiffre et jauge, coût par portion. Alimenté par les barquettes cochées (D24). | Le recul sur 3 mois. |
 
 Le lot 0 **n'est pas invisible** : 0a-1, 0b et 0c livrent chacun une interface. Le back-office
 est volontairement rudimentaire — le soin visuel commence au lot 1.
+
+### 10.0 Filtres du catalogue (lot 4)
+
+Dérivés de ce que la base contient réellement :
+
+| Filtre | Remarque |
+|---|---|
+| **Temps actif**, distinct du temps total | 10 min de gestes + 40 min de four ≠ 50 min de travail. Le filtre le plus utile, et personne ne l'a. Possible grâce à `load_type` (D19). |
+| Type | plat, entrée, dessert, petit-déjeuner, soupe |
+| Protéines / kcal / fibres | **Sur la borne défavorable** (D18), jamais la moyenne |
+| Appareil requis | « sans four » quand le four est pris ce jour-là |
+| Ingrédients du frigo | Lot 3 |
+| Se congèle ou non | Décide si l'on cuisine 6 ou 12 portions (D27) |
+| Coût par portion | Lot 5 |
+| Jamais essayé / aimé la dernière fois | Une note d'un geste après avoir mangé suffit à rendre les propositions personnelles |
+| Sans tel ingrédient | Réglé une fois pour toutes |
 
 ### 10.1 Parcours du lot 4 — l'ordre est une exigence, pas une préférence
 
