@@ -1,7 +1,7 @@
 # Design — Application de batch cooking, diet et budget
 
 - **Date** : 2026-09-17
-- **Version** : 8 — génération de recettes explicitée, 5 questions ouvertes tranchées par défaut
+- **Version** : 9 — parcours du lot 4 fixé : catalogue d'abord, génération IA sur demande explicite uniquement
 - **Statut** : design validé, en attente du plan d'implémentation du **lot 0a-1**
 - **Utilisateurs** : un foyer de 2 personnes au départ, puis d'autres foyers **sur invitation**
 
@@ -612,12 +612,34 @@ interface PriceSource {
 | **1 · Cuisiner** | Optimiseur, équipement par session, Gantt, arbitrage du four, bilan par personne | **La session du dimanche fonctionne.** |
 | **2 · Courses** | Agrégation, édition, envoi par e-mail | La liste arrive le samedi. |
 | **3 · Frigo** | Autocomplétion, puis photo + vision (R3), soustraction à la liste | Plus d'achats en double. |
-| **4 · Envies et propositions** | **Deux modes distincts** — (a) **catalogue** : filtres sur bornes défavorables (D18), densité protéique, envies (fromage, poisson, soupe, dessert), déterministe et gratuit ; (b) **génération LLM à la demande** : à partir du frigo, des envies, des cibles (D4) et de l'équipement du foyer (D6). `origin = générée`, `visibility = privée` par défaut (§5.0). **Une recette générée traverse le même pipeline de normalisation** que les recettes importées (§7.1 étapes 3 à 5 : décomposition en actions, résolution des ingrédients vers CIQUAL, macros en intervalle) — sans quoi elle serait affichable mais **non planifiable** par l'optimiseur. | Le moteur de suggestion. |
+| **4 · Envies et propositions** | Le parcours de §10.1, en trois temps : recherche par ingrédients du frigo → filtres → **génération IA sur demande explicite uniquement**. | Le moteur de suggestion. |
 | **5 · Prix** | `PriceSource` + 4 adaptateurs, estimation du panier, veille nouveautés | Budget prévisible. |
 | **6 · Suivi** | Consommé et dépensé, courbes, comparaison aux cibles | Le recul sur 3 mois. |
 
 Le lot 0 **n'est pas invisible** : 0a-1, 0b et 0c livrent chacun une interface. Le back-office
 est volontairement rudimentaire — le soin visuel commence au lot 1.
+
+### 10.1 Parcours du lot 4 — l'ordre est une exigence, pas une préférence
+
+**Le gratuit d'abord, toujours. L'IA seulement si la personne la demande.**
+
+1. **Recherche par ingrédients** — le contenu du frigo (saisi ou photographié, lot 3) filtre le
+   catalogue : « qu'est-ce qu'on peut faire avec ça ». Déterministe, instantané, gratuit.
+2. **Filtres cumulables** sur les résultats — calories, protéines, fibres, autres macros
+   (toujours sur la **borne défavorable**, D18), **temps de préparation**, envies (fromage,
+   poisson, viande, soupe, dessert), équipement disponible.
+3. **Génération IA — bouton explicite, jamais autre chose.** Proposée *à côté* des résultats du
+   catalogue, y compris quand le catalogue en retourne beaucoup. **Même quand le catalogue ne
+   retourne rien, on n'enchaîne pas automatiquement sur la génération** : on l'offre.
+
+**Interdits, formellement :**
+- déclencher une génération sans action explicite de la personne ;
+- utiliser la génération comme repli silencieux d'une recherche vide ;
+- masquer les résultats du catalogue derrière une proposition générée.
+
+Deux raisons, et la première suffit : la personne doit savoir quand elle utilise l'IA et quand
+elle ne l'utilise pas. La seconde est que c'est le seul poste de coût variable du régime
+permanent (§8.1) — une génération automatique le rendrait incontrôlable.
 
 ---
 
