@@ -1,32 +1,40 @@
-# React + TypeScript + Vite
+# Batch cooking
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Application de batch cooking, diététique et budget pour un foyer.
+Une session de cuisine le dimanche, planifiée pour exploiter le four, l'air fryer et les feux
+en parallèle ; des objectifs nutritionnels par personne ; la liste de courses qui en découle.
 
-Currently, two official plugins are available:
+| | |
+|---|---|
+| Documentation | [`docs/`](docs/) — [API](docs/api.md) · [schéma](docs/schema.md) · [lancer en local](docs/dev.md) |
+| Conception | `.design/` — spec, plan, mesures terrain. Brouillons de travail, pas de la doc. |
+| Stack | React 19 · Vite 8 · Tailwind v4 · Motion · TanStack Query · PWA · Supabase (Postgres, région UE) |
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install && npx supabase start && npm run db:reset && npm run test && npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## État
+
+| Lot | Contenu | État |
+|---|---|---|
+| **0a-1** | Schéma, auth sur invitation, isolation multi-foyers, budget LLM, export/suppression, 5 écrans | ✅ **39 tests verts** |
+| 0a-2 | Chargement CIQUAL, Open Food Facts, tables de conversion | ⬜ |
+| 0b | Ingestion des recettes | ⬜ précédé des mesures R1, R1b, R1c |
+| 1 | Optimiseur de session de batch cooking | ⬜ |
+| 2 à 6 | Courses · frigo · envies · prix · suivi | ⬜ |
+
+## Le test qui compte
+
+L'isolation entre foyers n'est pas une intention, c'est une propriété vérifiée :
+
+```bash
+npm run db:reset
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+  -c "alter table public.recipe disable row level security;
+      alter table public.household disable row level security;"
+npm run test          # 10 tests DOIVENT rougir
+npm run db:reset
+```
+
+Si la suite reste verte en retirant la sécurité, elle ne prouve rien.
