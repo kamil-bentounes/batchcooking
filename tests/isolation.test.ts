@@ -112,3 +112,112 @@ describe('classe C — données de foyer', () => {
     }
   })
 })
+
+const TABLES_A = [
+  'food', 'food_yield_factor', 'unit_weight', 'unit_conversion', 'density',
+  'default_temperature', 'default_duration', 'typical_quantity',
+  'appliance_catalog', 'ingestion_job', 'instance_setting',
+] as const
+
+// ⚠️ Lignes RÉELLEMENT valides. Avec un food_id inexistant, food_yield_factor et
+// density échoueraient sur la clé étrangère même sans RLS : le test resterait
+// vert alors qu'il ne teste rien.
+let foodId: string
+beforeAll(async () => {
+  const { data } = await admin().from('food')
+    .insert({ source: 'ciqual', source_code: `seed-${Date.now()}`, name: 'témoin' })
+    .select().single()
+  foodId = data!.id
+})
+
+const LIGNE_A = (): Record<string, Record<string, unknown>> => ({
+  food: { source: 'ciqual', source_code: `pirate-${Date.now()}`, name: 'pirate' },
+  food_yield_factor: { food_id: foodId, factor: 1 },
+  unit_weight: { label: 'pirate', grams: 1 },
+  unit_conversion: { unit_label: `pirate-${Date.now()}`, grams: 1 },
+  density: { food_id: foodId, grams_per_ml: 1 },
+  default_temperature: { preparation: `pirate-${Date.now()}`, temperature_c: 180 },
+  default_duration: { verb: `pirate-${Date.now()}`, base_minutes: 1, load_type: 'actif' },
+  typical_quantity: { ciqual_subgroup: `pirate-${Date.now()}`, grams: 1 },
+  appliance_catalog: { code: `pirate-${Date.now()}`, label: 'Pirate' },
+  ingestion_job: { url: `https://pirate.test/${Date.now()}` },
+  instance_setting: { key: `pirate-${Date.now()}`, value: {} },
+})
+
+describe('classe A — référentiel', () => {
+  it('est lisible par tout utilisateur authentifié', async () => {
+    for (const t of TABLES_A) {
+      const { error } = await alice.client.from(t).select('*').limit(1)
+      expect(error, `lecture de ${t}`).toBeNull()
+    }
+  })
+
+  it("n'est inscriptible par AUCUN utilisateur authentifié, sur les 11 tables", async () => {
+    const lignes = LIGNE_A()
+    for (const t of TABLES_A) {
+      const { error } = await alice.client.from(t).insert(lignes[t])
+      expect(error, `${t} accepte une écriture authentifiée`).not.toBeNull()
+    }
+  })
+
+  it('est inscriptible par le rôle de service', async () => {
+    const { error } = await admin()
+      .from('appliance_catalog').insert({ code: `four-${Date.now()}`, label: 'Four' })
+    expect(error).toBeNull()
+  })
+})
+
+describe('classe B — catalogue partagé', () => {
+  const TABLES_B = ['recipe', 'recipe_ingredient', 'recipe_step', 'recipe_step_dependency'] as const
+
+  const seedRecipe = async () => {
+    const { data } = await admin().from('recipe')
+      .insert({ source_url: `https://x/${Date.now()}-${Math.random()}`, yield_servings: 4 })
+      .select().single()
+    return data!
+  }
+
+  it('porte la traçabilité sur les quatre tables', async () => {
+    for (const t of TABLES_B) {
+      const { error } = await alice.client
+        .from(t).select('edited_by_household_id, edited_at').limit(1)
+      expect(error, `traçabilité manquante sur ${t}`).toBeNull()
+    }
+  })
+
+  it('est lisible par les deux foyers', async () => {
+    const r = await seedRecipe()
+    for (const who of [alice, bob]) {
+      const { data } = await who.client.from('recipe').select('id').eq('id', r.id)
+      expect(data, 'le catalogue est partagé').toHaveLength(1)
+    }
+  })
+
+  it("REFUSE l'insertion par un utilisateur authentifié", async () => {
+    const { error } = await alice.client
+      .from('recipe').insert({ source_url: `https://pirate/${Date.now()}` })
+    expect(error, 'un foyer peut créer une recette dans le catalogue partagé').not.toBeNull()
+  })
+
+  it('REFUSE la suppression par un utilisateur authentifié', async () => {
+    const r = await seedRecipe()
+    // Sans policy DELETE, PostgREST ne renvoie PAS d'erreur : il supprime 0 ligne.
+    await alice.client.from('recipe').delete().eq('id', r.id)
+    const { data } = await admin().from('recipe').select('id').eq('id', r.id)
+    expect(data, 'la ligne a été supprimée par un foyer').toHaveLength(1)
+  })
+})
+
+describe('current_household()', () => {
+  it('ne provoque pas de récursion de policy', async () => {
+    const { data, error } = await alice.client.rpc('current_household')
+    expect(error, 'code 42P17 = récursion de policy').toBeNull()
+    expect(data).toBe(alice.householdId)
+  })
+
+  it('renvoie NULL pour un authentifié sans profil', async () => {
+    const { client: orphan } = await makeOrphan()
+    const { data } = await orphan.rpc('current_household')
+    expect(data).toBeNull()
+  })
+})
