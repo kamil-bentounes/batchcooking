@@ -1,12 +1,33 @@
 import { motion } from 'motion/react'
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes } from 'react'
 
-export function Page({ titre, chapeau, centre, children }:
-  { titre: string; chapeau?: string; centre?: boolean; children: ReactNode }) {
+/* Navigation : deux liens, discrets. Le courant est en encre, l'autre en doux. */
+function Nav() {
+  const ici = window.location.pathname
+  const lien = (href: string, texte: string) => {
+    const actif = href === '/' ? ici === '/' : ici.startsWith(href)
+    return (
+      <a href={href}
+         className={`py-2 transition-colors ${actif ? 'text-encre' : 'text-doux hover:text-encre'}`}>
+        {texte}
+      </a>
+    )
+  }
+  return (
+    <nav className="mx-auto w-full max-w-lg flex gap-6 text-[15px] mb-8">
+      {lien('/', 'Objectifs')}
+      {lien('/settings', 'Réglages')}
+    </nav>
+  )
+}
+
+export function Page({ titre, chapeau, centre, nav, children }:
+  { titre: string; chapeau?: string; centre?: boolean; nav?: boolean; children: ReactNode }) {
   return (
     <main className={`min-h-dvh px-5 ${centre
       ? 'grid place-items-center py-10'
-      : 'py-12 sm:py-20'}`}>
+      : 'py-8 sm:py-14'}`}>
+      {nav && <Nav />}
       <div className="mx-auto w-full max-w-lg">
         <h1 className="titre text-4xl sm:text-5xl text-herbe">{titre}</h1>
         {chapeau && <p className="mt-3 text-doux text-[17px] max-w-[46ch]">{chapeau}</p>}

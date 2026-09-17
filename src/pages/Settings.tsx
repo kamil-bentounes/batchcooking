@@ -48,7 +48,7 @@ export function Settings() {
   }
 
   return (
-    <Page titre="Réglages">
+    <Page nav titre="Réglages">
       <section>
         <h2 className="titre text-xl text-herbe">Budget IA</h2>
         <p className="mt-1 text-doux text-[15px]">

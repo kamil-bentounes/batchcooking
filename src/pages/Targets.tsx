@@ -71,7 +71,7 @@ export function Targets({ userId }: { userId: string }) {
   }
 
   return (
-    <Page titre="Mes objectifs" chapeau="Ce que tu vises chaque jour. Ta moitié a les siens.">
+    <Page nav titre="Mes objectifs" chapeau="Ce que tu vises chaque jour. Ta moitié a les siens.">
       <Groupe>
         {MESURES.map(m => (
           <Mesure key={m.cle} m={m} valeur={v[m.cle]}
