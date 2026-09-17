@@ -1817,7 +1817,7 @@ git commit -m "feat(0a-1): porte d'entrée, création de foyer et les trois écr
 
 ### Task 11 : Export et suppression de compte (RGPD, §11 q. 1)
 
-Le spec range ces deux fonctions dans **ce lot**, pas plus tard. Elles sont petites, et les reporter voudrait dire livrer une application qui collecte des données de santé probables sans porte de sortie.
+**Pourquoi maintenant, alors que le RGPD ne s'applique pas encore** : en usage strictement domestique (vous deux), l'exemption de l'art. 2.2.c joue et rien n'est obligatoire. Ces deux fonctions sont livrées ici parce qu'elles font **20 lignes de SQL**, qu'elles servent de sauvegarde dès le premier jour, et qu'elles éviteront de reprendre le schéma le jour où un foyer tiers se connectera (D7). C'est de la prévoyance bon marché, pas une mise en conformité.
 
 **Files:**
 - Create: `supabase/migrations/0008_rgpd.sql`, `tests/rgpd.test.ts`

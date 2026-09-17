@@ -1,7 +1,7 @@
 # Design — Application de batch cooking, diet et budget
 
 - **Date** : 2026-09-17
-- **Version** : 9 — parcours du lot 4 fixé : catalogue d'abord, génération IA sur demande explicite uniquement
+- **Version** : 10 — cadrage RGPD corrigé : exemption domestique tant que l'usage reste le foyer
 - **Statut** : design validé, en attente du plan d'implémentation du **lot 0a-1**
 - **Utilisateurs** : un foyer de 2 personnes au départ, puis d'autres foyers **sur invitation**
 
@@ -39,7 +39,7 @@ Le différenciateur est le point 2 : l'ordonnancement de la session sous contrai
 | D9 | **LLM en API pour tout ce qui est en ligne** ; **serveur loué exclu** | Auto-hébergement sur serveur | Le VPS le moins cher capable de faire tourner un 7B quantifié coûte 6-14 €/mois ; la facture API qu'il remplacerait est de **1,30 €/mois**. Le plancher tarifaire d'un serveur est au-dessus de toute la dépense. |
 | D20 | **`ExtractionBackend` interchangeable** (§8.1) : fournisseur choisi par R1 parmi API de référence, **API à bas coût** et **modèle local quantifié**. Tranché par mesure, pas par opinion. | Choisir API ou local dans l'architecture | L'ingestion est le seul poste où le local pourrait gagner. Mais **le prix à battre est de ~4 €** (§8.3, DeepSeek V4 Flash sur du contenu public), pas de 20 € : contre 4 à 11 jours de machine et la plus faible qualité des options, le local ne rapporte plus rien. L'interface reste, pour ne pas dépendre d'un fournisseur. |
 | D21 | **Routage par tâche** (§8.1) : aucun modèle quand une table suffit, modèle rapide pour l'extraction et la vision, modèle capable pour la création | Un seul modèle partout | Le plus gros levier de coût n'est pas un modèle moins cher, c'est **ne pas appeler de modèle** : le JSON-LD couvre 98 % des recettes, D19 couvre les durées. En régime permanent il reste **~56 appels par mois**. |
-| D22 | **Le fournisseur est choisi par la sensibilité de la donnée, pas par le prix** (§8.2) : contenu web public → le moins cher ; **donnée personnelle du foyer → fournisseur à conditions claires et posture RGPD**, jamais le moins-disant | Fournisseur unique ; choix au prix seul | Le texte d'une recette est public. **Une photo de l'intérieur d'un frigo est une donnée personnelle du domicile**, au même titre que les objectifs caloriques (§11 q. 1). Le critère ne peut pas être le même. |
+| D22 | **Le fournisseur est choisi par la sensibilité de la donnée, pas par le prix** (§8.2) : contenu web public → le moins cher ; **image du logement → fournisseur de confiance**, jamais le moins-disant | Fournisseur unique ; choix au prix seul | Le texte d'une recette est public. Une photo de l'intérieur d'un frigo ne l'est pas. Ce n'est pas une obligation réglementaire en usage domestique (§11 q. 1) — c'est que l'écart de prix en jeu est de 0,003 € par photo, donc qu'il n'y a rien à arbitrer. |
 | D10 | **PWA** | Application native | 99 $/an + review pour un usage sur invitation. |
 | D11 | **Deux budgets LLM séparés** : global pour l'ingestion mutualisée, par foyer pour vision et propositions | Plafond unique par foyer | L'ingestion profite à tous les foyers (D16) : la facturer à un seul est incohérent. |
 | D12 | **Découverte par sitemaps publics**, pas par crawl | Crawl | **Mesuré** : aucun `robots.txt` ne bloque l'IA, les sitemaps exposent 112 000 recettes et existent pour être lus par des robots. |
@@ -556,8 +556,8 @@ D'où D20 : on le teste, on ne le suppose pas, et l'architecture n'en dépend pa
 | Donnée envoyée | Nature | Critère |
 |---|---|---|
 | Texte d'une page de recette | **Contenu web public** | Le moins cher qui passe R1. Aucune contrainte de juridiction. |
-| Photo du frigo, photo d'un ticket de caisse | **Donnée personnelle du domicile** | Conditions contractuelles claires, pas d'entraînement sur les données, posture RGPD. **Jamais le moins-disant.** |
-| Poids, pesées, objectifs caloriques | **Donnée de santé probable** (§11 q. 1) | **Ne quittent jamais la base.** Aucun appel LLM ne les transporte. |
+| Photo du frigo, photo d'un ticket de caisse | **Image de l'intérieur de votre logement** | Conditions contractuelles claires, pas d'entraînement sur les données. **Jamais le moins-disant** — le critère ici est la confiance, pas 0,003 € d'écart. |
+| Poids, pesées, objectifs caloriques | **Donnée personnelle intime** — pas nécessairement « de santé » au sens de l'art. 9 (§11 q. 1) | **Ne quittent jamais la base.** Aucun appel LLM ne les transporte. Règle gratuite : aucun besoin fonctionnel ne les envoie dehors. |
 
 ### 8.3 Options d'inférence chiffrées — amorçage de 5 000 recettes
 
@@ -650,7 +650,7 @@ L'utilisateur a explicitement délégué ces arbitrages. Chacun reçoit un défa
 
 | # | Question | Défaut retenu |
 |---|---|---|
-| 1 | **RGPD** — poids, objectifs caloriques et photos de frigo relèvent probablement des données de santé (art. 9) | Hébergement UE (acquis) · **export et suppression de compte** livrés au lot 0a-1 · aucune donnée de santé ne transite par un LLM (§8.2). Qualification juridique à confirmer, mais le traitement technique est celui du cas le plus strict. |
+| 1 | **RGPD** — s'applique-t-il ? | **Non, tant que l'usage reste le foyer.** L'art. 2.2.c du RGPD exclut le traitement « dans le cadre d'une activité strictement personnelle ou domestique » : deux personnes qui suivent leurs propres repas sont hors champ. Rien à déclarer, aucune formalité.<br>**Oui, dès qu'un foyer tiers se connecte** (D7 prévoit l'ouverture sur invitation) : à ce moment on traite les données d'autrui et l'exemption tombe.<br>Dispositions prises **par anticipation, parce qu'elles coûtent peu** : hébergement UE (acquis, c'est le choix de région Supabase), export et suppression de compte au lot 0a-1 (~20 lignes de SQL, et cela sert aussi de sauvegarde), et aucun poids ni objectif transporté vers un LLM (§8.2 — bonne pratique gratuite, pas une obligation).<br>**Formulation corrigée** : « donnée de santé au sens de l'art. 9 » était excessif. Un objectif calorique n'est pas un dossier médical ; la qualification est discutable, pas établie. Elle n'a de toute façon d'objet que dans le cas ouvert. |
 | 2 | **Conservation des plats** | **3-4 jours au frigo** pour un plat cuisiné, au-delà **congélation**. Dimensionne le nombre de portions par session : ~8 portions fraîches maximum pour 2 personnes. Réglable par foyer. |
 | 3 | **Validation des recettes générées** (lot 4) | `visibility = privée` d'office. Le passage en `partagée` est un **acte explicite du foyer**, jamais automatique. |
 | 4 | **Micronutriments affichés** | **Fer, calcium, B12, oméga-3, magnésium, vitamine D** — les six qui bougent réellement avec un régime riche en protéines. Aucune cible (§5.1), affichage seul. Les ~54 autres restent en base, disponibles sans encombrer l'interface. |
