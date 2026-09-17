@@ -1,7 +1,7 @@
 # Design — Application de batch cooking, diet et budget
 
 - **Date** : 2026-09-17
-- **Version** : 7 — routage des fournisseurs par sensibilité des données, options d'inférence chiffrées
+- **Version** : 8 — génération de recettes explicitée, 5 questions ouvertes tranchées par défaut
 - **Statut** : design validé, en attente du plan d'implémentation du **lot 0a-1**
 - **Utilisateurs** : un foyer de 2 personnes au départ, puis d'autres foyers **sur invitation**
 
@@ -612,7 +612,7 @@ interface PriceSource {
 | **1 · Cuisiner** | Optimiseur, équipement par session, Gantt, arbitrage du four, bilan par personne | **La session du dimanche fonctionne.** |
 | **2 · Courses** | Agrégation, édition, envoi par e-mail | La liste arrive le samedi. |
 | **3 · Frigo** | Autocomplétion, puis photo + vision (R3), soustraction à la liste | Plus d'achats en double. |
-| **4 · Envies et propositions** | Filtres sur bornes défavorables (D18), densité protéique · proposition et création de recettes par LLM (`origin = générée`, `visibility = privée` par défaut) | Le moteur de suggestion. |
+| **4 · Envies et propositions** | **Deux modes distincts** — (a) **catalogue** : filtres sur bornes défavorables (D18), densité protéique, envies (fromage, poisson, soupe, dessert), déterministe et gratuit ; (b) **génération LLM à la demande** : à partir du frigo, des envies, des cibles (D4) et de l'équipement du foyer (D6). `origin = générée`, `visibility = privée` par défaut (§5.0). **Une recette générée traverse le même pipeline de normalisation** que les recettes importées (§7.1 étapes 3 à 5 : décomposition en actions, résolution des ingrédients vers CIQUAL, macros en intervalle) — sans quoi elle serait affichable mais **non planifiable** par l'optimiseur. | Le moteur de suggestion. |
 | **5 · Prix** | `PriceSource` + 4 adaptateurs, estimation du panier, veille nouveautés | Budget prévisible. |
 | **6 · Suivi** | Consommé et dépensé, courbes, comparaison aux cibles | Le recul sur 3 mois. |
 
@@ -621,17 +621,18 @@ est volontairement rudimentaire — le soin visuel commence au lot 1.
 
 ---
 
-## 11. Questions ouvertes
+## 11. Questions ouvertes — tranchées par défaut
 
-1. **RGPD** — poids, objectifs caloriques et photos de frigo relèvent probablement des données
-   de santé (art. 9). Hébergement UE acquis ; export et suppression de compte à prévoir.
-   Qualification à confirmer.
-2. **Conservation des plats** — combien de jours au frigo, quoi congeler ? Dimensionne le
-   nombre de portions par session. Non tranché.
-3. **Validation des recettes générées** (lot 4) — quel niveau avant passage en `visibility = partagée` ?
-4. **Micronutriments** — CIQUAL en fournit ~60. Lesquels afficher sans noyer l'interface ?
-   (Aucune cible : §5.1.)
-5. **Veille « nouveautés protéinées »** — fréquence calée sur les prospectus hebdomadaires ?
+L'utilisateur a explicitement délégué ces arbitrages. Chacun reçoit un défaut documenté et
+**réglable à l'usage** : aucun n'entraîne de réécriture s'il déplaît.
+
+| # | Question | Défaut retenu |
+|---|---|---|
+| 1 | **RGPD** — poids, objectifs caloriques et photos de frigo relèvent probablement des données de santé (art. 9) | Hébergement UE (acquis) · **export et suppression de compte** livrés au lot 0a-1 · aucune donnée de santé ne transite par un LLM (§8.2). Qualification juridique à confirmer, mais le traitement technique est celui du cas le plus strict. |
+| 2 | **Conservation des plats** | **3-4 jours au frigo** pour un plat cuisiné, au-delà **congélation**. Dimensionne le nombre de portions par session : ~8 portions fraîches maximum pour 2 personnes. Réglable par foyer. |
+| 3 | **Validation des recettes générées** (lot 4) | `visibility = privée` d'office. Le passage en `partagée` est un **acte explicite du foyer**, jamais automatique. |
+| 4 | **Micronutriments affichés** | **Fer, calcium, B12, oméga-3, magnésium, vitamine D** — les six qui bougent réellement avec un régime riche en protéines. Aucune cible (§5.1), affichage seul. Les ~54 autres restent en base, disponibles sans encombrer l'interface. |
+| 5 | **Veille « nouveautés protéinées »** | **Hebdomadaire**, calée sur la parution des prospectus. |
 
 ---
 
