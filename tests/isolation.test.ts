@@ -221,3 +221,56 @@ describe('current_household()', () => {
     expect(data).toBeNull()
   })
 })
+
+describe('création du premier foyer', () => {
+  // ⚠️ Indispensable : makeActor() a déjà créé des foyers dans le beforeAll global,
+  // donc le repli `not exists (household)` vaut false et l'instance serait fermée.
+  // Sans ce réglage, le test d'évasion passe À VIDE — il resterait vert même si
+  // l'on remettait `for all` sur user_profile, soit la régression qu'il interdit.
+  beforeAll(async () => {
+    await admin().from('instance_setting')
+      .upsert({ key: 'allow_household_creation', value: { enabled: true } })
+  })
+
+  it('un authentifié sans profil peut créer son foyer, une seule fois', async () => {
+    const { client: solo } = await makeOrphan()
+    const { data, error } = await solo.rpc('create_household', { p_name: 'Chez nous' })
+    expect(error).toBeNull()
+    expect(data).toBeTruthy()
+
+    const { data: hh } = await solo.rpc('current_household')
+    expect(hh).toBe(data)
+
+    const { error: e2 } = await solo.rpc('create_household', { p_name: 'Évasion' })
+    expect(e2, 'un utilisateur déjà rattaché ne doit pas pouvoir créer un foyer').not.toBeNull()
+  })
+
+  it('ne peut PAS être contournée en supprimant son propre profil', async () => {
+    const { client: evade } = await makeOrphan()
+    const { data: hh1, error: e1 } = await evade.rpc('create_household', { p_name: 'Premier' })
+    expect(e1, "l'amorce a échoué : tout le test dégénérerait en expect(null).toBe(null)").toBeNull()
+    expect(hh1).toBeTruthy()
+    const { data: me } = await evade.auth.getUser()
+
+    await evade.from('user_profile').delete().eq('id', me.user!.id)
+    const { data: still } = await evade.rpc('current_household')
+    expect(still, 'le profil a pu être supprimé : évasion possible').toBe(hh1)
+
+    const { error } = await evade.rpc('create_household', { p_name: 'Évasion' })
+    expect(error, 'évasion réussie vers un second foyer').not.toBeNull()
+    // L'erreur doit venir du garde « déjà rattaché », pas du verrou d'instance :
+    // sinon le test ne prouverait rien sur l'absence de policy DELETE.
+    expect(String((error as any).message)).toContain('rattaché')
+  })
+
+  it("refuse la création quand l'instance est verrouillée", async () => {
+    const a = admin()
+    await a.from('instance_setting')
+      .upsert({ key: 'allow_household_creation', value: { enabled: false } })
+    const { client: tard } = await makeOrphan()
+    const { error } = await tard.rpc('create_household', { p_name: 'Trop tard' })
+    expect(error, "l'instance est sur invitation : la création doit être refusée").not.toBeNull()
+    await a.from('instance_setting')
+      .upsert({ key: 'allow_household_creation', value: { enabled: true } })
+  })
+})
