@@ -400,8 +400,16 @@ La tolérance de ±10 °C n'est **pas** la « tolérance culinaire » écartée 
 cuisait *tout* à une moyenne en rallongeant les durées. Ici on ne regroupe que le déjà
 compatible, et le reste est séquencé.
 
-**Dépassement de `target_duration_min`** : jamais d'échec silencieux. Le plan est produit, le
-dépassement affiché en minutes, une éviction proposée par coût marginal décroissant.
+**Décomposition de la durée** (D31) : le plan rend **trois nombres, pas un**.
+`makespan` = `temps_actif` + `attente_milieu` + `attente_fin`.
+`attente_milieu` est la **métrique de qualité de l'ordonnancement** — elle doit tendre vers zéro,
+et chaque minute qu'elle contient est une cuisson qu'aucune préparation n'a couverte.
+`attente_fin` est légitime : la dernière cuisson tourne, la cuisine est libre, on peut sortir.
+
+**Dépassement de `target_duration_min`** (D32) : jamais d'échec, jamais de refus. Le plan est
+produit, le dépassement affiché en minutes **avec la part d'attente qu'il contient** — c'est ce
+qui permet de décider — et deux boutons : **accepter** ou raccourcir. Une éviction par coût
+marginal décroissant n'est proposée que si l'utilisateur demande à raccourcir.
 
 **Recette non `plannable`** : **reste sélectionnable** — c'est par la sélection que passe la
 relecture (§7.5) — mais l'optimiseur ne la planifie pas tant que ses durées ne sont pas
