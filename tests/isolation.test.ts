@@ -116,7 +116,7 @@ describe('classe C — données de foyer', () => {
 const TABLES_A = [
   'food', 'food_yield_factor', 'unit_weight', 'unit_conversion', 'density',
   'default_temperature', 'default_duration', 'typical_quantity',
-  'appliance_catalog', 'ingestion_job', 'instance_setting',
+  'appliance_catalog', 'ingestion_job', 'instance_setting', 'non_action_pattern',
 ] as const
 
 // ⚠️ Lignes RÉELLEMENT valides. Avec un food_id inexistant, food_yield_factor et
@@ -142,6 +142,7 @@ const LIGNE_A = (): Record<string, Record<string, unknown>> => ({
   appliance_catalog: { code: `pirate-${Date.now()}`, label: 'Pirate' },
   ingestion_job: { url: `https://pirate.test/${Date.now()}` },
   instance_setting: { key: `pirate-${Date.now()}`, value: {} },
+  non_action_pattern: { pattern: `pirate-${Date.now()}` },
 })
 
 describe('classe A — référentiel', () => {
@@ -152,7 +153,7 @@ describe('classe A — référentiel', () => {
     }
   })
 
-  it("n'est inscriptible par AUCUN utilisateur authentifié, sur les 11 tables", async () => {
+  it("n'est inscriptible par AUCUN utilisateur authentifié, sur les 12 tables", async () => {
     const lignes = LIGNE_A()
     for (const t of TABLES_A) {
       const { error } = await alice.client.from(t).insert(lignes[t])

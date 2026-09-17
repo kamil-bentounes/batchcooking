@@ -54,6 +54,8 @@ await charger('food', aliments, 'source,source_code')
 await charger('unit_conversion',     c.unit_conversion,     'unit_label,ciqual_subgroup')
 await charger('typical_quantity',    c.typical_quantity,    'ciqual_subgroup')
 await charger('default_temperature', c.default_temperature, 'preparation')
+await charger('non_action_pattern',
+  c.non_action.motifs.map(m => ({ pattern: m })), 'pattern')
 await charger('default_duration',    c.default_duration,    'verb,appliance_type')
 
 // La densité pointe sur un aliment : on résout le code CIQUAL en identifiant.

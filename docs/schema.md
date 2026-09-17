@@ -55,10 +55,11 @@ peut se créer un foyer.
 |---|---|---|
 | `food` | **3 185** | CIQUAL 2020 (ANSES) — 14 nutriments retenus sur ~60, groupes et sous-groupes, état cru/cuit déduit du nom |
 | `unit_conversion` | 29 | Construite à la main. Cuillères, pincées, poignées → grammes, avec surcharges par sous-groupe (huile 13,5 g la c. à soupe contre 15 g par défaut) |
-| `default_duration` | 35 | Construite à la main. (verbe, appareil) → durée, `load_type`, `scaling` |
+| `default_duration` | **55** | Construite à la main puis **étendue par mesure** : partie de 35 verbes couvrant 86 % des étapes réelles, portée à 55 pour **98 %**. (verbe, appareil) → durée, `load_type`, `scaling` |
 | `default_temperature` | 12 | Construite à la main |
 | `typical_quantity` | 9 | Construite à la main. Borne haute des lignes d'ingrédients sans quantité |
 | `density` | 6 | Construite à la main, rattachée à un code CIQUAL |
+| `non_action_pattern` | 16 | Phrases qui ne décrivent aucun geste (« bon appétit », « astuce : »). Sans elles, le plan gagne des minutes fantômes. |
 | `appliance_catalog` | 8 | Four, plaques, air fryer, micro-ondes, robot cuiseur, autocuiseur, blender, batteur |
 
 ```bash
@@ -71,3 +72,19 @@ Idempotent : rejouable sans effet de bord, tout passe par des `upsert`.
 **Attribution obligatoire** : ANSES-CIQUAL, Licence Ouverte Etalab.
 La conversion du `.xls` d'origine est un geste ponctuel — `scripts/ciqual-to-json.py`,
 à rejouer seulement si l'ANSES publie une nouvelle table.
+
+## Un piège à ne pas réintroduire
+
+`unique (a, b)` **ne contraint pas** les lignes où `b` est `NULL` : Postgres traite chaque
+`NULL` comme distinct, donc un `upsert` répété les duplique. Constaté en production —
+`default_duration` est montée à 74 lignes au lieu de 55.
+
+La forme correcte, partout où une colonne de la clé peut être nulle :
+
+```sql
+unique nulls not distinct (a, b)   -- PostgreSQL 15+
+```
+
+Concernées : `default_duration` (`appliance_type`), `unit_conversion` (`ciqual_subgroup`),
+`llm_usage` (`household_id`). Un test de non-régression le vérifie
+(`tests/referentiels.test.ts`).
