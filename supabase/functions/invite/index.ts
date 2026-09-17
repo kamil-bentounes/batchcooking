@@ -22,10 +22,29 @@ Deno.serve(async (req) => {
   const { email } = await req.json().catch(() => ({ email: null }))
   if (!email) return reply('Email manquant', 400)
 
-  const { data: inv, error } = await admin.from('invitation')
-    .insert({ household_id: profile.household_id, email, created_by: userRes.user.id })
-    .select().single()
-  if (error) return reply(error.message, 409)
+  // Une invitation déjà en attente pour cette adresse n'est pas une erreur :
+  // on rend le lien existant. L'index unique invitation_pending_unique garantit
+  // qu'il n'y en a qu'une, et l'utilisateur veut le lien, pas un message.
+  const { data: dejaLa } = await admin.from('invitation')
+    .select('*').eq('household_id', profile.household_id)
+    .ilike('email', email).is('accepted_at', null).maybeSingle()
+
+  let inv = dejaLa
+  if (inv && new Date(inv.expires_at) < new Date()) {
+    // Expirée : on la prolonge au lieu d'en créer une seconde.
+    const { data: prolongee } = await admin.from('invitation')
+      .update({ expires_at: new Date(Date.now() + 7 * 864e5).toISOString() })
+      .eq('id', inv.id).select().single()
+    inv = prolongee
+  }
+
+  if (!inv) {
+    const { data: creee, error } = await admin.from('invitation')
+      .insert({ household_id: profile.household_id, email, created_by: userRes.user.id })
+      .select().single()
+    if (error) return reply(error.message, 409)
+    inv = creee
+  }
 
   const link = `${Deno.env.get('APP_BASE_URL')}/invite/${inv.token}`
   const key = Deno.env.get('RESEND_API_KEY')
