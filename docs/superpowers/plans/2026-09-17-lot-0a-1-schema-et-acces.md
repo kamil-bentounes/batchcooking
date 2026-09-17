@@ -2,15 +2,22 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Livrer un projet Supabase en région UE dont l'isolation multi-foyers est **prouvée par des tests**, avec le schéma des trois classes, le flux d'invitation par e-mail, les profils et cibles nutritionnelles, et le compteur de budget LLM.
+**Goal:** Livrer un projet Supabase en région UE dont l'isolation multi-foyers est **prouvée par des tests qui échouent quand on retire la RLS**, avec le schéma des trois classes, le flux d'invitation par e-mail, les profils et cibles nutritionnelles, le compteur de budget LLM, et l'export/suppression de compte.
 
-**Architecture:** Postgres (Supabase) porte trois classes d'isolation — A référentiel en lecture seule, B catalogue partagé en écriture tracée, C données de foyer sous RLS stricte. `current_household()` en `SECURITY DEFINER` évite la récursion de policy. Un trigger `BEFORE UPDATE` porte ce que RLS ne sait pas exprimer. Le front est une PWA React minimale : trois écrans, rien de plus.
+**Architecture:** Postgres (Supabase) porte trois classes d'isolation — A référentiel en lecture seule, B catalogue partagé en écriture tracée, C données de foyer sous RLS stricte. `current_household()` en `SECURITY DEFINER` contourne la RLS de `user_profile` **par ownership de table** et évite la récursion. Un trigger `BEFORE UPDATE` porte ce que RLS ne sait pas exprimer. Le front est une PWA React minimale : une porte d'entrée et trois écrans.
 
-**Tech Stack:** Supabase CLI · PostgreSQL 15 · React 18 + Vite + TypeScript · Vitest · `@supabase/supabase-js` · Resend (Edge Function Deno)
+**Tech Stack:** Supabase CLI (installé en devDependency) · PostgreSQL 15 · React + TypeScript + Vite (versions du template `react-ts` courant) · Vitest · `@supabase/supabase-js` · Edge Functions Deno · Resend
 
-**Spec de référence :** `docs/superpowers/specs/2026-09-17-batch-cooking-app-design.md` (v8) — §5.0, §5.0.1, §5.1, §5.2, §5.3, §10.
+**Spec de référence :** `docs/superpowers/specs/2026-09-17-batch-cooking-app-design.md` **(v9)** — §5.0, §5.0.1, §5.1, §5.2, §5.3, §10, §11.
 
-**Hors périmètre, explicitement :** peuplement des référentiels (lot 0a-2), ingestion (0b), pesée (0c), optimiseur (lot 1) et tout le reste. Les tables de classe A sont **créées vides** : leur remplissage est le lot 0a-2.
+**Hors périmètre, explicitement :** peuplement des référentiels (0a-2), ingestion (0b), pesée (0c), optimiseur (lot 1) et tout le reste. Les tables de classe A et B sont **créées vides**.
+
+---
+
+## Deux pièges vérifiés empiriquement — lire avant de commencer
+
+1. **`recipe.plannable` n'est PAS maintenue par trigger dans ce lot.** Le spec §5.3 l'exige, mais son calcul dépend des durées des *actions*, qui n'existent qu'au lot 0b. Ici la colonne est créée avec `default false` et **le trigger est explicitement reporté au lot 0b**. Ne pas l'implémenter à vide.
+2. **La policy `select using (true)` de la classe B ignore `visibility` et `owner_household_id`.** Sans effet ici — les tables sont vides — mais elle devra être resserrée au lot 4, quand des recettes privées créées par un foyer existeront. La phrase « aucun foyer ne voit les données d'un autre » est donc vraie **pour les données de foyer (classe C)**, pas pour un catalogue partagé qui est vide.
 
 ---
 
@@ -18,89 +25,106 @@
 
 | Fichier | Responsabilité |
 |---|---|
-| `supabase/migrations/0001_class_a.sql` | DDL classe A — référentiel et infrastructure, 11 tables |
-| `supabase/migrations/0002_class_b.sql` | DDL classe B — catalogue partagé, 4 tables + colonnes de traçabilité |
-| `supabase/migrations/0003_class_c.sql` | DDL classe C — foyer, 5 tables, dont `nutrition_target.household_id` dénormalisé |
-| `supabase/migrations/0004_current_household.sql` | `current_household()` en `SECURITY DEFINER` |
+| `supabase/migrations/0001_class_c.sql` | DDL classe C — foyer. **En premier** : le socle de test en dépend. |
+| `supabase/migrations/0002_class_a.sql` | DDL classe A — référentiel et infrastructure, 11 tables |
+| `supabase/migrations/0003_class_b.sql` | DDL classe B — catalogue partagé, 4 tables + traçabilité |
+| `supabase/migrations/0004_current_household.sql` | `current_household()` en `SECURITY DEFINER` + droits |
 | `supabase/migrations/0005_policies.sql` | Les trois formes de policies RLS (§5.0.1) |
-| `supabase/migrations/0006_triggers.sql` | Garde d'écriture classe B · dénormalisation `household_id` · `updated_at` |
-| `supabase/migrations/0007_llm_budget.sql` | `llm_usage`, les deux plafonds, `llm_budget_remaining()` |
-| `supabase/functions/invite/index.ts` | Crée une invitation et l'envoie via Resend |
-| `supabase/functions/accept-invite/index.ts` | Consomme un token et rattache l'utilisateur au foyer |
-| `tests/helpers/db.ts` | Deux foyers, deux utilisateurs, clients authentifiés — socle de tous les tests |
-| `tests/isolation.test.ts` | **Le livrable central** : l'isolation est prouvée ou elle ne l'est pas |
-| `tests/class-b-guard.test.ts` | Écriture tracée et champs à confiance élevée protégés |
-| `tests/invitation.test.ts` | Cycle complet création → envoi → acceptation → expiration |
-| `tests/llm-budget.test.ts` | Les deux plafonds, et la ligne système |
-| `src/lib/supabase.ts` | Client unique, typé |
-| `src/pages/AcceptInvite.tsx` · `Targets.tsx` · `Settings.tsx` | Les trois écrans |
+| `supabase/migrations/0006_triggers.sql` | Garde classe B · dénormalisation · `updated_at` |
+| `supabase/migrations/0007_llm_budget.sql` | `llm_usage`, les deux plafonds, les deux fonctions |
+| `supabase/migrations/0008_rgpd.sql` | Export et suppression de compte (§11 q. 1) |
+| `supabase/functions/_shared/cors.ts` | En-têtes CORS et préflight — sans quoi le front ne peut rien appeler |
+| `supabase/functions/invite/index.ts` | Crée une invitation, l'envoie via Resend |
+| `supabase/functions/accept-invite/index.ts` | Consomme un token, rattache l'utilisateur au foyer |
+| `tests/helpers/db.ts` | Deux foyers, deux utilisateurs, clients authentifiés |
+| `tests/isolation.test.ts` | **Le livrable central**, et il doit rougir si on retire la RLS |
+| `tests/class-b-guard.test.ts` | Écriture tracée, champs sûrs protégés, INSERT/DELETE refusés |
+| `tests/invitation.test.ts`, `tests/llm-budget.test.ts`, `tests/rgpd.test.ts` | Le reste |
+| `src/lib/supabase.ts` · `src/pages/*.tsx` | Porte d'entrée + trois écrans |
 
-**Un fichier de migration = une responsabilité.** Ne pas fusionner : chaque migration doit pouvoir être relue seule, et c'est sur elles que porte l'audit d'isolation.
+**Un fichier de migration = une responsabilité.** C'est sur elles que porte l'audit d'isolation.
 
 ---
 
 ### Task 1 : Échafaudage du projet
 
-**Files:**
-- Create: `package.json`, `vite.config.ts`, `tsconfig.json`, `.env.example`, `.gitignore`
-- Create: `supabase/config.toml` (généré)
+⚠️ **Le dépôt n'est PAS vide** : il contient `docs/`. `npm create vite@latest .` y refuse de travailler, et sa seule option (`--overwrite`) **supprimerait `docs/`**, donc le spec et ce plan. On échafaude dans un sous-dossier puis on déplace.
 
-- [ ] **Step 1 : Initialiser le projet Node et Vite**
+**Files:**
+- Create: `package.json`, `vite.config.ts`, `tsconfig*.json`, `index.html`, `src/`, `.env.example`, `.gitignore`
+
+- [ ] **Step 1 : Échafauder hors du dépôt racine, puis déplacer**
 
 ```bash
 cd /home/kamil/PERSO/smart-receipe-scheduler
-npm create vite@latest . -- --template react-ts
-npm install
-npm install @supabase/supabase-js
-npm install -D vitest dotenv
+npm create vite@latest .scaffold -- --template react-ts
+cp -r .scaffold/. .
+rm -rf .scaffold
+ls package.json src/App.tsx docs/superpowers/specs/  # les trois doivent exister
 ```
 
-- [ ] **Step 2 : Initialiser Supabase en local**
+Attendu : `package.json` et `src/App.tsx` créés, **et `docs/` intact**. Si `docs/` a disparu, `git checkout -- docs/` immédiatement.
+
+- [ ] **Step 2 : Installer les dépendances, CLI Supabase comprise**
+
+```bash
+npm install
+npm install @supabase/supabase-js
+npm install -D vitest dotenv supabase
+npx supabase --version   # doit répondre : le CLI est en devDependency, pas global
+```
+
+> Le CLI **doit** être une devDependency : sans lui, tous les `npm run db:reset` du plan échouent.
+
+- [ ] **Step 3 : Initialiser Supabase en local**
 
 ```bash
 npx supabase init
 npx supabase start
 ```
 
-Attendu : une sortie listant `API URL`, `anon key`, `service_role key`. **Les noter**, ils servent aux tests.
+Noter `API URL`, `anon key`, `service_role key`.
 
-- [ ] **Step 3 : Écrire `.env.example` et `.gitignore`**
+- [ ] **Step 4 : `.env.example`, `.env`, `.gitignore`**
 
 ```bash
 cat > .env.example <<'EOF'
 VITE_SUPABASE_URL=http://127.0.0.1:54321
 VITE_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+EOF
+mkdir -p supabase/functions
+cat > supabase/functions/.env.example <<'EOF'
 RESEND_API_KEY=
 APP_BASE_URL=http://localhost:5173
 EOF
-printf '%s\n' 'node_modules/' 'dist/' '.env' '.env.local' '.DS_Store' 'supabase/.temp/' > .gitignore
+printf '%s\n' 'node_modules/' 'dist/' '.env' '.env.local' '.scaffold/' \
+  'supabase/.temp/' 'supabase/functions/.env' '.DS_Store' > .gitignore
 cp .env.example .env
+cp supabase/functions/.env.example supabase/functions/.env
 ```
 
-Renseigner `.env` avec les clés de l'étape 2. **`.env` ne doit jamais être commité.**
+Renseigner `.env` avec les clés du Step 3. **`supabase/functions/.env` est lu automatiquement par `supabase functions serve`.**
 
-- [ ] **Step 4 : Déclarer les scripts de test dans `package.json`**
+- [ ] **Step 5 : Ajouter les scripts — FUSIONNER, ne pas remplacer le `package.json`**
+
+Ouvrir `package.json` et **ajouter** ces clés à l'objet `scripts` existant, sans toucher à `dependencies`, `devDependencies`, ni au script `build` généré :
 
 ```json
-{
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "test": "vitest run",
-    "db:reset": "supabase db reset"
-  }
-}
+"test": "vitest run --fileParallelism=false",
+"db:reset": "supabase db reset"
 ```
 
-- [ ] **Step 5 : Vérifier que tout démarre**
+> `--fileParallelism=false` : les fichiers de test partagent une seule base. En parallèle, certaines assertions deviennent dépendantes de l'ordre.
+
+- [ ] **Step 6 : Vérifier**
 
 ```bash
 npm run test -- --passWithNoTests && npx supabase status
 ```
-Attendu : Vitest sort en 0, `supabase status` liste les services `RUNNING`.
+Attendu : Vitest sort en 0, les services Supabase sont `RUNNING`.
 
-- [ ] **Step 6 : Commit**
+- [ ] **Step 7 : Commit**
 
 ```bash
 git add -A && git commit -m "chore(0a-1): échafaudage Vite + Supabase local"
@@ -110,7 +134,7 @@ git add -A && git commit -m "chore(0a-1): échafaudage Vite + Supabase local"
 
 ### Task 2 : Socle de test — deux foyers, deux utilisateurs
 
-Ce fichier conditionne tous les tests suivants. Il est écrit **avant** la première migration, parce que c'est lui qui définit ce que « isolation prouvée » veut dire.
+Ce fichier définit ce que « isolation prouvée » veut dire. Il insère dans `household` et `user_profile` : c'est pourquoi **la classe C est la première migration**, contrairement à l'ordre de lecture du spec.
 
 **Files:**
 - Create: `tests/helpers/db.ts`
@@ -126,20 +150,23 @@ const URL = process.env.VITE_SUPABASE_URL!
 const ANON = process.env.VITE_SUPABASE_ANON_KEY!
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-/** Client qui contourne RLS. À n'utiliser que pour préparer les données. */
+/** Client qui contourne RLS. Réservé à la préparation des données. */
 export const admin = () =>
   createClient(URL, SERVICE, { auth: { persistSession: false } })
 
-export type Actor = { client: SupabaseClient; userId: string; householdId: string }
+export type Actor = { client: SupabaseClient; userId: string; householdId: string; email: string }
+
+const PASSWORD = 'test-password-12345'
+const uniqueEmail = (p: string) =>
+  `${p}-${Date.now()}-${Math.random().toString(36).slice(2)}@test.local`
 
 /** Crée un foyer, un utilisateur confirmé, et le client authentifié correspondant. */
 export async function makeActor(name: string): Promise<Actor> {
   const a = admin()
-  const email = `${name}-${Date.now()}-${Math.random().toString(36).slice(2)}@test.local`
-  const password = 'test-password-12345'
+  const email = uniqueEmail(name)
 
   const { data: u, error: ue } = await a.auth.admin.createUser({
-    email, password, email_confirm: true,
+    email, password: PASSWORD, email_confirm: true,
   })
   if (ue) throw ue
 
@@ -152,22 +179,30 @@ export async function makeActor(name: string): Promise<Actor> {
   if (pe) throw pe
 
   const client = createClient(URL, ANON, { auth: { persistSession: false } })
-  const { error: se } = await client.auth.signInWithPassword({ email, password })
+  const { error: se } = await client.auth.signInWithPassword({ email, password: PASSWORD })
   if (se) throw se
 
-  return { client, userId: u.user.id, householdId: h.id }
+  return { client, userId: u.user.id, householdId: h.id, email }
 }
 
-/** Client authentifié mais SANS profil : sert à vérifier qu'il ne voit rien. */
-export async function makeOrphan(): Promise<SupabaseClient> {
+/** Authentifié mais SANS profil : doit ne rien voir. */
+export async function makeOrphan(): Promise<{ client: SupabaseClient; userId: string }> {
   const a = admin()
-  const email = `orphan-${Date.now()}@test.local`
-  const password = 'test-password-12345'
-  const { error } = await a.auth.admin.createUser({ email, password, email_confirm: true })
+  const email = uniqueEmail('orphan')
+  const { data, error } = await a.auth.admin.createUser({
+    email, password: PASSWORD, email_confirm: true,
+  })
   if (error) throw error
   const client = createClient(URL, ANON, { auth: { persistSession: false } })
-  await client.auth.signInWithPassword({ email, password })
-  return client
+  await client.auth.signInWithPassword({ email, password: PASSWORD })
+  return { client, userId: data.user.id }
+}
+
+/** Jeton d'accès brut, pour appeler les Edge Functions en fetch direct. */
+export async function accessToken(client: SupabaseClient): Promise<string> {
+  const { data } = await client.auth.getSession()
+  if (!data.session) throw new Error('pas de session')
+  return data.session.access_token
 }
 ```
 
@@ -179,31 +214,183 @@ git add tests/helpers/db.ts && git commit -m "test(0a-1): socle de test deux foy
 
 ---
 
-### Task 3 : Classe A — référentiel et infrastructure
+### Task 3 : Classe C — données de foyer
 
-Onze tables, **créées vides**. Leur peuplement est le lot 0a-2. Règle d'accès : lecture pour tout utilisateur authentifié, **écriture réservée au rôle de service**.
+**En premier**, parce que le socle de test en dépend. Point délicat : `nutrition_target` n'a pas de `household_id` naturel (sa clé est `user_profile_id`). §5.0.1 tranche : **on dénormalise**, la colonne est remplie par un trigger `BEFORE INSERT` — vérifié en PostgreSQL 15, `BEFORE` s'exécute avant la contrainte `NOT NULL` **et** avant le `WITH CHECK` de la policy.
 
 **Files:**
-- Create: `supabase/migrations/0001_class_a.sql`
-- Test: `tests/isolation.test.ts` (premier bloc)
+- Create: `supabase/migrations/0001_class_c.sql`, `tests/isolation.test.ts`
 
 - [ ] **Step 1 : Écrire le test qui échoue**
 
 ```typescript
 // tests/isolation.test.ts
 import { describe, it, expect, beforeAll } from 'vitest'
-import { makeActor, admin, type Actor } from './helpers/db'
+import { makeActor, makeOrphan, admin, type Actor } from './helpers/db'
 
 let alice: Actor, bob: Actor
 beforeAll(async () => { alice = await makeActor('alice'); bob = await makeActor('bob') })
 
-describe('classe A — référentiel', () => {
-  const TABLES_A = [
-    'food', 'food_yield_factor', 'unit_weight', 'unit_conversion', 'density',
-    'default_temperature', 'default_duration', 'typical_quantity',
-    'appliance_catalog', 'ingestion_job', 'instance_setting',
-  ]
+describe('classe C — données de foyer', () => {
+  it('un foyer ne voit que son propre household', async () => {
+    const { data } = await alice.client.from('household').select('id')
+    expect(data?.map(h => h.id)).toEqual([alice.householdId])
+  })
 
+  it("un foyer ne voit jamais les cibles d'un autre", async () => {
+    await admin().from('nutrition_target').insert({
+      user_profile_id: bob.userId,
+      kcal: 2400, protein_g: 180, fiber_g: 30, carb_g: 250, fat_g: 70,
+    })
+    const { data } = await alice.client
+      .from('nutrition_target').select('*').eq('user_profile_id', bob.userId)
+    expect(data ?? [], 'fuite entre foyers').toHaveLength(0)
+  })
+
+  it('les cibles sont historisées, pas écrasées', async () => {
+    for (const kcal of [2000, 2100]) {
+      const { error } = await alice.client.from('nutrition_target').insert({
+        user_profile_id: alice.userId,
+        kcal, protein_g: 150, fiber_g: 30, carb_g: 200, fat_g: 60,
+      })
+      expect(error).toBeNull()
+    }
+    const { data } = await alice.client
+      .from('nutrition_target').select('kcal').eq('user_profile_id', alice.userId)
+    expect(data!.length, 'une cible qui change ne doit pas effacer le passé')
+      .toBeGreaterThanOrEqual(2)
+  })
+
+  it("un foyer ne peut pas écrire une cible chez un autre", async () => {
+    const { error } = await alice.client.from('nutrition_target').insert({
+      user_profile_id: bob.userId,
+      kcal: 1, protein_g: 1, fiber_g: 1, carb_g: 1, fat_g: 1,
+    })
+    expect(error, 'écriture croisée acceptée').not.toBeNull()
+  })
+
+  it('un authentifié SANS profil ne voit aucune donnée de foyer', async () => {
+    const { client: orphan } = await makeOrphan()
+    for (const t of ['household', 'user_profile', 'nutrition_target', 'invitation']) {
+      const { data } = await orphan.from(t).select('*')
+      expect(data ?? [], `${t} visible par un orphelin`).toHaveLength(0)
+    }
+  })
+})
+```
+
+- [ ] **Step 2 : Lancer, vérifier l'échec**
+
+```bash
+npm run test -- tests/isolation.test.ts
+```
+Attendu : ÉCHEC dans `beforeAll` — `relation "public.household" does not exist`.
+
+- [ ] **Step 3 : Écrire `0001_class_c.sql`**
+
+```sql
+-- supabase/migrations/0001_class_c.sql
+-- Classe C : données de foyer, RLS stricte (spec §5.0, §5.0.1).
+
+create extension if not exists "pgcrypto";
+
+create table public.household (
+  id                  uuid primary key default gen_random_uuid(),
+  name                text not null,
+  llm_monthly_cap_eur numeric not null default 5 check (llm_monthly_cap_eur >= 0),
+  created_at          timestamptz not null default now()
+);
+
+create table public.user_profile (
+  id           uuid primary key references auth.users(id) on delete cascade,
+  household_id uuid not null references public.household(id) on delete cascade,
+  display_name text not null,
+  created_at   timestamptz not null default now()
+);
+create index on public.user_profile (household_id);
+
+-- household_id est DÉNORMALISÉ (§5.0.1, forme 3) : rempli par trigger BEFORE INSERT.
+-- Vérifié en PG15 : BEFORE s'exécute avant la vérification NOT NULL et avant le
+-- WITH CHECK de la policy, donc un insert client sans household_id fonctionne.
+create table public.nutrition_target (
+  id              uuid primary key default gen_random_uuid(),
+  user_profile_id uuid not null references public.user_profile(id) on delete cascade,
+  household_id    uuid not null references public.household(id) on delete cascade,
+  kcal      numeric not null check (kcal > 0),
+  protein_g numeric not null check (protein_g >= 0),
+  fiber_g   numeric not null check (fiber_g   >= 0),
+  carb_g    numeric not null check (carb_g    >= 0),
+  fat_g     numeric not null check (fat_g     >= 0),
+  valid_from timestamptz not null default now()
+);
+create index on public.nutrition_target (household_id);
+create index on public.nutrition_target (user_profile_id, valid_from desc);
+
+create table public.invitation (
+  id           uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.household(id) on delete cascade,
+  email        text not null,
+  token        uuid not null unique default gen_random_uuid(),
+  expires_at   timestamptz not null default now() + interval '7 days',
+  accepted_at  timestamptz,
+  created_by   uuid references auth.users(id),
+  created_at   timestamptz not null default now()
+);
+create index on public.invitation (household_id);
+create unique index invitation_pending_unique
+  on public.invitation (household_id, lower(email)) where accepted_at is null;
+```
+
+- [ ] **Step 4 : Appliquer et relancer**
+
+```bash
+npm run db:reset && npm run test -- tests/isolation.test.ts
+```
+Attendu : le `beforeAll` PASSE désormais. **Les assertions d'isolation ÉCHOUENT** — la RLS n'est posée qu'en Task 6, et le test « historisées » échoue aussi car `household_id` est `not null` sans trigger (Task 7). C'est l'échec attendu, pour la bonne raison.
+
+- [ ] **Step 5 : Commit**
+
+```bash
+git add supabase/migrations/0001_class_c.sql tests/isolation.test.ts
+git commit -m "feat(0a-1): schéma classe C, données de foyer"
+```
+
+---
+
+### Task 4 : Classe A — référentiel et infrastructure
+
+Onze tables, **créées vides**. Règle d'accès : lecture pour tout authentifié, **écriture réservée au rôle de service**.
+
+⚠️ **Le test de lecture ne prouve presque rien** : Supabase accorde `authenticated` sur les tables `public` neuves, donc il passerait aussi sans RLS. **C'est le test d'écriture qui porte la preuve**, et il doit couvrir les 11 tables, pas une seule.
+
+**Files:**
+- Create: `supabase/migrations/0002_class_a.sql`
+
+- [ ] **Step 1 : Ajouter le bloc de test à `tests/isolation.test.ts`**
+
+```typescript
+const TABLES_A = [
+  'food', 'food_yield_factor', 'unit_weight', 'unit_conversion', 'density',
+  'default_temperature', 'default_duration', 'typical_quantity',
+  'appliance_catalog', 'ingestion_job', 'instance_setting',
+] as const
+
+// Une ligne minimale valide par table, pour tenter une écriture qui DOIT être refusée.
+const LIGNE_A: Record<string, Record<string, unknown>> = {
+  food: { source: 'ciqual', source_code: 'x1', name: 'pirate' },
+  food_yield_factor: { food_id: '00000000-0000-0000-0000-000000000001', factor: 1 },
+  unit_weight: { label: 'pirate', grams: 1 },
+  unit_conversion: { unit_label: 'pirate', grams: 1 },
+  density: { food_id: '00000000-0000-0000-0000-000000000001', grams_per_ml: 1 },
+  default_temperature: { preparation: 'pirate', temperature_c: 180 },
+  default_duration: { verb: 'pirate', base_minutes: 1, load_type: 'actif' },
+  typical_quantity: { ciqual_subgroup: 'pirate', grams: 1 },
+  appliance_catalog: { code: 'pirate', label: 'Pirate' },
+  ingestion_job: { url: 'https://pirate.test' },
+  instance_setting: { key: 'pirate', value: {} },
+}
+
+describe('classe A — référentiel', () => {
   it('est lisible par tout utilisateur authentifié', async () => {
     for (const t of TABLES_A) {
       const { error } = await alice.client.from(t).select('*').limit(1)
@@ -211,10 +398,11 @@ describe('classe A — référentiel', () => {
     }
   })
 
-  it("n'est PAS inscriptible par un utilisateur authentifié", async () => {
-    const { error } = await alice.client
-      .from('appliance_catalog').insert({ code: 'pirate', label: 'Pirate' })
-    expect(error, "l'insertion aurait dû être refusée").not.toBeNull()
+  it("n'est inscriptible par AUCUN utilisateur authentifié, sur les 11 tables", async () => {
+    for (const t of TABLES_A) {
+      const { error } = await alice.client.from(t).insert(LIGNE_A[t])
+      expect(error, `${t} accepte une écriture authentifiée`).not.toBeNull()
+    }
   })
 
   it('est inscriptible par le rôle de service', async () => {
@@ -225,33 +413,30 @@ describe('classe A — référentiel', () => {
 })
 ```
 
-- [ ] **Step 2 : Lancer le test et vérifier qu'il échoue**
+- [ ] **Step 2 : Lancer, vérifier l'échec**
 
 ```bash
 npm run test -- tests/isolation.test.ts
 ```
 Attendu : ÉCHEC — `relation "public.food" does not exist`.
 
-- [ ] **Step 3 : Écrire la migration**
+- [ ] **Step 3 : Écrire `0002_class_a.sql`**
 
 ```sql
--- supabase/migrations/0001_class_a.sql
+-- supabase/migrations/0002_class_a.sql
 -- Classe A : référentiel immuable et infrastructure (spec §5.0).
--- Lecture pour tout authentifié, écriture réservée au rôle de service.
--- Ces tables sont créées VIDES : leur peuplement est le lot 0a-2.
-
-create extension if not exists "pgcrypto";
+-- Créées VIDES : leur peuplement est le lot 0a-2.
 
 create table public.food (
-  id            uuid primary key default gen_random_uuid(),
-  source        text not null check (source in ('ciqual','off')),
-  source_code   text not null,
-  name          text not null,
-  state         text not null default 'cru' check (state in ('cru','cuit')),
-  ciqual_group     text,
-  ciqual_subgroup  text,
-  nutrients     jsonb not null default '{}'::jsonb,
-  created_at    timestamptz not null default now(),
+  id              uuid primary key default gen_random_uuid(),
+  source          text not null check (source in ('ciqual','off')),
+  source_code     text not null,
+  name            text not null,
+  state           text not null default 'cru' check (state in ('cru','cuit')),
+  ciqual_group    text,
+  ciqual_subgroup text,
+  nutrients       jsonb not null default '{}'::jsonb,
+  created_at      timestamptz not null default now(),
   unique (source, source_code)
 );
 create index on public.food (ciqual_subgroup);
@@ -281,17 +466,17 @@ create table public.unit_conversion (
 );
 
 create table public.density (
-  food_id       uuid primary key references public.food(id) on delete cascade,
-  grams_per_ml  numeric not null check (grams_per_ml > 0)
+  food_id      uuid primary key references public.food(id) on delete cascade,
+  grams_per_ml numeric not null check (grams_per_ml > 0)
 );
 
 create table public.default_temperature (
-  id              uuid primary key default gen_random_uuid(),
-  preparation     text not null unique,
-  temperature_c   int not null check (temperature_c between 30 and 300)
+  id            uuid primary key default gen_random_uuid(),
+  preparation   text not null unique,
+  temperature_c int not null check (temperature_c between 30 and 300)
 );
 
--- D19 : la clé est (verbe, appareil) et s'applique aux ACTIONS, pas aux étapes.
+-- D19 : clé (verbe, appareil), appliquée aux ACTIONS et non aux étapes.
 create table public.default_duration (
   id             uuid primary key default gen_random_uuid(),
   verb           text not null,
@@ -303,16 +488,16 @@ create table public.default_duration (
   unique (verb, appliance_type)
 );
 
--- D18 : borne haute des lignes d'ingrédients sans quantité (16 % mesurés).
+-- D18 : borne haute des 16 % de lignes d'ingrédients sans quantité.
 create table public.typical_quantity (
   ciqual_subgroup text primary key,
   grams           numeric not null check (grams > 0)
 );
 
 create table public.appliance_catalog (
-  id       uuid primary key default gen_random_uuid(),
-  code     text not null unique,
-  label    text not null,
+  id               uuid primary key default gen_random_uuid(),
+  code             text not null unique,
+  label            text not null,
   default_capacity int not null default 1 check (default_capacity >= 1)
 );
 
@@ -340,33 +525,40 @@ create table public.instance_setting (
 ```bash
 npm run db:reset && npm run test -- tests/isolation.test.ts
 ```
-Attendu : les tests de lecture ÉCHOUENT encore (RLS pas encore posée, donc tout est refusé ou tout passe selon le défaut). Les policies arrivent en Task 6 — c'est normal et voulu : **une migration, une responsabilité**.
+Attendu : le test de **lecture** passe (privilèges Supabase par défaut), le test d'**écriture refusée** ÉCHOUE — la RLS n'existe pas encore. C'est précisément ce que la Task 6 vient corriger.
 
 - [ ] **Step 5 : Commit**
 
 ```bash
-git add supabase/migrations/0001_class_a.sql tests/isolation.test.ts
+git add supabase/migrations/0002_class_a.sql tests/isolation.test.ts
 git commit -m "feat(0a-1): schéma classe A, référentiel et infrastructure"
 ```
 
 ---
 
-### Task 4 : Classe B — catalogue partagé
+### Task 5 : Classe B — catalogue partagé
 
-Quatre tables, **créées vides** (l'ingestion est le lot 0b). Toutes portent `edited_by_household_id` et `edited_at` : c'est la correction de la relecture n°3.
+Quatre tables **vides** (l'ingestion est le lot 0b). Toutes portent `edited_by_household_id` et `edited_at`.
+
+⚠️ **Le piège du faux vert, mesuré** : en désactivant la RLS sur `recipe`, les tests de lecture et de traçabilité restent **tous verts** pendant qu'un utilisateur authentifié peut insérer et supprimer n'importe quelle ligne du catalogue. Il faut donc tester explicitement que **l'INSERT est refusé** et que le **DELETE affecte 0 ligne** — et, mesuré : RLS activée sans policy DELETE, le DELETE ne renvoie **aucune erreur**, il supprime simplement 0 ligne. **Asserter le compte, jamais `error`.**
 
 **Files:**
-- Create: `supabase/migrations/0002_class_b.sql`
+- Create: `supabase/migrations/0003_class_b.sql`
 
-- [ ] **Step 1 : Écrire le test qui échoue**
-
-Ajouter à `tests/isolation.test.ts` :
+- [ ] **Step 1 : Ajouter le bloc de test**
 
 ```typescript
 describe('classe B — catalogue partagé', () => {
-  const TABLES_B = ['recipe', 'recipe_ingredient', 'recipe_step', 'recipe_step_dependency']
+  const TABLES_B = ['recipe', 'recipe_ingredient', 'recipe_step', 'recipe_step_dependency'] as const
 
-  it('porte les colonnes de traçabilité sur les quatre tables', async () => {
+  const seedRecipe = async () => {
+    const { data } = await admin().from('recipe')
+      .insert({ source_url: `https://x/${Date.now()}-${Math.random()}`, yield_servings: 4 })
+      .select().single()
+    return data!
+  }
+
+  it('porte la traçabilité sur les quatre tables', async () => {
     for (const t of TABLES_B) {
       const { error } = await alice.client
         .from(t).select('edited_by_household_id, edited_at').limit(1)
@@ -375,15 +567,26 @@ describe('classe B — catalogue partagé', () => {
   })
 
   it('est lisible par les deux foyers', async () => {
-    const a = admin()
-    const { data: r } = await a.from('recipe')
-      .insert({ source_url: `https://x/${Date.now()}`, source_name: 'test', yield_servings: 4 })
-      .select().single()
+    const r = await seedRecipe()
     for (const who of [alice, bob]) {
-      const { data, error } = await who.client.from('recipe').select('id').eq('id', r!.id)
-      expect(error).toBeNull()
+      const { data } = await who.client.from('recipe').select('id').eq('id', r.id)
       expect(data, 'le catalogue est partagé').toHaveLength(1)
     }
+  })
+
+  // ↓↓↓ Les deux tests qui empêchent le faux vert ↓↓↓
+  it("REFUSE l'insertion par un utilisateur authentifié", async () => {
+    const { error } = await alice.client
+      .from('recipe').insert({ source_url: `https://pirate/${Date.now()}` })
+    expect(error, 'un foyer peut créer une recette dans le catalogue partagé').not.toBeNull()
+  })
+
+  it('REFUSE la suppression par un utilisateur authentifié', async () => {
+    const r = await seedRecipe()
+    // Sans policy DELETE, PostgREST ne renvoie PAS d'erreur : il supprime 0 ligne.
+    await alice.client.from('recipe').delete().eq('id', r.id)
+    const { data } = await admin().from('recipe').select('id').eq('id', r.id)
+    expect(data, 'la ligne a été supprimée par un foyer').toHaveLength(1)
   })
 })
 ```
@@ -395,69 +598,72 @@ npm run test -- tests/isolation.test.ts
 ```
 Attendu : ÉCHEC — `relation "public.recipe" does not exist`.
 
-- [ ] **Step 3 : Écrire la migration**
+- [ ] **Step 3 : Écrire `0003_class_b.sql`**
 
 ```sql
--- supabase/migrations/0002_class_b.sql
+-- supabase/migrations/0003_class_b.sql
 -- Classe B : catalogue partagé, écriture authentifiée et tracée (spec §5.0).
 -- Créées vides : l'ingestion est le lot 0b.
 
 create table public.recipe (
-  id                  uuid primary key default gen_random_uuid(),
-  source_url          text unique,
-  source_name         text,
-  origin              text not null default 'importee'
-                      check (origin in ('importee','generee','manuelle')),
-  owner_household_id  uuid,          -- NULL = importée ; non-NULL = créée par un foyer
-  visibility          text not null default 'privee'
-                      check (visibility in ('privee','partagee')),
-  title               text,
-  yield_servings      int check (yield_servings > 0),
-  total_time_min      numeric,
-  prep_time_min       numeric,
-  cook_time_min       numeric,
-  license_note        text,
-  plannable           boolean not null default false,  -- maintenue par trigger (Task 7)
+  id                 uuid primary key default gen_random_uuid(),
+  source_url         text unique,
+  source_name        text,
+  origin             text not null default 'importee'
+                     check (origin in ('importee','generee','manuelle')),
+  owner_household_id uuid,   -- NULL = importée ; non-NULL = créée par un foyer
+  visibility         text not null default 'privee'
+                     check (visibility in ('privee','partagee')),
+  title              text,
+  yield_servings     int check (yield_servings > 0),
+  total_time_min     numeric,
+  prep_time_min      numeric,
+  cook_time_min      numeric,
+  license_note       text,
+  -- §5.3 exige que plannable soit maintenue par trigger. Son calcul dépend des
+  -- durées des ACTIONS, qui n'existent qu'au lot 0b : le trigger y est reporté.
+  -- Ici la colonne existe et reste false. NE PAS implémenter de trigger à vide.
+  plannable          boolean not null default false,
   edited_by_household_id uuid,
-  edited_at           timestamptz,
-  created_at          timestamptz not null default now()
+  edited_at          timestamptz,
+  created_at         timestamptz not null default now()
 );
 create index on public.recipe (plannable);
 create index on public.recipe (owner_household_id);
 
 create table public.recipe_ingredient (
-  id                uuid primary key default gen_random_uuid(),
-  recipe_id         uuid not null references public.recipe(id) on delete cascade,
-  ordinal           int not null,
-  raw_text          text not null,
-  food_id           uuid references public.food(id),
-  qty               numeric,
-  unit              text,
-  grams_reference   numeric,
-  -- résolution de RÉFÉRENCE seulement. La résolution par foyer vit en classe C
-  -- (household_ingredient_resolution, lot 0c) — correction de la relecture n°2.
+  id        uuid primary key default gen_random_uuid(),
+  recipe_id uuid not null references public.recipe(id) on delete cascade,
+  ordinal   int not null,
+  raw_text  text not null,
+  food_id   uuid references public.food(id),
+  qty       numeric,
+  unit      text,
+  grams_reference numeric,
+  -- Résolution de RÉFÉRENCE seulement. La résolution par foyer vit en classe C
+  -- (household_ingredient_resolution, lot 0c).
   resolution_source text check (resolution_source in ('reference','llm','aucune')),
-  confidence        numeric check (confidence between 0 and 1),
+  confidence numeric check (confidence between 0 and 1),
   edited_by_household_id uuid,
-  edited_at         timestamptz,
+  edited_at timestamptz,
   unique (recipe_id, ordinal)
 );
 create index on public.recipe_ingredient (recipe_id);
 
 create table public.recipe_step (
-  id                uuid primary key default gen_random_uuid(),
-  recipe_id         uuid not null references public.recipe(id) on delete cascade,
-  ordinal           int not null,
-  text              text not null,
-  duration_min      numeric,
-  duration_source   text check (duration_source in ('declaree','defaut','llm','confirmee')),
-  appliance_type    text,
-  temperature_c     int,
+  id        uuid primary key default gen_random_uuid(),
+  recipe_id uuid not null references public.recipe(id) on delete cascade,
+  ordinal   int not null,
+  text      text not null,
+  duration_min       numeric,
+  duration_source    text check (duration_source in ('declaree','defaut','llm','confirmee')),
+  appliance_type     text,
+  temperature_c      int,
   temperature_source text check (temperature_source in ('declaree','defaut','llm','confirmee')),
-  load_type         text check (load_type in ('actif','passif','bloquant')),
-  confidence        numeric check (confidence between 0 and 1),
+  load_type          text check (load_type in ('actif','passif','bloquant')),
+  confidence numeric check (confidence between 0 and 1),
   edited_by_household_id uuid,
-  edited_at         timestamptz,
+  edited_at timestamptz,
   unique (recipe_id, ordinal)
 );
 create index on public.recipe_step (recipe_id);
@@ -473,150 +679,37 @@ create table public.recipe_step_dependency (
 );
 ```
 
-- [ ] **Step 4 : Appliquer et commiter**
+- [ ] **Step 4 : Appliquer, commiter**
 
 ```bash
-npm run db:reset
-git add supabase/migrations/0002_class_b.sql tests/isolation.test.ts
+npm run db:reset && npm run test -- tests/isolation.test.ts
+git add supabase/migrations/0003_class_b.sql tests/isolation.test.ts
 git commit -m "feat(0a-1): schéma classe B, catalogue partagé et tracé"
-```
-
----
-
-### Task 5 : Classe C — données de foyer
-
-Cinq tables. Point délicat : **`nutrition_target` n'a pas de `household_id` naturel** (sa clé est `user_profile_id`). Le spec §5.0.1 tranche : **on dénormalise**, la colonne est maintenue par trigger. Une colonne coûte moins qu'une jointure dans chaque policy, et supprime un risque de récursion.
-
-**Files:**
-- Create: `supabase/migrations/0003_class_c.sql`
-
-- [ ] **Step 1 : Écrire le test qui échoue**
-
-```typescript
-describe('classe C — données de foyer', () => {
-  it('un foyer ne voit jamais les cibles d\'un autre', async () => {
-    await admin().from('nutrition_target').insert({
-      user_profile_id: bob.userId, household_id: bob.householdId,
-      kcal: 2400, protein_g: 180, fiber_g: 30, carb_g: 250, fat_g: 70,
-    })
-    const { data } = await alice.client.from('nutrition_target').select('*')
-    expect(data ?? [], 'fuite entre foyers').toHaveLength(0)
-  })
-
-  it('un foyer ne voit que son propre household', async () => {
-    const { data } = await alice.client.from('household').select('id')
-    expect(data?.map(h => h.id)).toEqual([alice.householdId])
-  })
-
-  it('les cibles sont historisées, pas écrasées', async () => {
-    const a = admin()
-    for (const kcal of [2000, 2100]) {
-      await a.from('nutrition_target').insert({
-        user_profile_id: alice.userId, household_id: alice.householdId,
-        kcal, protein_g: 150, fiber_g: 30, carb_g: 200, fat_g: 60,
-      })
-    }
-    const { data } = await alice.client
-      .from('nutrition_target').select('kcal').eq('user_profile_id', alice.userId)
-    expect(data!.length, 'une cible qui change ne doit pas effacer le passé')
-      .toBeGreaterThanOrEqual(2)
-  })
-})
-```
-
-- [ ] **Step 2 : Lancer, vérifier l'échec**
-
-```bash
-npm run test -- tests/isolation.test.ts
-```
-Attendu : ÉCHEC — `relation "public.nutrition_target" does not exist`.
-
-- [ ] **Step 3 : Écrire la migration**
-
-```sql
--- supabase/migrations/0003_class_c.sql
--- Classe C : données de foyer, RLS stricte (spec §5.0, §5.0.1).
-
-create table public.household (
-  id                    uuid primary key default gen_random_uuid(),
-  name                  text not null,
-  llm_monthly_cap_eur   numeric not null default 5 check (llm_monthly_cap_eur >= 0),
-  created_at            timestamptz not null default now()
-);
-
-create table public.user_profile (
-  id           uuid primary key references auth.users(id) on delete cascade,
-  household_id uuid not null references public.household(id) on delete cascade,
-  display_name text not null,
-  created_at   timestamptz not null default now()
-);
-create index on public.user_profile (household_id);
-
--- household_id est DÉNORMALISÉ (§5.0.1) : maintenu par trigger depuis user_profile.
-create table public.nutrition_target (
-  id              uuid primary key default gen_random_uuid(),
-  user_profile_id uuid not null references public.user_profile(id) on delete cascade,
-  household_id    uuid not null references public.household(id) on delete cascade,
-  kcal       numeric not null check (kcal > 0),
-  protein_g  numeric not null check (protein_g >= 0),
-  fiber_g    numeric not null check (fiber_g >= 0),
-  carb_g     numeric not null check (carb_g >= 0),
-  fat_g      numeric not null check (fat_g >= 0),
-  valid_from timestamptz not null default now()
-);
-create index on public.nutrition_target (household_id);
-create index on public.nutrition_target (user_profile_id, valid_from desc);
-
-create table public.invitation (
-  id           uuid primary key default gen_random_uuid(),
-  household_id uuid not null references public.household(id) on delete cascade,
-  email        text not null,
-  token        uuid not null unique default gen_random_uuid(),
-  expires_at   timestamptz not null default now() + interval '7 days',
-  accepted_at  timestamptz,
-  created_by   uuid references auth.users(id),
-  created_at   timestamptz not null default now()
-);
-create index on public.invitation (household_id);
-create unique index invitation_pending_unique
-  on public.invitation (household_id, lower(email)) where accepted_at is null;
-```
-
-- [ ] **Step 4 : Appliquer et commiter**
-
-```bash
-npm run db:reset
-git add supabase/migrations/0003_class_c.sql tests/isolation.test.ts
-git commit -m "feat(0a-1): schéma classe C, données de foyer"
 ```
 
 ---
 
 ### Task 6 : `current_household()` et les trois formes de policies
 
-**Le cœur du lot.** `SECURITY DEFINER` est obligatoire : si la fonction lit `user_profile`, elle-même sous RLS, elle provoque la récursion de policy classique de Postgres.
+**Le cœur du lot.** `SECURITY DEFINER` contourne la RLS de `user_profile` **par ownership de table** — les migrations tournent sous `postgres`, propriétaire des tables, et le propriétaire d'une table n'est pas soumis à sa RLS. Cela **casserait** si quelqu'un posait `FORCE ROW LEVEL SECURITY` ou changeait le propriétaire : c'est écrit en commentaire dans la migration.
 
 **Files:**
 - Create: `supabase/migrations/0004_current_household.sql`, `supabase/migrations/0005_policies.sql`
 
-- [ ] **Step 1 : Ajouter le test de non-récursion et d'orphelin**
+- [ ] **Step 1 : Ajouter le test de non-récursion**
 
 ```typescript
-import { makeOrphan } from './helpers/db'
-
 describe('current_household()', () => {
   it('ne provoque pas de récursion de policy', async () => {
     const { data, error } = await alice.client.rpc('current_household')
-    expect(error, 'récursion probable si erreur 42P17').toBeNull()
+    expect(error, 'code 42P17 = récursion de policy').toBeNull()
     expect(data).toBe(alice.householdId)
   })
 
-  it('un authentifié SANS profil ne voit aucune donnée de foyer', async () => {
-    const orphan = await makeOrphan()
-    for (const t of ['household', 'user_profile', 'nutrition_target', 'invitation']) {
-      const { data } = await orphan.from(t).select('*')
-      expect(data ?? [], `${t} visible par un orphelin`).toHaveLength(0)
-    }
+  it('renvoie NULL pour un authentifié sans profil', async () => {
+    const { client: orphan } = await makeOrphan()
+    const { data } = await orphan.rpc('current_household')
+    expect(data).toBeNull()
   })
 })
 ```
@@ -632,7 +725,12 @@ Attendu : ÉCHEC — `function public.current_household does not exist`.
 
 ```sql
 -- supabase/migrations/0004_current_household.sql
--- SECURITY DEFINER : contourne la RLS de user_profile et évite la récursion (§5.0.1).
+-- SECURITY DEFINER : la fonction s'exécute avec les droits de son propriétaire
+-- (postgres, propriétaire des tables), et le propriétaire d'une table n'est pas
+-- soumis à sa RLS. C'est ce qui évite la récursion de policy (§5.0.1).
+--
+-- ⚠️ Cela cesse d'être vrai si l'on pose FORCE ROW LEVEL SECURITY sur
+--    user_profile, ou si l'on change le propriétaire de la fonction. Ne pas le faire.
 create or replace function public.current_household()
 returns uuid
 language sql
@@ -643,8 +741,8 @@ as $$
   select household_id from public.user_profile where id = auth.uid()
 $$;
 
-revoke execute on function public.current_household() from public;
-grant   execute on function public.current_household() to authenticated;
+revoke execute on function public.current_household() from public, anon;
+grant   execute on function public.current_household() to authenticated, service_role;
 ```
 
 - [ ] **Step 4 : Écrire `0005_policies.sql`**
@@ -653,8 +751,8 @@ grant   execute on function public.current_household() to authenticated;
 -- supabase/migrations/0005_policies.sql
 -- Les TROIS formes de prédicat de §5.0.1.
 
--- ── Classe A : lecture pour tout authentifié, aucune policy d'écriture.
--- Le rôle de service contourne RLS, donc lui seul écrit.
+-- ── Classe A : lecture pour tout authentifié. AUCUNE policy d'écriture :
+-- seul le rôle de service, qui contourne RLS, peut écrire.
 do $$
 declare t text;
 begin
@@ -670,9 +768,13 @@ begin
   end loop;
 end $$;
 
--- ── Classe B : lecture par tous, écriture par tout authentifié.
+-- ── Classe B : lecture par tous, UPDATE par tout authentifié.
+-- Pas de policy INSERT ni DELETE : le catalogue est alimenté par le worker (0b).
 -- La restriction aux champs peu sûrs n'est PAS exprimable en RLS : c'est le
 -- trigger de la Task 7 qui la porte.
+--
+-- ⚠️ `using (true)` en lecture ignore visibility et owner_household_id. Sans effet
+--    ici (tables vides) ; à resserrer au lot 4, quand des recettes privées existeront.
 do $$
 declare t text;
 begin
@@ -709,7 +811,7 @@ create policy invitation_rw on public.invitation
   using (household_id = public.current_household())
   with check (household_id = public.current_household());
 
--- ── Classe C, forme 3 : household_id dénormalisé (maintenu par trigger, Task 7).
+-- ── Classe C, forme 3 : household_id dénormalisé (rempli par trigger, Task 7).
 alter table public.nutrition_target enable row level security;
 create policy nutrition_target_rw on public.nutrition_target
   for all to authenticated
@@ -717,12 +819,12 @@ create policy nutrition_target_rw on public.nutrition_target
   with check (household_id = public.current_household());
 ```
 
-- [ ] **Step 5 : Appliquer et vérifier que TOUT passe**
+- [ ] **Step 5 : Appliquer**
 
 ```bash
 npm run db:reset && npm run test -- tests/isolation.test.ts
 ```
-Attendu : **tous les tests d'isolation PASSENT.** C'est le livrable central du lot : si l'un échoue, ne pas continuer.
+Attendu : **tout passe sauf les tests qui dépendent du trigger de dénormalisation** (`historisées`, `écriture croisée`) — ils tombent en Task 7. Tous les autres, y compris les quatre tests anti-faux-vert, doivent être verts.
 
 - [ ] **Step 6 : Commit**
 
@@ -731,15 +833,26 @@ git add supabase/migrations/0004_current_household.sql supabase/migrations/0005_
 git commit -m "feat(0a-1): current_household en SECURITY DEFINER et les 3 formes de policies"
 ```
 
+- [ ] **Step 7 : Prouver que les tests ne sont pas creux**
+
+```bash
+npx supabase db reset
+psql "$(npx supabase status -o json | python3 -c 'import sys,json;print(json.load(sys.stdin)["DB_URL"])')" \
+  -c "alter table public.recipe disable row level security;"
+npm run test -- tests/isolation.test.ts
+```
+Attendu : **les tests « REFUSE l'insertion » et « REFUSE la suppression » ÉCHOUENT.**
+S'ils passent encore, la suite ne prouve rien : ne pas continuer, corriger les tests.
+Puis `npm run db:reset` pour revenir à l'état sain.
+
 ---
 
 ### Task 7 : Les triggers — ce que RLS ne sait pas exprimer
 
-Trois triggers. Le premier est le plus important : **la restriction d'écriture de la classe B dépend de la valeur de `confidence` de la ligne**, ce qu'une policy RLS ne peut pas porter (§5.0.1).
+Trois triggers. Le premier porte la restriction d'écriture de la classe B, qui **dépend de la valeur de `confidence` de la ligne** — inexprimable en policy (§5.0.1).
 
 **Files:**
-- Create: `supabase/migrations/0006_triggers.sql`
-- Create: `tests/class-b-guard.test.ts`
+- Create: `supabase/migrations/0006_triggers.sql`, `tests/class-b-guard.test.ts`
 
 - [ ] **Step 1 : Écrire le test qui échoue**
 
@@ -762,19 +875,17 @@ async function seedStep(confidence: number) {
   return s!
 }
 
-describe('garde d\'écriture de la classe B', () => {
-  it('autorise la correction d\'un champ peu sûr et la trace', async () => {
+describe("garde d'écriture de la classe B", () => {
+  it('autorise la correction d\'un champ peu sûr ET la trace', async () => {
     const step = await seedStep(0.4)
     const { error } = await alice.client
       .from('recipe_step').update({ duration_min: 30 }).eq('id', step.id)
     expect(error).toBeNull()
 
-    const { data } = await admin()
-      .from('recipe_step').select('duration_min, edited_by_household_id, edited_at')
-      .eq('id', step.id).single()
+    const { data } = await admin().from('recipe_step')
+      .select('duration_min, edited_by_household_id, edited_at').eq('id', step.id).single()
     expect(Number(data!.duration_min)).toBe(30)
-    expect(data!.edited_by_household_id, 'la traçabilité doit être posée par le trigger')
-      .toBe(alice.householdId)
+    expect(data!.edited_by_household_id, 'traçabilité non posée').toBe(alice.householdId)
     expect(data!.edited_at).not.toBeNull()
   })
 
@@ -782,14 +893,23 @@ describe('garde d\'écriture de la classe B', () => {
     const step = await seedStep(0.95)
     const { error } = await alice.client
       .from('recipe_step').update({ duration_min: 999 }).eq('id', step.id)
-    expect(error, 'une ligne sûre ne doit pas être modifiable par un foyer').not.toBeNull()
+    expect(error, 'une ligne sûre est modifiable par un foyer').not.toBeNull()
   })
 
   it('laisse passer le rôle de service quelle que soit la confiance', async () => {
     const step = await seedStep(0.99)
-    const { error } = await admin()
-      .from('recipe_step').update({ duration_min: 12 }).eq('id', step.id)
+    const { error } = await admin().from('recipe_step').update({ duration_min: 12 }).eq('id', step.id)
     expect(error).toBeNull()
+  })
+
+  it('fonctionne sur recipe, qui n\'a PAS de colonne confidence', async () => {
+    const { data: r } = await admin().from('recipe')
+      .insert({ source_url: `https://x/${Date.now()}-${Math.random()}` }).select().single()
+    const { error } = await alice.client.from('recipe').update({ title: 'corrigé' }).eq('id', r!.id)
+    expect(error, 'la garde ne doit pas planter sur une table sans confidence').toBeNull()
+    const { data } = await admin().from('recipe')
+      .select('edited_by_household_id').eq('id', r!.id).single()
+    expect(data!.edited_by_household_id).toBe(alice.householdId)
   })
 
   it('remplit household_id de nutrition_target automatiquement', async () => {
@@ -808,15 +928,15 @@ describe('garde d\'écriture de la classe B', () => {
 ```bash
 npm run test -- tests/class-b-guard.test.ts
 ```
-Attendu : ÉCHEC — la traçabilité est `null`, la ligne sûre se laisse modifier, et l'insert sans `household_id` viole `not null`.
+Attendu : ÉCHEC — traçabilité `null`, ligne sûre modifiable, insert `nutrition_target` en violation de `not null`.
 
 - [ ] **Step 3 : Écrire `0006_triggers.sql`**
 
 ```sql
 -- supabase/migrations/0006_triggers.sql
 
--- Détection robuste du rôle de service : Supabase pose SET LOCAL ROLE, mais on
--- vérifie aussi le claim JWT au cas où.
+-- PostgREST fait SET ROLE service_role : current_user suffit. Le claim JWT est
+-- vérifié en second, par robustesse.
 create or replace function public.is_service_role()
 returns boolean language sql stable as $$
   select current_user = 'service_role'
@@ -825,8 +945,10 @@ returns boolean language sql stable as $$
            '') = 'service_role'
 $$;
 
--- Garde de la classe B : ce que RLS ne peut pas exprimer (§5.0.1).
--- Générique sur les 4 tables : teste la présence de `confidence` via to_jsonb.
+-- Garde de la classe B. Générique sur 4 tables aux colonnes différentes :
+-- to_jsonb(old) ? 'confidence' saute simplement la vérification sur recipe et
+-- recipe_step_dependency, qui n'ont pas cette colonne. Les 4 ont en revanche
+-- edited_by_household_id, donc l'affectation est toujours valide.
 create or replace function public.tg_class_b_guard()
 returns trigger language plpgsql as $$
 declare old_conf numeric;
@@ -838,8 +960,7 @@ begin
   if to_jsonb(old) ? 'confidence' then
     old_conf := nullif(to_jsonb(old) ->> 'confidence', '')::numeric;
     if old_conf is not null and old_conf >= 0.8 then
-      raise exception
-        'ligne à confiance élevée (%), non modifiable par un foyer', old_conf
+      raise exception 'ligne à confiance élevée (%), non modifiable par un foyer', old_conf
         using errcode = 'check_violation';
     end if;
   end if;
@@ -860,6 +981,8 @@ create trigger class_b_guard before update on public.recipe_step_dependency
 
 -- Dénormalisation de nutrition_target.household_id (§5.0.1, forme 3).
 -- SECURITY DEFINER : doit lire user_profile, qui est sous RLS.
+-- BEFORE INSERT s'exécute avant la contrainte NOT NULL et avant le WITH CHECK
+-- de la policy — vérifié en PG15.
 create or replace function public.tg_nutrition_target_household()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
@@ -876,7 +999,6 @@ create trigger nutrition_target_household
   before insert or update of user_profile_id on public.nutrition_target
   for each row execute function public.tg_nutrition_target_household();
 
--- updated_at sur ingestion_job.
 create or replace function public.tg_touch_updated_at()
 returns trigger language plpgsql as $$
 begin new.updated_at := now(); return new; end $$;
@@ -885,14 +1007,12 @@ create trigger ingestion_job_touch before update on public.ingestion_job
   for each row execute function public.tg_touch_updated_at();
 ```
 
-> **Note pour l'implémenteur** : `nutrition_target.household_id` doit devenir nullable au moment de l'insert pour que le trigger puisse le remplir. Si `not null` bloque, remplacer la contrainte de colonne par une contrainte différée, ou poser le trigger en `BEFORE INSERT` (c'est le cas ici) — `BEFORE` s'exécute **avant** la vérification `not null`, donc cela fonctionne tel quel. Vérifier par le test, ne pas supposer.
-
-- [ ] **Step 4 : Appliquer, vérifier que tout passe**
+- [ ] **Step 4 : Appliquer, tout doit passer**
 
 ```bash
 npm run db:reset && npm run test
 ```
-Attendu : `isolation.test.ts` et `class-b-guard.test.ts` PASSENT tous les deux.
+Attendu : `isolation.test.ts` et `class-b-guard.test.ts` entièrement verts.
 
 - [ ] **Step 5 : Commit**
 
@@ -905,7 +1025,9 @@ git commit -m "feat(0a-1): garde d'écriture classe B, dénormalisation, updated
 
 ### Task 8 : Budget LLM — les deux plafonds
 
-Rappel du spec (D11) : **deux budgets distincts.** L'ingestion est mutualisée (D13) et tombe sur la ligne `household_id IS NULL`, plafonnée par `instance_setting`. La vision et les propositions tombent sur le foyer, plafonnées par `household.llm_monthly_cap_eur`.
+D11 : **deux budgets.** L'ingestion est mutualisée (D13) et tombe sur la ligne `household_id IS NULL`, plafonnée par `instance_setting`. La vision et les propositions tombent sur le foyer.
+
+⚠️ **Piège de fuseau horaire, vérifié** : `new Date(y, m, 1).toISOString().slice(0,10)` renvoie **le mois précédent** en Europe/Paris (minuit local = 22 h UTC la veille). Utiliser la forme ci-dessous.
 
 **Files:**
 - Create: `supabase/migrations/0007_llm_budget.sql`, `tests/llm-budget.test.ts`
@@ -919,8 +1041,10 @@ import { makeActor, admin, type Actor } from './helpers/db'
 
 let alice: Actor, bob: Actor
 beforeAll(async () => { alice = await makeActor('alice-llm'); bob = await makeActor('bob-llm') })
-const month = () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-  .toISOString().slice(0, 10)
+
+// Premier jour du mois courant, en UTC. NE PAS utiliser new Date(y, m, 1) :
+// en Europe/Paris, toISOString() renverrait le mois précédent.
+const month = () => new Date().toISOString().slice(0, 8) + '01'
 
 describe('budget LLM', () => {
   it('décompte la consommation du foyer de son plafond', async () => {
@@ -934,12 +1058,12 @@ describe('budget LLM', () => {
     expect(Number(data)).toBeCloseTo(3.5, 2)
   })
 
-  it('un foyer ne voit pas la consommation d\'un autre', async () => {
+  it("un foyer ne voit pas la consommation d'un autre", async () => {
     const { data } = await bob.client.from('llm_usage').select('*')
     expect((data ?? []).some(r => r.household_id === alice.householdId)).toBe(false)
   })
 
-  it('la ligne système (household_id NULL) n\'est visible d\'aucun foyer', async () => {
+  it("la ligne système n'est visible d'aucun foyer", async () => {
     await admin().from('llm_usage').insert({
       household_id: null, month: month(), kind: 'extraction', calls: 5000, cost_eur: 4,
     })
@@ -949,13 +1073,23 @@ describe('budget LLM', () => {
     }
   })
 
-  it('le plafond global est décompté séparément', async () => {
+  it('le plafond global décompte exactement la consommation système', async () => {
     const a = admin()
     await a.from('instance_setting')
       .upsert({ key: 'llm_global_monthly_cap_eur', value: { amount: 50 } })
-    const { data, error } = await a.rpc('llm_global_budget_remaining')
-    expect(error).toBeNull()
-    expect(Number(data)).toBeLessThanOrEqual(50)
+    const { data: before, error: e1 } = await a.rpc('llm_global_budget_remaining')
+    expect(e1, 'service_role doit pouvoir appeler cette fonction').toBeNull()
+
+    await a.from('llm_usage').upsert({
+      household_id: null, month: month(), kind: 'generation', calls: 1, cost_eur: 7,
+    })
+    const { data: after } = await a.rpc('llm_global_budget_remaining')
+    expect(Number(before) - Number(after)).toBeCloseTo(7, 2)
+  })
+
+  it("un foyer ne peut PAS appeler la fonction de budget global", async () => {
+    const { error } = await alice.client.rpc('llm_global_budget_remaining')
+    expect(error, 'le budget global ne regarde pas les foyers').not.toBeNull()
   })
 })
 ```
@@ -972,13 +1106,14 @@ Attendu : ÉCHEC — `relation "public.llm_usage" does not exist`.
 ```sql
 -- supabase/migrations/0007_llm_budget.sql
 -- D11 : deux budgets. household_id NULL = consommation système (ingestion mutualisée).
+-- `unique nulls not distinct` (PostgreSQL 15+) rend la ligne système unique par mois et kind.
 
 create table public.llm_usage (
   id           uuid primary key default gen_random_uuid(),
   household_id uuid references public.household(id) on delete cascade,  -- NULL = système
   month        date not null,
   kind         text not null check (kind in ('extraction','vision','generation')),
-  calls        int not null default 0 check (calls >= 0),
+  calls        int     not null default 0 check (calls >= 0),
   cost_eur     numeric not null default 0 check (cost_eur >= 0),
   updated_at   timestamptz not null default now(),
   constraint llm_usage_unique unique nulls not distinct (household_id, month, kind)
@@ -986,7 +1121,7 @@ create table public.llm_usage (
 create index on public.llm_usage (household_id, month);
 
 alter table public.llm_usage enable row level security;
--- Un foyer ne lit que ses propres lignes. La ligne système (NULL) n'est lue par personne
+-- Lecture des seules lignes du foyer. La ligne système (NULL) n'est lue par personne
 -- d'autre que le rôle de service, qui contourne RLS.
 create policy llm_usage_read on public.llm_usage
   for select to authenticated
@@ -995,32 +1130,30 @@ create policy llm_usage_read on public.llm_usage
 create trigger llm_usage_touch before update on public.llm_usage
   for each row execute function public.tg_touch_updated_at();
 
--- Budget restant du foyer courant.
 create or replace function public.llm_budget_remaining()
 returns numeric language sql stable security definer set search_path = public as $$
   select h.llm_monthly_cap_eur - coalesce((
     select sum(u.cost_eur) from public.llm_usage u
-    where u.household_id = h.id
-      and u.month = date_trunc('month', now())::date
+    where u.household_id = h.id and u.month = date_trunc('month', now())::date
   ), 0)
-  from public.household h
-  where h.id = public.current_household()
+  from public.household h where h.id = public.current_household()
 $$;
-revoke execute on function public.llm_budget_remaining() from public;
-grant   execute on function public.llm_budget_remaining() to authenticated;
+revoke execute on function public.llm_budget_remaining() from public, anon;
+grant   execute on function public.llm_budget_remaining() to authenticated, service_role;
 
--- Budget global d'ingestion (D11/D13). Réservé au rôle de service.
+-- Budget global d'ingestion (D11/D13). RÉSERVÉ au rôle de service : le revoke
+-- seul ne suffit pas sous Supabase, qui accorde EXECUTE par défaut à anon et
+-- authenticated. Il faut révoquer ces deux rôles NOMMÉMENT, puis accorder.
 create or replace function public.llm_global_budget_remaining()
 returns numeric language sql stable security definer set search_path = public as $$
-  select coalesce((
-           select (value ->> 'amount')::numeric from public.instance_setting
-           where key = 'llm_global_monthly_cap_eur'), 0)
-       - coalesce((
-           select sum(cost_eur) from public.llm_usage
-           where household_id is null
-             and month = date_trunc('month', now())::date), 0)
+  select coalesce((select (value ->> 'amount')::numeric from public.instance_setting
+                   where key = 'llm_global_monthly_cap_eur'), 0)
+       - coalesce((select sum(cost_eur) from public.llm_usage
+                   where household_id is null
+                     and month = date_trunc('month', now())::date), 0)
 $$;
-revoke execute on function public.llm_global_budget_remaining() from public;
+revoke execute on function public.llm_global_budget_remaining() from public, anon, authenticated;
+grant   execute on function public.llm_global_budget_remaining() to service_role;
 ```
 
 - [ ] **Step 4 : Appliquer, vérifier**
@@ -1028,7 +1161,6 @@ revoke execute on function public.llm_global_budget_remaining() from public;
 ```bash
 npm run db:reset && npm run test
 ```
-Attendu : les trois fichiers de test PASSENT.
 
 - [ ] **Step 5 : Commit**
 
@@ -1041,21 +1173,22 @@ git commit -m "feat(0a-1): compteur llm_usage et les deux plafonds"
 
 ### Task 9 : Flux d'invitation
 
-Deux Edge Functions. L'invité doit d'abord s'authentifier (lien magique Supabase), puis consommer le token.
+Deux Edge Functions. **Le CORS n'est pas optionnel** : le front envoie `Authorization` et `Content-Type: application/json`, ce qui déclenche un préflight `OPTIONS`. Sans réponse à ce préflight, l'écran d'invitation ne peut rien appeler depuis `localhost:5173`.
 
 **Files:**
-- Create: `supabase/functions/invite/index.ts`, `supabase/functions/accept-invite/index.ts`
-- Create: `tests/invitation.test.ts`
+- Create: `supabase/functions/_shared/cors.ts`, `supabase/functions/invite/index.ts`, `supabase/functions/accept-invite/index.ts`, `tests/invitation.test.ts`
 
 - [ ] **Step 1 : Écrire le test qui échoue**
 
 ```typescript
 // tests/invitation.test.ts
 import { describe, it, expect, beforeAll } from 'vitest'
-import { makeActor, makeOrphan, admin, type Actor } from './helpers/db'
+import { makeActor, makeOrphan, admin, accessToken, type Actor } from './helpers/db'
 
 let alice: Actor
 beforeAll(async () => { alice = await makeActor('alice-invit') })
+
+const fn = (name: string) => `${process.env.VITE_SUPABASE_URL}/functions/v1/${name}`
 
 describe('invitation', () => {
   it('un foyer crée une invitation pour lui-même', async () => {
@@ -1074,45 +1207,56 @@ describe('invitation', () => {
     expect(error, 'invitation croisée acceptée').not.toBeNull()
   })
 
-  it('accept-invite rattache l\'invité au foyer', async () => {
+  it('répond au préflight CORS', async () => {
+    const res = await fetch(fn('accept-invite'), {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'http://localhost:5173',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'authorization, content-type',
+      },
+    })
+    expect(res.status, 'sans préflight, le front ne peut rien appeler').toBeLessThan(300)
+    expect(res.headers.get('access-control-allow-origin')).toBeTruthy()
+  })
+
+  it('accept-invite rattache l\'invité au foyer et consomme le token', async () => {
     const a = admin()
     const { data: inv } = await a.from('invitation')
       .insert({ household_id: alice.householdId, email: 'nouveau@test.local' })
       .select().single()
 
-    const guest = await makeOrphan()
-    const { data: sess } = await guest.auth.getSession()
-    const res = await fetch(`${process.env.VITE_SUPABASE_URL}/functions/v1/accept-invite`, {
+    const { client: guest } = await makeOrphan()
+    const res = await fetch(fn('accept-invite'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${sess.session!.access_token}`,
+        Authorization: `Bearer ${await accessToken(guest)}`,
       },
       body: JSON.stringify({ token: inv!.token }),
     })
-    expect(res.status, await res.text()).toBe(200)
+    expect(res.status, await res.clone().text()).toBe(200)
 
     const { data: hh } = await guest.rpc('current_household')
     expect(hh).toBe(alice.householdId)
 
-    const { data: after } = await a.from('invitation').select('accepted_at').eq('id', inv!.id).single()
+    const { data: after } = await a.from('invitation')
+      .select('accepted_at').eq('id', inv!.id).single()
     expect(after!.accepted_at, 'le token doit être consommé').not.toBeNull()
   })
 
   it('refuse un token expiré', async () => {
-    const a = admin()
-    const { data: inv } = await a.from('invitation').insert({
+    const { data: inv } = await admin().from('invitation').insert({
       household_id: alice.householdId, email: 'tard@test.local',
       expires_at: new Date(Date.now() - 1000).toISOString(),
     }).select().single()
 
-    const guest = await makeOrphan()
-    const { data: sess } = await guest.auth.getSession()
-    const res = await fetch(`${process.env.VITE_SUPABASE_URL}/functions/v1/accept-invite`, {
+    const { client: guest } = await makeOrphan()
+    const res = await fetch(fn('accept-invite'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${sess.session!.access_token}`,
+        Authorization: `Bearer ${await accessToken(guest)}`,
       },
       body: JSON.stringify({ token: inv!.token }),
     })
@@ -1121,26 +1265,54 @@ describe('invitation', () => {
 })
 ```
 
-- [ ] **Step 2 : Lancer, vérifier l'échec**
+- [ ] **Step 2 : Démarrer le serveur de fonctions, lancer, vérifier l'échec**
+
+Dans un **second terminal**, laissé ouvert jusqu'à la fin de la tâche :
 
 ```bash
-npx supabase functions serve --no-verify-jwt &
+npx supabase functions serve
+```
+
+Puis :
+```bash
 npm run test -- tests/invitation.test.ts
 ```
-Attendu : ÉCHEC — la fonction `accept-invite` n'existe pas (404).
+Attendu : ÉCHEC — 404 sur `accept-invite`.
 
-- [ ] **Step 3 : Écrire `accept-invite`**
+- [ ] **Step 3 : Écrire le module CORS partagé**
+
+```typescript
+// supabase/functions/_shared/cors.ts
+export const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+export const preflight = (req: Request) =>
+  req.method === 'OPTIONS' ? new Response('ok', { headers: corsHeaders }) : null
+
+export const reply = (body: unknown, status = 200) =>
+  new Response(typeof body === 'string' ? body : JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type':
+      typeof body === 'string' ? 'text/plain' : 'application/json' },
+  })
+```
+
+- [ ] **Step 4 : Écrire `accept-invite`**
 
 ```typescript
 // supabase/functions/accept-invite/index.ts
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { preflight, reply } from '../_shared/cors.ts'
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
+  const pre = preflight(req); if (pre) return pre
+  if (req.method !== 'POST') return reply('Method not allowed', 405)
 
-  const authHeader = req.headers.get('Authorization') ?? ''
-  const jwt = authHeader.replace('Bearer ', '')
-  if (!jwt) return new Response('Non authentifié', { status: 401 })
+  const jwt = (req.headers.get('Authorization') ?? '').replace('Bearer ', '')
+  if (!jwt) return reply('Non authentifié', 401)
 
   const admin = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -1148,67 +1320,67 @@ Deno.serve(async (req) => {
   )
 
   const { data: userRes, error: userErr } = await admin.auth.getUser(jwt)
-  if (userErr || !userRes.user) return new Response('Non authentifié', { status: 401 })
+  if (userErr || !userRes.user) return reply('Non authentifié', 401)
   const user = userRes.user
 
   const { token } = await req.json().catch(() => ({ token: null }))
-  if (!token) return new Response('Token manquant', { status: 400 })
+  if (!token) return reply('Token manquant', 400)
 
-  const { data: inv } = await admin
-    .from('invitation').select('*').eq('token', token).maybeSingle()
-
-  if (!inv) return new Response('Invitation inconnue', { status: 404 })
-  if (inv.accepted_at) return new Response('Invitation déjà utilisée', { status: 409 })
-  if (new Date(inv.expires_at) < new Date()) return new Response('Invitation expirée', { status: 410 })
+  const { data: inv } = await admin.from('invitation').select('*').eq('token', token).maybeSingle()
+  if (!inv) return reply('Invitation inconnue', 404)
+  if (inv.accepted_at) return reply('Invitation déjà utilisée', 409)
+  if (new Date(inv.expires_at) < new Date()) return reply('Invitation expirée', 410)
 
   const { data: existing } = await admin
     .from('user_profile').select('id').eq('id', user.id).maybeSingle()
-  if (existing) return new Response('Déjà rattaché à un foyer', { status: 409 })
+  if (existing) return reply('Déjà rattaché à un foyer', 409)
 
   const { error: pe } = await admin.from('user_profile').insert({
     id: user.id,
     household_id: inv.household_id,
     display_name: (user.email ?? 'invité').split('@')[0],
   })
-  if (pe) return new Response(pe.message, { status: 500 })
+  if (pe) return reply(pe.message, 500)
 
   await admin.from('invitation')
     .update({ accepted_at: new Date().toISOString() }).eq('id', inv.id)
 
-  return Response.json({ household_id: inv.household_id })
+  return reply({ household_id: inv.household_id })
 })
 ```
 
-- [ ] **Step 4 : Écrire `invite` (création + envoi Resend)**
+- [ ] **Step 5 : Écrire `invite`**
 
 ```typescript
 // supabase/functions/invite/index.ts
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { preflight, reply } from '../_shared/cors.ts'
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
+  const pre = preflight(req); if (pre) return pre
+  if (req.method !== 'POST') return reply('Method not allowed', 405)
 
   const jwt = (req.headers.get('Authorization') ?? '').replace('Bearer ', '')
-  if (!jwt) return new Response('Non authentifié', { status: 401 })
+  if (!jwt) return reply('Non authentifié', 401)
 
   const admin = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
   const { data: userRes } = await admin.auth.getUser(jwt)
-  if (!userRes?.user) return new Response('Non authentifié', { status: 401 })
+  if (!userRes?.user) return reply('Non authentifié', 401)
 
   const { data: profile } = await admin
     .from('user_profile').select('household_id').eq('id', userRes.user.id).maybeSingle()
-  if (!profile) return new Response('Aucun foyer', { status: 403 })
+  if (!profile) return reply('Aucun foyer', 403)
 
   const { email } = await req.json().catch(() => ({ email: null }))
-  if (!email) return new Response('Email manquant', { status: 400 })
+  if (!email) return reply('Email manquant', 400)
 
   const { data: inv, error } = await admin.from('invitation')
     .insert({ household_id: profile.household_id, email, created_by: userRes.user.id })
     .select().single()
-  if (error) return new Response(error.message, { status: 409 })
+  if (error) return reply(error.message, 409)
 
   const link = `${Deno.env.get('APP_BASE_URL')}/invite/${inv.token}`
   const key = Deno.env.get('RESEND_API_KEY')
@@ -1225,37 +1397,38 @@ Deno.serve(async (req) => {
                <p>Ce lien expire dans 7 jours.</p>`,
       }),
     })
+    // L'invitation reste valide si l'e-mail échoue : le lien est renvoyable.
     if (!r.ok) console.error('Resend a échoué :', await r.text())
-    // L'invitation reste valide même si l'e-mail échoue : le lien est renvoyable.
   }
 
-  return Response.json({ token: inv.token, link })
+  return reply({ token: inv.token, link })
 })
 ```
 
-- [ ] **Step 5 : Relancer et vérifier**
+- [ ] **Step 6 : Relancer (le serveur de fonctions du Step 2 doit toujours tourner)**
 
 ```bash
 npm run test -- tests/invitation.test.ts
 ```
-Attendu : PASS sur les quatre cas.
+Attendu : PASS sur les cinq cas, préflight compris.
 
-- [ ] **Step 6 : Commit**
+- [ ] **Step 7 : Commit**
 
 ```bash
 git add supabase/functions tests/invitation.test.ts
-git commit -m "feat(0a-1): flux d'invitation, Edge Functions et envoi Resend"
+git commit -m "feat(0a-1): flux d'invitation, CORS, Edge Functions et envoi Resend"
 ```
 
 ---
 
-### Task 10 : Les trois écrans
+### Task 10 : Le front — porte d'entrée et trois écrans
 
-Volontairement rudimentaires. Le soin visuel commence au lot 1 (§10 du spec).
+⚠️ **Deux manques à combler, sans quoi l'application livrée est inutilisable** : il n'y a aucun **chemin d'authentification**, et aucune **porte d'entrée pour créer le tout premier foyer**. Le livrable §10 est « deux comptes, un foyer » : il doit exister dans l'app, pas seulement dans les tests.
 
 **Files:**
-- Create: `src/lib/supabase.ts`, `src/pages/AcceptInvite.tsx`, `src/pages/Targets.tsx`, `src/pages/Settings.tsx`
+- Create: `src/lib/supabase.ts`, `src/pages/SignIn.tsx`, `src/pages/Onboarding.tsx`, `src/pages/Targets.tsx`, `src/pages/Settings.tsx`, `src/pages/AcceptInvite.tsx`
 - Modify: `src/App.tsx`
+- Create: `supabase/migrations/0009_create_household.sql`
 
 - [ ] **Step 1 : Le client**
 
@@ -1269,55 +1442,129 @@ export const supabase = createClient(
 )
 ```
 
-- [ ] **Step 2 : Écran « accepter une invitation »**
+- [ ] **Step 2 : Test de la création du premier foyer**
+
+Ajouter à `tests/isolation.test.ts` :
+
+```typescript
+describe('création du premier foyer', () => {
+  it('un authentifié sans profil peut créer son foyer, une seule fois', async () => {
+    const { client: solo } = await makeOrphan()
+    const { data, error } = await solo.rpc('create_household', { p_name: 'Chez nous' })
+    expect(error).toBeNull()
+    expect(data).toBeTruthy()
+
+    const { data: hh } = await solo.rpc('current_household')
+    expect(hh).toBe(data)
+
+    // Deuxième appel : refusé, sinon on pourrait s'échapper de son foyer.
+    const { error: e2 } = await solo.rpc('create_household', { p_name: 'Évasion' })
+    expect(e2, 'un utilisateur déjà rattaché ne doit pas pouvoir créer un foyer').not.toBeNull()
+  })
+})
+```
+
+- [ ] **Step 3 : Écrire `0009_create_household.sql`**
+
+```sql
+-- supabase/migrations/0009_create_household.sql
+-- Porte d'entrée : un utilisateur authentifié SANS profil crée son foyer.
+-- SECURITY DEFINER car il doit écrire dans household et user_profile alors que
+-- current_household() vaut encore NULL, donc que les policies le bloqueraient.
+create or replace function public.create_household(p_name text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_uid uuid := auth.uid(); v_id uuid;
+begin
+  if v_uid is null then
+    raise exception 'non authentifié' using errcode = 'insufficient_privilege';
+  end if;
+  if exists (select 1 from public.user_profile where id = v_uid) then
+    raise exception 'déjà rattaché à un foyer' using errcode = 'unique_violation';
+  end if;
+
+  insert into public.household (name) values (coalesce(nullif(p_name,''), 'Mon foyer'))
+    returning id into v_id;
+  insert into public.user_profile (id, household_id, display_name)
+    values (v_uid, v_id,
+            split_part(coalesce((select email from auth.users where id = v_uid), 'moi'), '@', 1));
+  return v_id;
+end $$;
+
+revoke execute on function public.create_household(text) from public, anon;
+grant   execute on function public.create_household(text) to authenticated;
+```
+
+- [ ] **Step 4 : Vérifier**
+
+```bash
+npm run db:reset && npm run test -- tests/isolation.test.ts
+```
+Attendu : les deux assertions de création du foyer PASSENT.
+
+- [ ] **Step 5 : Écran de connexion**
 
 ```tsx
-// src/pages/AcceptInvite.tsx
+// src/pages/SignIn.tsx
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-export function AcceptInvite({ token }: { token: string }) {
+export function SignIn({ redirectTo }: { redirectTo?: string }) {
   const [email, setEmail] = useState('')
   const [msg, setMsg] = useState('')
 
-  async function sendLink() {
+  async function send() {
     const { error } = await supabase.auth.signInWithOtp({
-      email, options: { emailRedirectTo: window.location.href },
+      email, options: { emailRedirectTo: redirectTo ?? window.location.href },
     })
-    setMsg(error ? error.message : 'Lien envoyé. Ouvrez-le depuis cette page.')
-  }
-
-  async function accept() {
-    const { data } = await supabase.auth.getSession()
-    if (!data.session) return setMsg('Connectez-vous d’abord.')
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/accept-invite`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${data.session.access_token}`,
-        },
-        body: JSON.stringify({ token }),
-      },
-    )
-    setMsg(res.ok ? 'Vous avez rejoint le foyer.' : await res.text())
+    setMsg(error ? error.message : 'Lien envoyé. Ouvrez-le depuis cet appareil.')
   }
 
   return (
     <main>
-      <h1>Rejoindre le foyer</h1>
-      <input value={email} onChange={e => setEmail(e.target.value)}
-             placeholder="votre e-mail" type="email" />
-      <button onClick={sendLink}>Recevoir un lien de connexion</button>
-      <button onClick={accept}>J’ai cliqué le lien — rejoindre</button>
+      <h1>Connexion</h1>
+      <input type="email" value={email} placeholder="votre e-mail"
+             onChange={e => setEmail(e.target.value)} />
+      <button onClick={send}>Recevoir un lien de connexion</button>
       <p role="status">{msg}</p>
     </main>
   )
 }
 ```
 
-- [ ] **Step 3 : Écran « mes cibles »** (historisé : chaque enregistrement est un `insert`, jamais un `update`)
+- [ ] **Step 6 : Écran d'amorçage — créer son foyer ou attendre une invitation**
+
+```tsx
+// src/pages/Onboarding.tsx
+import { useState } from 'react'
+import { supabase } from '../lib/supabase'
+
+export function Onboarding({ onDone }: { onDone: () => void }) {
+  const [name, setName] = useState('Notre foyer')
+  const [msg, setMsg] = useState('')
+
+  async function create() {
+    const { error } = await supabase.rpc('create_household', { p_name: name })
+    if (error) return setMsg(error.message)
+    onDone()
+  }
+
+  return (
+    <main>
+      <h1>Créer votre foyer</h1>
+      <p>Si quelqu’un vous a déjà invité·e, ouvrez plutôt le lien reçu par e-mail.</p>
+      <input value={name} onChange={e => setName(e.target.value)} />
+      <button onClick={create}>Créer le foyer</button>
+      <p role="status">{msg}</p>
+    </main>
+  )
+}
+```
+
+- [ ] **Step 7 : Écran « mes objectifs »** — historisé : chaque enregistrement est un `insert`, jamais un `update`
 
 ```tsx
 // src/pages/Targets.tsx
@@ -1326,27 +1573,24 @@ import { supabase } from '../lib/supabase'
 
 const CHAMPS = ['kcal', 'protein_g', 'fiber_g', 'carb_g', 'fat_g'] as const
 
-export function Targets() {
+export function Targets({ userId }: { userId: string }) {
   const [v, setV] = useState<Record<string, number>>(
     { kcal: 2000, protein_g: 150, fiber_g: 30, carb_g: 200, fat_g: 60 })
   const [hist, setHist] = useState<any[]>([])
   const [msg, setMsg] = useState('')
 
   async function load() {
-    const { data: u } = await supabase.auth.getUser()
-    if (!u.user) return
     const { data } = await supabase.from('nutrition_target')
-      .select('*').eq('user_profile_id', u.user.id).order('valid_from', { ascending: false })
+      .select('*').eq('user_profile_id', userId).order('valid_from', { ascending: false })
     setHist(data ?? [])
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [userId])
 
   async function save() {
-    const { data: u } = await supabase.auth.getUser()
     // INSERT, jamais UPDATE : les cibles sont historisées (spec §5.1).
     const { error } = await supabase.from('nutrition_target')
-      .insert({ user_profile_id: u.user!.id, ...v })
-    setMsg(error ? error.message : 'Cible enregistrée.')
+      .insert({ user_profile_id: userId, ...v })
+    setMsg(error ? error.message : 'Objectif enregistré.')
     if (!error) load()
   }
 
@@ -1362,35 +1606,41 @@ export function Targets() {
       <button onClick={save}>Enregistrer</button>
       <p role="status">{msg}</p>
       <h2>Historique</h2>
-      <ul>{hist.map(h =>
-        <li key={h.id}>{new Date(h.valid_from).toLocaleDateString('fr-FR')} — {h.kcal} kcal, {h.protein_g} g de protéines</li>)}
+      <ul>{hist.map(h => (
+        <li key={h.id}>
+          {new Date(h.valid_from).toLocaleDateString('fr-FR')} — {h.kcal} kcal, {h.protein_g} g de protéines
+        </li>))}
       </ul>
     </main>
   )
 }
 ```
 
-- [ ] **Step 4 : Écran « réglages »** — plafond LLM et budget restant
+- [ ] **Step 8 : Écran « réglages »** — plafond LLM, invitation, export et suppression
 
 ```tsx
 // src/pages/Settings.tsx
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
+const fn = (n: string) => `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${n}`
+
 export function Settings() {
   const [cap, setCap] = useState(5)
   const [left, setLeft] = useState<number | null>(null)
+  const [invitee, setInvitee] = useState('')
   const [msg, setMsg] = useState('')
 
   async function load() {
-    const { data: h } = await supabase.from('household').select('llm_monthly_cap_eur').maybeSingle()
+    const { data: h } = await supabase.from('household')
+      .select('llm_monthly_cap_eur').maybeSingle()
     if (h) setCap(Number(h.llm_monthly_cap_eur))
     const { data: r } = await supabase.rpc('llm_budget_remaining')
     setLeft(r === null ? null : Number(r))
   }
   useEffect(() => { load() }, [])
 
-  async function save() {
+  async function saveCap() {
     const { data: hh } = await supabase.rpc('current_household')
     const { error } = await supabase.from('household')
       .update({ llm_monthly_cap_eur: cap }).eq('id', hh)
@@ -1398,123 +1648,389 @@ export function Settings() {
     if (!error) load()
   }
 
+  async function invite() {
+    const { data: s } = await supabase.auth.getSession()
+    const res = await fetch(fn('invite'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${s.session!.access_token}`,
+      },
+      body: JSON.stringify({ email: invitee }),
+    })
+    setMsg(res.ok ? 'Invitation envoyée.' : await res.text())
+  }
+
+  async function exportData() {
+    const { data, error } = await supabase.rpc('export_my_data')
+    if (error) return setMsg(error.message)
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'mes-donnees.json'
+    a.click()
+  }
+
+  async function deleteAccount() {
+    if (!confirm('Supprimer définitivement votre compte et vos données ? Action irréversible.')) return
+    const { error } = await supabase.rpc('delete_my_account')
+    if (error) return setMsg(error.message)
+    await supabase.auth.signOut()
+    window.location.href = '/'
+  }
+
   return (
     <main>
       <h1>Réglages</h1>
-      <label>Plafond LLM mensuel (€)
+
+      <h2>Budget IA</h2>
+      <label>Plafond mensuel (€)
         <input type="number" step="0.5" value={cap}
                onChange={e => setCap(Number(e.target.value))} />
       </label>
-      <button onClick={save}>Enregistrer</button>
+      <button onClick={saveCap}>Enregistrer</button>
       <p>Budget restant ce mois-ci : {left === null ? '—' : `${left.toFixed(2)} €`}</p>
+
+      <h2>Inviter quelqu’un dans le foyer</h2>
+      <input type="email" value={invitee} placeholder="son e-mail"
+             onChange={e => setInvitee(e.target.value)} />
+      <button onClick={invite}>Envoyer l’invitation</button>
+
+      <h2>Mes données</h2>
+      <button onClick={exportData}>Exporter mes données</button>
+      <button onClick={deleteAccount}>Supprimer mon compte</button>
+
       <p role="status">{msg}</p>
     </main>
   )
 }
 ```
 
-- [ ] **Step 5 : Routage minimal dans `App.tsx`**
+- [ ] **Step 9 : Écran « accepter une invitation »**
 
 ```tsx
-// src/App.tsx
-import { AcceptInvite } from './pages/AcceptInvite'
-import { Targets } from './pages/Targets'
-import { Settings } from './pages/Settings'
+// src/pages/AcceptInvite.tsx
+import { useState } from 'react'
+import { supabase } from '../lib/supabase'
 
-export default function App() {
-  const path = window.location.pathname
-  const invite = path.match(/^\/invite\/(.+)$/)
-  if (invite) return <AcceptInvite token={invite[1]} />
-  if (path.startsWith('/settings')) return <Settings />
-  return <Targets />
+export function AcceptInvite({ token }: { token: string }) {
+  const [msg, setMsg] = useState('')
+
+  async function accept() {
+    const { data } = await supabase.auth.getSession()
+    if (!data.session) return setMsg('Connectez-vous d’abord.')
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/accept-invite`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${data.session.access_token}`,
+        },
+        body: JSON.stringify({ token }),
+      })
+    if (res.ok) { window.location.href = '/' } else { setMsg(await res.text()) }
+  }
+
+  return (
+    <main>
+      <h1>Rejoindre le foyer</h1>
+      <button onClick={accept}>Rejoindre</button>
+      <p role="status">{msg}</p>
+    </main>
+  )
 }
 ```
 
-- [ ] **Step 6 : Vérifier à la main**
+- [ ] **Step 10 : `App.tsx` — la porte d'entrée qui manquait**
+
+```tsx
+// src/App.tsx
+import { useEffect, useState } from 'react'
+import type { Session } from '@supabase/supabase-js'
+import { supabase } from './lib/supabase'
+import { SignIn } from './pages/SignIn'
+import { Onboarding } from './pages/Onboarding'
+import { Targets } from './pages/Targets'
+import { Settings } from './pages/Settings'
+import { AcceptInvite } from './pages/AcceptInvite'
+
+export default function App() {
+  const [session, setSession] = useState<Session | null>(null)
+  const [household, setHousehold] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
+
+  async function refresh() {
+    const { data } = await supabase.auth.getSession()
+    setSession(data.session)
+    if (data.session) {
+      const { data: hh } = await supabase.rpc('current_household')
+      setHousehold(hh ?? null)
+    }
+    setReady(true)
+  }
+
+  useEffect(() => {
+    refresh()
+    const { data: sub } = supabase.auth.onAuthStateChange(() => refresh())
+    return () => sub.subscription.unsubscribe()
+  }, [])
+
+  if (!ready) return <main><p>Chargement…</p></main>
+
+  const invite = window.location.pathname.match(/^\/invite\/(.+)$/)
+
+  // 1. Pas de session → connexion (en conservant la cible d'invitation).
+  if (!session) return <SignIn redirectTo={window.location.href} />
+  // 2. Session + lien d'invitation → acceptation.
+  if (invite) return <AcceptInvite token={invite[1]} />
+  // 3. Session sans foyer → amorçage.
+  if (!household) return <Onboarding onDone={refresh} />
+  // 4. Nominal.
+  if (window.location.pathname.startsWith('/settings')) return <Settings />
+  return <Targets userId={session.user.id} />
+}
+```
+
+- [ ] **Step 11 : Vérification manuelle du parcours complet**
 
 ```bash
 npm run dev
 ```
-Ouvrir `http://localhost:5173/` (cibles), `/settings` (plafond), `/invite/<token>` avec un token pris en base. Les trois écrans s'affichent et enregistrent.
+1. `/` → écran de connexion. Récupérer le lien magique dans **Inbucket** (`http://127.0.0.1:54324`).
+2. Après connexion → écran d'amorçage. Créer le foyer.
+3. → Écran des objectifs. Enregistrer, vérifier que l'historique s'allonge.
+4. `/settings` → régler le plafond, inviter une seconde adresse.
+5. Ouvrir le lien d'invitation dans une **fenêtre privée** → se connecter → rejoindre.
+6. Vérifier que le second compte voit bien le même foyer.
 
-- [ ] **Step 7 : Commit**
+**Aucune erreur CORS ne doit apparaître dans la console.** S'il y en a, la Task 9 est incomplète.
+
+- [ ] **Step 12 : Commit**
 
 ```bash
-git add src && git commit -m "feat(0a-1): trois écrans — invitation, cibles, réglages"
+git add src supabase/migrations/0009_create_household.sql tests/isolation.test.ts
+git commit -m "feat(0a-1): porte d'entrée, création de foyer et les trois écrans"
 ```
 
 ---
 
-### Task 11 : Déploiement en région UE
+### Task 11 : Export et suppression de compte (RGPD, §11 q. 1)
+
+Le spec range ces deux fonctions dans **ce lot**, pas plus tard. Elles sont petites, et les reporter voudrait dire livrer une application qui collecte des données de santé probables sans porte de sortie.
 
 **Files:**
-- Modify: `supabase/config.toml`
-- Create: `README.md`
+- Create: `supabase/migrations/0008_rgpd.sql`, `tests/rgpd.test.ts`
 
-- [ ] **Step 1 : Créer le projet distant en UE**
+- [ ] **Step 1 : Écrire le test qui échoue**
 
-Dans le tableau de bord Supabase, créer le projet avec une région **européenne**
-(`eu-west-3` Paris, ou `eu-central-1` Francfort). **La région n'est pas modifiable après coup**
-et c'est une contrainte du spec (§11 q. 1, RGPD).
+```typescript
+// tests/rgpd.test.ts
+import { describe, it, expect, beforeAll } from 'vitest'
+import { makeActor, admin, type Actor } from './helpers/db'
 
-- [ ] **Step 2 : Lier et pousser les migrations**
+let alice: Actor
+beforeAll(async () => {
+  alice = await makeActor('alice-rgpd')
+  await alice.client.from('nutrition_target').insert({
+    user_profile_id: alice.userId,
+    kcal: 2000, protein_g: 150, fiber_g: 30, carb_g: 200, fat_g: 60,
+  })
+})
 
-```bash
-npx supabase link --project-ref <REF>
-npx supabase db push
-npx supabase functions deploy invite accept-invite
-npx supabase secrets set RESEND_API_KEY=<clé> APP_BASE_URL=<url>
+describe('RGPD', () => {
+  it('exporte les données du foyer, et rien d\'autre', async () => {
+    const { data, error } = await alice.client.rpc('export_my_data')
+    expect(error).toBeNull()
+    expect(data.household.id).toBe(alice.householdId)
+    expect(data.nutrition_targets.length).toBeGreaterThanOrEqual(1)
+    expect(data.profiles.every((p: any) => p.household_id === alice.householdId)).toBe(true)
+  })
+
+  it('supprime le compte et ses données en cascade', async () => {
+    const victim = await makeActor('victime')
+    await victim.client.from('nutrition_target').insert({
+      user_profile_id: victim.userId,
+      kcal: 1, protein_g: 1, fiber_g: 1, carb_g: 1, fat_g: 1,
+    })
+    const { error } = await victim.client.rpc('delete_my_account')
+    expect(error).toBeNull()
+
+    const a = admin()
+    const { data: prof } = await a.from('user_profile').select('id').eq('id', victim.userId)
+    expect(prof, 'le profil doit avoir disparu').toHaveLength(0)
+    const { data: tg } = await a.from('nutrition_target')
+      .select('id').eq('user_profile_id', victim.userId)
+    expect(tg, 'les cibles doivent avoir disparu en cascade').toHaveLength(0)
+    const { data: u } = await a.auth.admin.getUserById(victim.userId)
+    expect(u.user, "le compte d'authentification doit avoir disparu").toBeNull()
+  })
+})
 ```
 
-- [ ] **Step 3 : Rejouer la suite de tests contre le distant**
+- [ ] **Step 2 : Lancer, vérifier l'échec**
 
 ```bash
-VITE_SUPABASE_URL=<url-distante> VITE_SUPABASE_ANON_KEY=<anon> \
-SUPABASE_SERVICE_ROLE_KEY=<service> npm run test
+npm run test -- tests/rgpd.test.ts
 ```
-Attendu : **tous les tests d'isolation passent aussi en distant.** Une policy qui marche en local
-et pas en distant est un échec du lot, pas un détail de configuration.
+Attendu : ÉCHEC — `function public.export_my_data does not exist`.
 
-- [ ] **Step 4 : Écrire le `README.md`**
+- [ ] **Step 3 : Écrire `0008_rgpd.sql`**
 
-Documenter : prérequis, `supabase start`, `npm run db:reset`, `npm run test`, les variables
-d'environnement, et **la règle de région UE**.
+```sql
+-- supabase/migrations/0008_rgpd.sql
+-- §11 q. 1 : export et suppression, livrés dans ce lot.
+
+create or replace function public.export_my_data()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'exported_at',       now(),
+    'household',         (select to_jsonb(h) from public.household h
+                          where h.id = public.current_household()),
+    'profiles',          (select coalesce(jsonb_agg(to_jsonb(p)), '[]'::jsonb)
+                          from public.user_profile p
+                          where p.household_id = public.current_household()),
+    'nutrition_targets', (select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb)
+                          from public.nutrition_target t
+                          where t.household_id = public.current_household()),
+    'invitations',       (select coalesce(jsonb_agg(to_jsonb(i)), '[]'::jsonb)
+                          from public.invitation i
+                          where i.household_id = public.current_household()),
+    'llm_usage',         (select coalesce(jsonb_agg(to_jsonb(u)), '[]'::jsonb)
+                          from public.llm_usage u
+                          where u.household_id = public.current_household())
+  )
+$$;
+revoke execute on function public.export_my_data() from public, anon;
+grant   execute on function public.export_my_data() to authenticated;
+
+-- Supprime le profil (donc les cibles en cascade), puis le compte d'auth.
+-- Le foyer n'est supprimé que s'il ne reste personne dedans.
+create or replace function public.delete_my_account()
+returns void language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); v_hh uuid;
+begin
+  if v_uid is null then
+    raise exception 'non authentifié' using errcode = 'insufficient_privilege';
+  end if;
+
+  select household_id into v_hh from public.user_profile where id = v_uid;
+  delete from public.user_profile where id = v_uid;
+
+  if v_hh is not null
+     and not exists (select 1 from public.user_profile where household_id = v_hh) then
+    delete from public.household where id = v_hh;
+  end if;
+
+  delete from auth.users where id = v_uid;
+end $$;
+revoke execute on function public.delete_my_account() from public, anon;
+grant   execute on function public.delete_my_account() to authenticated;
+```
+
+- [ ] **Step 4 : Appliquer, vérifier**
+
+```bash
+npm run db:reset && npm run test
+```
+Attendu : la suite entière est verte.
 
 - [ ] **Step 5 : Commit**
 
 ```bash
-git add README.md supabase/config.toml
-git commit -m "docs(0a-1): déploiement UE et mode d'emploi"
+git add supabase/migrations/0008_rgpd.sql tests/rgpd.test.ts
+git commit -m "feat(0a-1): export et suppression de compte (RGPD)"
 ```
 
 ---
 
-### Task 12 : Vérification de fin de lot
+### Task 12 : Déploiement en région UE
 
-- [ ] **Step 1 : La suite complète passe, en local et en distant**
+⚠️ **Ne PAS rejouer la suite complète contre la production** : elle crée des utilisateurs, des foyers et des lignes via l'API d'administration, sans nettoyage. Créer un **second projet Supabase de recette** (même région), y rejouer la suite, et ne faire contre la production qu'une vérification en lecture.
+
+**Files:**
+- Create: `README.md`
+
+- [ ] **Step 1 : Créer les projets en région européenne**
+
+Dans le tableau de bord Supabase, créer **deux** projets en région UE (`eu-west-3` Paris ou `eu-central-1` Francfort) : `batchcooking-recette` et `batchcooking-prod`.
+**La région n'est pas modifiable après coup** — c'est une contrainte du spec (§11 q. 1).
+
+- [ ] **Step 2 : Pousser sur la recette et y rejouer toute la suite**
+
+```bash
+npx supabase link --project-ref <REF_RECETTE>
+npx supabase db push
+npx supabase functions deploy invite accept-invite
+npx supabase secrets set RESEND_API_KEY=<clé> APP_BASE_URL=<url>
+
+VITE_SUPABASE_URL=<url-recette> VITE_SUPABASE_ANON_KEY=<anon-recette> \
+SUPABASE_SERVICE_ROLE_KEY=<service-recette> npm run test
+```
+Attendu : **toute la suite passe en distant.** Une policy qui marche en local et pas en distant est un échec du lot, pas un détail de configuration.
+
+- [ ] **Step 3 : Pousser en production, et n'y vérifier qu'en lecture**
+
+```bash
+npx supabase link --project-ref <REF_PROD>
+npx supabase db push
+npx supabase functions deploy invite accept-invite
+npx supabase secrets set RESEND_API_KEY=<clé> APP_BASE_URL=<url-prod>
+```
+
+Vérification en lecture seule, sans rien créer :
+```bash
+psql "<DB_URL_PROD>" -c "
+  select tablename, rowsecurity from pg_tables
+  where schemaname='public' order by tablename;"
+```
+Attendu : **`rowsecurity = true` sur les 20 tables.** Aucune exception.
+
+- [ ] **Step 4 : Écrire le `README.md`**
+
+Documenter : prérequis, `npx supabase start`, `npm run db:reset`, `npm run test`, le second terminal pour `functions serve`, les variables d'environnement, **la règle de région UE**, et la distinction recette/production.
+
+- [ ] **Step 5 : Commit**
+
+```bash
+git add README.md && git commit -m "docs(0a-1): déploiement UE et mode d'emploi"
+```
+
+---
+
+### Task 13 : Vérification de fin de lot
+
+- [ ] **Step 1 : La suite complète passe**
 
 ```bash
 npm run db:reset && npm run test
 ```
 
-- [ ] **Step 2 : Relire la liste de contrôle du lot**
+- [ ] **Step 2 : Prouver une dernière fois que les tests mordent**
 
-| Livrable du spec §10 | Vérifié par |
+Refaire la manipulation de la Task 6, Step 7 : désactiver la RLS sur `recipe` **et** sur `nutrition_target`, relancer, vérifier que **des tests rougissent**. Puis `npm run db:reset`.
+
+Un lot dont les tests restent verts quand on retire la sécurité n'a rien prouvé.
+
+- [ ] **Step 3 : Liste de contrôle du spec §10**
+
+| Livrable | Vérifié par |
 |---|---|
-| Projet Supabase région UE | Task 11, étape 1 |
+| Projet Supabase région UE | Task 12, étape 1 |
 | Schéma classes A et B, tables foyer de §5.1 | Tasks 3, 4, 5 |
 | `current_household()` en `SECURITY DEFINER` | Task 6 + test de non-récursion |
-| Les 3 formes de policies (§5.0.1) | Task 6 + `isolation.test.ts` |
+| Les 3 formes de policies (§5.0.1) | Task 6 + `isolation.test.ts` + Task 6 Step 7 |
 | Trigger `BEFORE UPDATE` classe B | Task 7 + `class-b-guard.test.ts` |
-| Flux d'invitation via Resend | Task 9 + `invitation.test.ts` |
-| CRUD profils et cibles historisées | Tasks 5, 10 |
+| Flux d'invitation via Resend | Task 9 + `invitation.test.ts` (CORS compris) |
+| CRUD profils et cibles historisées | Tasks 3, 10 |
 | Compteur `llm_usage` et les deux plafonds | Task 8 + `llm-budget.test.ts` |
-| Trois écrans | Task 10 |
+| Export et suppression de compte (§11 q. 1) | Task 11 + `rgpd.test.ts` |
+| Trois écrans + porte d'entrée | Task 10, vérification manuelle Step 11 |
 
-- [ ] **Step 3 : Commit de clôture**
+- [ ] **Step 4 : Commit de clôture**
 
 ```bash
-git add -A && git commit -m "feat(0a-1): lot 0a-1 terminé — isolation prouvée par les tests"
+git add -A && git commit -m "feat(0a-1): lot terminé — isolation prouvée par des tests qui mordent"
 ```
 
 ---
@@ -1522,8 +2038,14 @@ git add -A && git commit -m "feat(0a-1): lot 0a-1 terminé — isolation prouvé
 ## Ce que ce lot ne livre pas, volontairement
 
 - **Les référentiels sont vides.** CIQUAL, Open Food Facts et les tables de conversion sont le lot 0a-2.
-- **Aucune recette.** L'ingestion est le lot 0b, et elle est précédée de R1, R1b et R1c.
+- **Aucune recette.** L'ingestion est le lot 0b, précédée de R1, R1b et R1c.
 - **Aucun appel LLM.** Le compteur existe, rien ne l'incrémente encore.
-- **Aucun soin visuel.** Trois écrans fonctionnels, rien de plus.
+- **`recipe.plannable` n'a pas de trigger.** Reporté au lot 0b, où les durées des actions existeront.
+- **La policy de lecture de la classe B ignore `visibility`.** À resserrer au lot 4.
+- **Aucun soin visuel.** Des écrans fonctionnels, rien de plus.
 
-Le lot est réussi si, et seulement si, **un foyer ne peut voir aucune donnée d'un autre foyer, et que les tests le prouvent en local comme en distant.**
+## Critère de réussite
+
+**Un foyer ne peut voir aucune donnée de foyer d'un autre foyer, et les tests le prouvent — en local comme en distant — en rougissant dès qu'on retire la RLS.**
+
+C'est la seule formulation honnête : le catalogue partagé (classe B) est, lui, délibérément visible de tous, et il est vide à ce stade.
