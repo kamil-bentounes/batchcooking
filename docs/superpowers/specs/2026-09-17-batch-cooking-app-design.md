@@ -1,7 +1,7 @@
 # Design — Application de batch cooking, diet et budget
 
 - **Date** : 2026-09-17
-- **Version** : 4 — prémisse de D15 mesurée et infirmée ; durées ré-ancrées sur `default_duration` + confirmation à la sélection
+- **Version** : 5 — routage par tâche, `ExtractionBackend` interchangeable, leviers de coût avant tout auto-hébergement
 - **Statut** : design validé, en attente du plan d'implémentation du **lot 0a-1**
 - **Utilisateurs** : un foyer de 2 personnes au départ, puis d'autres foyers **sur invitation**
 
@@ -36,7 +36,9 @@ Le différenciateur est le point 2 : l'ordonnancement de la session sous contrai
 | D6 | **Équipement : catalogue en base, coché par foyer, surchargeable par session** | Équipement en dur | L'optimiseur le prend en entrée, jamais en constante. |
 | D7 | **Multi-tenant sur invitation** | Produit public | Pas de CGU, pas de paiement, pas de modération. |
 | D8 | **Prix : interface `PriceSource` + adaptateurs indépendants** | Scraping au fondement | Lidl FR n'a pas de boutique alimentaire en ligne. Les autres sont hors CGU et cassent. |
-| D9 | **LLM en API** | Auto-hébergé | Bascule à ~40 000 appels/mois ; usage réel ~250. |
+| D9 | **LLM en API pour tout ce qui est en ligne** ; **serveur loué exclu** | Auto-hébergement sur serveur | Le VPS le moins cher capable de faire tourner un 7B quantifié coûte 6-14 €/mois ; la facture API qu'il remplacerait est de **1,30 €/mois**. Le plancher tarifaire d'un serveur est au-dessus de toute la dépense. |
+| D20 | **`ExtractionBackend` interchangeable** (§8.1) : API par défaut, **modèle local quantifié activable par configuration** pour l'ingestion seule. Tranché par **R1**, pas par opinion. | Choisir API ou local dans l'architecture | L'ingestion est le seul poste où le local peut gagner : job batch, latence indifférente, coût marginal nul sur la machine de l'utilisateur. Mais le gain maximal est de **~20 €, une fois**, contre 4 à 11 jours de calcul — cela ne doit pas façonner l'architecture. |
+| D21 | **Routage par tâche** (§8.1) : aucun modèle quand une table suffit, modèle rapide pour l'extraction et la vision, modèle capable pour la création | Un seul modèle partout | Le plus gros levier de coût n'est pas un modèle moins cher, c'est **ne pas appeler de modèle** : le JSON-LD couvre 98 % des recettes et D19 couvre les durées. |
 | D10 | **PWA** | Application native | 99 $/an + review pour un usage sur invitation. |
 | D11 | **Deux budgets LLM séparés** : global pour l'ingestion mutualisée, par foyer pour vision et propositions | Plafond unique par foyer | L'ingestion profite à tous les foyers (D16) : la facturer à un seul est incohérent. |
 | D12 | **Découverte par sitemaps publics**, pas par crawl | Crawl | **Mesuré** : aucun `robots.txt` ne bloque l'IA, les sitemaps exposent 112 000 recettes et existent pour être lus par des robots. |
@@ -186,7 +188,7 @@ Sab'n'Pepper — uniquement du texte d'article.
 
 | # | À mesurer | Go | Si échec |
 |---|---|---|---|
-| R1 | Extraction LLM des attributs d'étape (appareil, température, `load_type`) sur 20 recettes | ≥ 85 % | 70-85 % : lot 1 construit, mais relecture systématique des étapes four. < 70 % : lot 1 reporté, on revoit l'approche. |
+| R1 | Extraction des attributs d'étape (appareil, température, `load_type`) sur 20 recettes, **deux bras comparés : API rapide vs modèle local quantifié** (D20) | ≥ 85 % pour l'API. Le local est retenu s'il est **à moins de 5 points** de l'API — l'écart se paie alors 20 € une fois, contre plusieurs jours de calcul. | 70-85 % : lot 1 construit, relecture systématique des étapes four. < 70 % : lot 1 reporté. Local en deçà : `ExtractionBackend` reste sur l'API, l'interface ne change pas. |
 | R1b | **Qualité des durées pré-remplies (D15/D19)**, sur données **masquées** : on cache les 69 durées déclarées de l'échantillon, on pré-remplit par `default_duration` + LLM, on mesure l'**erreur absolue médiane par étape en minutes**, séparément pour **étapes actives** et **étapes à appareil** (112/308) | **≤ 5 min d'erreur médiane sur les étapes à appareil** — ce sont elles qui occupent une ressource et dont l'erreur se paie sur le Gantt. Étapes actives : ±10 min tolérés. | > 5 min : `default_duration` est réduite à des classes grossières (< 5 / 5-15 / 15-45 / > 45 min) et la confirmation à la sélection devient obligatoire au lieu d'optionnelle. Le Gantt perd en précision, **le projet ne s'arrête pas** — c'était le défaut du repli précédent. |
 | R2 | Relaxations de précédence (D14) sur 20 recettes | **0 faux positif** | ≥ 1 faux positif : relaxations désactivées, ordre total strict, parallélisme inter-recettes seulement. |
 | R3 | Vision sur 5 photos réelles du frigo | ≥ 70 % identifiés, **0 hallucination** | Hallucination : la photo ne préremplit plus, elle suggère, et tout est confirmé. |
@@ -448,7 +450,7 @@ tous les foyers. **Régime permanent, 2 personnes** : ~1,30 €/mois sur le budg
 |---|---|
 | Supabase (free tier, UE) | 0 € |
 | Cloudflare Pages | 0 € |
-| LLM — amorçage | 50 € une fois |
+| LLM — amorçage (5 000 recettes) | **~20 € une fois** avec Batch API + prompt caching (50 € sans) · **0 €** si le bras local passe R1 |
 | LLM — régime permanent | < 2 €/mois |
 | Resend (free) | 0 € |
 | Domaine (facultatif) | 12 €/an |
@@ -458,6 +460,42 @@ tous les foyers. **Régime permanent, 2 personnes** : ~1,30 €/mois sur le budg
 ~10 Go, incompatible avec le free tier) : il est **interrogé à la demande et mis en cache**
 dans `food` au fil des produits rencontrés. Seul CIQUAL, borné à ~3 200 aliments, est chargé
 intégralement.
+
+---
+
+### 8.1 Routage par tâche et backends (D20, D21)
+
+| Tâche | Backend | Justification |
+|---|---|---|
+| Parsing d'une recette | **Aucun modèle** — JSON-LD `schema.org/Recipe` | 98 % de succès mesuré (§4.1) |
+| Durées, températures, conversions d'unités | **Tables déterministes** — `default_duration`, `default_temperature`, `unit_conversion` | D19. Hors ligne, auditable, gratuit |
+| Extraction structurée des étapes (les 2 % restants + attributs) | **`ExtractionBackend`** — API rapide par défaut, **local quantifié activable** | D20, tranché par R1 |
+| Vision — frigo, ticket de caisse | **API rapide uniquement** | 0,03 €/mois d'enjeu total ; les petits VLM sont nettement moins bons sur une photo de frigo encombré |
+| Création et proposition de recettes | **API capable** | Qualité déterminante, volume faible |
+
+```ts
+interface ExtractionBackend {
+  readonly name: string            // 'api-fast' | 'local-<modèle>'
+  extractSteps(page: RecipeText, anchors: TimeAnchors): Promise<StructuredSteps>
+}
+```
+
+Même patron que `PriceSource` (§9) : l'implémentation est remplaçable sans toucher au reste.
+
+**Leviers de coût, par ordre de rentabilité :**
+
+| # | Levier | Effet sur les 50 € d'amorçage | Perte de qualité |
+|---|---|---|---|
+| 1 | Ne pas appeler de modèle (JSON-LD + tables D19) | Déjà acquis — **de loin le plus gros levier** | aucune |
+| 2 | **Batch API (−50 %) + prompt caching** — le prompt d'extraction est identique sur 5 000 appels, et l'ingestion *est* un job asynchrone | **50 € → ~20 €** | **aucune** |
+| 3 | Modèle local quantifié (D20) | 20 € → 0 € | **à mesurer (R1)** |
+
+Coût réel du levier 3 sur la machine de référence (Core Ultra 7 165H, 22 threads, 31 Go,
+pas de GPU CUDA, ollama présent) : 5 000 recettes × ~1 500 tokens de sortie ≈ 7,5 M tokens.
+**1B ≈ 1,7 jour** (mais l'extraction JSON structurée depuis du français mal formé est
+précisément ce qu'un 1B rate), **3B ≈ 4-5 jours**, **7B Q4 ≈ 11 jours** de calcul continu.
+Le prix du levier 3 est donc : **20 € contre plusieurs jours de machine**, à qualité non prouvée.
+D'où D20 : on le teste, on ne le suppose pas, et l'architecture n'en dépend pas.
 
 ---
 
