@@ -6,6 +6,7 @@ export function Settings() {
   const [plafond, setPlafond] = useState(5)
   const [reste, setReste] = useState<number | null>(null)
   const [invite, setInvite] = useState('')
+  const [lien, setLien] = useState('')
   const [msg, setMsg] = useState(''); const [err, setErr] = useState(false)
 
   async function charger() {
@@ -28,7 +29,13 @@ export function Settings() {
   }
 
   async function inviter() {
-    try { await callFunction('invite', { email: invite }); dire(`Invitation envoyée à ${invite}.`) }
+    try {
+      const r = await callFunction('invite', { email: invite })
+      // Le lien est le vrai livrable : sans clé Resend aucun e-mail ne part, et
+      // même avec, le destinataire peut l'avoir classé en indésirable.
+      setLien(`${window.location.origin}/invite/${r.token}`)
+      dire(`Invitation créée pour ${invite}. Envoie-lui le lien ci-dessous.`)
+    }
     catch (e) { dire(String((e as Error).message), true) }
   }
 
@@ -73,12 +80,23 @@ export function Settings() {
       <section className="mt-12">
         <h2 className="titre text-xl text-herbe">Inviter</h2>
         <p className="mt-1 text-doux text-[15px]">
-          La personne recevra un lien. Elle rejoint le foyer, garde ses propres objectifs.
+          Tu obtiens un lien à lui transmettre. Elle rejoint le foyer et garde ses propres objectifs.
         </p>
         <div className="mt-4 space-y-4">
           <Champ label="Son e-mail" type="email" value={invite} placeholder="elle@exemple.fr"
                  onChange={e => setInvite(e.target.value)} />
-          <Bouton onClick={inviter} disabled={!invite}>Envoyer l’invitation</Bouton>
+          <Bouton onClick={inviter} disabled={!invite}>Créer l’invitation</Bouton>
+          {lien && (
+            <div className="rounded-xl border border-brume bg-surface p-4">
+              <p className="text-doux text-[15px]">Son lien, valable 7 jours :</p>
+              <p className="mt-2 break-all text-[15px] text-encre">{lien}</p>
+              <button
+                onClick={() => { navigator.clipboard.writeText(lien); dire('Lien copié.') }}
+                className="mt-3 text-herbe underline underline-offset-4">
+                Copier le lien
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
