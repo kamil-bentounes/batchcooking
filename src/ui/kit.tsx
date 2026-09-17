@@ -3,11 +3,12 @@ import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes } from 'react
 
 /* Navigation : deux liens, discrets. Le courant est en encre, l'autre en doux. */
 function Nav() {
-  const ici = window.location.pathname
+  const b = import.meta.env.BASE_URL
+  const ici = '/' + window.location.pathname.slice(b.length).replace(/^\/+/, '')
   const lien = (href: string, texte: string) => {
     const actif = href === '/' ? ici === '/' : ici.startsWith(href)
     return (
-      <a href={href}
+      <a href={(b + href.slice(1)).replace(/\/\//g, '/')}
          className={`py-2 transition-colors ${actif ? 'text-encre' : 'text-doux hover:text-encre'}`}>
         {texte}
       </a>

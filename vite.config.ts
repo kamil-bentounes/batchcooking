@@ -3,7 +3,11 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// GitHub Pages sert le site sous /batchcooking/. En local la base reste '/'.
+const base = process.env.PAGES ? '/batchcooking/' : '/'
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     tailwindcss(),
@@ -13,7 +17,7 @@ export default defineConfig({
         name: 'Batch cooking',
         short_name: 'Batch',
         lang: 'fr',
-        start_url: '/',
+        start_url: base,
         display: 'standalone',
         background_color: '#F2F4EF',
         theme_color: '#2F5D45',

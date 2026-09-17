@@ -39,11 +39,14 @@ export default function App() {
 
   if (!pret) return <main className="min-h-dvh grid place-items-center text-doux">Un instant…</main>
 
-  const invitation = window.location.pathname.match(/^\/invite\/(.+)$/)
+  // Retire le préfixe de base (/batchcooking/ sur GitHub Pages, / en local).
+  const chemin = '/' + window.location.pathname
+    .slice(import.meta.env.BASE_URL.length).replace(/^\/+/, '')
+  const invitation = chemin.match(/^\/invite\/(.+)$/)
 
   if (!session) return <SignIn redirectTo={window.location.href} />
   if (invitation) return <AcceptInvite token={invitation[1]} />
   if (!foyer) return <Onboarding onDone={relire} />
-  if (window.location.pathname.startsWith('/settings')) return <Settings />
+  if (chemin.startsWith('/settings')) return <Settings />
   return <Targets userId={session.user.id} />
 }
