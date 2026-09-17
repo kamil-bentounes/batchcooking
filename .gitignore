@@ -6,3 +6,4 @@ dist/
 supabase/.temp/
 supabase/functions/.env
 .DS_Store
+.shots/

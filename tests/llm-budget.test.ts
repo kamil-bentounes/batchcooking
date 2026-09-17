@@ -42,13 +42,18 @@ describe('budget LLM', () => {
     const { data: before, error: e1 } = await a.rpc('llm_global_budget_remaining')
     expect(e1, 'service_role doit pouvoir appeler cette fonction').toBeNull()
 
-    // ⚠️ upsert() résout le conflit sur la clé PRIMAIRE par défaut, pas sur
-    // llm_usage_unique : sans onConflict, c'est un INSERT qui violerait la contrainte.
-    await a.from('llm_usage').upsert({
+    // ⚠️ Le test doit être idempotent : rejoué sans db:reset, un upsert laisserait
+    // la ligne inchangée et l'écart mesuré vaudrait 0. On purge d'abord.
+    await a.from('llm_usage').delete()
+      .is('household_id', null).eq('month', month()).eq('kind', 'generation')
+    const { data: base } = await a.rpc('llm_global_budget_remaining')
+
+    await a.from('llm_usage').insert({
       household_id: null, month: month(), kind: 'generation', calls: 1, cost_eur: 7,
-    }, { onConflict: 'household_id,month,kind' })
+    })
     const { data: after } = await a.rpc('llm_global_budget_remaining')
-    expect(Number(before) - Number(after)).toBeCloseTo(7, 2)
+    expect(Number(base) - Number(after), 'la consommation système doit se décompter du plafond')
+      .toBeCloseTo(7, 2)
   })
 
   it('un foyer ne peut PAS appeler la fonction de budget global', async () => {
