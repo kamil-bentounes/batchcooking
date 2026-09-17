@@ -1,7 +1,7 @@
 # Design — Application de batch cooking, diet et budget
 
 - **Date** : 2026-09-17
-- **Version** : 10 — cadrage RGPD corrigé : exemption domestique tant que l'usage reste le foyer
+- **Version** : 11 — stack d'interface arrêtée : Tailwind v4, shadcn/ui, Motion, TanStack Query, PWA
 - **Statut** : design validé, en attente du plan d'implémentation du **lot 0a-1**
 - **Utilisateurs** : un foyer de 2 personnes au départ, puis d'autres foyers **sur invitation**
 
@@ -39,6 +39,7 @@ Le différenciateur est le point 2 : l'ordonnancement de la session sous contrai
 | D9 | **LLM en API pour tout ce qui est en ligne** ; **serveur loué exclu** | Auto-hébergement sur serveur | Le VPS le moins cher capable de faire tourner un 7B quantifié coûte 6-14 €/mois ; la facture API qu'il remplacerait est de **1,30 €/mois**. Le plancher tarifaire d'un serveur est au-dessus de toute la dépense. |
 | D20 | **`ExtractionBackend` interchangeable** (§8.1) : fournisseur choisi par R1 parmi API de référence, **API à bas coût** et **modèle local quantifié**. Tranché par mesure, pas par opinion. | Choisir API ou local dans l'architecture | L'ingestion est le seul poste où le local pourrait gagner. Mais **le prix à battre est de ~4 €** (§8.3, DeepSeek V4 Flash sur du contenu public), pas de 20 € : contre 4 à 11 jours de machine et la plus faible qualité des options, le local ne rapporte plus rien. L'interface reste, pour ne pas dépendre d'un fournisseur. |
 | D21 | **Routage par tâche** (§8.1) : aucun modèle quand une table suffit, modèle rapide pour l'extraction et la vision, modèle capable pour la création | Un seul modèle partout | Le plus gros levier de coût n'est pas un modèle moins cher, c'est **ne pas appeler de modèle** : le JSON-LD couvre 98 % des recettes, D19 couvre les durées. En régime permanent il reste **~56 appels par mois**. |
+| D23 | **Stack d'interface : Tailwind v4 + shadcn/ui + Motion + TanStack Query**, sur React/Vite | SvelteKit ; Next.js ; CSS maison | Exigence explicite : une application moderne, rapide, fluide, et **modifiable simplement**. SvelteKit est plus agréable à écrire mais prive de shadcn/ui et d'une large part de l'écosystème d'animation. Next.js apporte un rendu serveur sans objet pour une PWA hors ligne adossée à Supabase. Le choix ne concerne **que l'interface** : il n'a aucun effet sur les lots 0a-1, 0a-2 et 0b. |
 | D22 | **Le fournisseur est choisi par la sensibilité de la donnée, pas par le prix** (§8.2) : contenu web public → le moins cher ; **image du logement → fournisseur de confiance**, jamais le moins-disant | Fournisseur unique ; choix au prix seul | Le texte d'une recette est public. Une photo de l'intérieur d'un frigo ne l'est pas. Ce n'est pas une obligation réglementaire en usage domestique (§11 q. 1) — c'est que l'écart de prix en jeu est de 0,003 € par photo, donc qu'il n'y a rien à arbitrer. |
 | D10 | **PWA** | Application native | 99 $/an + review pour un usage sur invitation. |
 | D11 | **Deux budgets LLM séparés** : global pour l'ingestion mutualisée, par foyer pour vision et propositions | Plafond unique par foyer | L'ingestion profite à tous les foyers (D16) : la facturer à un seul est incohérent. |
@@ -77,7 +78,11 @@ Le différenciateur est le point 2 : l'ordonnancement de la session sous contrai
 
 | Couche | Choix | Justification |
 |---|---|---|
-| Frontend | **PWA — React + Vite + TypeScript**, service worker | Installable. Le plan de session doit s'afficher en cuisine **sans réseau** : le plan calculé et la liste chronologique sont mis en cache à l'ouverture de la session. |
+| Frontend | **PWA — React + Vite + TypeScript** (`vite-plugin-pwa`), service worker | Installable sur l'écran d'accueil. Le plan de session doit s'afficher en cuisine **sans réseau** : le plan calculé et la liste chronologique sont mis en cache à l'ouverture de la session. |
+| Style | **Tailwind CSS v4** | Une couleur, un espacement, un arrondi se changent en une classe. C'est l'exigence « modifier simplement », et c'est ce qui rend les itérations de maquette peu coûteuses. |
+| Composants | **shadcn/ui** | Les composants sont **copiés dans le dépôt**, pas importés d'une dépendance : ils sont modifiables sans limite et rien n'est verrouillé par une bibliothèque tierce. |
+| Animation | **Motion** + **View Transitions API** | Transitions d'écran natives et animations à 60 fps. C'est ce qui produit la sensation de fluidité, pas la vitesse du serveur. |
+| Données côté client | **TanStack Query** | Cache et **mises à jour optimistes** : l'interface réagit avant la réponse réseau. C'est le principal levier de rapidité *perçue*. |
 | Backend | **Supabase** — Postgres, Auth, RLS, Storage, Edge Functions — **région UE** | Auth + isolation + stockage des photos en un service. RLS natif = D7 et D16 quasi gratuits. |
 | Worker d'ingestion | **Node + TypeScript**, exposant les outils MCP, exécuté hors de l'app (local ou tâche planifiée), authentifié en **rôle de service** | Découplé. Peut tourner à la demande, sans dimensionner un serveur permanent. |
 | Optimiseur | **TypeScript pur, exécuté côté client** | < 100 ms pour 5 recettes. Aucun aller-retour réseau, donc utilisable hors ligne. |
