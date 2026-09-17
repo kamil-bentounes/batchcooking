@@ -1,127 +1,720 @@
 {
   "_note": "Tables construites à la main. Aucune base ouverte ne les fournit telles quelles. Valeurs issues de références culinaires standard et des poids de portions USDA FoodData Central. Chacune est corrigeable, et les corrections des foyers les enrichissent à l'usage.",
-
   "unit_conversion": [
-    { "unit_label": "c. à soupe", "ciqual_subgroup": null, "grams": 15 },
-    { "unit_label": "c. à soupe", "ciqual_subgroup": "huiles et graisses végétales", "grams": 13.5 },
-    { "unit_label": "c. à soupe", "ciqual_subgroup": "sucres, miels et assimilés", "grams": 15 },
-    { "unit_label": "c. à soupe", "ciqual_subgroup": "sels", "grams": 18 },
-    { "unit_label": "c. à soupe", "ciqual_subgroup": "épices", "grams": 7 },
-    { "unit_label": "c. à soupe", "ciqual_subgroup": "herbes", "grams": 4 },
-
-    { "unit_label": "c. à café", "ciqual_subgroup": null, "grams": 5 },
-    { "unit_label": "c. à café", "ciqual_subgroup": "huiles et graisses végétales", "grams": 4.5 },
-    { "unit_label": "c. à café", "ciqual_subgroup": "sucres, miels et assimilés", "grams": 5 },
-    { "unit_label": "c. à café", "ciqual_subgroup": "sels", "grams": 6 },
-    { "unit_label": "c. à café", "ciqual_subgroup": "épices", "grams": 2.3 },
-    { "unit_label": "c. à café", "ciqual_subgroup": "herbes", "grams": 1.3 },
-
-    { "unit_label": "pincée",   "ciqual_subgroup": null, "grams": 0.4 },
-    { "unit_label": "poignée",  "ciqual_subgroup": null, "grams": 30 },
-    { "unit_label": "verre",    "ciqual_subgroup": null, "grams": 200 },
-    { "unit_label": "bol",      "ciqual_subgroup": null, "grams": 350 },
-    { "unit_label": "tasse",    "ciqual_subgroup": null, "grams": 150 },
-    { "unit_label": "sachet",   "ciqual_subgroup": null, "grams": 11 },
-    { "unit_label": "gousse",   "ciqual_subgroup": null, "grams": 5 },
-    { "unit_label": "brin",     "ciqual_subgroup": null, "grams": 2 },
-    { "unit_label": "bouquet",  "ciqual_subgroup": null, "grams": 25 },
-    { "unit_label": "feuille",  "ciqual_subgroup": null, "grams": 0.5 },
-    { "unit_label": "filet",    "ciqual_subgroup": null, "grams": 5 },
-    { "unit_label": "trait",    "ciqual_subgroup": null, "grams": 3 },
-    { "unit_label": "noix",     "ciqual_subgroup": null, "grams": 15 },
-    { "unit_label": "noisette", "ciqual_subgroup": null, "grams": 5 },
-    { "unit_label": "tranche",  "ciqual_subgroup": null, "grams": 30 },
-    { "unit_label": "rondelle", "ciqual_subgroup": null, "grams": 10 },
-    { "unit_label": "louche",   "ciqual_subgroup": null, "grams": 100 }
+    {
+      "unit_label": "c. à soupe",
+      "ciqual_subgroup": null,
+      "grams": 15
+    },
+    {
+      "unit_label": "c. à soupe",
+      "ciqual_subgroup": "huiles et graisses végétales",
+      "grams": 13.5
+    },
+    {
+      "unit_label": "c. à soupe",
+      "ciqual_subgroup": "sucres, miels et assimilés",
+      "grams": 15
+    },
+    {
+      "unit_label": "c. à soupe",
+      "ciqual_subgroup": "sels",
+      "grams": 18
+    },
+    {
+      "unit_label": "c. à soupe",
+      "ciqual_subgroup": "épices",
+      "grams": 7
+    },
+    {
+      "unit_label": "c. à soupe",
+      "ciqual_subgroup": "herbes",
+      "grams": 4
+    },
+    {
+      "unit_label": "c. à café",
+      "ciqual_subgroup": null,
+      "grams": 5
+    },
+    {
+      "unit_label": "c. à café",
+      "ciqual_subgroup": "huiles et graisses végétales",
+      "grams": 4.5
+    },
+    {
+      "unit_label": "c. à café",
+      "ciqual_subgroup": "sucres, miels et assimilés",
+      "grams": 5
+    },
+    {
+      "unit_label": "c. à café",
+      "ciqual_subgroup": "sels",
+      "grams": 6
+    },
+    {
+      "unit_label": "c. à café",
+      "ciqual_subgroup": "épices",
+      "grams": 2.3
+    },
+    {
+      "unit_label": "c. à café",
+      "ciqual_subgroup": "herbes",
+      "grams": 1.3
+    },
+    {
+      "unit_label": "pincée",
+      "ciqual_subgroup": null,
+      "grams": 0.4
+    },
+    {
+      "unit_label": "poignée",
+      "ciqual_subgroup": null,
+      "grams": 30
+    },
+    {
+      "unit_label": "verre",
+      "ciqual_subgroup": null,
+      "grams": 200
+    },
+    {
+      "unit_label": "bol",
+      "ciqual_subgroup": null,
+      "grams": 350
+    },
+    {
+      "unit_label": "tasse",
+      "ciqual_subgroup": null,
+      "grams": 150
+    },
+    {
+      "unit_label": "sachet",
+      "ciqual_subgroup": null,
+      "grams": 11
+    },
+    {
+      "unit_label": "gousse",
+      "ciqual_subgroup": null,
+      "grams": 5
+    },
+    {
+      "unit_label": "brin",
+      "ciqual_subgroup": null,
+      "grams": 2
+    },
+    {
+      "unit_label": "bouquet",
+      "ciqual_subgroup": null,
+      "grams": 25
+    },
+    {
+      "unit_label": "feuille",
+      "ciqual_subgroup": null,
+      "grams": 0.5
+    },
+    {
+      "unit_label": "filet",
+      "ciqual_subgroup": null,
+      "grams": 5
+    },
+    {
+      "unit_label": "trait",
+      "ciqual_subgroup": null,
+      "grams": 3
+    },
+    {
+      "unit_label": "noix",
+      "ciqual_subgroup": null,
+      "grams": 15
+    },
+    {
+      "unit_label": "noisette",
+      "ciqual_subgroup": null,
+      "grams": 5
+    },
+    {
+      "unit_label": "tranche",
+      "ciqual_subgroup": null,
+      "grams": 30
+    },
+    {
+      "unit_label": "rondelle",
+      "ciqual_subgroup": null,
+      "grams": 10
+    },
+    {
+      "unit_label": "louche",
+      "ciqual_subgroup": null,
+      "grams": 100
+    }
   ],
-
   "density": [
-    { "ciqual_code": "18066", "grams_per_ml": 1.00, "_nom": "eau" },
-    { "ciqual_code": "17270", "grams_per_ml": 0.92, "_nom": "huile d'olive" },
-    { "ciqual_code": "19041", "grams_per_ml": 1.03, "_nom": "lait demi-écrémé" },
-    { "ciqual_code": "31008", "grams_per_ml": 1.42, "_nom": "miel" },
-    { "ciqual_code": "31016", "grams_per_ml": 0.85, "_nom": "sucre blanc" },
-    { "ciqual_code": "9436",  "grams_per_ml": 0.55, "_nom": "farine T55" }
+    {
+      "ciqual_code": "18066",
+      "grams_per_ml": 1.0,
+      "_nom": "eau"
+    },
+    {
+      "ciqual_code": "17270",
+      "grams_per_ml": 0.92,
+      "_nom": "huile d'olive"
+    },
+    {
+      "ciqual_code": "19041",
+      "grams_per_ml": 1.03,
+      "_nom": "lait demi-écrémé"
+    },
+    {
+      "ciqual_code": "31008",
+      "grams_per_ml": 1.42,
+      "_nom": "miel"
+    },
+    {
+      "ciqual_code": "31016",
+      "grams_per_ml": 0.85,
+      "_nom": "sucre blanc"
+    },
+    {
+      "ciqual_code": "9436",
+      "grams_per_ml": 0.55,
+      "_nom": "farine T55"
+    }
   ],
-
   "typical_quantity": [
-    { "ciqual_subgroup": "sels",    "grams": 3 },
-    { "ciqual_subgroup": "épices",  "grams": 2 },
-    { "ciqual_subgroup": "herbes",  "grams": 8 },
-    { "ciqual_subgroup": "huiles et graisses végétales", "grams": 15 },
-    { "ciqual_subgroup": "condiments", "grams": 15 },
-    { "ciqual_subgroup": "sauces",  "grams": 30 },
-    { "ciqual_subgroup": "légumes", "grams": 150 },
-    { "ciqual_subgroup": "salades", "grams": 80 },
-    { "ciqual_subgroup": "fromages", "grams": 40 }
+    {
+      "ciqual_subgroup": "sels",
+      "grams": 3
+    },
+    {
+      "ciqual_subgroup": "épices",
+      "grams": 2
+    },
+    {
+      "ciqual_subgroup": "herbes",
+      "grams": 8
+    },
+    {
+      "ciqual_subgroup": "huiles et graisses végétales",
+      "grams": 15
+    },
+    {
+      "ciqual_subgroup": "condiments",
+      "grams": 15
+    },
+    {
+      "ciqual_subgroup": "sauces",
+      "grams": 30
+    },
+    {
+      "ciqual_subgroup": "légumes",
+      "grams": 150
+    },
+    {
+      "ciqual_subgroup": "salades",
+      "grams": 80
+    },
+    {
+      "ciqual_subgroup": "fromages",
+      "grams": 40
+    }
   ],
-
   "default_temperature": [
-    { "preparation": "gratin",        "temperature_c": 180 },
-    { "preparation": "rôti",          "temperature_c": 200 },
-    { "preparation": "volaille",      "temperature_c": 200 },
-    { "preparation": "poisson",       "temperature_c": 180 },
-    { "preparation": "légumes rôtis", "temperature_c": 200 },
-    { "preparation": "pâtisserie",    "temperature_c": 180 },
-    { "preparation": "gâteau",        "temperature_c": 170 },
-    { "preparation": "tarte",         "temperature_c": 190 },
-    { "preparation": "pain",          "temperature_c": 220 },
-    { "preparation": "pizza",         "temperature_c": 240 },
-    { "preparation": "meringue",      "temperature_c": 90  },
-    { "preparation": "réchauffage",   "temperature_c": 150 }
+    {
+      "preparation": "gratin",
+      "temperature_c": 180
+    },
+    {
+      "preparation": "rôti",
+      "temperature_c": 200
+    },
+    {
+      "preparation": "volaille",
+      "temperature_c": 200
+    },
+    {
+      "preparation": "poisson",
+      "temperature_c": 180
+    },
+    {
+      "preparation": "légumes rôtis",
+      "temperature_c": 200
+    },
+    {
+      "preparation": "pâtisserie",
+      "temperature_c": 180
+    },
+    {
+      "preparation": "gâteau",
+      "temperature_c": 170
+    },
+    {
+      "preparation": "tarte",
+      "temperature_c": 190
+    },
+    {
+      "preparation": "pain",
+      "temperature_c": 220
+    },
+    {
+      "preparation": "pizza",
+      "temperature_c": 240
+    },
+    {
+      "preparation": "meringue",
+      "temperature_c": 90
+    },
+    {
+      "preparation": "réchauffage",
+      "temperature_c": 150
+    }
   ],
-
   "default_duration": [
-    { "verb": "éplucher",   "appliance_type": null,        "base_minutes": 4,  "load_type": "actif",    "scaling": "lineaire_plafonne" },
-    { "verb": "émincer",    "appliance_type": null,        "base_minutes": 3,  "load_type": "actif",    "scaling": "lineaire_plafonne" },
-    { "verb": "hacher",     "appliance_type": null,        "base_minutes": 3,  "load_type": "actif",    "scaling": "lineaire_plafonne" },
-    { "verb": "couper",     "appliance_type": null,        "base_minutes": 3,  "load_type": "actif",    "scaling": "lineaire_plafonne" },
-    { "verb": "râper",      "appliance_type": null,        "base_minutes": 3,  "load_type": "actif",    "scaling": "lineaire_plafonne" },
-    { "verb": "laver",      "appliance_type": null,        "base_minutes": 2,  "load_type": "actif",    "scaling": "lineaire_plafonne" },
-    { "verb": "mélanger",   "appliance_type": null,        "base_minutes": 1,  "load_type": "actif",    "scaling": "constant" },
-    { "verb": "assaisonner","appliance_type": null,        "base_minutes": 1,  "load_type": "actif",    "scaling": "constant" },
-    { "verb": "battre",     "appliance_type": null,        "base_minutes": 3,  "load_type": "actif",    "scaling": "constant" },
-    { "verb": "pétrir",     "appliance_type": null,        "base_minutes": 8,  "load_type": "actif",    "scaling": "constant" },
-    { "verb": "étaler",     "appliance_type": null,        "base_minutes": 4,  "load_type": "actif",    "scaling": "constant" },
-    { "verb": "dresser",    "appliance_type": null,        "base_minutes": 4,  "load_type": "actif",    "scaling": "lineaire_plafonne" },
-
-    { "verb": "préchauffer","appliance_type": "four",      "base_minutes": 12, "load_type": "passif",   "scaling": "constant" },
-    { "verb": "enfourner",  "appliance_type": "four",      "base_minutes": 25, "load_type": "passif",   "scaling": "constant" },
-    { "verb": "gratiner",   "appliance_type": "four",      "base_minutes": 8,  "load_type": "passif",   "scaling": "constant" },
-    { "verb": "rôtir",      "appliance_type": "four",      "base_minutes": 40, "load_type": "passif",   "scaling": "constant" },
-
-    { "verb": "faire revenir","appliance_type": "poele",   "base_minutes": 6,  "load_type": "bloquant", "scaling": "lineaire_plafonne" },
-    { "verb": "saisir",     "appliance_type": "poele",     "base_minutes": 4,  "load_type": "bloquant", "scaling": "lineaire_plafonne" },
-    { "verb": "sauter",     "appliance_type": "poele",     "base_minutes": 7,  "load_type": "bloquant", "scaling": "lineaire_plafonne" },
-    { "verb": "dorer",      "appliance_type": "poele",     "base_minutes": 5,  "load_type": "bloquant", "scaling": "lineaire_plafonne" },
-
-    { "verb": "porter à ébullition","appliance_type": "casserole","base_minutes": 8, "load_type": "passif", "scaling": "constant" },
-    { "verb": "cuire",      "appliance_type": "casserole", "base_minutes": 12, "load_type": "passif",   "scaling": "constant" },
-    { "verb": "mijoter",    "appliance_type": "casserole", "base_minutes": 35, "load_type": "passif",   "scaling": "constant" },
-    { "verb": "réduire",    "appliance_type": "casserole", "base_minutes": 10, "load_type": "passif",   "scaling": "constant" },
-    { "verb": "blanchir",   "appliance_type": "casserole", "base_minutes": 3,  "load_type": "passif",   "scaling": "constant" },
-
-    { "verb": "air fryer",  "appliance_type": "air_fryer", "base_minutes": 18, "load_type": "passif",   "scaling": "constant" },
-    { "verb": "mixer",      "appliance_type": "blender",   "base_minutes": 2,  "load_type": "passif",   "scaling": "constant" },
-    { "verb": "réchauffer", "appliance_type": "micro_ondes","base_minutes": 3, "load_type": "passif",   "scaling": "constant" },
-
-    { "verb": "laisser reposer","appliance_type": null,    "base_minutes": 30, "load_type": "passif",   "scaling": "constant" },
-    { "verb": "laisser lever", "appliance_type": null,     "base_minutes": 60, "load_type": "passif",   "scaling": "constant" },
-    { "verb": "réfrigérer", "appliance_type": null,        "base_minutes": 60, "load_type": "passif",   "scaling": "constant" },
-    { "verb": "mariner",    "appliance_type": null,        "base_minutes": 30, "load_type": "passif",   "scaling": "constant" },
-    { "verb": "refroidir",  "appliance_type": null,        "base_minutes": 20, "load_type": "passif",   "scaling": "constant" },
-    { "verb": "égoutter",   "appliance_type": null,        "base_minutes": 2,  "load_type": "actif",    "scaling": "constant" },
-    { "verb": "réserver",   "appliance_type": null,        "base_minutes": 1,  "load_type": "actif",    "scaling": "constant" }
+    {
+      "verb": "éplucher",
+      "appliance_type": null,
+      "base_minutes": 4,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "émincer",
+      "appliance_type": null,
+      "base_minutes": 3,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "hacher",
+      "appliance_type": null,
+      "base_minutes": 3,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "couper",
+      "appliance_type": null,
+      "base_minutes": 3,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "râper",
+      "appliance_type": null,
+      "base_minutes": 3,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "laver",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "mélanger",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "assaisonner",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "battre",
+      "appliance_type": null,
+      "base_minutes": 3,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "pétrir",
+      "appliance_type": null,
+      "base_minutes": 8,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "étaler",
+      "appliance_type": null,
+      "base_minutes": 4,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "dresser",
+      "appliance_type": null,
+      "base_minutes": 4,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "préchauffer",
+      "appliance_type": "four",
+      "base_minutes": 12,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "enfourner",
+      "appliance_type": "four",
+      "base_minutes": 25,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "gratiner",
+      "appliance_type": "four",
+      "base_minutes": 8,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "rôtir",
+      "appliance_type": "four",
+      "base_minutes": 40,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "faire revenir",
+      "appliance_type": "poele",
+      "base_minutes": 6,
+      "load_type": "bloquant",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "saisir",
+      "appliance_type": "poele",
+      "base_minutes": 4,
+      "load_type": "bloquant",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "sauter",
+      "appliance_type": "poele",
+      "base_minutes": 7,
+      "load_type": "bloquant",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "dorer",
+      "appliance_type": "poele",
+      "base_minutes": 5,
+      "load_type": "bloquant",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "porter à ébullition",
+      "appliance_type": "casserole",
+      "base_minutes": 8,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "cuire",
+      "appliance_type": "casserole",
+      "base_minutes": 12,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "mijoter",
+      "appliance_type": "casserole",
+      "base_minutes": 35,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "réduire",
+      "appliance_type": "casserole",
+      "base_minutes": 10,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "blanchir",
+      "appliance_type": "casserole",
+      "base_minutes": 3,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "air fryer",
+      "appliance_type": "air_fryer",
+      "base_minutes": 18,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "mixer",
+      "appliance_type": "blender",
+      "base_minutes": 2,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "réchauffer",
+      "appliance_type": "micro_ondes",
+      "base_minutes": 3,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "laisser reposer",
+      "appliance_type": null,
+      "base_minutes": 30,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "laisser lever",
+      "appliance_type": null,
+      "base_minutes": 60,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "réfrigérer",
+      "appliance_type": null,
+      "base_minutes": 60,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "mariner",
+      "appliance_type": null,
+      "base_minutes": 30,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "refroidir",
+      "appliance_type": null,
+      "base_minutes": 20,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "égoutter",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "réserver",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "ciseler",
+      "appliance_type": null,
+      "base_minutes": 3,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "zester",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "séparer les blancs",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "décortiquer",
+      "appliance_type": null,
+      "base_minutes": 7,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "gratter",
+      "appliance_type": null,
+      "base_minutes": 5,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "presser",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "rouler",
+      "appliance_type": null,
+      "base_minutes": 6,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "dérouler",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "piquer",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "beurrer",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "farcir",
+      "appliance_type": null,
+      "base_minutes": 6,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "plier",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "disposer",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "décorer",
+      "appliance_type": null,
+      "base_minutes": 3,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "retirer du feu",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "faire chauffer",
+      "appliance_type": "poele",
+      "base_minutes": 3,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "faire fondre",
+      "appliance_type": "casserole",
+      "base_minutes": 3,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "déglacer",
+      "appliance_type": "poele",
+      "base_minutes": 2,
+      "load_type": "bloquant",
+      "scaling": "constant"
+    },
+    {
+      "verb": "cuire sous pression",
+      "appliance_type": "autocuiseur",
+      "base_minutes": 15,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "tremper",
+      "appliance_type": null,
+      "base_minutes": 120,
+      "load_type": "passif",
+      "scaling": "constant"
+    }
   ],
-
   "appliance_catalog": [
-    { "code": "four",         "label": "Four",              "default_capacity": 2 },
-    { "code": "plaques",      "label": "Plaques de cuisson","default_capacity": 4 },
-    { "code": "air_fryer",    "label": "Air fryer",         "default_capacity": 1 },
-    { "code": "micro_ondes",  "label": "Micro-ondes",       "default_capacity": 1 },
-    { "code": "robot_cuiseur","label": "Robot cuiseur",     "default_capacity": 1 },
-    { "code": "autocuiseur",  "label": "Autocuiseur",       "default_capacity": 1 },
-    { "code": "blender",      "label": "Blender",           "default_capacity": 1 },
-    { "code": "batteur",      "label": "Batteur",           "default_capacity": 1 }
-  ]
+    {
+      "code": "four",
+      "label": "Four",
+      "default_capacity": 2
+    },
+    {
+      "code": "plaques",
+      "label": "Plaques de cuisson",
+      "default_capacity": 4
+    },
+    {
+      "code": "air_fryer",
+      "label": "Air fryer",
+      "default_capacity": 1
+    },
+    {
+      "code": "micro_ondes",
+      "label": "Micro-ondes",
+      "default_capacity": 1
+    },
+    {
+      "code": "robot_cuiseur",
+      "label": "Robot cuiseur",
+      "default_capacity": 1
+    },
+    {
+      "code": "autocuiseur",
+      "label": "Autocuiseur",
+      "default_capacity": 1
+    },
+    {
+      "code": "blender",
+      "label": "Blender",
+      "default_capacity": 1
+    },
+    {
+      "code": "batteur",
+      "label": "Batteur",
+      "default_capacity": 1
+    }
+  ],
+  "non_action": {
+    "_note": "Motifs des phrases de recette qui ne décrivent aucun geste. Elles ne reçoivent pas de durée : elles sont écartées de l'ordonnancement. Sans cela le plan gagne des minutes fantômes et l'utilisateur voit des étapes vides.",
+    "motifs": [
+      "bon app[ée]tit",
+      "r[ée]gale[zr]",
+      "et voil[àa]",
+      "^d[ée]gust",
+      "[àa] d[ée]guster",
+      "^servez? (?:frais|chaud|ti[ée]de|froid|imm[ée]diatement)",
+      "sont pr[êe]t(?:e?s)?\\s*!?$",
+      "^accompagn",
+      "^vous pouvez (?:servir|accompagner|d[ée]guster)",
+      "astuce\\s*:",
+      "^conseil\\s*:",
+      "^variante\\s*:",
+      "^note\\s*:",
+      "bonne d[ée]gustation",
+      "^utilise[rz] du",
+      "^r[ée]p[ée]t(?:er|ez) l.op[ée]ration"
+    ]
+  }
 }
