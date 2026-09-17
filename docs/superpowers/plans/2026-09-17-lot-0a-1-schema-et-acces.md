@@ -116,21 +116,19 @@ Renseigner `.env` avec les clés du Step 3. **`supabase/functions/.env` est lu a
 |---|---|---|
 | `site_url = "http://127.0.0.1:3000"` | L'app tourne sur `:5173`. Le lien magique **retombe sur un port où rien n'écoute** : tout le parcours du Step 11 de la Task 10 est bloqué. | `site_url = "http://localhost:5173"` |
 | `additional_redirect_urls = ["https://127.0.0.1:3000"]` | `emailRedirectTo` n'est pas en liste blanche, GoTrue l'ignore. | y ajouter `"http://localhost:5173"` et `"http://localhost:5173/**"` |
-| aucune section `[functions]` → `verify_jwt = true` | Le préflight CORS `OPTIONS` **ne porte pas d'`Authorization`** : il reçoit 401 et n'atteint jamais le code de la fonction. | ajouter les deux sections ci-dessous |
+| aucune section `[functions]` → `verify_jwt = true` | Le préflight CORS `OPTIONS` **ne porte pas d'`Authorization`** : il reçoit 401 et n'atteint jamais le code de la fonction. | ⚠️ **Se règle en Task 9**, pas ici — voir l'encadré ci-dessous |
 
 ```toml
 [auth]
 site_url = "http://localhost:5173"
 additional_redirect_urls = ["http://localhost:5173", "http://localhost:5173/**"]
-
-# Les deux fonctions valident elles-mêmes le JWT via admin.auth.getUser(jwt).
-# Désactiver la vérification de la passerelle est donc sans danger, et c'est
-# la seule façon de laisser passer le préflight OPTIONS.
-[functions.invite]
-verify_jwt = false
-[functions.accept-invite]
-verify_jwt = false
 ```
+
+> ⚠️ **Constaté à l'exécution** : déclarer `[functions.invite]` / `[functions.accept-invite]`
+> **avant que les fichiers existent** fait échouer `supabase start` —
+> `failed to read file: open supabase/functions/accept-invite/index.ts: no such file or directory`.
+> Le CLI tente d'empaqueter toute fonction déclarée. Ces deux sections sont donc ajoutées
+> **en Task 9, Step 5bis**, une fois les fonctions écrites.
 
 ⚠️ **`enable_signup = true` est la valeur par défaut** : n'importe qui pourrait s'inscrire et créer
 un foyer, ce qui contredit D7 (« multi-tenant **sur invitation** »). Le verrou est posé dans la
@@ -1562,6 +1560,26 @@ Deno.serve(async (req) => {
 
   return reply({ token: inv.token, link })
 })
+```
+
+- [ ] **Step 5bis : Déclarer les fonctions dans `config.toml`, maintenant qu'elles existent**
+
+Sans cela, `verify_jwt = true` s'applique et le préflight `OPTIONS` — qui ne porte pas
+d'en-tête `Authorization` — reçoit 401 avant d'atteindre le code de la fonction.
+
+```bash
+cat >> supabase/config.toml <<'EOF'
+
+# Les deux fonctions valident elles-mêmes le JWT via admin.auth.getUser(jwt).
+# Désactiver la vérification de la passerelle est donc sans danger, et c'est la
+# seule façon de laisser passer le préflight OPTIONS.
+[functions.invite]
+verify_jwt = false
+
+[functions.accept-invite]
+verify_jwt = false
+EOF
+npx supabase stop && npx supabase start   # config.toml n'est relu qu'au démarrage
 ```
 
 - [ ] **Step 6 : Relancer (le serveur de fonctions du Step 2 doit toujours tourner)**
