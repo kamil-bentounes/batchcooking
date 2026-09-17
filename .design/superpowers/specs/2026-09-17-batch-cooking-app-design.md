@@ -1,7 +1,7 @@
 # Design — Application de batch cooking, diet et budget
 
 - **Date** : 2026-09-17
-- **Version** : 12 — la barquette devient l'unité de suivi ; portions et complément protéiné tranchés
+- **Version** : 13 — le frigo devient une annotation, pas un filtre ; deux plafonds de session au lieu d'une limite
 - **Statut** : design validé, en attente du plan d'implémentation du **lot 0a-1**
 - **Utilisateurs** : un foyer de 2 personnes au départ, puis d'autres foyers **sur invitation**
 
@@ -39,6 +39,9 @@ Le différenciateur est le point 2 : l'ordonnancement de la session sous contrai
 | D9 | **LLM en API pour tout ce qui est en ligne** ; **serveur loué exclu** | Auto-hébergement sur serveur | Le VPS le moins cher capable de faire tourner un 7B quantifié coûte 6-14 €/mois ; la facture API qu'il remplacerait est de **1,30 €/mois**. Le plancher tarifaire d'un serveur est au-dessus de toute la dépense. |
 | D20 | **`ExtractionBackend` interchangeable** (§8.1) : fournisseur choisi par R1 parmi API de référence, **API à bas coût** et **modèle local quantifié**. Tranché par mesure, pas par opinion. | Choisir API ou local dans l'architecture | L'ingestion est le seul poste où le local pourrait gagner. Mais **le prix à battre est de ~4 €** (§8.3, DeepSeek V4 Flash sur du contenu public), pas de 20 € : contre 4 à 11 jours de machine et la plus faible qualité des options, le local ne rapporte plus rien. L'interface reste, pour ne pas dépendre d'un fournisseur. |
 | D21 | **Routage par tâche** (§8.1) : aucun modèle quand une table suffit, modèle rapide pour l'extraction et la vision, modèle capable pour la création | Un seul modèle partout | Le plus gros levier de coût n'est pas un modèle moins cher, c'est **ne pas appeler de modèle** : le JSON-LD couvre 98 % des recettes, D19 couvre les durées. En régime permanent il reste **~56 appels par mois**. |
+| D28 | **Le contenu du frigo annote, il ne filtre pas.** Par défaut le catalogue entier est visible et **chaque recette affiche ce qui manque** (« il manque 2 poivrons et le saumon »). Le filtre strict reste disponible en bascule. | Filtre binaire qui cache les recettes incomplètes | Cacher une recette parce qu'il manque deux articles est une mauvaise décision prise à la place de l'utilisateur. Et la liste des manques **alimente directement la liste de courses** du lot 2. |
+| D29 | **Aucune limite de recettes par session. Deux plafonds vivants, affichés pendant la sélection** : le **temps** (contre `session.target_duration_min`) et les **portions** rapportées à la péremption (D27) — « 1 h 52 / 2 h · 10 parts, dont 4 à congeler ». Signalés en dépassement, **jamais bloquants**. | « Maximum 5 recettes » | Le vrai plafond n'est pas un nombre : avec un bon parallélisme, 2 h font 4 à 5 recettes au lieu de 2 — c'est précisément ce que l'optimiseur achète. Et cuisiner 16 portions qu'on jettera n'est pas de l'optimisation. |
+| D30 | **Le temps affiché est le temps ACTIF**, le temps total en second | Afficher le temps total | « 40 min » dont 18 aux fourneaux et 22 de four n'engage pas le même effort. Possible grâce à `load_type` (D19), et personne ne l'affiche. |
 | D24 | **La session produit des BARQUETTES, pas des recettes.** Chaque part est nommée, porte ses macros, son coût et sa date limite. **Manger = cocher une barquette.** | Journal alimentaire saisi à la main | C'est la seule forme de suivi qui tient dans la durée : personne ne saisit ses repas pendant trois mois. Tout est déjà calculé le dimanche, il ne reste qu'un geste. Et le tableau de bord (lot 6) se remplit tout seul. |
 | D25 | **Portions inégales pour des cibles inégales, sauf si l'écart est protéique** : 2 000 contre 1 700 kcal → 54/46, annoncé à la dernière étape du plan (« 5 × 340 g, 5 × 290 g »). **Mais si l'écart porte surtout sur les protéines, parts égales + complément dense** (100 g de skyr, deux œufs) | Portions égales pour tous ; deux plats distincts | Une part plus grosse donne plus de **tout**, pas plus de protéines : elle ajoute glucides et lipides dont la personne n'a pas besoin. L'application dit lequel des deux gestes s'applique, au moment du dressage. |
 | D26 | **Le petit-déjeuner et le midi sont saisis, en un geste** (habitudes mémorisées) | Ne suivre que les dîners | Le batch cooking couvre les dîners. Sans les deux autres repas, le tableau de bord **ment de ~900 kcal par jour** — il vaudrait mieux ne rien afficher. |
@@ -634,11 +637,11 @@ Dérivés de ce que la base contient réellement :
 
 | Filtre | Remarque |
 |---|---|
-| **Temps actif**, distinct du temps total | 10 min de gestes + 40 min de four ≠ 50 min de travail. Le filtre le plus utile, et personne ne l'a. Possible grâce à `load_type` (D19). |
+| **Temps actif**, distinct du temps total | 10 min de gestes + 40 min de four ≠ 50 min de travail. Le filtre le plus utile, et personne ne l'a. Possible grâce à `load_type` (D19). C'est aussi le temps **affiché** sur chaque carte (D30). |
 | Type | plat, entrée, dessert, petit-déjeuner, soupe |
 | Protéines / kcal / fibres | **Sur la borne défavorable** (D18), jamais la moyenne |
 | Appareil requis | « sans four » quand le four est pris ce jour-là |
-| Ingrédients du frigo | Lot 3 |
+| Ingrédients du frigo | Lot 3. **Bascule, pas filtre imposé** (D28) : en mode « tout », chaque recette affiche ses manques. |
 | Se congèle ou non | Décide si l'on cuisine 6 ou 12 portions (D27) |
 | Coût par portion | Lot 5 |
 | Jamais essayé / aimé la dernière fois | Une note d'un geste après avoir mangé suffit à rendre les propositions personnelles |
