@@ -153,6 +153,28 @@ describe('le rapprochement d’un ticket entier', () => {
     }
   })
 
+  it('ne rapproche pas un article DÉJÀ payé', () => {
+    // Le cas que l'écran recommande lui-même : « si le ticket est long,
+    // photographie-le en deux fois ». La seconde photo réattrapait les
+    // articles déjà soldés et écrasait leur prix avec une autre ligne.
+    const deja = [{ id: 'd', label: 'courgette', paid_price_eur: 0.89 }]
+    expect(rapproche([{ label: 'COURGETTE VRAC', price_eur: 1.15 }], deja)[0].article)
+      .toBeNull()
+  })
+
+  it('rapproche encore les articles non payés du même ticket', () => {
+    const melange = [
+      { id: 'a', label: 'courgette', paid_price_eur: 0.89 },
+      { id: 'b', label: 'poulet', paid_price_eur: null },
+    ]
+    const r = rapproche([
+      { label: 'COURGETTE VRAC', price_eur: 1.15 },
+      { label: 'FILET PLT', price_eur: 6.49 },
+    ], melange)
+    expect(r[0].article).toBeNull()
+    expect(r[1].article?.id).toBe('b')
+  })
+
   it('n’explose pas sur une liste vide', () => {
     const r = rapproche([{ label: 'PAIN', price_eur: 1.1 }], [])
     expect(r).toHaveLength(1)
@@ -205,6 +227,22 @@ describe('l’estimation du prochain panier', () => {
     const e = estimation({ label: 'poulet', food_id: 'f1', quantity: 1000, unit: 'g' },
       parAliment, 's1')
     expect(e!.euros).toBe(12.98)
+  })
+
+  it('départage deux prix parfaitement à égalité, toujours pareil', () => {
+    // Sans ce dernier critère, le tri reste à égalité et c'est l'ordre
+    // physique des lignes Postgres qui tranche — un ordre qui change après
+    // chaque UPDATE. Deux téléphones estimeraient la même liste
+    // différemment (D50), et le résultat s'écrit en base.
+    const egaux = [
+      { label: 'LAIT ENTIER 1L', food_id: null, store_id: 's1', unit: 'u',
+        avg_price_eur: 1.29, last_price_eur: 1.29, observations: 2 },
+      { label: 'LAIT ECREME 1L', food_id: null, store_id: 's1', unit: 'u',
+        avg_price_eur: 0.89, last_price_eur: 0.89, observations: 2 },
+    ]
+    const a = estimation({ label: 'lait' }, egaux, 's1')!.euros
+    const b = estimation({ label: 'lait' }, [...egaux].reverse(), 's1')!.euros
+    expect(b, 'l’estimation dépend de l’ordre des lignes').toBe(a)
   })
 
   it('départage deux prix par le nombre d’observations', () => {

@@ -1365,8 +1365,10 @@ export type Database = {
           grams: number
           kcal: number
           kcal_margin: number
+          kcal_max: number | null
           protein_g: number
           protein_g_margin: number
+          protein_g_min: number | null
           recipe_id: string
         }
         Insert: {
@@ -1378,8 +1380,10 @@ export type Database = {
           grams: number
           kcal: number
           kcal_margin?: number
+          kcal_max?: number | null
           protein_g: number
           protein_g_margin?: number
+          protein_g_min?: number | null
           recipe_id: string
         }
         Update: {
@@ -1391,8 +1395,10 @@ export type Database = {
           grams?: number
           kcal?: number
           kcal_margin?: number
+          kcal_max?: number | null
           protein_g?: number
           protein_g_margin?: number
+          protein_g_min?: number | null
           recipe_id?: string
         }
         Relationships: [
@@ -2246,6 +2252,10 @@ export type Database = {
       is_service_role: { Args: never; Returns: boolean }
       lieu_du_rayon: { Args: { rayon: string }; Returns: string }
       llm_budget_remaining: { Args: never; Returns: number }
+      llm_consomme: {
+        Args: { p_household: string; p_kind: string }
+        Returns: number
+      }
       llm_global_budget_remaining: { Args: never; Returns: number }
       open_cycle: {
         Args: { p_servings?: number; p_week_of: string }

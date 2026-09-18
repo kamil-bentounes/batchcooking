@@ -86,6 +86,20 @@ export function useGenereListe() {
         .select('recipe_id, food_id, raw_text, qty, unit, grams_reference, food:food_id(name, ciqual_group)')
         .in('recipe_id', choisies.map(c => c.recipe_id))) as unknown as LigneRecette[]
 
+      /*
+       * Ce que le foyer a PESÉ (lot 0c) prime sur le référentiel partagé.
+       *
+       * Sans cela la boucle de pesée ne servait à rien : peser trois fois ses
+       * oignons faisait disparaître la ligne de l'écran « Peser » et ne
+       * changeait aucun gramme. C'est ici que ça compte — « 2 oignons » devient
+       * 236 g pour CE foyer, et la liste de courses le dit.
+       */
+      const pesesDuFoyer = new Map<string, number>()
+      for (const w of ou(await supabase.from('household_unit_weight')
+        .select('food_id, grams').eq('actif', true))) {
+        pesesDuFoyer.set(w.food_id, Number(w.grams))
+      }
+
       // Facteur d'échelle par recette : on cuisine `servings` parts d'une
       // recette qui en rend `yield_servings`.
       const facteur = new Map(choisies.map(c => {
@@ -98,6 +112,8 @@ export function useGenereListe() {
       type Cumul = {
         label: string; food_id: string | null; groupe: string | null
         grammes: number | null; unite: string | null; quantite: number | null
+        /** Ce qu'on n'a pas su convertir et qu'on refuse de perdre. */
+        nonConverti: number
       }
       const cumuls = new Map<string, Cumul>()
       for (const i of ingredients) {
@@ -106,9 +122,17 @@ export function useGenereListe() {
         const nom = i.food?.name ?? i.raw_text
         const c = cumuls.get(cle) ?? {
           label: nom, food_id: i.food_id, groupe: i.food?.ciqual_group ?? null,
-          grammes: null, unite: null, quantite: null,
+          grammes: null, unite: null, quantite: null, nonConverti: 0,
         }
-        if (i.grams_reference !== null) {
+        // Le poids appris par le foyer, quand il en a un : c'est LUI qui fait
+        // qu'« 2 oignons » vaut quelque chose.
+        const pese = i.food_id && i.unit === null && i.qty !== null
+          ? pesesDuFoyer.get(i.food_id) ?? null
+          : null
+
+        if (pese !== null) {
+          c.grammes = (c.grammes ?? 0) + Number(i.qty) * pese * f
+        } else if (i.grams_reference !== null) {
           c.grammes = (c.grammes ?? 0) + Number(i.grams_reference) * f
         } else if (i.qty !== null) {
           // Sans conversion en grammes, on additionne à l'unité près, et
@@ -116,6 +140,8 @@ export function useGenereListe() {
           if (c.unite === null || c.unite === i.unit) {
             c.unite = i.unit
             c.quantite = (c.quantite ?? 0) + Number(i.qty) * f
+          } else {
+            c.nonConverti += Number(i.qty) * f
           }
         }
         cumuls.set(cle, c)
@@ -140,6 +166,13 @@ export function useGenereListe() {
       const lignes = [...cumuls.values()].map(c => {
         const quantite = c.grammes ?? c.quantite ?? null
         const unite = c.grammes !== null ? 'g' : c.unite
+        // Un compte qu'on n'a su ni convertir ni additionner ne DISPARAÎT pas :
+        // « 500 g de poireaux » et « 2 poireaux » faisaient 500 g, et les deux
+        // poireaux s'évaporaient sans un mot. On le dit dans le libellé, où ça
+        // se corrige d'un geste dans le magasin.
+        const reste = c.grammes !== null && c.quantite !== null
+          ? c.quantite + c.nonConverti
+          : c.nonConverti
         const prix = connus.length === 0 ? null : estimation(
           { label: c.label, food_id: c.food_id, quantity: quantite, unit: unite },
           connus, magasin)
@@ -148,7 +181,9 @@ export function useGenereListe() {
           household_id: foyer,
           store_id: magasin,
           food_id: c.food_id,
-          label: c.label,
+          label: reste > 0
+            ? `${c.label} (+ ${Math.round(reste)} à compter)`
+            : c.label,
           aisle: rayonDe({ groupe: c.groupe, libelle: c.label }),
           quantity: quantite,
           unit: unite,

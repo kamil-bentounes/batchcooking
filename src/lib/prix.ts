@@ -198,10 +198,18 @@ export function rapproche(
   lignes: LigneTicket[],
   articles: ArticleListe[],
 ): Rapprochement[] {
+  // Un article DÉJÀ payé ne se rapproche pas une deuxième fois. Le cas est
+  // celui que l'écran recommande lui-même — « si le ticket est long,
+  // photographie-le en deux fois » : la seconde photo revoyait la même liste,
+  // réattrapait les articles déjà soldés, et écrasait leur prix payé avec le
+  // montant d'une autre ligne.
+  const libres = articles.filter(a => a.paid_price_eur === null
+                                   || a.paid_price_eur === undefined)
+
   const paires: { i: number; j: number; score: number }[] = []
   for (let i = 0; i < lignes.length; i++) {
-    for (let j = 0; j < articles.length; j++) {
-      const score = ressemblance(lignes[i].label, articles[j].label)
+    for (let j = 0; j < libres.length; j++) {
+      const score = ressemblance(lignes[i].label, libres[j].label)
       if (score >= SEUIL_PROPOSE) paires.push({ i, j, score })
     }
   }
@@ -216,7 +224,7 @@ export function rapproche(
     if (prisLigne.has(p.i) || prisArticle.has(p.j)) continue
     prisLigne.add(p.i)
     prisArticle.add(p.j)
-    retenu.set(p.i, { article: articles[p.j], score: p.score })
+    retenu.set(p.i, { article: libres[p.j], score: p.score })
   }
 
   return lignes.map((ligne, i) => {
@@ -267,7 +275,14 @@ export function estimation(
   const retenus = ici.length > 0 ? ici : candidats
   // Le mieux ressemblant, puis le plus observé : un prix vu six fois vaut mieux
   // qu'un prix vu une fois.
-  retenus.sort((a, b) => b.score - a.score || b.p.observations - a.p.observations)
+  //
+  // ⚠️ Et le LIBELLÉ en dernier recours, sans quoi le tri serait à égalité et
+  //    c'est l'ordre physique des lignes Postgres qui trancherait — un ordre
+  //    qui change après chaque UPDATE. Deux téléphones estimeraient alors la
+  //    même liste différemment (D50), et `useEstimeListe` écrirait le résultat.
+  retenus.sort((a, b) => b.score - a.score
+    || b.p.observations - a.p.observations
+    || a.p.label.localeCompare(b.p.label, 'fr'))
   const gagnant = retenus[0].p
 
   const unitaire = Number(gagnant.avg_price_eur)

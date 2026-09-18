@@ -125,7 +125,17 @@ describe('le bilan se remplit tout seul', () => {
     const { data: dressees } = await alice.client.from('portion')
       .select('id').eq('cycle_id', cycle)
 
-    const b = budget(liste!, dressees!.length, 320)
+    // Le payé vient du TICKET, pas de la somme des articles rapprochés : sinon
+    // les lignes qui ne sont sur aucune liste disparaissent du budget.
+    const { data: tickets } = await alice.client.from('receipt')
+      .select('id, total_eur').eq('id', ticket!.id)
+    const { data: lignesTicket } = await alice.client.from('receipt_line')
+      .select('price_eur').eq('receipt_id', ticket!.id)
+    const payeTicket = tickets![0].total_eur !== null
+      ? Number(tickets![0].total_eur)
+      : lignesTicket!.reduce((s2, l) => s2 + Number(l.price_eur), 0)
+
+    const b = budget(liste!, payeTicket, dressees!.length, 320)
     expect(b.paye, 'le ticket n’a pas rempli le prix payé').toBe(6.49)
     expect(b.estimeRestant, 'un article payé est resté compté comme estimé').toBe(0)
     expect(b.parPortion).toBe(3.25)

@@ -146,14 +146,25 @@ export function useCatalogue(f: Filtres) {
         }
       }
 
-      // ── La requête, filtrée par la base autant que possible ───────────────
+      // ── La requête, filtrée par la BASE ───────────────────────────────────
+      // Les bornes sont des colonnes générées (migration 0029) : sans cela,
+      // « au moins 30 g de protéines » ne cherchait que parmi les 240 recettes
+      // les plus rapides, et pouvait rendre « rien » alors que des centaines
+      // qualifiaient.
+      const surMacros = f.proteinesMin !== null || f.kcalMax !== null
       let q = supabase.from('recipe')
         .select(`id, title, yield_servings, total_time_min, active_time_min,
                  appliances, freezable, step_count, source_name, origin,
-                 recipe_nutrition(kcal, protein_g, kcal_margin, protein_g_margin,
-                                  fiber_g, coverage)`)
+                 recipe_nutrition${surMacros ? '!inner' : ''}(kcal, protein_g,
+                                  kcal_margin, protein_g_margin, fiber_g, coverage)`)
         .not('title', 'is', null)
         .eq('plannable', true)
+
+      // La borne DÉFAVORABLE, jamais la moyenne (D18).
+      if (f.proteinesMin !== null) {
+        q = q.gte('recipe_nutrition.protein_g_min', f.proteinesMin)
+      }
+      if (f.kcalMax !== null) q = q.lte('recipe_nutrition.kcal_max', f.kcalMax)
 
       if (f.texte.trim()) q = q.ilike('title', `%${f.texte.trim()}%`)
       if (f.tempsActifMax !== null) q = q.lte('active_time_min', f.tempsActifMax)

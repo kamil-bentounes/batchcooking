@@ -139,6 +139,55 @@ describe('le prix se moyenne', () => {
   })
 })
 
+describe('on ne moyenne jamais entre deux unités', () => {
+  /*
+   * Le prix est ramené au kilo quand la quantité est lue, et laissé à l'unité
+   * sinon. La moyenne mobile additionnait donc des grandeurs de natures
+   * différentes, et `unit` était écrasée par la DERNIÈRE lecture : une seule
+   * lecture incomplète corrompait durablement un prix, sans rien signaler.
+   */
+  it('ignore une lecture sans quantité quand on connaît le prix au kilo', async () => {
+    const t1 = await ticketPour(alice, { store_id: magasin })
+    await ligne(t1, { label: 'PDT CHARLOTTE', quantity: 2.5, unit: 'kg', price_eur: 3.75 })
+    const t2 = await ticketPour(alice, { store_id: magasin })
+    await ligne(t2, { label: 'PDT CHARLOTTE', quantity: null, unit: null, price_eur: 3.75 })
+
+    const p = await prixDe(alice.householdId, 'PDT CHARLOTTE')
+    expect(p!.unit, 'l’unité a basculé de kg à u').toBe('kg')
+    expect(Number(p!.avg_price_eur), 'des €/kg et des €/u ont été moyennés')
+      .toBeCloseTo(1.5, 2)
+  })
+
+  it('remplace quand la nouvelle lecture est PLUS informative', async () => {
+    // Un prix au kilo vaut mieux qu'un prix de sac : il remplace, et la série
+    // repart à une observation plutôt que de traîner l'ancienne moyenne.
+    const t1 = await ticketPour(alice, { store_id: magasin })
+    await ligne(t1, { label: 'RIZ', quantity: null, unit: null, price_eur: 4.20 })
+    const t2 = await ticketPour(alice, { store_id: magasin })
+    await ligne(t2, { label: 'RIZ', quantity: 2, unit: 'kg', price_eur: 4.20 })
+
+    const p = await prixDe(alice.householdId, 'RIZ')
+    expect(p!.unit).toBe('kg')
+    expect(Number(p!.avg_price_eur)).toBeCloseTo(2.1, 2)
+    expect(p!.observations, 'la série n’a pas redémarré').toBe(1)
+  })
+
+  it('reporte quand même le prix payé, même sans rien apprendre', async () => {
+    // Ne pas apprendre n'est pas ne rien faire : le bilan attend ce chiffre.
+    const { data: article } = await admin().from('shopping_item').insert({
+      cycle_id: cycleAlice, household_id: alice.householdId,
+      store_id: magasin, label: 'pommes de terre',
+    }).select().single()
+    const t = await ticketPour(alice, { store_id: magasin })
+    await ligne(t, { label: 'PDT CHARLOTTE', quantity: null, unit: null,
+                     price_eur: 3.99, shopping_item_id: article!.id })
+
+    const { data } = await admin().from('shopping_item')
+      .select('paid_price_eur').eq('id', article!.id).single()
+    expect(Number(data!.paid_price_eur)).toBeCloseTo(3.99, 2)
+  })
+})
+
 describe('le prix payé remonte sur la liste', () => {
   it('remplit paid_price_eur de l’article rapproché', async () => {
     const { data: article } = await admin().from('shopping_item').insert({

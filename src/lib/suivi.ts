@@ -137,13 +137,19 @@ export type Budget = {
  * deux et appeler cela « dépensé » serait un mensonge, puisque la moitié du
  * chiffre serait une supposition. Les deux vivent côte à côte, et la jauge ne
  * mesure que le payé.
+ *
+ * Et le payé vient des TICKETS, pas de la somme des articles rapprochés. Un
+ * ticket à 87,40 € dont 7 lignes sur 12 sont rattachées à la liste ne
+ * remplissait la jauge que des 7 : les sacs poubelle, que le rapprochement
+ * laisse volontairement libres, disparaissaient du budget.
  */
 export function budget(
   articles: { est_price_eur: number | string | null; paid_price_eur: number | string | null }[],
+  payeTickets: number,
   portionsDressees: number,
   plafond: number | null,
 ): Budget {
-  const paye = arrondi(articles.reduce((s, a) => s + Number(a.paid_price_eur ?? 0), 0))
+  const paye = arrondi(payeTickets)
   const estimeRestant = arrondi(articles
     .filter(a => a.paid_price_eur === null)
     .reduce((s, a) => s + Number(a.est_price_eur ?? 0), 0))

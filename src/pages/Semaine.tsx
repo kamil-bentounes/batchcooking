@@ -9,12 +9,17 @@
  * veut dire « on ne sait pas », et le bilan doit pouvoir le dire.
  */
 import { useMemo, useState } from 'react'
-import { Attente, Ecran, Surface, Vide, dateLongue, jourCourt } from '../ui/coque.tsx'
+import { Attente, Ecran, Erreur, Surface, Vide, dateLongue, jourCourt } from '../ui/coque.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
-  NOM_REPAS, REPAS, jour, useBarquettes, useDistribue, useMange, useSaute, useSemaine,
+  NOM_REPAS, REPAS, jour, useAjouteExtra, useBarquettes, useDistribue, useFrequents,
+  useMange, useSaute, useSemaine, useSupprimeExtra,
 } from '../lib/donnees/barquettes.ts'
 import type { Barquette, Case, Repas } from '../lib/donnees/barquettes.ts'
+import type { Ligne as LigneBase } from '../lib/supabase.ts'
+import { reperesDe } from '../lib/reperes.ts'
+
+type Frequent = LigneBase<'frequent_food'>
 import { useCycle } from '../lib/donnees/cycle.ts'
 import { urgence } from '../lib/peremption.ts'
 
@@ -27,6 +32,7 @@ export function Semaine({ userId, va }: { userId: string; va: (v: string) => voi
   const mange = useMange()
   const saute = useSaute()
   const distribue = useDistribue()
+  const { data: frequents = [] } = useFrequents()
 
   const [qui, setQui] = useState<string | 'tous'>(userId)
   const [quoi, setQuoi] = useState<Repas | 'tous'>('tous')
@@ -71,17 +77,22 @@ export function Semaine({ userId, va }: { userId: string; va: (v: string) => voi
         ))}
       </div>
 
-      {visibles.length === 0 ? (
+      {visibles.length === 0 && qui === 'tous' && (
         <Vide titre="Rien de planifié"
               texte={cycle
                 ? 'La distribution se fait à la fin de la session de cuisine.'
                 : 'Ouvre une semaine depuis l’accueil.'} />
-      ) : (
+      )}
+
+      {/* Les sept jours, TOUS affichés — y compris ceux où rien n'est prévu.
+          Un déjeuner au restaurant n'a pas de barquette : sans jour à toucher,
+          il n'y avait nulle part où le noter, et le bilan mentait de ~900 kcal
+          par jour (D26). */}
+      {(qui !== 'tous' || visibles.length > 0) && (
         <div className="mt-8 space-y-8">
           {jours.map(d => {
             const j = jour(d)
             const duJour = visibles.filter(c => c.day === j)
-            if (duJour.length === 0) return null
             const aujourdhui = j === jour(new Date())
             return (
               <section key={j} aria-label={dateLongue(d)}>
@@ -89,6 +100,9 @@ export function Semaine({ userId, va }: { userId: string; va: (v: string) => voi
                                 ${aujourdhui ? 'text-encre' : 'text-doux'}`}>
                   {aujourdhui ? 'Aujourd’hui' : jourCourt(d)}
                 </h2>
+                {duJour.length === 0 && (
+                  <p className="mt-1.5 text-[14px] text-doux">Rien de prévu.</p>
+                )}
                 <ul className="mt-3 space-y-3">
                   {duJour.map(c => (
                     <Ligne key={c.id} cas={c}
@@ -97,6 +111,7 @@ export function Semaine({ userId, va }: { userId: string; va: (v: string) => voi
                              : null}
                            ouvert={caseOuverte === c.id}
                            disponibles={disponibles}
+                           frequents={frequents}
                            surOuvre={() => setCaseOuverte(caseOuverte === c.id ? null : c.id)}
                            surMange={() => mange.mutate(c.id)}
                            surSaute={() => saute.mutate(c.id)}
@@ -109,6 +124,14 @@ export function Semaine({ userId, va }: { userId: string; va: (v: string) => voi
                            })} />
                   ))}
                 </ul>
+
+                {/* La porte pour ce qui n'était pas prévu. Elle n'apparaît que
+                    quand on regarde UNE personne : on ne saisit pas un repas
+                    sans savoir de qui il s'agit. */}
+                {qui !== 'tous' && (
+                  <HorsBarquette jour={j} userId={qui} frequents={frequents}
+                                 dejaLa={duJour} />
+                )}
               </section>
             )
           })}
@@ -130,11 +153,13 @@ export function Semaine({ userId, va }: { userId: string; va: (v: string) => voi
   )
 }
 
-function Ligne({ cas, qui, ouvert, disponibles, surOuvre, surMange, surSaute, surPlace }: {
+function Ligne({ cas, qui, ouvert, disponibles, frequents,
+                 surOuvre, surMange, surSaute, surPlace }: {
   cas: Case
   qui: string | null
   ouvert: boolean
   disponibles: Barquette[]
+  frequents: Frequent[]
   surOuvre: () => void
   surMange: () => void
   surSaute: () => void
@@ -210,6 +235,8 @@ function Ligne({ cas, qui, ouvert, disponibles, surOuvre, surMange, surSaute, su
               </div>
             </div>
           )}
+
+          <EnPlus cas={cas} frequents={frequents} />
         </div>
       )}
     </li>
@@ -224,5 +251,192 @@ function Puce({ actif, surClic, children }:
               ${actif ? 'bg-encre text-fond' : 'bg-brume/50 hover:bg-brume'}`}>
       {children}
     </button>
+  )
+}
+
+/**
+ * Ce qu'on a mangé EN PLUS de la barquette (D26, D34, D38).
+ *
+ * Le batch cooking couvre les dîners. Sans le petit-déjeuner ni le midi, le
+ * tableau de bord ment de ~900 kcal par jour — il vaudrait mieux ne rien
+ * afficher. Mais personne ne tape des calories deux semaines de suite : d'où
+ * des repères en UN GESTE, et ce que le foyer remange sans cesse à portée de
+ * pouce. Approximatif et tenu vaut mieux que précis et abandonné.
+ */
+function EnPlus({ cas, frequents, deployeParDefaut = false, surAjoute }:
+  { cas: Case; frequents: Frequent[]; deployeParDefaut?: boolean
+    surAjoute?: () => void }) {
+  const ajoute = useAjouteExtra({ onSuccess: surAjoute })
+  const supprime = useSupprimeExtra()
+  const [ouvert, setOuvert] = useState(deployeParDefaut)
+  const laCase = {
+    id: cas.id, user_profile_id: cas.user_profile_id, day: cas.day, meal: cas.meal,
+  }
+  const [libre, setLibre] = useState({ label: '', kcal: '', prot: '' })
+
+  const reperes = reperesDe(cas.meal)
+  const k = Number(libre.kcal.replace(',', '.'))
+  const pr = Number(libre.prot.replace(',', '.'))
+  const saisi = libre.label.trim() !== '' && Number.isFinite(k) && k >= 0
+
+  return (
+    <div>
+      {cas.extras.length > 0 && (
+        <ul className="mb-2 space-y-1">
+          {cas.extras.map(e => (
+            <li key={e.id} className="flex items-center gap-2 text-[13px] text-doux">
+              <span className="grow">
+                {e.label} · {Math.round(Number(e.kcal))} kcal ·
+                {' '}{Math.round(Number(e.protein_g))} g de protéines
+              </span>
+              <button onClick={() => supprime.mutate(e.id)}
+                      aria-label={`Retirer ${e.label}`}
+                      className="h-9 px-2 underline underline-offset-2">retirer</button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {!ouvert ? (
+        <button onClick={() => setOuvert(true)}
+                className="text-[13px] text-doux underline underline-offset-2">
+          + ce que j’ai mangé en plus
+        </button>
+      ) : (
+        <div className="space-y-3">
+          {frequents.length > 0 && (
+            <div>
+              <p className="text-[13px] text-doux mb-1.5">Ce que tu reprends souvent</p>
+              <div className="flex gap-2 flex-wrap">
+                {frequents.slice(0, 6).map(f => (
+                  <button key={f.id} onClick={() => ajoute.mutate({
+                    cas: laCase, label: f.label, grammes: Number(f.grams),
+                    kcal: Number(f.kcal), proteinG: Number(f.protein_g),
+                    foodId: f.food_id,
+                  })}
+                          className="px-3 py-2 rounded-full bg-surface text-[14px]">
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <p className="text-[13px] text-doux mb-1.5">
+              Un repère, pas une pesée — c’est marqué comme estimé
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              {reperes.map(r => (
+                <button key={r.label} onClick={() => ajoute.mutate({
+                  cas: laCase, label: r.label, kcal: r.kcal, proteinG: r.proteinG,
+                })}
+                        className="px-3 py-2 rounded-full bg-brume/50 text-[14px]">
+                  {r.label}
+                  <span className="text-doux"> {r.kcal}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2 items-end">
+            <label className="grow">
+              <span className="sr-only">Quoi</span>
+              <input value={libre.label} placeholder="Autre chose"
+                     onChange={e => setLibre({ ...libre, label: e.target.value })}
+                     className="w-full h-[44px] px-3 rounded-[13px] bg-brume/40 text-[15px]" />
+            </label>
+            <label className="w-[74px]">
+              <span className="sr-only">Kilocalories</span>
+              <input inputMode="numeric" value={libre.kcal} placeholder="kcal"
+                     onChange={e => setLibre({ ...libre, kcal: e.target.value })}
+                     className="w-full h-[44px] px-2 rounded-[13px] bg-brume/40
+                                text-[15px] text-center" />
+            </label>
+            <label className="w-[64px]">
+              <span className="sr-only">Grammes de protéines</span>
+              <input inputMode="numeric" value={libre.prot} placeholder="g prot"
+                     onChange={e => setLibre({ ...libre, prot: e.target.value })}
+                     className="w-full h-[44px] px-2 rounded-[13px] bg-brume/40
+                                text-[15px] text-center" />
+            </label>
+            <button disabled={!saisi}
+                    onClick={() => {
+                      ajoute.mutate({
+                        cas: laCase, label: libre.label, kcal: k,
+                        proteinG: Number.isFinite(pr) ? pr : 0,
+                      })
+                      setLibre({ label: '', kcal: '', prot: '' })
+                    }}
+                    className="h-[44px] px-4 rounded-[13px] bg-herbe text-fond text-[15px]
+                               disabled:bg-brume disabled:text-doux">
+              Ajouter
+            </button>
+          </div>
+
+          <Erreur de={ajoute.error} />
+          {!deployeParDefaut && (
+            <button onClick={() => setOuvert(false)}
+                    className="text-[13px] text-doux underline underline-offset-2">
+              Fermer
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Noter un repas là où rien n'était prévu (D26, D34).
+ *
+ * Le batch cooking couvre les dîners. Un déjeuner au restaurant n'a donc pas de
+ * case — et sans case, il n'y avait nulle part où l'écrire. La case se crée au
+ * moment où l'on a quelque chose à y mettre.
+ */
+function HorsBarquette({ jour: j, userId, frequents, dejaLa }: {
+  jour: string
+  userId: string
+  frequents: Frequent[]
+  dejaLa: Case[]
+}) {
+  const [moment, setMoment] = useState<Repas | null>(null)
+  const pris = new Set(dejaLa.map(c => c.meal))
+  const libres = REPAS.filter(r => !pris.has(r))
+  if (libres.length === 0) return null
+
+  return (
+    <div className="mt-3">
+      {moment === null ? (
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-[13px] text-doux">Mangé sans barquette ?</span>
+          {libres.map(r => (
+            <button key={r} onClick={() => setMoment(r)}
+                    className="px-3 py-1.5 rounded-full bg-brume/50 text-[13px]
+                               hover:bg-brume transition-colors">
+              {NOM_REPAS[r]}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-[16px] bg-brume/25 p-3.5">
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-[14px]">{NOM_REPAS[moment]}</span>
+            <button onClick={() => setMoment(null)}
+                    className="text-[13px] text-doux underline underline-offset-2">
+              annuler
+            </button>
+          </div>
+          <EnPlus frequents={frequents} deployeParDefaut
+                  surAjoute={() => setMoment(null)}
+                  cas={{
+                    // Une case seulement AFFICHÉE : elle n'existe en base que
+                    // si l'on y met quelque chose.
+                    id: `vide:${userId}:${j}:${moment}`,
+                    user_profile_id: userId, day: j, meal: moment, extras: [],
+                  } as unknown as Case} />
+        </div>
+      )}
+    </div>
   )
 }

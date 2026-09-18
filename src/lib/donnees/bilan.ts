@@ -40,6 +40,30 @@ export type Bilan = {
   recettes: { label: string; dressees: number; mangees: number; jetees: number }[]
 }
 
+/**
+ * `.in()` porte ses valeurs dans l'URL, et Kong coupe au-delà d'environ 205
+ * identifiants — par un **414**, pas par une troncature. Deux personnes, deux
+ * repas suivis par jour, et l'onglet « 3 mois » dépassait dès le 52ᵉ jour :
+ * la requête échouait, `data` restait indéfini, et l'écran affichait
+ * « Rien à mesurer ». Il MENTAIT au lieu de signaler une erreur.
+ */
+const PAR_PAQUET = 150
+
+async function parPaquets<T>(ids: string[], lire: (lot: string[]) => Promise<T[]>): Promise<T[]> {
+  const sortie: T[] = []
+  for (let i = 0; i < ids.length; i += PAR_PAQUET) {
+    sortie.push(...await lire(ids.slice(i, i + PAR_PAQUET)))
+  }
+  return sortie
+}
+
+/** L'instant UTC de minuit LOCAL. Suffixer « Z » à une date locale ferait
+    tomber les deux premières heures du 1er du mois dans le mois précédent. */
+const minuit = (d: Date) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString()
+const finDuJour = (d: Date) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).toISOString()
+
 export function useBilan(depuis: Date, jusqu: Date) {
   const a = iso(depuis)
   const b = iso(jusqu)
@@ -49,15 +73,37 @@ export function useBilan(depuis: Date, jusqu: Date) {
     queryFn: async (): Promise<Bilan> => {
       const [portions, cases, articles, profils, objectifs, foyer] = await Promise.all([
         supabase.from('portion').select('*')
-          .gte('prepared_at', `${a}T00:00:00Z`).lte('prepared_at', `${b}T23:59:59Z`),
+          .gte('prepared_at', minuit(depuis)).lte('prepared_at', finDuJour(jusqu)),
         supabase.from('meal_slot').select('*, portion:portion_id(kcal, protein_g)')
           .gte('day', a).lte('day', b),
         supabase.from('shopping_item').select('est_price_eur, paid_price_eur, created_at')
-          .gte('created_at', `${a}T00:00:00Z`).lte('created_at', `${b}T23:59:59Z`),
+          .gte('created_at', minuit(depuis)).lte('created_at', finDuJour(jusqu)),
         supabase.from('user_profile').select('id, display_name'),
         supabase.from('nutrition_target').select('*').order('valid_from', { ascending: false }),
         supabase.from('household').select('food_budget_eur').limit(1).maybeSingle(),
       ])
+
+      /*
+       * Ce qui est VRAIMENT sorti du compte, c'est le ticket — pas la somme des
+       * articles rapprochés. Un ticket à 87,40 € dont 7 lignes sur 12 sont
+       * rattachées ne remplissait la jauge que des 7, et les sacs poubelle que
+       * `prix.md` revendique explicitement restaient invisibles du budget.
+       *
+       * Et la date est celle de l'ACHAT, pas celle de la création de la ligne :
+       * une liste faite le 29 septembre et payée le 2 octobre tombait entière
+       * dans le mois de septembre.
+       */
+      const tickets = ou(await supabase.from('receipt')
+        .select('id, total_eur, bought_at').gte('bought_at', a).lte('bought_at', b))
+      const sansTotal = tickets.filter(t => t.total_eur === null).map(t => t.id)
+      const lignes = sansTotal.length === 0 ? [] : await parPaquets(sansTotal, async lot =>
+        ou(await supabase.from('receipt_line').select('receipt_id, price_eur').in('receipt_id', lot)))
+      // Un ticket dont le total n'a pas été lu vaut la somme de ses lignes :
+      // c'est moins sûr, mais nettement mieux que zéro.
+      const paye = tickets.reduce((s2, t) => s2 + (t.total_eur !== null
+        ? Number(t.total_eur)
+        : lignes.filter(l => l.receipt_id === t.id)
+            .reduce((s3, l) => s3 + Number(l.price_eur), 0)), 0)
 
       const p = ou(portions)
       const c = ou(cases) as unknown as (Ligne<'meal_slot'> & {
@@ -66,10 +112,9 @@ export function useBilan(depuis: Date, jusqu: Date) {
 
       // Les repas hors barquette (D34) : sans eux le tableau de bord ment de
       // ~900 kcal par jour, et il vaudrait mieux ne rien afficher.
-      const extras = c.length > 0
-        ? ou(await supabase.from('meal_extra').select('meal_slot_id, kcal, protein_g')
-            .in('meal_slot_id', c.map(x => x.id)))
-        : []
+      const extras = await parPaquets(c.map(x => x.id), async lot =>
+        ou(await supabase.from('meal_extra').select('meal_slot_id, kcal, protein_g')
+          .in('meal_slot_id', lot)))
       const enPlus = new Map<string, { kcal: number; protein: number }>()
       for (const e of extras) {
         const v = enPlus.get(e.meal_slot_id) ?? { kcal: 0, protein: 0 }
@@ -122,7 +167,7 @@ export function useBilan(depuis: Date, jusqu: Date) {
         mangees: p.filter(x => x.state === 'mangee').length,
         jetees: p.filter(x => x.state === 'jetee').length,
         restantes: p.filter(x => x.state === 'au_frais' || x.state === 'decongelee').length,
-        budget: budget(ou(articles), p.length,
+        budget: budget(ou(articles), paye, p.length,
           ou(foyer)?.food_budget_eur === null || ou(foyer)?.food_budget_eur === undefined
             ? null
             : Number(ou(foyer)!.food_budget_eur)),

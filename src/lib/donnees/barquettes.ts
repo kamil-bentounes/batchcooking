@@ -69,9 +69,8 @@ export function useSemaine(du: Date, jours = 7) {
         .select('*, portion:portion_id(*)')
         .gte('day', debut).lte('day', fin)
         .order('day').order('meal')) as unknown as (Ligne<'meal_slot'> & { portion: Barquette | null })[]
-      if (cases.length === 0) return []
 
-      const extras = ou(await supabase.from('meal_extra').select('*')
+      const extras = cases.length === 0 ? [] : ou(await supabase.from('meal_extra').select('*')
         .in('meal_slot_id', cases.map(c => c.id)))
       const parCase = new Map<string, Ligne<'meal_extra'>[]>()
       for (const e of extras) {
@@ -222,19 +221,51 @@ export function useSupprimeBarquette() {
 }
 
 /** Ce qu'on a mangé en plus, ou à la place : le carré de chocolat compte aussi. */
-export function useAjouteExtra() {
+/**
+ * La case d'un repas, créée à la demande.
+ *
+ * Un déjeuner au restaurant n'a pas de barquette, donc pas de ligne — et sans
+ * ligne, il n'y avait nulle part où le noter. Le batch cooking couvre les
+ * dîners ; sans les deux autres repas le tableau de bord ment de ~900 kcal par
+ * jour (D26), ce qui vaudrait moins que de ne rien afficher.
+ *
+ * On crée donc la case au moment où l'on a quelque chose à y mettre, dans
+ * l'état `prevu` : elle ne compte pas encore comme renseignée, et c'est
+ * l'extra qui la remplit.
+ */
+async function caseOuCree(
+  virtuelle: { id: string; user_profile_id: string; day: string; meal: string },
+): Promise<string> {
+  if (!virtuelle.id.startsWith('vide:')) return virtuelle.id
+  const foyer = ou(await supabase.rpc('current_household'))
+  if (!foyer) throw new Error('Aucun foyer.')
+  const { data, error } = await supabase.from('meal_slot').upsert({
+    household_id: foyer,
+    user_profile_id: virtuelle.user_profile_id,
+    day: virtuelle.day,
+    meal: virtuelle.meal,
+    state: 'prevu',
+  }, { onConflict: 'household_id,user_profile_id,day,meal' }).select('id').single()
+  if (error) throw new Error(error.message)
+  return data.id
+}
+
+export function useAjouteExtra({ onSuccess }: { onSuccess?: () => void } = {}) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (e: {
-      caseId: string; label: string; grammes?: number | null
+      /** La case, réelle ou seulement affichée. */
+      cas: { id: string; user_profile_id: string; day: string; meal: string }
+      label: string; grammes?: number | null
       kcal: number; proteinG: number; fiberG?: number; carbG?: number; fatG?: number
       foodId?: string | null; memoriser?: boolean
     }) => {
       const foyer = ou(await supabase.rpc('current_household'))
       if (!foyer) throw new Error('Aucun foyer.')
+      const caseId = await caseOuCree(e.cas)
       const ligne = ou(await supabase.from('meal_extra').insert({
         household_id: foyer,
-        meal_slot_id: e.caseId,
+        meal_slot_id: caseId,
         label: e.label.trim(),
         food_id: e.foodId ?? null,
         grams: e.grammes ?? null,
@@ -256,7 +287,7 @@ export function useAjouteExtra() {
       }
       return ligne
     },
-    onSuccess: () => qc.invalidateQueries(),
+    onSuccess: () => { qc.invalidateQueries(); onSuccess?.() },
   })
 }
 

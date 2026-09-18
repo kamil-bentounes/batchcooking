@@ -109,37 +109,47 @@ describe('le budget', () => {
     { est_price_eur: 4, paid_price_eur: 3.99 },
     { est_price_eur: 5, paid_price_eur: null },
   ]
+  /** Le total IMPRIMÉ du ticket : 10,48 € d'articles rattachés à la liste, plus
+      3,20 € de sacs poubelle que le rapprochement laisse volontairement libres. */
+  const TICKET = 13.68
 
   it('ne mélange pas le payé et l’estimé', () => {
     // Additionner les deux et appeler cela « dépensé » serait un mensonge : la
     // moitié du chiffre serait une supposition.
-    const b = budget(articles, 10, 320)
-    expect(b.paye).toBe(10.48)
+    const b = budget(articles, TICKET, 10, 320)
+    expect(b.paye).toBe(13.68)
     expect(b.estimeRestant).toBe(5)
   })
 
+  it('compte TOUT le ticket, pas seulement ce qui est rattaché', () => {
+    // La jauge ne se remplissait que des lignes rapprochées : un ticket dont
+    // cinq lignes sur douze ne sont sur aucune liste disparaissait à moitié du
+    // budget, alors que l'argent est bien sorti du compte.
+    expect(budget(articles, TICKET, 10, 320).paye).toBeGreaterThan(10.48)
+  })
+
   it('ne remplit la jauge qu’avec ce qui est vraiment sorti', () => {
-    expect(budget(articles, 10, 320).part).toBeCloseTo(10.48 / 320, 4)
+    expect(budget(articles, TICKET, 10, 320).part).toBeCloseTo(13.68 / 320, 4)
   })
 
   it('n’a pas de jauge sans budget fixé', () => {
     // Ne pas se fixer de budget est un choix légitime : on n'en invente pas un.
-    expect(budget(articles, 10, null).part).toBeNull()
+    expect(budget(articles, TICKET, 10, null).part).toBeNull()
   })
 
   it('donne le coût d’une part', () => {
-    expect(budget(articles, 8, null).parPortion).toBe(1.31)
+    expect(budget(articles, 10.48, 8, null).parPortion).toBe(1.31)
   })
 
   it('se tait plutôt que de diviser par zéro portion', () => {
-    expect(budget(articles, 0, null).parPortion).toBeNull()
+    expect(budget(articles, TICKET, 0, null).parPortion).toBeNull()
   })
 
-  it('se tait aussi quand rien n’a été payé', () => {
+  it('se tait aussi quand aucun ticket n’a été enregistré', () => {
     // Zéro euro la part serait faux, là où « on ne sait pas encore » est vrai.
     const sansTicket = [{ est_price_eur: 40, paid_price_eur: null }]
-    expect(budget(sansTicket, 10, 320).parPortion).toBeNull()
-    expect(budget(sansTicket, 10, 320).paye).toBe(0)
+    expect(budget(sansTicket, 0, 10, 320).parPortion).toBeNull()
+    expect(budget(sansTicket, 0, 10, 320).paye).toBe(0)
   })
 })
 
