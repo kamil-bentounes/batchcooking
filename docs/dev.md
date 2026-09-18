@@ -44,7 +44,8 @@ Sans clé, l'écran « Envie spéciale » répond 503 et le dit — il ne plante
 | Projet | `mjlxfffdirlqmmjzhorg` · **West EU (Paris)** `eu-west-3` |
 | URL | `https://mjlxfffdirlqmmjzhorg.supabase.co` |
 | Connexion psql | `postgresql://postgres.mjlxfffdirlqmmjzhorg:<mdp>@aws-1-eu-west-3.pooler.supabase.com:5432/postgres` |
-| Vérifié | 22 migrations · **RLS active sur toutes les tables** · 3 Edge Functions, préflight CORS 200, POST sans jeton 401 |
+| Vérifié en prod | 12 migrations (lot 0a) · RLS active · 2 Edge Functions, préflight CORS 200, POST sans jeton 401 |
+| **Reste à pousser** | migrations 0013 à 0022 (lot 1 + ingestion) · fonction `inventer` |
 
 ```bash
 export SUPABASE_ACCESS_TOKEN=<jeton>
