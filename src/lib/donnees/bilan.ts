@@ -1,16 +1,32 @@
 /**
- * Le bilan (D54).
+ * Le bilan d'un cycle (D54) et le SUIVI sur la durée (lot 6).
  *
- * Il ne sert pas à se féliciter : il sert à décider du cycle suivant. Ce qu'on a
- * jeté, ce qu'on n'a pas mangé, ce qui a coûté plus cher que prévu — chacun de
- * ces chiffres change une décision du mercredi d'après.
+ * Deux usages d'une même donnée, et c'est voulu : le bilan sert à décider du
+ * cycle suivant — ce qu'on a jeté, ce qui est resté, ce qui a coûté plus cher
+ * que prévu — le suivi sert à voir si, sur trois mois, ça tient.
  *
- * Et il se remplit TOUT SEUL. C'est la contrepartie de la barquette : on n'a
- * rien saisi de la semaine, donc on peut tout mesurer.
+ * Et les deux se remplissent TOUT SEULS. C'est la contrepartie de la barquette
+ * (D24) : on n'a rien saisi de la semaine, donc on peut tout mesurer. Le seul
+ * effort demandé est un geste, cocher ce qu'on mange ; tout le reste est déjà
+ * calculé depuis le dimanche.
+ *
+ * Les règles d'honnêteté vivent dans `lib/suivi.ts`, où elles s'éprouvent sans
+ * base : un jour non renseigné n'est pas un jour à zéro (D33), et le payé ne se
+ * mélange pas à l'estimé.
  */
 import { useQuery } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
 import type { Ligne } from '../supabase.ts'
+import { budget, iso, joursEntre, serie } from '../suivi.ts'
+import type { Budget, Repas, Serie } from '../suivi.ts'
+
+export type Personne = {
+  userId: string
+  nom: string
+  cibleKcal: number | null
+  cibleProtein: number | null
+  serie: Serie
+}
 
 export type Bilan = {
   /** Barquettes dressées, mangées, jetées, encore là. */
@@ -18,21 +34,8 @@ export type Bilan = {
   mangees: number
   jetees: number
   restantes: number
-  /** Ce que les courses ont coûté : estimé d'abord, réel s'il a été saisi. */
-  estimeEur: number
-  payeEur: number | null
-  /** Moyennes par personne et par jour, sur les seuls jours renseignés. */
-  parPersonne: {
-    userId: string
-    nom: string
-    kcalMoyen: number
-    proteinMoyen: number
-    joursRenseignes: number
-    cibleKcal: number | null
-    cibleProtein: number | null
-  }[]
-  /** kcal par jour, pour la courbe. Les jours non renseignés valent null. */
-  courbe: { jour: string; kcal: number | null }[]
+  budget: Budget
+  personnes: Personne[]
   /** Ce qui a plu, ce qui est resté : le retour vers le choix du mercredi. */
   recettes: { label: string; dressees: number; mangees: number; jetees: number }[]
 }
@@ -44,7 +47,7 @@ export function useBilan(depuis: Date, jusqu: Date) {
   return useQuery({
     queryKey: ['bilan', a, b],
     queryFn: async (): Promise<Bilan> => {
-      const [portions, cases, articles, profils, objectifs] = await Promise.all([
+      const [portions, cases, articles, profils, objectifs, foyer] = await Promise.all([
         supabase.from('portion').select('*')
           .gte('prepared_at', `${a}T00:00:00Z`).lte('prepared_at', `${b}T23:59:59Z`),
         supabase.from('meal_slot').select('*, portion:portion_id(kcal, protein_g)')
@@ -53,17 +56,20 @@ export function useBilan(depuis: Date, jusqu: Date) {
           .gte('created_at', `${a}T00:00:00Z`).lte('created_at', `${b}T23:59:59Z`),
         supabase.from('user_profile').select('id, display_name'),
         supabase.from('nutrition_target').select('*').order('valid_from', { ascending: false }),
+        supabase.from('household').select('food_budget_eur').limit(1).maybeSingle(),
       ])
 
       const p = ou(portions)
       const c = ou(cases) as unknown as (Ligne<'meal_slot'> & {
         portion: { kcal: number; protein_g: number } | null
       })[]
+
+      // Les repas hors barquette (D34) : sans eux le tableau de bord ment de
+      // ~900 kcal par jour, et il vaudrait mieux ne rien afficher.
       const extras = c.length > 0
         ? ou(await supabase.from('meal_extra').select('meal_slot_id, kcal, protein_g')
             .in('meal_slot_id', c.map(x => x.id)))
         : []
-
       const enPlus = new Map<string, { kcal: number; protein: number }>()
       for (const e of extras) {
         const v = enPlus.get(e.meal_slot_id) ?? { kcal: 0, protein: 0 }
@@ -72,48 +78,33 @@ export function useBilan(depuis: Date, jusqu: Date) {
         enPlus.set(e.meal_slot_id, v)
       }
 
-      const art = ou(articles)
-      const payes = art.filter(x => x.paid_price_eur !== null)
-
-      const cibles = new Map<string, Ligne<'nutrition_target'>>()
-      for (const o of ou(objectifs)) if (!cibles.has(o.user_profile_id)) cibles.set(o.user_profile_id, o)
-
-      const jours = joursEntre(depuis, jusqu)
-      const parPersonne = ou(profils).map(m => {
-        const siens = c.filter(x => x.user_profile_id === m.id)
-        const renseignes = jours.filter(j =>
-          siens.some(x => x.day === j && x.state !== 'prevu'))
-        const total = siens.filter(x => x.state === 'mange').reduce((s, x) => {
-          const e = enPlus.get(x.id)
-          return {
-            kcal: s.kcal + Number(x.portion?.kcal ?? 0) + (e?.kcal ?? 0),
-            protein: s.protein + Number(x.portion?.protein_g ?? 0) + (e?.protein ?? 0),
-          }
-        }, { kcal: 0, protein: 0 })
-        const n = Math.max(1, renseignes.length)
-        const cible = cibles.get(m.id)
+      const repas: Repas[] = c.map(x => {
+        const e = enPlus.get(x.id)
         return {
-          userId: m.id,
-          nom: m.display_name,
-          // Diviser par les jours RENSEIGNÉS, jamais par la période : sinon un
-          // week-end non saisi ferait passer quelqu'un pour sous-alimenté (D33).
-          kcalMoyen: Math.round(total.kcal / n),
-          proteinMoyen: Math.round(total.protein / n),
-          joursRenseignes: renseignes.length,
-          cibleKcal: cible ? Number(cible.kcal) : null,
-          cibleProtein: cible ? Number(cible.protein_g) : null,
+          day: x.day,
+          user_profile_id: x.user_profile_id,
+          state: x.state as Repas['state'],
+          kcal: Number(x.portion?.kcal ?? 0) + (e?.kcal ?? 0),
+          protein_g: Number(x.portion?.protein_g ?? 0) + (e?.protein ?? 0),
         }
       })
 
-      const courbe = jours.map(j => {
-        const duJour = c.filter(x => x.day === j && x.state === 'mange')
-        const connu = c.some(x => x.day === j && x.state !== 'prevu')
+      const cibles = new Map<string, Ligne<'nutrition_target'>>()
+      for (const o of ou(objectifs)) {
+        if (!cibles.has(o.user_profile_id)) cibles.set(o.user_profile_id, o)
+      }
+
+      const jours = joursEntre(depuis, jusqu)
+      const personnes: Personne[] = ou(profils).map(m => {
+        const cible = cibles.get(m.id)
+        const k = cible ? Number(cible.kcal) : null
+        const pr = cible ? Number(cible.protein_g) : null
         return {
-          jour: j,
-          kcal: connu
-            ? Math.round(duJour.reduce((s, x) =>
-                s + Number(x.portion?.kcal ?? 0) + (enPlus.get(x.id)?.kcal ?? 0), 0))
-            : null,
+          userId: m.id,
+          nom: m.display_name,
+          cibleKcal: k,
+          cibleProtein: pr,
+          serie: serie(jours, repas, m.id, { kcal: k, protein: pr }),
         }
       })
 
@@ -131,12 +122,11 @@ export function useBilan(depuis: Date, jusqu: Date) {
         mangees: p.filter(x => x.state === 'mangee').length,
         jetees: p.filter(x => x.state === 'jetee').length,
         restantes: p.filter(x => x.state === 'au_frais' || x.state === 'decongelee').length,
-        estimeEur: arrondi(art.reduce((s, x) => s + Number(x.est_price_eur ?? 0), 0)),
-        payeEur: payes.length > 0
-          ? arrondi(payes.reduce((s, x) => s + Number(x.paid_price_eur), 0))
-          : null,
-        parPersonne,
-        courbe,
+        budget: budget(ou(articles), p.length,
+          ou(foyer)?.food_budget_eur === null || ou(foyer)?.food_budget_eur === undefined
+            ? null
+            : Number(ou(foyer)!.food_budget_eur)),
+        personnes,
         recettes: [...parRecette.entries()]
           .map(([label, v]) => ({ label, ...v }))
           .sort((x, y) => y.dressees - x.dressees),
@@ -144,23 +134,4 @@ export function useBilan(depuis: Date, jusqu: Date) {
     },
     staleTime: 30_000,
   })
-}
-
-function iso(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function joursEntre(a: Date, b: Date): string[] {
-  const liste: string[] = []
-  const d = new Date(a.getFullYear(), a.getMonth(), a.getDate())
-  const fin = new Date(b.getFullYear(), b.getMonth(), b.getDate())
-  while (d <= fin) {
-    liste.push(iso(d))
-    d.setDate(d.getDate() + 1)
-  }
-  return liste
-}
-
-function arrondi(n: number): number {
-  return Math.round(n * 100) / 100
 }

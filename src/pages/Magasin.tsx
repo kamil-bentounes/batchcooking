@@ -59,7 +59,9 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
         {restants === 0
           ? 'Tout est coché.'
           : `${restants} article${restants > 1 ? 's' : ''} à prendre`}
-        {sous.estime > 0 && ` · ${sous.estime.toFixed(2).replace('.', ',')} € estimés`}
+        {sous.paye !== null
+          ? ` · ${sous.paye.toFixed(2).replace('.', ',')} € payés`
+          : sous.estime > 0 && ` · ${sous.estime.toFixed(2).replace('.', ',')} € estimés`}
       </p>
 
       {magasins.length === 0 && <PremierMagasin />}
@@ -124,6 +126,14 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
                      storeId: magasins.find(m => m.is_default)?.id ?? null,
                    })} />
       )}
+
+      {/* Le ticket (lot 5). Sa place est ici : on le photographie en sortant
+          de caisse, pas depuis un écran de réglages où personne n'irait. */}
+      <button onClick={() => va('/ticket')}
+              className="mt-4 w-full h-[46px] rounded-[16px] bg-brume/50 text-[15px]
+                         hover:bg-brume transition-colors">
+        J’ai payé — photographier le ticket
+      </button>
 
       <div className="mt-11">
         <Principal onClick={termine} disabled={change.isPending || articles.length === 0}>

@@ -9,6 +9,8 @@
  * ne sait pas ordonnancer les étapes ne doit pas apparaître à la sélection du
  * mercredi, où elle produirait un plan faux.
  */
+import { agrege, parPart, pour100De } from '../../src/lib/nutrition/macros.ts'
+import type { Agregat } from '../../src/lib/nutrition/macros.ts'
 import { analyser } from './ingredient.ts'
 import { rattacher } from './aliment.ts'
 import type { AlimentIndexe } from './aliment.ts'
@@ -30,6 +32,18 @@ export interface Contexte {
   sousGroupes: Map<string, string | null>
   /** `food_id` → g/ml, quand la densité est connue. */
   densites: Map<string, number>
+  /**
+   * `food_id` → poids d'UNE unité, quand on le connaît (§5.2.1).
+   *
+   * C'est ce qui fait qu'« 2 oignons » vaut 220 g plutôt que rien. Le
+   * référentiel donne un ordre de grandeur ; la pesée du foyer le remplacera
+   * sur SES oignons, mais l'ingestion est partagée : elle n'a que la référence.
+   */
+  poidsUnitaires?: Map<string, number>
+  /** `food_id` → valeurs pour 100 g. Sert à calculer les macros de la recette. */
+  nutriments?: Map<string, unknown>
+  /** sous-groupe → grammes typiques, pour les lignes sans quantité. */
+  typiques?: Map<string, number>
 }
 
 export interface IngredientPret {
@@ -57,6 +71,19 @@ export interface EtapePrete {
   confidence: number
 }
 
+/** Les macros par part, quand la recette est assez résolue pour qu'elles valent. */
+export interface NutritionPrete {
+  grams: number
+  kcal: number
+  protein_g: number
+  fiber_g: number
+  carb_g: number
+  fat_g: number
+  kcal_margin: number
+  protein_g_margin: number
+  coverage: number
+}
+
 export interface RecettePrete {
   recipe: {
     source_url: string
@@ -69,14 +96,44 @@ export interface RecettePrete {
     cook_time_min: number | null
     license_note: string | null
     plannable: boolean
+    freezable: boolean | null
   }
   ingredients: IngredientPret[]
   /** Étapes ordonnançables seulement : les « bon appétit » sont écartés ici. */
   etapes: EtapePrete[]
   /** Paires (ordinal avant, ordinal après), dans l'espace des étapes retenues. */
   dependances: [number, number][]
+  /**
+   * Les macros par part. `null` quand trop de lignes manquent : une valeur
+   * calculée sur la moitié d'une recette est pire qu'aucune valeur, parce
+   * qu'elle sert ensuite à filtrer (D18).
+   */
+  nutrition: NutritionPrete | null
   /** Ce qui manque, pour le journal d'ingestion. */
   motifs: string[]
+}
+
+/**
+ * « Se congèle ou non » (D27).
+ *
+ * Aucune source ne le porte. On le déduit du titre et des ingrédients, et on
+ * rend `null` — jamais `false` — quand rien ne tranche : « on ne sait pas » et
+ * « ça ne se congèle pas » ne doivent pas se confondre dans un filtre.
+ */
+export function seCongele(titre: string | null, ingredients: IngredientPret[]): boolean | null {
+  const t = (titre ?? '').toLowerCase()
+  const tout = t + ' ' + ingredients.map(i => i.raw_text.toLowerCase()).join(' ')
+
+  // Ce qui ne survit pas au congélateur : l'eau des crudités fait éclater les
+  // cellules, les émulsions tranchent, les fritures ramollissent.
+  if (/\bsalade|crudit|carpaccio|tartare|mayonnaise|vinaigrette|fritur|frites\b/.test(tout)) return false
+  if (/\bcrème fraîche|fromage blanc|yaourt\b/.test(tout) && /\bsalade|sauce froide/.test(tout)) return false
+
+  // Ce qui se congèle sans discussion.
+  if (/\bsoupe|velouté|potage|gratin|lasagne|dahl|curry|chili|ragoût|blanquette/.test(tout)) return true
+  if (/\bmijot|compote|purée|bolognaise|hachis|tajine|boulettes?\b/.test(tout)) return true
+
+  return null
 }
 
 /** Un millilitre d'eau pèse un gramme. Faute de densité, c'est le moins faux. */
@@ -117,11 +174,14 @@ function enGrammes(
       const g = precise?.grams ?? generale?.grams
       return g === undefined ? null : Math.round(ligne.qte * g * 10) / 10
     }
-    // « 2 oignons » : il faudrait `unit_weight`, qui n'est pas encore rempli.
-    // On rend `null` plutôt qu'un chiffre inventé — les macros afficheront une
-    // fourchette, et c'est exactement ce qu'il faut (D18).
-    default:
-      return null
+    // « 2 oignons » : c'est `unit_weight` qui répond, quand il connaît
+    // l'aliment. Sinon `null` plutôt qu'un chiffre inventé — les macros
+    // s'afficheront en fourchette, et c'est exactement ce qu'il faut (D18).
+    default: {
+      if (!foodId) return null
+      const unitaire = ctx.poidsUnitaires?.get(foodId)
+      return unitaire === undefined ? null : Math.round(ligne.qte * unitaire * 10) / 10
+    }
   }
 }
 
@@ -248,6 +308,37 @@ export function preparer(brute: RecetteBrute, ctx: Contexte): RecettePrete {
     }
   }
 
+  // ── Les macros par part, pour les filtres (D18) ──────────────────────────
+  let nutrition: NutritionPrete | null = null
+  if (ctx.nutriments) {
+    const lignes = ingredients.map(g => ({
+      grammes: g.grams_reference,
+      grammesTypiques: g.food_id
+        ? ctx.typiques?.get(ctx.sousGroupes.get(g.food_id) ?? '') ?? null
+        : null,
+      pour100: g.food_id ? pour100De(ctx.nutriments.get(g.food_id)) : null,
+    }))
+    const a: Agregat = agrege(lignes)
+    const grammesPlat = lignes.reduce(
+      (s2, l) => s2 + (l.pour100 ? (l.grammes ?? l.grammesTypiques ?? 0) : 0), 0)
+    const parts = Math.max(1, brute.parts ?? 1)
+
+    if (a.couverture >= 0.75 && grammesPlat > 0) {
+      const p = parPart(a, grammesPlat, grammesPlat / parts)
+      nutrition = {
+        grams: Math.round(grammesPlat / parts),
+        kcal: p.valeur.kcal,
+        protein_g: p.valeur.proteinG,
+        fiber_g: p.valeur.fiberG,
+        carb_g: p.valeur.carbG,
+        fat_g: p.valeur.fatG,
+        kcal_margin: p.marge.kcal,
+        protein_g_margin: p.marge.proteinG,
+        coverage: Math.round(a.couverture * 100) / 100,
+      }
+    }
+  }
+
   const { oui, motifs } = estPlanifiable(etapes)
   const sansAliment = ingredients.filter(g => g.food_id === null).length
   if (sansAliment > ingredients.length / 2) {
@@ -265,6 +356,7 @@ export function preparer(brute: RecetteBrute, ctx: Contexte): RecettePrete {
       prep_time_min: brute.prepMin,
       cook_time_min: brute.cuissonMin,
       // L'attribution n'est pas une politesse : on republie le travail d'autrui.
+      freezable: seCongele(brute.titre, ingredients),
       license_note: brute.licence
         ?? (brute.source ? `Recette importée depuis ${brute.source} — ${brute.url}` : brute.url),
       plannable: oui,
@@ -272,6 +364,7 @@ export function preparer(brute: RecetteBrute, ctx: Contexte): RecettePrete {
     ingredients,
     etapes,
     dependances: arcs,
+    nutrition,
     motifs,
   }
 }

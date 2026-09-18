@@ -15,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ou, ouNul, supabase } from '../supabase.ts'
 import type { Ligne } from '../supabase.ts'
 import { rayonDe } from '../rayons.ts'
+import { estimation } from '../prix.ts'
 
 export type Article = Ligne<'shopping_item'>
 
@@ -125,17 +126,36 @@ export function useGenereListe() {
       ou(await supabase.from('shopping_item').delete()
         .eq('cycle_id', cycleId).eq('source', 'recette').select())
 
-      const lignes = [...cumuls.values()].map(c => ({
-        cycle_id: cycleId,
-        household_id: foyer,
-        store_id: magasinDefaut ? magasinDefaut.id : null,
-        food_id: c.food_id,
-        label: c.label,
-        aisle: rayonDe({ groupe: c.groupe, libelle: c.label }),
-        quantity: c.grammes ?? c.quantite ?? null,
-        unit: c.grammes !== null ? 'g' : c.unite,
-        source: 'recette' as const,
-      })).filter(l => l.label.trim().length > 0)
+      // Ce que le foyer a déjà payé pour ces produits (lot 5). C'est la seule
+      // source de prix qu'on ait : il n'existe aucune API pour un particulier,
+      // et une moyenne nationale ne dirait rien de NOTRE enseigne.
+      const appris = ou(await supabase.from('price_knowledge').select('*'))
+      const connus = appris.map(p => ({
+        label: p.label ?? '', food_id: p.food_id, store_id: p.store_id,
+        unit: p.unit ?? 'u', avg_price_eur: p.avg_price_eur ?? 0,
+        last_price_eur: p.last_price_eur ?? 0, observations: p.observations ?? 1,
+      }))
+
+      const magasin = magasinDefaut ? magasinDefaut.id : null
+      const lignes = [...cumuls.values()].map(c => {
+        const quantite = c.grammes ?? c.quantite ?? null
+        const unite = c.grammes !== null ? 'g' : c.unite
+        const prix = connus.length === 0 ? null : estimation(
+          { label: c.label, food_id: c.food_id, quantity: quantite, unit: unite },
+          connus, magasin)
+        return {
+          cycle_id: cycleId,
+          household_id: foyer,
+          store_id: magasin,
+          food_id: c.food_id,
+          label: c.label,
+          aisle: rayonDe({ groupe: c.groupe, libelle: c.label }),
+          quantity: quantite,
+          unit: unite,
+          est_price_eur: prix?.euros ?? null,
+          source: 'recette' as const,
+        }
+      }).filter(l => l.label.trim().length > 0)
 
       return ou(await supabase.from('shopping_item').insert(lignes).select())
     },

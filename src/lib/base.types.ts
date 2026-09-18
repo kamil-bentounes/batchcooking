@@ -449,23 +449,181 @@ export type Database = {
       household: {
         Row: {
           created_at: string
+          food_budget_eur: number | null
           id: string
           llm_monthly_cap_eur: number
           name: string
         }
         Insert: {
           created_at?: string
+          food_budget_eur?: number | null
           id?: string
           llm_monthly_cap_eur?: number
           name: string
         }
         Update: {
           created_at?: string
+          food_budget_eur?: number | null
           id?: string
           llm_monthly_cap_eur?: number
           name?: string
         }
         Relationships: []
+      }
+      household_ingredient_resolution: {
+        Row: {
+          food_id: string | null
+          grams: number | null
+          household_id: string
+          recipe_ingredient_id: string
+          updated_at: string
+        }
+        Insert: {
+          food_id?: string | null
+          grams?: number | null
+          household_id: string
+          recipe_ingredient_id: string
+          updated_at?: string
+        }
+        Update: {
+          food_id?: string | null
+          grams?: number | null
+          household_id?: string
+          recipe_ingredient_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_ingredient_resolution_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "food"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_ingredient_resolution_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_ingredient_resolution_recipe_ingredient_id_fkey"
+            columns: ["recipe_ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_ingredient"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      household_price: {
+        Row: {
+          avg_price_eur: number
+          food_id: string | null
+          household_id: string
+          id: string
+          label: string
+          last_price_eur: number
+          last_seen_at: string
+          observations: number
+          store_id: string | null
+          unit: string
+        }
+        Insert: {
+          avg_price_eur: number
+          food_id?: string | null
+          household_id: string
+          id?: string
+          label: string
+          last_price_eur: number
+          last_seen_at?: string
+          observations?: number
+          store_id?: string | null
+          unit?: string
+        }
+        Update: {
+          avg_price_eur?: number
+          food_id?: string | null
+          household_id?: string
+          id?: string
+          label?: string
+          last_price_eur?: number
+          last_seen_at?: string
+          observations?: number
+          store_id?: string | null
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_price_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "food"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_price_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_price_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "store"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      household_unit_weight: {
+        Row: {
+          actif: boolean
+          food_id: string
+          grams: number
+          household_id: string
+          observations: number
+          seuil: number
+          unit_label: string
+          updated_at: string
+        }
+        Insert: {
+          actif?: boolean
+          food_id: string
+          grams: number
+          household_id: string
+          observations: number
+          seuil: number
+          unit_label: string
+          updated_at?: string
+        }
+        Update: {
+          actif?: boolean
+          food_id?: string
+          grams?: number
+          household_id?: string
+          observations?: number
+          seuil?: number
+          unit_label?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_unit_weight_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "food"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_unit_weight_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ingestion_job: {
         Row: {
@@ -945,12 +1103,138 @@ export type Database = {
           },
         ]
       }
+      receipt: {
+        Row: {
+          bought_at: string
+          created_at: string
+          household_id: string
+          id: string
+          raw: Json | null
+          store_id: string | null
+          total_eur: number | null
+          trip_id: string | null
+        }
+        Insert: {
+          bought_at?: string
+          created_at?: string
+          household_id: string
+          id?: string
+          raw?: Json | null
+          store_id?: string | null
+          total_eur?: number | null
+          trip_id?: string | null
+        }
+        Update: {
+          bought_at?: string
+          created_at?: string
+          household_id?: string
+          id?: string
+          raw?: Json | null
+          store_id?: string | null
+          total_eur?: number | null
+          trip_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receipt_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "store"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "shopping_trip"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      receipt_line: {
+        Row: {
+          confidence: number
+          food_id: string | null
+          household_id: string
+          id: string
+          label: string
+          price_eur: number
+          quantity: number | null
+          receipt_id: string
+          shopping_item_id: string | null
+          unit: string | null
+        }
+        Insert: {
+          confidence?: number
+          food_id?: string | null
+          household_id: string
+          id?: string
+          label: string
+          price_eur: number
+          quantity?: number | null
+          receipt_id: string
+          shopping_item_id?: string | null
+          unit?: string | null
+        }
+        Update: {
+          confidence?: number
+          food_id?: string | null
+          household_id?: string
+          id?: string
+          label?: string
+          price_eur?: number
+          quantity?: number | null
+          receipt_id?: string
+          shopping_item_id?: string | null
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receipt_line_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "food"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_line_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_line_receipt_id_fkey"
+            columns: ["receipt_id"]
+            isOneToOne: false
+            referencedRelation: "receipt"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipt_line_shopping_item_id_fkey"
+            columns: ["shopping_item_id"]
+            isOneToOne: false
+            referencedRelation: "shopping_item"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recipe: {
         Row: {
+          active_time_min: number | null
+          appliances: string[]
           cook_time_min: number | null
           created_at: string
           edited_at: string | null
           edited_by_household_id: string | null
+          freezable: boolean | null
           id: string
           license_note: string | null
           origin: string
@@ -959,16 +1243,20 @@ export type Database = {
           prep_time_min: number | null
           source_name: string | null
           source_url: string | null
+          step_count: number
           title: string | null
           total_time_min: number | null
           visibility: string
           yield_servings: number | null
         }
         Insert: {
+          active_time_min?: number | null
+          appliances?: string[]
           cook_time_min?: number | null
           created_at?: string
           edited_at?: string | null
           edited_by_household_id?: string | null
+          freezable?: boolean | null
           id?: string
           license_note?: string | null
           origin?: string
@@ -977,16 +1265,20 @@ export type Database = {
           prep_time_min?: number | null
           source_name?: string | null
           source_url?: string | null
+          step_count?: number
           title?: string | null
           total_time_min?: number | null
           visibility?: string
           yield_servings?: number | null
         }
         Update: {
+          active_time_min?: number | null
+          appliances?: string[]
           cook_time_min?: number | null
           created_at?: string
           edited_at?: string | null
           edited_by_household_id?: string | null
+          freezable?: boolean | null
           id?: string
           license_note?: string | null
           origin?: string
@@ -995,6 +1287,7 @@ export type Database = {
           prep_time_min?: number | null
           source_name?: string | null
           source_url?: string | null
+          step_count?: number
           title?: string | null
           total_time_min?: number | null
           visibility?: string
@@ -1057,6 +1350,56 @@ export type Database = {
             foreignKeyName: "recipe_ingredient_recipe_id_fkey"
             columns: ["recipe_id"]
             isOneToOne: false
+            referencedRelation: "recipe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_nutrition: {
+        Row: {
+          carb_g: number
+          computed_at: string
+          coverage: number
+          fat_g: number
+          fiber_g: number
+          grams: number
+          kcal: number
+          kcal_margin: number
+          protein_g: number
+          protein_g_margin: number
+          recipe_id: string
+        }
+        Insert: {
+          carb_g: number
+          computed_at?: string
+          coverage: number
+          fat_g: number
+          fiber_g: number
+          grams: number
+          kcal: number
+          kcal_margin?: number
+          protein_g: number
+          protein_g_margin?: number
+          recipe_id: string
+        }
+        Update: {
+          carb_g?: number
+          computed_at?: string
+          coverage?: number
+          fat_g?: number
+          fiber_g?: number
+          grams?: number
+          kcal?: number
+          kcal_margin?: number
+          protein_g?: number
+          protein_g_margin?: number
+          recipe_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_nutrition_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: true
             referencedRelation: "recipe"
             referencedColumns: ["id"]
           },
@@ -1788,9 +2131,110 @@ export type Database = {
           },
         ]
       }
+      weighing: {
+        Row: {
+          at: string
+          cycle_id: string | null
+          food_id: string
+          grams: number
+          household_id: string
+          id: string
+          qty_observed: number
+          recipe_ingredient_id: string | null
+          unit_observed: string
+        }
+        Insert: {
+          at?: string
+          cycle_id?: string | null
+          food_id: string
+          grams: number
+          household_id: string
+          id?: string
+          qty_observed: number
+          recipe_ingredient_id?: string | null
+          unit_observed: string
+        }
+        Update: {
+          at?: string
+          cycle_id?: string | null
+          food_id?: string
+          grams?: number
+          household_id?: string
+          id?: string
+          qty_observed?: number
+          recipe_ingredient_id?: string | null
+          unit_observed?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weighing_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "cycle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weighing_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "food"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weighing_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weighing_recipe_ingredient_id_fkey"
+            columns: ["recipe_ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_ingredient"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      price_knowledge: {
+        Row: {
+          avg_price_eur: number | null
+          food_id: string | null
+          household_id: string | null
+          label: string | null
+          last_price_eur: number | null
+          last_seen_at: string | null
+          observations: number | null
+          store_id: string | null
+          store_name: string | null
+          unit: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_price_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "food"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_price_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_price_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "store"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       create_household: { Args: { p_name: string }; Returns: string }
@@ -1798,6 +2242,7 @@ export type Database = {
       current_household: { Args: never; Returns: string }
       delete_my_account: { Args: never; Returns: undefined }
       export_my_data: { Args: never; Returns: Json }
+      export_my_data_base: { Args: never; Returns: Json }
       is_service_role: { Args: never; Returns: boolean }
       lieu_du_rayon: { Args: { rayon: string }; Returns: string }
       llm_budget_remaining: { Args: never; Returns: number }
@@ -1805,6 +2250,16 @@ export type Database = {
       open_cycle: {
         Args: { p_servings?: number; p_week_of: string }
         Returns: string
+      }
+      poids_unitaire: {
+        Args: { p_food_id: string; p_unit?: string }
+        Returns: number
+      }
+      tables_de_foyer: {
+        Args: never
+        Returns: {
+          table_name: string
+        }[]
       }
     }
     Enums: {
