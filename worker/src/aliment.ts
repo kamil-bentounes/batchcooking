@@ -35,6 +35,10 @@ export const pliure = (s: string) => {
 const VIDES = new Set([
   'de', 'du', 'des', 'la', 'le', 'les', 'un', 'une', 'a', 'au', 'aux', 'en', 'et',
   'ou', 'pour', 'avec', 'sans', 'bio', 'frais', 'fraiche', 'nature', 'environ',
+  // Ce qu'une recette écrit pour dire « pas beaucoup ». Ces mots ne nomment
+  // rien, et les compter faisait chuter le rappel : « un peu de sel » perdait
+  // le sel et tombait sur un beurre demi-sel.
+  'peu', 'quelques', 'quelque', 'petit', 'petite', 'gros', 'grosse', 'grand',
 ])
 
 /**
@@ -98,6 +102,16 @@ const ETAT_DE_BASE = new Set(['cru', 'crue', 'entier', 'entiere', 'demi', 'stand
 /** Le nom générique que CIQUAL signale explicitement. */
 const GENERIQUE = /aliment moyen/i
 
+/**
+ * « X au Y » n'est pas du X : c'est du X mélangé à autre chose.
+ *
+ * « Sel au céleri » était l'aliment LE PLUS rattaché du catalogue — 658 lignes
+ * de recette écrivant « sel ». Les mots de liaison sont dans `VIDES`, donc le
+ * composite ne payait rien pour ce qu'il ajoute. La pénalité ne s'applique que
+ * si la recette n'a pas demandé le complément.
+ */
+const COMPOSITE = /\b(au|aux|à la|à l'|fourré|fourrée|sauce)\b/i
+
 /** Chiffres, taux et unités : une spécification, jamais un autre aliment. */
 const SPEC = /^(\d+|mg|g|kg|ml|cl|l|uht|t\d+|[a-z]\d+)$/
 
@@ -159,6 +173,30 @@ export const SYNONYMES: Record<string, string> = {
   'coulis de tomate': 'tomate coulis appertise puree',
   'concentre de tomates': 'tomate concentre',
   'huile': 'huile olive vierge extra',
+
+  /*
+   * Trouvés en CONTRÔLANT la production par échantillon, après la correction du
+   * score — c'est-à-dire par un autre chemin que le corpus de trente, qui ne
+   * les couvrait pas. Ce sont les deux aliments les PLUS rattachés du
+   * catalogue, et les deux tombaient à côté :
+   *
+   *  · « sel » rendait « Sel au céleri » — 658 lignes ;
+   *  · « eau » rendait « Eau de vie », c'est-à-dire de l'alcool à 40° là où la
+   *    recette met de l'eau — 171 lignes. Sur les macros, l'écart est total.
+   *
+   * La leçon vaut d'être écrite : un corpus de trente cas bien choisis ne
+   * remplace pas un comptage sur ce qui est réellement rattaché.
+   */
+  'sel': 'sel blanc alimentaire iode non fluore',
+  'sel fin': 'sel blanc alimentaire iode non fluore',
+  'gros sel': 'sel marin gris non iode non fluore',
+  'fleur de sel': 'sel marin gris non iode non fluore',
+  'eau': 'eau du robinet',
+  'eau froide': 'eau du robinet',
+  'eau chaude': 'eau du robinet',
+  'eau tiede': 'eau du robinet',
+  'sauce soja': 'sauce soja preemballee',
+  'soja sauce': 'sauce soja preemballee',
 }
 
 export interface AlimentIndexe { id: string; name: string; state: string; _mots?: Set<string> }
@@ -207,6 +245,8 @@ function score(recherche: string[], cible: AlimentIndexe, prefereCru: boolean): 
   const pasDemande = (p: RegExp) => p.test(cible.name) && !p.test(demande)
   for (const p of PENALITES) if (pasDemande(p)) { s *= 0.6; break }
   for (const p of TRANSFORMATIONS) if (pasDemande(p)) { s *= 0.45; break }
+  // Un composite doit perdre contre l'aliment simple, sauf si on l'a demandé.
+  if (COMPOSITE.test(cible.name) && !COMPOSITE.test(demande)) s *= 0.5
   // CIQUAL nomme ses entrées génériques : quand elle existe, c'est CELLE-LÀ
   // qu'une recette sans précision désigne.
   if (GENERIQUE.test(cible.name)) s *= 1.25

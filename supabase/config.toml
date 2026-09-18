@@ -151,6 +151,15 @@ max_indexes = 5
 # Vector Buckets is available to Supabase Pro plan.
 # [storage.vector.buckets.documents-openai]
 
+# ⚠️ NE JAMAIS lancer `supabase config push` sur ce projet.
+#
+#    Le projet hébergé porte site_url = https://kamil-bentounes.github.io/batchcooking/
+#    et les URL de redirection qui vont avec. Ce fichier porte celles du
+#    développement local, et `config push` écraserait les premières par les
+#    secondes : les liens magiques renverraient vers une machine locale, et
+#    plus personne ne pourrait se connecter. Voir docs/mails.md.
+#
+#    `supabase config diff` est en lecture seule et reste sans danger.
 [auth]
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
