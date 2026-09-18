@@ -1,7 +1,7 @@
 # Design — Application de batch cooking, diet et budget
 
 - **Date** : 2026-09-17
-- **Version** : 17 — fusion des gestes identiques entre recettes : le vrai gain du batch cooking
+- **Version** : 19 — la répartition de la semaine, chaînon manquant ; l'application devient une machine à états
 - **Statut** : design validé, en attente du plan d'implémentation du **lot 0a-1**
 - **Utilisateurs** : un foyer de 2 personnes au départ, puis d'autres foyers **sur invitation**
 
@@ -406,6 +406,15 @@ durées ne sont pas confirmées, et l'affiche comme telle. `ingestion_job` est e
 
 `portion_event(portion_id, de_etat, vers_etat, at)` conserve **chaque** transition : c'est
 cet historique qui permet de dire combien vous jetez et ce que ça coûte (D36).
+
+**`meal_plan`** — lot 1 (produit par la répartition, D39), classe C :
+`household_id`, `date`, `meal` (`petit_dejeuner` \| `dejeuner` \| `diner` \| `collation`),
+`user_profile_id`, `portion_id` NULL, `frequent_food_id` NULL,
+`statut` (`prevu` \| `consomme` \| `decale` \| `annule`).
+
+Une ligne par personne et par repas. **C'est cette table qui permet à l'accueil de répondre
+à « qu'est-ce qu'on mange aujourd'hui »**. La répartition la remplit, l'écran « La semaine »
+la modifie, et `portion.etat` en découle (D40) — jamais l'inverse.
 
 **`frequent_food`** — lot 6, classe C : `household_id`, `label`, `food_id` NULL, `grams`,
 `macros` jsonb, `default_meal`, `usage_count`. Enregistré une fois, réutilisable en un geste
