@@ -71,20 +71,26 @@ Sondé le 18 septembre 2026, 4 pages par site, une requête par seconde.
 | **recetteproteine.fr** | 4/4 | 100 % | 91 % | ✅ **protéiné** |
 | chefsimon.com | 1/4 | 100 % | 100 % | ⚠️ beaucoup de pages hors recettes |
 | fitnessmith.fr | 1/4 | 100 % | 100 % | ⚠️ idem, mais **musculation** |
-| 750g.com | 0/4 | — | — | ❌ aucun `schema.org/Recipe` |
-| recettes.de · quitoque.fr · croquonslavie.fr · mangerbouger.fr | 0/4 | — | — | ❌ idem |
+| 750g.com | 2/3 | 100 % | 100 % | ⚠️ publie bien, mais **aucun sitemap** : pas d'URL à ingérer |
+| quitoque.fr | 2/4 | 100 % | 86 % | ⚠️ paniers, pas recettes |
+| recettes.de · croquonslavie.fr · mangerbouger.fr | 0/4 | — | — | ❌ aucun `schema.org/Recipe` |
 | papillesetpupilles.fr · odelices.com · atelierdeschefs.fr · natura-force.com | — | — | — | ❓ **bloquent notre robot** — non concluant, pas « ne publie rien » |
 
 Ce que la mesure a appris et qu'aucun article ne disait :
 
-- **750g, pourtant cité partout, ne publie pas de données structurées.** Sa
-  popularité ne dit rien de son exploitabilité.
+- **750g publie bien des données structurées, mais ne déclare aucun sitemap.**
+  Premier verdict de la sonde : « n'en publie pas ». Faux — elle cherchait au
+  mauvais endroit. Un outil de mesure se trompe aussi, et il faut le vérifier.
 - **Un site déclare dix sitemaps** (news, images, vidéos, tags…). Prendre les
   premiers, c'est sonder les vidéos et conclure qu'il n'y a pas de recettes —
   c'est ce que faisait la sonde à son premier jet, et elle donnait Marmiton
   pour inexploitable.
 - **Quatre sites renvoient une page de challenge** à notre agent. On ne
   contourne pas : on les note indéterminés.
+- **Le repli par la page d'accueil ne sert qu'à SONDER.** Il ramène des pages de
+  catégorie dont le JSON-LD porte la recette mise en avant : bon pour répondre
+  « ce site publie-t-il ? », désastreux pour ingérer — le catalogue hériterait
+  d'une recette intitulée « Cuisine minceur ».
 
 ## `plannable`
 

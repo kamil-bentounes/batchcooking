@@ -7,10 +7,11 @@
  * ce qui n'est pas trouvé reste `null`, et la recette est marquée non
  * planifiable plutôt que complétée au jugé.
  *
- *   node scripts/ingest.mjs <url> [<url>…]
- *   node scripts/ingest.mjs --fichier urls.txt
- *   node scripts/ingest.mjs --sitemap https://site.fr/sitemap.xml --limite 50
- *   node scripts/ingest.mjs --prod --fichier urls.txt
+ *   npm run ingest -- <url> [<url>…]
+ *   npm run ingest -- --site marmiton.org --site jow.fr --limite 60
+ *   npm run ingest -- --fichier urls.txt
+ *   npm run ingest -- --sitemap https://site.fr/sitemap.xml --limite 50
+ *   npm run ingest -- --prod --site marmiton.org
  *
  * Idempotent : une URL déjà ingérée est mise à jour, jamais dupliquée.
  *
@@ -25,10 +26,14 @@ import { extraire } from '../worker/src/jsonld.ts'
 import { preparer } from '../worker/src/ingere.ts'
 import { pliure } from '../worker/src/etape.ts'
 import { indexer } from '../worker/src/aliment.ts'
+import { AGENT, decouvrir, texteDe } from '../worker/src/sitemap.ts'
 
 const args = process.argv.slice(2)
 const prod = args.includes('--prod')
-config({ path: prod ? '.env.production' : '.env' })
+// `override: true` est indispensable : vite-node charge `.env` de lui-même
+// avant que ce script démarre, et dotenv n'écrase pas ce qui existe déjà —
+// `--prod` visait donc la base LOCALE avec la clé de PRODUCTION.
+config({ path: prod ? '.env.production' : '.env', override: true })
 
 const API = process.env.VITE_SUPABASE_URL
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -39,8 +44,9 @@ if (!API || !KEY) {
 const db = createClient(API, KEY, { auth: { persistSession: false } })
 
 /** Une seconde entre deux pages. C'est le respect minimal d'un site tiers. */
-const PAUSE_MS = 1000
-const UA = 'batchcooking-perso/1.0 (usage domestique ; contact via github.com/kamil-bentounes)'
+const PAUSE_MS = 1100
+const UA = AGENT
+const dors = () => new Promise(r => setTimeout(r, PAUSE_MS))
 
 const option = (nom) => {
   const i = args.indexOf(nom)
@@ -53,28 +59,43 @@ async function urls() {
     return readFileSync(fichier, 'utf8').split(/\r?\n/)
       .map(l => l.trim()).filter(l => l.startsWith('http'))
   }
+
+  const limite = Number(option('--limite') ?? 25)
+
+  // `--site` : on découvre le sitemap nous-mêmes, en respectant robots.txt.
+  // C'est la même découverte que la sonde — un seul endroit où se tromper.
+  const sites = args.filter((a, i) => args[i - 1] === '--site')
+  if (sites.length > 0) {
+    const tout = []
+    for (const d of sites) {
+      const { robots, urls: u } = await decouvrir(d, { max: limite, pause: dors })
+      console.log(`  ${d.padEnd(30)} ${u.length} recettes`
+        + (robots.delai ? ` (crawl-delay ${robots.delai}s déclaré)` : ''))
+      tout.push(...u)
+    }
+    return tout
+  }
+
   const sitemap = option('--sitemap')
   if (sitemap) {
-    const limite = Number(option('--limite') ?? 25)
-    const lire = async (u) => {
-      const xml = await (await fetch(u, { headers: { 'User-Agent': UA },
-        signal: AbortSignal.timeout(30000) })).text()
-      return [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1])
-    }
-    const premier = await lire(sitemap)
-    // Un sitemap d'index ne contient que d'autres sitemaps : c'est la forme
-    // normale sur les gros sites. On descend d'UN niveau, jamais plus.
-    const pages = premier.filter(u => !/\.xml(\.gz)?$/i.test(u))
+    const xml = await texteDe(sitemap)
+    const liens = xml ? [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1]) : []
+    const pages = liens.filter(u => !/\.xml(\.gz)?$/i.test(u))
     if (pages.length > 0) return pages.slice(0, limite)
 
     const sorties = []
-    for (const sous of premier) {
+    for (const sous of liens) {
       if (sorties.length >= limite) break
-      await new Promise(r => setTimeout(r, PAUSE_MS))
-      sorties.push(...(await lire(sous)).filter(u => !/\.xml(\.gz)?$/i.test(u)))
+      await dors()
+      const x = await texteDe(sous)
+      if (x) {
+        sorties.push(...[...x.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)]
+          .map(m => m[1]).filter(u => !/\.xml(\.gz)?$/i.test(u)))
+      }
     }
     return sorties.slice(0, limite)
   }
+
   return args.filter(a => a.startsWith('http'))
 }
 
@@ -226,7 +247,7 @@ for (const [i, url] of liste.entries()) {
     await journal(url, 'failed', String(e.message ?? e))
     console.log(`${prefixe} ✗ ${e.message ?? e} · ${url}`)
   }
-  if (i < liste.length - 1) await new Promise(r => setTimeout(r, PAUSE_MS))
+  if (i < liste.length - 1) await dors()
 }
 
 const total = liste.length

@@ -15,7 +15,10 @@ import { readFileSync } from 'node:fs'
 import { config } from 'dotenv'
 
 const prod = process.argv.includes('--prod')
-config({ path: prod ? '.env.production' : '.env' })
+// `override: true` est indispensable : vite-node charge `.env` de lui-même
+// avant que ce script démarre, et dotenv n'écrase pas ce qui existe déjà —
+// `--prod` visait donc la base LOCALE avec la clé de PRODUCTION.
+config({ path: prod ? '.env.production' : '.env', override: true })
 
 const API = process.env.VITE_SUPABASE_URL
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY

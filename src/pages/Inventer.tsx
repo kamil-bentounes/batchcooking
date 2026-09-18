@@ -15,6 +15,7 @@ import {
 import { callFunction, ou, supabase } from '../lib/supabase.ts'
 import { useAppareils, useFoyer, objectifDe } from '../lib/donnees/foyer.ts'
 import { PART_DU_JOUR } from '../lib/nutrition/portions.ts'
+import { appareilDuCatalogue } from '../lib/plan/duree.ts'
 import { useStock } from '../lib/donnees/barquettes.ts'
 
 type Perimetre = 'frigo' | 'courses' | 'libre'
@@ -92,7 +93,9 @@ export function Inventer({ userId, retour, va }: {
           text: e.texte,
           duration_min: e.minutes,
           duration_source: 'llm' as const,
-          appliance_type: e.appareil,
+          // Normalisé dès l'écriture : le modèle dit « plaque », le catalogue
+          // connaît « plaques », et l'ordonnanceur exige un code du catalogue.
+          appliance_type: appareilDuCatalogue(e.appareil),
           load_type: ['actif', 'passif', 'bloquant'].includes(e.charge) ? e.charge : 'actif',
         })).slice(0, 40)).select())
       }

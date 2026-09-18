@@ -21,8 +21,8 @@ import { extraire } from '../worker/src/jsonld.ts'
 import { preparer } from '../worker/src/ingere.ts'
 import { pliure } from '../worker/src/etape.ts'
 import { indexer } from '../worker/src/aliment.ts'
+import { autorise, decouvrir, texteDe } from '../worker/src/sitemap.ts'
 
-const UA = 'batchcooking-perso/1.0 (usage domestique ; contact via github.com/kamil-bentounes)'
 const PAUSE_MS = 1100
 const dors = () => new Promise(r => setTimeout(r, PAUSE_MS))
 
@@ -39,95 +39,7 @@ const CANDIDATS = [
   'natura-force.com', 'recetteproteine.fr', 'mangerbouger.fr',
 ]
 
-async function texte(url, timeout = 20000) {
-  try {
-    const r = await fetch(url, {
-      headers: { 'User-Agent': UA, 'Accept-Language': 'fr-FR,fr;q=0.9' },
-      signal: AbortSignal.timeout(timeout),
-      redirect: 'follow',
-    })
-    return r.ok ? await r.text() : null
-  } catch { return null }
-}
-
-/**
- * Lecture de robots.txt. On ne cherche pas l'exhaustivité d'un parseur — on
- * cherche à savoir si le site nous dit non, et à s'y tenir.
- */
-function robots(txt) {
-  if (!txt) return { present: false, interdits: [], sitemaps: [], delai: null }
-  const sitemaps = [...txt.matchAll(/^\s*sitemap:\s*(\S+)/gim)].map(m => m[1])
-  const lignes = txt.split(/\r?\n/)
-  const interdits = []
-  let delai = null
-  let concerne = false
-  for (const l of lignes) {
-    const ua = l.match(/^\s*user-agent:\s*(.+)$/i)
-    if (ua) { concerne = ua[1].trim() === '*'; continue }
-    if (!concerne) continue
-    const d = l.match(/^\s*disallow:\s*(\S*)/i)
-    if (d && d[1]) interdits.push(d[1])
-    const c = l.match(/^\s*crawl-delay:\s*(\d+)/i)
-    if (c) delai = Number(c[1])
-  }
-  return { present: true, interdits, sitemaps, delai }
-}
-
-const autorise = (chemin, r) =>
-  !r.interdits.some(i => chemin.startsWith(i))
-
-/** Des URL de recettes, par le sitemap quand il existe. */
-async function urlsDeRecettes(domaine, r) {
-  // Un site déclare souvent dix sitemaps : news, images, vidéos, tags… Prendre
-  // les premiers, c'est sonder les vidéos et conclure qu'il n'y a pas de
-  // recettes. On vise donc CEUX QUI LE DISENT, d'abord.
-  const declares = r.sitemaps.length > 0
-    ? [...r.sitemaps].sort((a, b) =>
-        Number(/recip|recett/i.test(b)) - Number(/recip|recett/i.test(a)))
-    : [`https://${domaine}/sitemap.xml`, `https://www.${domaine}/sitemap.xml`,
-       `https://${domaine}/sitemap_index.xml`]
-  const candidats = declares
-
-  const locs = async u => {
-    const xml = await texte(u, 25000)
-    return xml ? [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map(m => m[1]) : []
-  }
-
-  for (const sm of candidats.slice(0, 4)) {
-    let liste = await locs(sm)
-    await dors()
-    // Sitemap d'index : on descend d'un niveau, en visant les recettes.
-    const sous = liste.filter(u => /\.xml(\.gz)?$/i.test(u))
-    if (sous.length > 0) {
-      const vise = sous.filter(u => /recip|recett/i.test(u))
-      for (const s of (vise.length > 0 ? vise : sous).slice(0, 2)) {
-        liste = liste.concat(await locs(s))
-        await dors()
-      }
-    }
-    const pages = liste.filter(u => !/\.xml(\.gz)?$/i.test(u) && /recette|recipe/i.test(u))
-    if (pages.length >= PAGES) {
-      // On échantillonne au hasard plutôt que de prendre les premières : les
-      // sitemaps commencent souvent par des pages de catégorie.
-      const pris = []
-      for (let i = 0; i < PAGES && pages.length > 0; i++) {
-        pris.push(pages.splice(Math.floor(pages.length * (i + 1) / (PAGES + 1)), 1)[0])
-      }
-      return pris.filter(Boolean)
-    }
-  }
-  // Aucun sitemap exploitable : on retombe sur les liens de la page d'accueil.
-  // C'est moins représentatif, mais cela suffit à répondre à la seule question
-  // qui compte ici — le site publie-t-il du schema.org/Recipe ?
-  const accueil = await texte(`https://www.${domaine}/`) ?? await texte(`https://${domaine}/`)
-  await dors()
-  if (!accueil) return []
-  const liens = [...accueil.matchAll(/href="((?:https?:\/\/[^"]*)?\/[^"]*recette[^"]*)"/gi)]
-    .map(m => m[1])
-    .map(u => (u.startsWith('http') ? u : `https://www.${domaine}${u}`))
-    .filter(u => !/\/(recettes|recipes)\/?$/i.test(u))
-  return [...new Set(liens)].slice(0, PAGES)
-}
+const texte = texteDe
 
 // ── Le contexte de résolution, depuis les fichiers de graine ────────────────
 const lire = f => JSON.parse(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'))
@@ -151,10 +63,9 @@ const CTX = {
 const pct = (a, b) => (b === 0 ? '—' : `${Math.round((a / b) * 100)} %`)
 
 async function sonder(domaine) {
-  const r = robots(await texte(`https://${domaine}/robots.txt`, 15000))
-  await dors()
-
-  const urls = await urlsDeRecettes(domaine, r)
+  // La sonde répond « ce site publie-t-il ? » : le repli par l'accueil lui va.
+  const { robots: r, urls } = await decouvrir(
+    domaine, { max: PAGES, pause: dors, repliAccueil: true })
   const bilan = {
     domaine, robots: r, urls: urls.length,
     pages: 0, avecRecette: 0, planifiables: 0,

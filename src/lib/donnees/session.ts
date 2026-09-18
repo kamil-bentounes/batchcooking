@@ -11,6 +11,7 @@ import { ou, supabase } from '../supabase.ts'
 import type { Ligne } from '../supabase.ts'
 import { actionsDeLaSession } from '../plan/fusion.ts'
 import type { Etape } from '../plan/fusion.ts'
+import { appareilDuCatalogue } from '../plan/duree.ts'
 import { planifie } from '../plan/ordonnance.ts'
 import type { Plan, Ressources } from '../plan/types.ts'
 
@@ -128,7 +129,10 @@ async function etapesDuCycle(cycleId: string): Promise<Etape[]> {
     dureeMin: e.duration_min === null ? null : Number(e.duration_min),
     verbe: e.verb,
     quantiteG: e.quantity_g === null ? null : Number(e.quantity_g),
-    appareil: e.appliance_type,
+    // Une recette inventée par un modèle écrit « plaque » ; l'ingestion écrit
+    // « plaques ». `session_task.appliance_code` a une clé étrangère vers le
+    // catalogue : sans cette normalisation, le plan refuse de s'enregistrer.
+    appareil: appareilDuCatalogue(e.appliance_type),
     charge: e.load_type,
     dependDe: avant.get(e.id) ?? (precedente.get(e.id) ? [precedente.get(e.id)!] : []),
   }))

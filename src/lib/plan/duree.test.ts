@@ -41,6 +41,12 @@ describe('les appareils', () => {
     expect(appareilDuCatalogue('casserole')).toBe('plaques')
   })
 
+  it('normalise ce qu’un modèle invente', () => {
+    // Mesuré : `gpt-oss-120b` rend « plaque » au singulier. La clé étrangère de
+    // `session_task.appliance_code` refuserait le plan entier.
+    expect(appareilDuCatalogue('plaque')).toBe('plaques')
+  })
+
   it('laisse passer les codes du catalogue', () => {
     for (const c of ['four', 'air_fryer', 'micro_ondes', 'autocuiseur', 'blender']) {
       expect(appareilDuCatalogue(c)).toBe(c)
