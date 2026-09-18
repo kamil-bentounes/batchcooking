@@ -23,7 +23,26 @@ const EPS = 1e-9
 const CUISINIER = '#cuisinier'
 
 type Reservation = { debut: number; fin: number }
-type Occupation = Map<string, Reservation[]>
+
+/**
+ * Les réservations d'un pool, UNITÉ PAR UNITÉ.
+ *
+ * ⚠️ C'est le cœur du modèle, et la première version s'y est trompée. Elle
+ *    comptait les occupants INSTANT PAR INSTANT : tant qu'il restait une place
+ *    à chaque moment, le créneau passait. Or une tâche ne se passe pas de main
+ *    en main, et un gratin ne change pas de four à mi-cuisson.
+ *
+ *    Trouvé par le test de propriétés, sur une session à trois cuisiniers : A
+ *    occupé de 0 à 21, B de 0 à 24, C de 24 à 33. À chaque instant il restait
+ *    une place libre — mais personne n'était libre sur tout [0,9 ; 45[. Le plan
+ *    posait quand même la tâche, et l'attribution, ne trouvant aucun cuisinier
+ *    libre, retombait en silence sur le numéro 0, déjà occupé.
+ *
+ *    On suit donc chaque unité séparément, et une tâche doit en trouver UNE
+ *    libre du début à la fin.
+ */
+type Pool = Reservation[][]
+type Occupation = Map<string, Pool>
 
 /** Capacité d'un pool. Un appareil inconnu de la session compte pour un. */
 function capacite(ressources: Ressources, pool: string): number {
@@ -39,64 +58,85 @@ function pools(t: Tache): string[] {
   return p
 }
 
+function poolDe(occ: Occupation, nom: string, cap: number): Pool {
+  let p = occ.get(nom)
+  if (!p) {
+    p = Array.from({ length: cap }, () => [] as Reservation[])
+    occ.set(nom, p)
+  }
+  return p
+}
+
+/** Cette unité est-elle libre sur TOUT l'intervalle ? */
+function libre(unite: Reservation[], debut: number, fin: number): boolean {
+  // Une réservation de durée nulle n'occupe rien : elle ne bloque personne.
+  return unite.every(r => r.fin <= r.debut + EPS
+    || r.fin <= debut + EPS || fin <= r.debut + EPS)
+}
+
+/** Le temps déjà réservé sur cette unité. Sert à répartir la charge. */
+function charge(unite: Reservation[]): number {
+  return unite.reduce((s, r) => s + (r.fin - r.debut), 0)
+}
+
 /**
- * La capacité tient-elle sur TOUT l'intervalle ?
+ * La première unité libre du pool, la moins chargée d'abord.
  *
- * Compter les réservations qui chevauchent [debut, fin) surestime : deux
- * réservations peuvent chevaucher l'intervalle sans se chevaucher entre elles.
- * On balaie donc les seuls instants où le compte peut changer.
+ * Répartir plutôt que remplir la première : c'est ce qui fait que deux
+ * personnes qui cuisinent se partagent vraiment le travail. L'index départage,
+ * pour que deux téléphones attribuent pareil (D50).
  */
-function tient(res: Reservation[], debut: number, fin: number, cap: number): boolean {
-  const instants = [debut]
-  for (const r of res) if (r.debut > debut + EPS && r.debut < fin - EPS) instants.push(r.debut)
-  for (const t of instants) {
-    let n = 0
-    for (const r of res) if (r.debut <= t + EPS && t < r.fin - EPS) n++
-    if (n >= cap) return false
-  }
-  return true
-}
-
-/** Le plus tôt possible à partir de `apres`, tous pools satisfaits ensemble. */
-function premierCreneau(
-  t: Tache, apres: number, occ: Occupation, ressources: Ressources,
-): number {
-  const concernes = pools(t)
-  if (concernes.length === 0) return apres
-
-  // Un créneau ne peut s'ouvrir qu'au moment où quelque chose se libère.
-  const candidats = new Set<number>([apres])
-  for (const p of concernes)
-    for (const r of occ.get(p) ?? []) if (r.fin > apres + EPS) candidats.add(r.fin)
-
-  for (const c of [...candidats].sort((a, b) => a - b)) {
-    const ok = concernes.every(p =>
-      tient(occ.get(p) ?? [], c, c + t.dureeMin, capacite(ressources, p)))
-    if (ok) return c
-  }
-  // Inatteignable : passé la dernière fin, tout est libre.
-  return Math.max(apres, ...concernes.flatMap(p => (occ.get(p) ?? []).map(r => r.fin)))
-}
-
-/** Le cuisinier le moins chargé parmi ceux qui sont libres sur l'intervalle. */
-function attribueCuisinier(
-  planifiees: TachePlanifiee[], debut: number, fin: number, nb: number,
-): number {
-  const charge = new Array<number>(nb).fill(0)
-  const pris = new Set<number>()
-  for (const p of planifiees) {
-    if (p.cuisinier === null) continue
-    charge[p.cuisinier] += p.dureeMin
-    if (p.debutMin < fin - EPS && debut < p.finMin - EPS) pris.add(p.cuisinier)
-  }
-  let choix = 0
+function uniteLibre(pool: Pool, debut: number, fin: number): number | null {
+  let choix: number | null = null
   let min = Infinity
-  for (let i = 0; i < nb; i++) {
-    if (pris.has(i)) continue
-    if (charge[i] < min) { min = charge[i]; choix = i }
+  for (let i = 0; i < pool.length; i++) {
+    if (!libre(pool[i], debut, fin)) continue
+    const c = charge(pool[i])
+    if (c < min - EPS) { min = c; choix = i }
   }
   return choix
 }
+
+/**
+ * Le plus tôt possible à partir de `apres`, avec UNE unité libre par pool sur
+ * toute la durée.
+ *
+ * Un créneau ne peut s'ouvrir qu'au moment où quelque chose se libère : on
+ * n'essaie que `apres` et les fins de réservation.
+ */
+function premierCreneau(
+  t: Tache, apres: number, occ: Occupation, ressources: Ressources,
+): { debut: number; unites: Map<string, number> } {
+  const concernes = pools(t)
+  if (concernes.length === 0) return { debut: apres, unites: new Map() }
+
+  const candidats = new Set<number>([apres])
+  for (const nom of concernes) {
+    for (const u of poolDe(occ, nom, capacite(ressources, nom))) {
+      for (const r of u) if (r.fin > apres + EPS) candidats.add(r.fin)
+    }
+  }
+
+  for (const c of [...candidats].sort((a, b) => a - b)) {
+    const unites = new Map<string, number>()
+    let possible = true
+    for (const nom of concernes) {
+      const i = uniteLibre(poolDe(occ, nom, capacite(ressources, nom)), c, c + t.dureeMin)
+      if (i === null) { possible = false; break }
+      unites.set(nom, i)
+    }
+    if (possible) return { debut: c, unites }
+  }
+
+  // Inatteignable : passé la dernière fin de tous les pools concernés, tout est
+  // libre. On le garde pour ne jamais rendre un plan sans début.
+  const apresTout = Math.max(apres, ...concernes.flatMap(nom =>
+    poolDe(occ, nom, capacite(ressources, nom)).flatMap(u => u.map(r => r.fin))))
+  const unites = new Map<string, number>()
+  for (const nom of concernes) unites.set(nom, 0)
+  return { debut: apresTout, unites }
+}
+
 
 /**
  * Schéma sériel : on prend les tâches une à une dans l'ordre de priorité, en
@@ -127,20 +167,22 @@ export function ordonnance(
 
     const t = parId.get(eligibles[0])!
     const apres = t.dependDe.reduce((m, d) => Math.max(m, posees.get(d)?.finMin ?? 0), 0)
-    const debut = premierCreneau(t, apres, occ, ressources)
+    const { debut, unites } = premierCreneau(t, apres, occ, ressources)
     const fin = debut + t.dureeMin
 
     const pl: TachePlanifiee = {
       ...t,
       debutMin: debut,
       finMin: fin,
-      cuisinier: t.actif
-        ? attribueCuisinier(planifiees, debut, fin, Math.max(1, ressources.cuisiniers))
-        : null,
+      // Le cuisinier n'est plus choisi à part : c'est l'unité du pool des mains
+      // que le créneau vient de réserver. Les deux décisions ne peuvent plus
+      // diverger — c'est exactement ainsi qu'un cuisinier se retrouvait à deux
+      // endroits à la fois.
+      cuisinier: t.actif ? unites.get(CUISINIER) ?? 0 : null,
     }
-    for (const p of pools(t)) {
-      if (!occ.has(p)) occ.set(p, [])
-      occ.get(p)!.push({ debut, fin })
+    for (const nom of pools(t)) {
+      poolDe(occ, nom, capacite(ressources, nom))[unites.get(nom) ?? 0]
+        .push({ debut, fin })
     }
     posees.set(t.id, pl)
     planifiees.push(pl)
