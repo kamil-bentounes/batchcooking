@@ -1,7 +1,7 @@
 # Design — Application de batch cooking, diet et budget
 
 - **Date** : 2026-09-17
-- **Version** : 16 — R1b mesuré : la table couvre 98 % des durées, le LLM passe d'estimer à découper
+- **Version** : 17 — fusion des gestes identiques entre recettes : le vrai gain du batch cooking
 - **Statut** : design validé, en attente du plan d'implémentation du **lot 0a-1**
 - **Utilisateurs** : un foyer de 2 personnes au départ, puis d'autres foyers **sur invitation**
 
@@ -39,6 +39,7 @@ Le différenciateur est le point 2 : l'ordonnancement de la session sous contrai
 | D9 | **LLM en API pour tout ce qui est en ligne** ; **serveur loué exclu** | Auto-hébergement sur serveur | Le VPS le moins cher capable de faire tourner un 7B quantifié coûte 6-14 €/mois ; la facture API qu'il remplacerait est de **1,30 €/mois**. Le plancher tarifaire d'un serveur est au-dessus de toute la dépense. |
 | D20 | **`ExtractionBackend` interchangeable** (§8.1) : fournisseur choisi par R1 parmi API de référence, **API à bas coût** et **modèle local quantifié**. Tranché par mesure, pas par opinion. | Choisir API ou local dans l'architecture | L'ingestion est le seul poste où le local pourrait gagner. Mais **le prix à battre est de ~4 €** (§8.3, DeepSeek V4 Flash sur du contenu public), pas de 20 € : contre 4 à 11 jours de machine et la plus faible qualité des options, le local ne rapporte plus rien. L'interface reste, pour ne pas dépendre d'un fournisseur. |
 | D21 | **Routage par tâche** (§8.1) : aucun modèle quand une table suffit, modèle rapide pour l'extraction et la vision, modèle capable pour la création | Un seul modèle partout | Le plus gros levier de coût n'est pas un modèle moins cher, c'est **ne pas appeler de modèle** : le JSON-LD couvre 98 % des recettes, D19 couvre les durées. En régime permanent il reste **~56 appels par mois**. |
+| D35 | **L'optimiseur FUSIONNE les actions identiques entre recettes** : même verbe + même aliment + appareil compatible → **une seule tâche, quantités additionnées**. La fusion est **affichée** (« émince 500 g d'oignons — pour le dahl et la basquaise ») et **défaisable**. | Traiter chaque recette isolément | C'est **le gain même du batch cooking**. Émincer 500 g une fois n'est pas émincer 300 puis 200 : c'est précisément ce que mesure `scaling: lineaire_plafonne` (D19). Sans fusion, l'optimiseur ne fait qu'entrelacer des recettes — il ne les cuisine pas ensemble.<br>**Bornes** : la capacité de l'appareil (une poêle ne tient pas 2 kg), la plage de ±10 °C du four (§6.1), et les actions intrinsèquement propres à un plat (une marinade). Une fusion qui dépasse la capacité est **scindée**, pas abandonnée.<br>**Affichée, toujours** : sans la mention des recettes concernées, l'utilisateur ne comprend plus pourquoi il coupe autant, et se trompe au dressage. |
 | D31 | **La durée de session se décompose en « à cuisiner » et « d'attente »**, et l'attente est qualifiée : **au milieu** (échec d'ordonnancement) ou **en fin** (normale, on quitte la cuisine). | Afficher un makespan unique | Le temps d'attente **est la note de l'optimiseur** : un creux au milieu signifie qu'une cuisson n'a pas été couverte par une préparation. L'afficher rend la qualité du calcul visible. Et « 3 h dont 1 h passive » n'engage pas le même effort que « 3 h de travail ». |
 | D32 | **La cible de durée est un repère, jamais une barrière.** Tout dépassement est annoncé avec son ampleur **et la part d'attente qu'il contient**, puis deux boutons — *Ça me va* / *Raccourcir*. **Accepter est toujours possible**, à 2 h 09 comme à 3 h. | Refuser, ou écarter des recettes d'autorité | L'utilisateur seul sait si les recettes valent l'heure supplémentaire. L'application constate, donne le fait qui permet de décider, et n'a pas d'avis. Le ton n'est jamais celui du reproche. |
 | D33 | **Trois états de saisie par repas, jamais deux** : `barquette` (compté au gramme), `estimé` (compté, **marqué comme tel**), `vide` (**exclu du calcul**). Le tableau de bord affiche toujours « N jours renseignés sur M ». | Traiter l'absence de saisie comme zéro | Un jour vide n'est pas un jour à jeun. Compter les blancs comme des zéros fait mentir les moyennes **vers le bas** — le pire sens : on croit manquer de protéines alors qu'on n'a simplement rien saisi. |
@@ -407,6 +408,20 @@ RCPSP. **Tâches** = les `recipe_step`, avec durée (D15) et précédences (D14)
 | `actif` | **1 unité de `mains`** | « Hacher l'oignon » |
 | `passif` | un appareil, **0 `mains`** | « 25 min au four à 180 °C » |
 | `bloquant` | 1 `mains` **et** un appareil | « Remuer le risotto » |
+
+**Fusion des actions (D35)** — appliquée **avant** l'ordonnancement, sur le graphe de toutes
+les recettes retenues :
+
+1. deux actions fusionnent si `verb` et `food_id` sont identiques et `appliance_type` compatible ;
+2. la quantité est la somme, la durée recalculée par `scaling` — `lineaire_plafonne` pour les
+   gestes actifs, `constant` pour les cuissons ;
+3. si la quantité fusionnée dépasse `household_appliance.capacity`, la tâche est **scindée** en
+   autant de passages que nécessaire, jamais abandonnée ;
+4. les précédences des recettes d'origine sont **reportées sur la tâche fusionnée** : elle doit
+   précéder tout ce que chacune précédait.
+
+C'est cette étape, et non l'entrelacement, qui fait la différence entre « cuisiner trois recettes
+à la suite » et « faire une session de batch cooking ».
 
 **Ressources**
 
