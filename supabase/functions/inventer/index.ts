@@ -14,6 +14,9 @@
  *     après ne sert à rien.
  *  3. Le résultat est marqué « jamais testée » et ne porte que des fourchettes.
  *     Personne n'a jamais cuisiné cette recette, pas même le modèle.
+ *  4. Un fournisseur qui tombe ne doit pas faire tomber l'écran : `LLM_FALLBACK_*`
+ *     prend le relais, et la réponse dit lequel a répondu. Un repli silencieux
+ *     ferait croire pendant des semaines que le principal va bien.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { preflight, reply } from '../_shared/cors.ts'
@@ -137,29 +140,67 @@ Deno.serve(async (req) => {
     SCHEMA,
   ].filter(Boolean).join('\n')
 
-  // ── L'appel ────────────────────────────────────────────────────────────────
-  const base = Deno.env.get('LLM_BASE_URL') ?? 'https://api.openai.com/v1'
-  const modele = Deno.env.get('LLM_MODEL') ?? 'gpt-4o-mini'
-  let brut: string
-  try {
-    const res = await fetch(`${base.replace(/\/$/, '')}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cle}` },
-      body: JSON.stringify({
-        model: modele,
-        messages: [
-          { role: 'system', content: 'Tu réponds toujours par un unique objet JSON valide.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.8,
-        response_format: { type: 'json_object' },
-      }),
-    })
-    if (!res.ok) return reply({ erreur: `Le modèle a refusé : ${await res.text()}` }, 502)
-    const json = await res.json()
-    brut = json.choices?.[0]?.message?.content ?? ''
-  } catch (e) {
-    return reply({ erreur: `Modèle injoignable : ${e instanceof Error ? e.message : e}` }, 502)
+  // ── L'appel, avec repli ───────────────────────────────────────────────────
+  const fournisseurs = [
+    {
+      nom: 'principal',
+      base: Deno.env.get('LLM_BASE_URL') ?? 'https://api.openai.com/v1',
+      modele: Deno.env.get('LLM_MODEL') ?? 'gpt-4o-mini',
+      cle,
+    },
+    {
+      nom: 'repli',
+      base: Deno.env.get('LLM_FALLBACK_BASE_URL'),
+      modele: Deno.env.get('LLM_FALLBACK_MODEL'),
+      cle: Deno.env.get('LLM_FALLBACK_API_KEY'),
+    },
+  ].filter(f => f.base && f.modele && f.cle) as
+    { nom: string; base: string; modele: string; cle: string }[]
+
+  let brut = ''
+  let par = ''
+  const echecs: string[] = []
+
+  for (const f of fournisseurs) {
+    try {
+      const res = await fetch(`${f.base.replace(/\/$/, '')}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${f.cle}` },
+        body: JSON.stringify({
+          model: f.modele,
+          messages: [
+            { role: 'system', content: 'Tu réponds toujours par un unique objet JSON valide.' },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.8,
+          response_format: { type: 'json_object' },
+        }),
+        // Un fournisseur qui ne répond pas en 45 s ne répondra pas : on bascule.
+        // Mesuré : un modèle sain rend une recette en 6 à 7 s.
+        signal: AbortSignal.timeout(45_000),
+      })
+      if (!res.ok) {
+        echecs.push(`${f.nom} : HTTP ${res.status}`)
+        continue
+      }
+      const json = await res.json()
+      const contenu = json.choices?.[0]?.message?.content ?? ''
+      if (!contenu) { echecs.push(`${f.nom} : réponse vide`); continue }
+      brut = contenu
+      par = f.nom
+      break
+    } catch (e) {
+      echecs.push(`${f.nom} : ${e instanceof Error ? e.message : e}`)
+    }
+  }
+
+  if (!brut) {
+    return reply({
+      erreur: fournisseurs.length === 0
+        ? 'Aucun modèle configuré.'
+        : `Aucun modèle n'a répondu (${echecs.join(' ; ')}).`,
+      restantes: QUOTA_MENSUEL - deja,
+    }, 502)
   }
 
   let recette: RecetteInventee
@@ -183,5 +224,10 @@ Deno.serve(async (req) => {
     calls: deja + 1, cost_eur: Number(usage?.cost_eur ?? 0),
   }, { onConflict: 'household_id,month,kind' })
 
-  return reply({ recette, restantes: QUOTA_MENSUEL - deja - 1, quota: QUOTA_MENSUEL })
+  // `par` dit QUI a répondu : sans cela, un repli silencieux ferait croire que
+  // le fournisseur principal va bien pendant des semaines.
+  return reply({
+    recette, par, echecs,
+    restantes: QUOTA_MENSUEL - deja - 1, quota: QUOTA_MENSUEL,
+  })
 })

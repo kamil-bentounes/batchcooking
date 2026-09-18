@@ -123,10 +123,24 @@ export function ingredients(v: unknown): string[] {
     .filter((s): s is string => !!s && s.length > 1)
 }
 
-/** Le nom du site, tel que la page le donne. Sert à l'attribution. */
-function editeur(r: Record<string, unknown>): string | null {
-  const p = r.publisher ?? r.author
-  return texte(p)
+/**
+ * Le nom du SITE, pour l'attribution : TOUJOURS le domaine.
+ *
+ * `publisher` existe, mais il n'est pas fiable — relevé sur 225 pages réelles :
+ * « Marmiton_Recettes », « Jow », « Rinoa Keller », « Anonyme », et même une URL
+ * de schéma (`.../#/schema/person/3b50…`). Se rabattre sur `author` était pire
+ * encore : l'écran affichait le nom d'un inconnu là où il fallait dire d'où
+ * venait la recette.
+ *
+ * Le domaine, lui, n'est jamais faux et se reconnaît d'un coup d'œil. Une seule
+ * règle, aucune surprise.
+ */
+function editeur(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -147,7 +161,7 @@ export function extraire(html: string, url: string): RecetteBrute | null {
       return {
         url,
         titre: texte(r.name),
-        source: editeur(r),
+        source: editeur(url),
         parts: parts(r.recipeYield),
         totalMin: dureeIso(r.totalTime),
         prepMin: dureeIso(r.prepTime),

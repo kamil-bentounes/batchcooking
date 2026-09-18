@@ -36,15 +36,40 @@ Le critère est le prix : **aucune raison de payer** pour dix générations par 
 | Mistral | `https://api.mistral.ai/v1` | `mistral-small-latest` | oui (Experiment) | non |
 | OpenAI | `https://api.openai.com/v1` | `gpt-5-mini` | non | oui |
 
-**Groq est configuré.** Gratuit sans échéance, sans carte, mille requêtes par
-jour contre dix par mois de besoin. Mesuré en production : une recette cohérente
-en **6,8 s**, JSON valide du premier coup, appareils et charges correctement
-étiquetés.
+**Groq est configuré**, `openai/gpt-oss-120b`. Pas par préférence : par mesure.
 
-⚠️ **`llama-3.3-70b` n'est plus au catalogue de Groq** (relevé le 18/09/2026).
-Les modèles de conversation disponibles sont `openai/gpt-oss-120b`,
-`openai/gpt-oss-20b`, `qwen/qwen3.8-27b` et `groq/compound`. Une liste de
-modèles se périme : `curl https://api.groq.com/openai/v1/models` avant de choisir.
+## Le banc d'essai — `npm run banc`
+
+Même prompt que la fonction, trois tirages par modèle, dix critères
+**vérifiables sans jugement de goût** : JSON valide, champs présents, contraintes
+de protéines / kcal / minutes tenues, appareils du catalogue, charges valides,
+étapes toutes datées, ingrédients limités aux placards, français.
+
+Relevé le 18 septembre 2026 :
+
+| Modèle | Note | Latence | Jetons | Ce qui coince |
+|---|:-:|:-:|:-:|---|
+| **groq · gpt-oss-120b** | **93 %** | 6,3 s | 3 268 | dépasse parfois le plafond kcal |
+| groq · qwen3.8-27b | 60 % | 1,4 s | 1 214 | **invente des ingrédients** (0/3), et 429 dès le 3ᵉ appel |
+| groq · gpt-oss-20b | 30 % | 2,6 s | 2 252 | échoue à produire du JSON valide |
+| gemini · 3.8-flash | 0 % | timeout 60 s | — | la clé ne génère pas |
+| gemini · flash-latest | 0 % | timeout 60 s | — | idem |
+
+**Non, qwen n'est pas meilleur.** Il est quatre fois plus rapide et deux fois
+moins cher en jetons, mais il **invente des ingrédients absents des placards** —
+ce qui est précisément ce que le mode « ce qu'on a » interdit. Il reste en repli,
+là où une recette approximative vaut mieux qu'un écran d'erreur.
+
+⚠️ **`llama-3.3-70b` n'est plus au catalogue de Groq.** Une liste de modèles se
+périme : `curl https://api.groq.com/openai/v1/models` avant de choisir.
+
+## Le repli
+
+`LLM_FALLBACK_BASE_URL` / `_MODEL` / `_API_KEY` : si le fournisseur principal
+répond une erreur, ne répond pas en 45 s, ou rend une réponse vide, le second
+prend le relais. Le quota n'est décompté qu'en cas de succès, et la réponse
+porte `par: "principal" | "repli"` — **un repli silencieux ferait croire pendant
+des semaines que le principal va bien.**
 
 Changer de fournisseur, c'est trois variables et trente secondes :
 

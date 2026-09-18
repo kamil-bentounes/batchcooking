@@ -179,12 +179,32 @@ describe('les ingrédients', () => {
   })
 })
 
+describe('la source', () => {
+  it('rend le domaine, pas l’éditeur déclaré', () => {
+    // `publisher` n'est pas fiable : relevé « Marmiton_Recettes », « Anonyme »,
+    // et une URL de schéma. Le domaine, lui, n'est jamais faux.
+    expect(extraire(page(RECETTE), 'https://www.marmiton.org/r/42')!.source)
+      .toBe('marmiton.org')
+  })
+
+  it('ne se rabat jamais sur l’auteur', () => {
+    const sansEditeur = { ...RECETTE, publisher: undefined, author: { name: 'Rinoa Keller' } }
+    expect(extraire(page(sansEditeur), 'https://www.ptitchef.com/r/7')!.source)
+      .toBe('ptitchef.com')
+  })
+
+  it('garde les sous-domaines, qui distinguent les sites', () => {
+    expect(extraire(page(RECETTE), 'https://cuisine.journaldesfemmes.fr/r/1')!.source)
+      .toBe('cuisine.journaldesfemmes.fr')
+  })
+})
+
 describe('la recette complète', () => {
   it('rend tout ce dont l’ingestion a besoin', () => {
     const r = extraire(page(RECETTE), 'https://marmiton.org/r/42')!
     expect(r.url).toBe('https://marmiton.org/r/42')
     expect(r.titre).toBe('Poulet basquaise')
-    expect(r.source).toBe('Marmiton')
+    expect(r.source).toBe('marmiton.org')
     expect(r.parts).toBe(4)
     expect(r.totalMin).toBe(75)
     expect(r.prepMin).toBe(25)
