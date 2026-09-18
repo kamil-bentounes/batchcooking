@@ -10,7 +10,7 @@ Tout passe par PostgREST sauf les Edge Functions. Les droits sont appliqués par
 | `food`, `food_yield_factor`, `unit_weight`, `unit_conversion`, `density`, `default_temperature`, `default_duration`, `typical_quantity`, `appliance_catalog`, `ingestion_job`, `instance_setting` | ✅ | ❌ | ❌ | ❌ | Référentiel global, écriture réservée au rôle de service |
 | `recipe`, `recipe_ingredient`, `recipe_step`, `recipe_step_dependency` | ✅ | ❌ | ✅¹ | ❌ | Catalogue partagé, création réservée au worker d'ingestion |
 | `household` | ✅ | ❌ | ✅ | ❌ | Son foyer. Création : `create_household`. Suppression : `delete_my_account` |
-| `user_profile` | ✅ | ❌ | ✅² | ❌ | Lecture : le foyer. Écriture : soi |
+| `user_profile` | ✅ | ❌ | ✅² | ❌ | Lecture : le foyer. Écriture : soi. Porte `password_set`. |
 | `nutrition_target` | ✅ | ✅² | ✅² | ✅² | Lecture : le foyer. Écriture : soi |
 | `invitation` | ✅ | ✅ | ✅ | ✅ | Son foyer |
 | `llm_usage` | ✅ | ❌ | ❌ | ❌ | Ses lignes. La ligne système (`household_id IS NULL`) reste invisible |
@@ -48,3 +48,18 @@ Tout passe par PostgREST sauf les Edge Functions. Les droits sont appliqués par
 | Suppression refusée | PostgREST renvoie **200 avec 0 ligne**, pas une erreur. Vérifier le compte, jamais `error`. |
 | Historisation | Un objectif qui change est un `INSERT`, jamais un `UPDATE`. |
 | Secrets | Le client n'utilise que la clé `anon`. La clé `service_role` ne quitte jamais le serveur. |
+
+## Connexion
+
+Le lien par e-mail ne sert qu'à la **première** connexion. On y pose un mot de passe, et
+ensuite c'est `signInWithPassword`. Le mail ne resservira que pour un oubli.
+
+| Étape | Appel |
+|---|---|
+| Première fois, ou oubli | `auth.signInWithOtp({ email, options.emailRedirectTo })` |
+| Poser le mot de passe | `auth.updateUser({ password })` puis `user_profile.password_set = true` |
+| Toutes les fois d'après | `auth.signInWithPassword({ email, password })` |
+
+`user_profile.password_set` à `false` **bloque l'entrée** dans l'application et conduit à
+l'écran de choix. Sans ce drapeau, la personne repart sur un lien par e-mail à chaque
+connexion — et se heurte à la limite d'envoi de Supabase.

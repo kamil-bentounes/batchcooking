@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { SignIn } from './pages/SignIn'
+import { Password } from './pages/Password'
 import { Onboarding } from './pages/Onboarding'
 import { Targets } from './pages/Targets'
 import { Settings } from './pages/Settings'
@@ -10,6 +11,7 @@ import { AcceptInvite } from './pages/AcceptInvite'
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [foyer, setFoyer] = useState<string | null>(null)
+  const [mdpPose, setMdpPose] = useState(true)
   const [pret, setPret] = useState(false)
 
   const relire = useCallback(async () => {
@@ -18,7 +20,12 @@ export default function App() {
     if (data.session) {
       const { data: hh } = await supabase.rpc('current_household')
       setFoyer(hh ?? null)
-    } else setFoyer(null)
+      // Tant que le mot de passe n'est pas posé, on n'entre pas : sinon la
+      // personne repart sur un lien par mail à chaque connexion.
+      const { data: p } = await supabase.from('user_profile')
+        .select('password_set').eq('id', data.session.user.id).maybeSingle()
+      setMdpPose(p ? !!p.password_set : true)
+    } else { setFoyer(null); setMdpPose(true) }
     setPret(true)
   }, [])
 
@@ -47,6 +54,7 @@ export default function App() {
   if (!session) return <SignIn redirectTo={window.location.href} />
   if (invitation) return <AcceptInvite token={invitation[1]} />
   if (!foyer) return <Onboarding onDone={relire} />
+  if (!mdpPose) return <Password userId={session.user.id} onDone={relire} />
   if (chemin.startsWith('/settings')) return <Settings />
   return <Targets userId={session.user.id} />
 }
