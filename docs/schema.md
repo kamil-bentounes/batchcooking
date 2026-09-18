@@ -11,7 +11,7 @@
 gestes entre recettes (D35) compare des verbes, pas des phrases, et la mesure
 des durées (D48) s'agrège par verbe — une étape n'est jamais refaite, un verbe
 l'est toutes les semaines. Remplis par l'ingestion, voir [`ingestion.md`](ingestion.md).
-| **C — foyer** | RLS stricte, trois formes de prédicat. | `household`, `user_profile`, `nutrition_target`, `invitation`, `llm_usage` + les 18 tables du lot 1 (ci-dessous) |
+| **C — foyer** | RLS stricte, trois formes de prédicat. | `household`, `user_profile`, `nutrition_target`, `invitation`, `llm_usage` + les 18 tables du lot 1 et les 6 des lots 0c et 5 (ci-dessous) |
 
 ## Les tables du lot 1
 
@@ -23,6 +23,19 @@ l'est toutes les semaines. Remplis par l'ingestion, voir [`ingestion.md`](ingest
 | Les barquettes | `portion`, `portion_event` | L'unité de suivi, et son journal |
 | La semaine | `meal_slot`, `meal_extra`, `frequent_food` | Ce qui est prévu, ce qui a été mangé en plus |
 | L'inventaire | `stock_item` | Frigo, congélateur, placard |
+
+## Les tables des lots 0c, 4, 5 et 6
+
+| Domaine | Tables | Ce qu'elles portent |
+|---|---|---|
+| Les filtres (lot 4, classe B) | `recipe_nutrition` | Macros **par part**, avec leur marge et leur couverture (D18). `recipe` gagne `active_time_min`, `appliances`, `step_count`, `freezable` — matérialisés par `tg_recipe_agrege` |
+| Les prix (lot 5) | `receipt`, `receipt_line`, `household_price` | Le ticket lu, ses lignes, et le prix appris par produit **et par enseigne**. Voir [`prix.md`](prix.md) |
+| La pesée (lot 0c) | `weighing`, `household_unit_weight`, `household_ingredient_resolution` | L'observation brute, la médiane retenue, et la correction de rattachement propre au foyer (§5.2.1) |
+| Le budget (lot 6) | — | `household.food_budget_eur`, **nullable** : ne pas s'en fixer est un choix. Voir [`suivi.md`](suivi.md) |
+
+`price_knowledge` est une **vue** (`security_invoker`) sur `household_price`
+jointe à `store` : elle existe pour que « ignorer les relevés trop vieux » soit
+un jour la correction d'une seule ligne.
 
 Les quatre policies (`select`, `insert`, `update`, `delete`) sont écrites
 **séparément** sur chacune. Jamais `for all` : la leçon a déjà été payée sur
@@ -62,7 +75,12 @@ remettrait `current_household()` à `NULL` et lui permettrait de créer un secon
 | `tg_shopping_check` | Cocher = rang + ordre des rayons appris + entrée à l'inventaire + habitude retenue. **En base**, parce que deux téléphones cochent la même liste. |
 | `tg_session_task_duree` / `_mesure` | La durée réelle est mesurée entre « je prends » et « c'est fait », jamais demandée. Alimente `duration_observation`. |
 | `tg_meal_slot_consomme` | Une case passée à « mangé » consomme sa barquette. |
-| `tables_de_foyer()` | Introspection, rôle de service. Sert au test qui empêche `export_my_data` de prendre du retard sur le schéma. |
+| `tables_de_foyer()` | Introspection, rôle de service. Ne liste que des `BASE TABLE` — sinon la vue `price_knowledge` réclamerait un export en plus de la table qu'elle lit. Sert au test qui empêche `export_my_data` de prendre du retard sur le schéma. |
+| `tg_recipe_agrege` | `AFTER INSERT/UPDATE/DELETE` sur `recipe_step` : recalcule temps actif, appareils et nombre d'étapes. **Un trigger ne rattrape pas le passé** — `scripts/recalcule.mjs` existe pour cela. |
+| `tg_receipt_line_apprend` | `AFTER INSERT` sur `receipt_line` : apprend le prix (ramené au kilo ou au litre, **médiane mobile**) et reporte `paid_price_eur`. ⚠️ `SECURITY DEFINER`, donc il **vérifie lui-même** le foyer de l'article et du magasin — la RLS ne le protège pas. |
+| `tg_pesee_apprend` | `AFTER INSERT/UPDATE/DELETE` sur `weighing` : rejette les aberrantes hors `[0,4× ; 2,5×]` la référence, retient la **médiane**, active à 3 observations (5 sans référence). Repart des observations à chaque fois — une médiane incrémentale serait fausse dès la première suppression. |
+| `poids_unitaire(food, unit)` | Le poids appris s'il est actif, sinon la référence, sinon `NULL`. Jamais un chiffre inventé (D18). |
+| `llm_consomme(foyer, kind)` | Incrément **atomique** du quota. Le code lisait puis écrivait : un appel simultané sur deux ne comptait pas. Rôle de service seulement. |
 
 ## Budget LLM
 

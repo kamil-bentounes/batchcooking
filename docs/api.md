@@ -16,7 +16,15 @@ Tout passe par PostgREST sauf les Edge Functions. Les droits sont appliqués par
 | `llm_usage` | ✅ | ❌ | ❌ | ❌ | Ses lignes. La ligne système (`household_id IS NULL`) reste invisible |
 | `suggested_item`, `cycle_transition` | ✅ | ❌ | ❌ | ❌ | Référentiel global |
 | `cycle`, `cycle_recipe`, `store`, `aisle_order`, `shopping_item`, `shopping_trip`, `shopping_habit`, `session_task`, `session_task_recipe`, `session_task_dependency`, `session_appliance`, `portion`, `meal_slot`, `meal_extra`, `frequent_food`, `stock_item` | ✅ | ✅ | ✅ | ✅ | Son foyer, les quatre verbes |
+| `receipt`, `receipt_line`, `household_price`, `weighing`, `household_unit_weight`, `household_ingredient_resolution` | ✅ | ✅ | ✅ | ✅ | Son foyer, les quatre verbes |
+| `recipe_nutrition` | ✅ | ❌ | ❌ | ❌ | Catalogue partagé, calculé à l'ingestion |
+| `price_knowledge` | ✅ | ❌ | ❌ | ❌ | Vue (`security_invoker`) sur `household_price` jointe à `store` |
 | `portion_event`, `duration_observation` | ✅ | ❌ | ❌ | ❌ | Journaux : écrits par trigger, jamais réécrits |
+
+`household_price` et `household_unit_weight` sont ouverts en écriture au foyer
+alors qu'ils sont **remplis par trigger** : c'est délibéré. Corriger un prix
+appris de travers ou effacer une pesée fautive doit rester possible sans passer
+par le rôle de service — et le trigger recalcule tout derrière.
 
 ¹ Refusé si `confidence >= 0.8`. Chaque écriture pose `edited_by_household_id` et `edited_at`.
 ² `id` / `user_profile_id` doit valoir `auth.uid()`. Sur `nutrition_target`, `household_id` est posé par trigger : ne pas l'envoyer.
@@ -33,6 +41,18 @@ Tout passe par PostgREST sauf les Edge Functions. Les droits sont appliqués par
 | `open_cycle` | `p_week_of date`, `p_servings int` | `uuid` | authentifié |
 | `export_my_data` | — | `jsonb` | authentifié |
 | `delete_my_account` | — | `void` | authentifié |
+| `poids_unitaire` | `p_food_id uuid`, `p_unit text` | `numeric` \| `null` | authentifié |
+| `llm_consomme` | `p_household uuid`, `p_kind text` | `int` | **rôle de service uniquement** |
+| `tables_de_foyer` | — | `setof text` | **rôle de service uniquement** |
+
+`poids_unitaire` rend le poids appris par le foyer s'il est actif (3 pesées, 5
+sans référence), sinon la référence, sinon `null` — **jamais un chiffre
+inventé** : c'est ce qui fait afficher une fourchette au lieu d'une fausse
+précision (D18).
+
+`llm_consomme` incrémente le quota en **une instruction**, donc atomiquement.
+Le code lisait `calls` puis écrivait `calls + 1` : deux appels simultanés
+lisaient la même valeur et un appel sur deux ne comptait pas.
 
 `create_household` lève `déjà rattaché à un foyer` (23505) ou `création de foyer fermée` (42501).
 `open_cycle` rend le cycle vivant s'il y en a un, et lève `unique_violation` si la semaine
@@ -49,6 +69,8 @@ demandée a déjà son cycle clos — on n'efface pas un bilan pour recommencer.
 | `invite` | `{ email }` | `{ token, link }` | 401 non authentifié · 403 aucun foyer · 400 e-mail manquant · 409 invitation déjà en attente |
 | `accept-invite` | `{ token }` | `{ household_id }` | 401 · 400 token manquant · 404 inconnue · 409 déjà utilisée ou déjà rattaché · 410 expirée |
 | `inventer` | `{ envie, perimetre, proteinesMin, kcalMax, minutesMax, appareils, parts }` | `{ recette, restantes, quota }` | 401 · 403 aucun foyer · 429 quota mensuel atteint · 502 modèle injoignable ou illisible · 503 aucun modèle configuré |
+| `frigo` | `{ image: "data:image/jpeg;base64,…", lieu }` | `{ articles, lisible, commentaire, par, ms, restantes, quota }` | 401 · 403 · 400 image absente ou mal formée · 413 > 6 Mo · 429 · 502 · 503 |
+| `ticket` | `{ image: "data:image/jpeg;base64,…", enseigne }` | `{ enseigne, date, lignes, total_eur, somme, ecart, remisesDeduites, par, ms, restantes, quota }` | 401 · 403 · 400 · 413 · 429 · 502 · 503 |
 
 `inventer` : **10 générations par foyer et par mois**, vérifiées *avant* l'appel.
 Le prompt est construit côté serveur — le modèle reçoit des bornes chiffrées
@@ -57,7 +79,27 @@ Variables d'environnement : `LLM_API_KEY` (requise), `LLM_BASE_URL`
 (défaut `https://api.openai.com/v1`), `LLM_MODEL` (défaut `gpt-4o-mini`).
 Toute API compatible OpenAI convient, y compris auto-hébergée.
 
-`OPTIONS` répond 200 avec `Access-Control-Allow-Origin: *`. Les deux fonctions valident le JWT elles-mêmes.
+`frigo` et `ticket` : **30 lectures par foyer et par mois chacune**, comptées
+séparément — un mois de photos de frigo ne doit pas empêcher d'enregistrer ce
+qu'on a payé. Toutes deux enchaînent plusieurs **modèles Gemini** plutôt que
+plusieurs fournisseurs : aucun modèle de Groq ne voit, et le quota gratuit de
+Gemini est de 20 requêtes par jour **et par modèle**, si bien que trois modèles
+portent le budget à 60 lectures par jour. Variables : `LLM_VISION_API_KEY`,
+`LLM_VISION_BASE_URL`, `LLM_VISION_MODELS` (liste séparée par des virgules).
+
+Ni l'une ni l'autre **n'écrit en base** : ce qu'elles rendent est une
+proposition que l'écran fait valider ligne par ligne. Le quota n'est
+décompté qu'**après** une réponse utile — un 503 de Gemini, et il y en a, ne
+doit pas coûter une photo.
+
+`ticket` rend `ecart` (somme des lignes moins total imprimé) et
+`remisesDeduites` : quand l'écart vaut exactement les remises annoncées, elles
+sont déduites, et l'écran le dit. Sinon rien n'est corrigé et l'écart
+s'affiche — mieux vaut un écart visible qu'une correction inventée. Détail dans
+[`prix.md`](prix.md).
+
+`OPTIONS` répond 200 avec `Access-Control-Allow-Origin: *`. Toutes les
+fonctions valident le JWT elles-mêmes.
 
 ## Conventions
 
