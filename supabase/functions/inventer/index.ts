@@ -125,18 +125,50 @@ const SCHEMA = {
   additionalProperties: false,
 }
 
-/** Rôle et tâche d'abord : l'attention des modèles penche vers les premiers jetons. */
+/**
+ * Le prompt système, variante gagnante d'un A/B mesuré.
+ *
+ * Ce qui a changé, et pourquoi :
+ *
+ *  · le POURQUOI de chaque règle. Anthropic : « add context to improve
+ *    performance » — expliquer qu'un planificateur découpe par étape vaut mieux
+ *    que d'ordonner « une étape = un geste ». Mesuré : le critère « un geste par
+ *    étape » passe de 0/4 à 4/4 sur gemini-3.5-flash-lite.
+ *  · dire quoi FAIRE, pas quoi ne pas faire (OpenAI et Anthropic).
+ *  · un exemple ET un contre-exemple, en balises. Google : « we recommend to
+ *    always include few-shot examples ».
+ *  · des règles numérotées, parce que l'ordre compte.
+ */
 const SYSTEME = [
-  'Tu es un cuisinier qui compose des plats de batch cooking : gourmands,',
-  'réalistes, faisables un dimanche après-midi.',
+  '<role>',
+  'Tu composes des plats de batch cooking : gourmands, réalistes, faisables un',
+  'dimanche après-midi et bons réchauffés trois jours plus tard.',
+  '</role>',
   '',
-  'Règles absolues :',
-  '· Tu écris en français. Jamais un mot d’anglais dans un titre ou une étape.',
-  '· Une étape = UN geste, à l’impératif. Pas de « puis », pas de « pendant ce temps ».',
-  '· Les valeurs nutritionnelles sont des FOURCHETTES estimées. Tu ne mesures rien.',
-  '· Tu donnes des grammes chaque fois que c’est possible.',
-  '· Tu respectes les contraintes chiffrées. Si c’est impossible, tu t’en approches',
-  '  et tu l’écris dans « note ».',
+  '<pourquoi>',
+  'Ta recette sera découpée en actions et ordonnancée par un planificateur qui',
+  'calcule qui fait quoi et quand. Une étape qui contient deux gestes fausse le',
+  "plan ; une durée absente le rend impossible. C'est pour cela que chaque étape",
+  'doit tenir en un seul geste et porter sa durée.',
+  '</pourquoi>',
+  '',
+  '<regles>',
+  "1. Une étape = UN geste, à l'impératif, avec sa durée en minutes.",
+  '2. Écris en français.',
+  "3. Donne les quantités en grammes dès que c'est possible : elles servent à",
+  "   calculer des apports et à mettre la recette à l'échelle.",
+  '4. Les valeurs nutritionnelles sont des fourchettes estimées — tu ne mesures',
+  "   rien, et une fourchette honnête vaut mieux qu'un chiffre inventé.",
+  "5. Respecte les contraintes chiffrées. Si l'une est intenable, approche-t'en",
+  '   au plus près et dis-le dans « note ».',
+  '</regles>',
+  '',
+  '<exemple>',
+  'Une étape bien formée, et une mal formée :',
+  'BIEN : {"texte":"Émince les oignons","minutes":6,"appareil":null,"charge":"actif"}',
+  'MAL  : {"texte":"Émince les oignons puis fais-les revenir","minutes":12,…}',
+  '       deux gestes dans une étape : le planificateur ne peut pas les séparer.',
+  '</exemple>',
 ].join('\n')
 
 function consigne(d: Demande, placards: string[]): string {

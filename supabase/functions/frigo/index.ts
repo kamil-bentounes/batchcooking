@@ -17,12 +17,18 @@
  *    L'écran trie par confiance et ne coche d'avance que ce qui est sûr.
  *
  * Aucun modèle de Groq ne voit : le relevé du 18/09/2026 ne liste que du texte
- * et de l'audio. C'est donc Gemini, et le repli est l'absence de repli — mieux
- * vaut « je n'ai pas su lire » qu'un inventaire inventé.
+ * et de l'audio. Le repli n'est donc pas un autre fournisseur mais un autre
+ * MODÈLE Gemini — le quota gratuit est de 20 requêtes par jour ET PAR MODÈLE,
+ * si bien qu'enchaîner trois modèles porte le budget à 60 photos par jour.
+ *
+ * Le prompt est la variante gagnante d'un A/B sur une vraie photo de frigo :
+ * faire SITUER chaque produit avant de le compter (champ « ou ») sépare deux
+ * groupes distincts du même yaourt là où l'ancien prompt les fusionnait, et
+ * reconnaît un beurre entamé là où il voyait un citron.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { preflight, reply } from '../_shared/cors.ts'
-import { demande, fournisseurVision } from '../_shared/llm.ts'
+import { demande, fournisseursVision } from '../_shared/llm.ts'
 
 /** Lectures de photo par foyer et par mois. Une photo coûte plus qu'un texte. */
 const QUOTA_MENSUEL = 30
@@ -31,6 +37,7 @@ const QUOTA_MENSUEL = 30
 const TAILLE_MAX = 6 * 1024 * 1024
 
 type Vu = {
+  ou: string
   nom: string
   variete: string | null
   quantite: number | null
@@ -48,6 +55,13 @@ const SCHEMA = {
       items: {
         type: 'object',
         properties: {
+          ou: {
+            type: 'string',
+            description: 'Où se trouve cet article dans l’image, en quelques mots : '
+              + '« étagère du haut, à gauche », « dans la porte, en bas ». '
+              + 'Écris-le AVANT de compter : c’est ce qui évite de fusionner deux '
+              + 'groupes distincts du même produit.',
+          },
           nom: {
             type: 'string',
             description: 'Le nom générique de l’aliment, au singulier : « yaourt », '
@@ -89,7 +103,7 @@ const SCHEMA = {
               + '« date visible : 24/09 », « emballage ouvert ». Sinon null.',
           },
         },
-        required: ['nom', 'variete', 'quantite', 'unite', 'lieu', 'confiance', 'remarque'],
+        required: ['ou', 'nom', 'variete', 'quantite', 'unite', 'lieu', 'confiance', 'remarque'],
         additionalProperties: false,
       },
     },
@@ -108,19 +122,51 @@ const SCHEMA = {
 }
 
 const SYSTEME = [
-  'Tu inventories le contenu d’un réfrigérateur, d’un congélateur ou d’un placard',
-  'à partir d’une photo. Tu décris ce que tu VOIS, tu ne devines pas ce qu’il',
-  'devrait y avoir.',
+  '<role>',
+  'Tu dresses l’inventaire d’un réfrigérateur, d’un congélateur ou d’un placard',
+  'à partir d’une photo, pour une application de cuisine qui s’en sert pour faire',
+  'les courses et calculer des apports nutritionnels.',
+  '</role>',
   '',
-  'Règles absolues :',
-  '· COMPTE les unités visibles. « 4 pots de yaourt », jamais « des yaourts ».',
-  '· Distingue les variétés : un yaourt aux fruits n’a pas les mêmes valeurs',
-  '  nutritionnelles qu’un nature. C’est la variété qui compte, pas la marque.',
-  '· Un article par LIGNE de produit, pas un par exemplaire : quatre pots',
-  '  identiques font UN article de quantité 4.',
-  '· Si tu hésites entre deux aliments, choisis le plus probable et baisse la',
-  '  confiance. Si tu ne vois vraiment pas, ne le liste pas.',
-  '· Tu écris en français, au singulier, sans marque commerciale.',
+  '<pourquoi>',
+  'Ce que tu rends sera affiché à quelqu’un qui validera chaque ligne. Un article',
+  'oublié se rattrape d’un geste ; un article inventé fait acheter en double et',
+  'fausse des calculs. Dans le doute, baisse la confiance plutôt que d’omettre,',
+  'et n’invente jamais ce que tu ne vois pas.',
+  '</pourquoi>',
+  '',
+  '<methode>',
+  'Procède dans cet ordre, sans sauter d’étape :',
+  '1. Parcours l’image zone par zone : chaque étagère, chaque bac, chaque',
+  '   rangement de porte.',
+  '2. Pour chaque produit trouvé, écris D’ABORD où il se trouve dans le champ',
+  '   « ou ». Situer avant de compter réduit fortement les erreurs de comptage.',
+  '3. Compte alors les exemplaires de CE produit, un par un.',
+  '4. Lis l’étiquette si elle est lisible : elle donne la variété et le poids.',
+  '</methode>',
+  '',
+  '<regles>',
+  '· Regroupe par LIGNE de produit : quatre pots identiques font un article de',
+  '  quantité 4, parce qu’une liste de courses parle de produits, pas d’unités.',
+  '· Donne la variété (« aux fruits », « demi-écrémé », « 0 % ») : elle change',
+  '  les valeurs nutritionnelles, et c’est elle qui permet de rattacher',
+  '  l’aliment à une table de composition.',
+  '· Écris en français, au singulier, avec le nom générique de l’aliment.',
+  '· Mets dans « remarque » ce qu’une étiquette indique et que les autres champs',
+  '  ne portent pas : poids, date, « emballage ouvert », « à moitié caché ».',
+  '· Liste les boissons et les plats préparés comme les autres aliments.',
+  '· Ignore ce qui ne se mange pas : bacs, clayettes, tasses, ustensiles.',
+  '</regles>',
+  '',
+  '<exemple>',
+  'Pour une étagère portant quatre pots de yaourt à la fraise et une brique de lait :',
+  '[',
+  '  {"ou":"étagère du milieu, à gauche","nom":"yaourt","variete":"à la fraise",',
+  '   "quantite":4,"unite":"pot","lieu":"frigo","confiance":0.95,"remarque":"pack de 4"},',
+  '  {"ou":"étagère du milieu, à droite","nom":"lait","variete":"demi-écrémé",',
+  '   "quantite":1,"unite":"bouteille","lieu":"frigo","confiance":1,"remarque":"brique de 1 L"}',
+  ']',
+  '</exemple>',
 ].join('\n')
 
 Deno.serve(async (req) => {
@@ -154,8 +200,8 @@ Deno.serve(async (req) => {
     }, 429)
   }
 
-  const f = fournisseurVision()
-  if (!f) {
+  const vus = fournisseursVision()
+  if (vus.length === 0) {
     return reply({
       erreur: 'Aucun modèle de vision configuré. Renseigne LLM_VISION_API_KEY.',
       restantes: QUOTA_MENSUEL - deja,
@@ -171,18 +217,17 @@ Deno.serve(async (req) => {
   }
 
   const indice = ['frigo', 'congelateur', 'placard'].includes(lieu)
-    ? `Cette photo a été prise dans : ${lieu}. Utilise-le comme valeur par défaut `
-      + 'de « lieu », sauf si la photo dit clairement autre chose.'
+    ? `Photo prise dans : ${lieu}.`
     : 'Déduis le lieu de la photo.'
 
   const r = await demande<{ articles: Vu[]; lisible: boolean; commentaire: string | null }>(
-    [f],
+    vus,
     [
       { role: 'system', content: SYSTEME },
       {
         role: 'user',
         content: [
-          { type: 'text', text: `Inventorie ce que tu vois. ${indice}` },
+          { type: 'text', text: `Inventorie cette photo.\n\n<contexte>\n${indice}\n</contexte>` },
           { type: 'image_url', image_url: { url: image } },
         ],
       },

@@ -13,7 +13,8 @@
     "seed": "node scripts/seed.mjs",
     "ingest": "vite-node scripts/ingest.mjs --",
     "sonde": "vite-node scripts/sonde.mjs --",
-    "banc": "vite-node scripts/banc.mjs --"
+    "banc": "vite-node scripts/banc.mjs --",
+    "banc-vision": "vite-node scripts/banc-vision.mjs --"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

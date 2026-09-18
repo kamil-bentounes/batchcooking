@@ -18,70 +18,51 @@ couvrant cent fois ce volume. D'où la conséquence qui compte : **rien à louer
 Un VPS avec GPU coûte 50 à 200 €/mois — trois mille fois le besoin. La fonction
 `inventer` tourne déjà sur Supabase et appelle une API hébergée.
 
-## Quel fournisseur
+## Quel fournisseur — mesuré, pas supposé
 
-Le code parle le protocole **OpenAI**. Trois variables suffisent à en changer :
+`npm run banc` : 3 modèles × 2 prompts × 5 essais, dix critères vérifiables.
+La **qualité** est notée sur les appels qui ont répondu, la **disponibilité** est
+comptée à part — sans quoi un 429 provoqué par le banc lui-même se lit comme une
+faute du modèle.
+
+| Modèle | Qualité | Dispo | Latence |
+|---|:-:|:-:|:-:|
+| **gemini-3.5-flash-lite** | **100 %** | **5/5** | 4,7 s |
+| groq · qwen3.8-27b | 100 % | 2/5 | 0,8 s |
+| groq · gpt-oss-120b | 95 % | 2/5 | 3,4 s |
+| groq · gpt-oss-20b | — | 0/5 | ne tient pas le schéma strict |
+
+`gemini-3.5-flash-lite` est le seul **parfait ET toujours disponible**. Les deux
+modèles Groq sont excellents quand ils répondent, mais le palier gratuit les
+coupe (429) et `gpt-oss-120b` rend par intermittence un `json_validate_failed`
+avec une génération vide.
+
+## La configuration en place
+
+| Usage | Principal | Repli |
+|---|---|---|
+| **Génération** | `gemini-3.5-flash-lite` | Groq `gpt-oss-120b` — *autre fournisseur*, donc vrai repli |
+| **Vision** | `gemini-flash-lite-latest` | `gemini-3.6-flash`, puis `gemini-3.1-flash-lite` |
+
+⚠️ **Le quota gratuit de Gemini est de 20 requêtes par jour ET PAR MODÈLE**
+(`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, relevé dans l'erreur 429).
+C'est pour cela que la génération et la vision n'utilisent **pas les mêmes
+modèles** : elles ne se partagent pas le même budget. Face au besoin réel —
+10 générations et ~30 photos par mois — c'est cent fois trop large.
+
+Aucun modèle de Groq n'est multimodal : le repli de la vision ne peut pas être
+Groq, il est dans d'autres modèles Gemini.
 
 ```bash
 npx supabase secrets set LLM_API_KEY=... LLM_BASE_URL=... LLM_MODEL=...
+npx supabase secrets set LLM_FALLBACK_API_KEY=... LLM_FALLBACK_BASE_URL=... LLM_FALLBACK_MODEL=...
+npx supabase secrets set LLM_VISION_API_KEY=... LLM_VISION_MODELS=a,b,c
 ```
-
-Le critère est le prix : **aucune raison de payer** pour dix générations par mois.
-
-| Fournisseur | `LLM_BASE_URL` | `LLM_MODEL` | Gratuit | Carte ? |
-|---|---|---|---|---|
-| **Groq** ← en place | `https://api.groq.com/openai/v1` | `openai/gpt-oss-120b` | oui, sans fin | non |
-| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | `gemini-2.5-flash` | oui, sans fin | non |
-| Anthropic | `https://api.anthropic.com/v1/` | `claude-haiku-4-5-20251001` | ~5 $ offerts | vérification |
-| Mistral | `https://api.mistral.ai/v1` | `mistral-small-latest` | oui (Experiment) | non |
-| OpenAI | `https://api.openai.com/v1` | `gpt-5-mini` | non | oui |
-
-**Groq est configuré**, `openai/gpt-oss-120b`. Pas par préférence : par mesure.
-
-## Le banc d'essai — `npm run banc`
-
-Même prompt que la fonction, trois tirages par modèle, dix critères
-**vérifiables sans jugement de goût** : JSON valide, champs présents, contraintes
-de protéines / kcal / minutes tenues, appareils du catalogue, charges valides,
-étapes toutes datées, ingrédients limités aux placards, français.
-
-Relevé le 18 septembre 2026 :
-
-| Modèle | Note | Latence | Jetons | Ce qui coince |
-|---|:-:|:-:|:-:|---|
-| **groq · gpt-oss-120b** | **93 %** | 6,3 s | 3 268 | dépasse parfois le plafond kcal |
-| groq · qwen3.8-27b | 60 % | 1,4 s | 1 214 | **invente des ingrédients** (0/3), et 429 dès le 3ᵉ appel |
-| groq · gpt-oss-20b | 30 % | 2,6 s | 2 252 | échoue à produire du JSON valide |
-| gemini · 3.8-flash | 0 % | timeout 60 s | — | la clé ne génère pas |
-| gemini · flash-latest | 0 % | timeout 60 s | — | idem |
-
-**Non, qwen n'est pas meilleur.** Il est quatre fois plus rapide et deux fois
-moins cher en jetons, mais il **invente des ingrédients absents des placards** —
-ce qui est précisément ce que le mode « ce qu'on a » interdit. Il reste en repli,
-là où une recette approximative vaut mieux qu'un écran d'erreur.
 
 ⚠️ **`llama-3.3-70b` n'est plus au catalogue de Groq.** Une liste de modèles se
 périme : `curl https://api.groq.com/openai/v1/models` avant de choisir.
 
-## Le repli
-
-`LLM_FALLBACK_BASE_URL` / `_MODEL` / `_API_KEY` : si le fournisseur principal
-répond une erreur, ne répond pas en 45 s, ou rend une réponse vide, le second
-prend le relais. Le quota n'est décompté qu'en cas de succès, et la réponse
-porte `par: "principal" | "repli"` — **un repli silencieux ferait croire pendant
-des semaines que le principal va bien.**
-
-Changer de fournisseur, c'est trois variables et trente secondes :
-
-```bash
-npx supabase secrets set LLM_API_KEY=... LLM_BASE_URL=... LLM_MODEL=...
-```
-
-Tous ceux du tableau acceptent `response_format: {"type":"json_object"}`, que la
-fonction envoie. C'est la seule exigence du code.
-
 ⚠️ **Un abonnement ChatGPT Plus / Claude Pro ne donne AUCUN accès à l'API.**
-Ce sont deux facturations séparées. Payer l'une ne paie pas l'autre.
 
 ## Ce que le modèle voit — et ne voit pas
 

@@ -23,6 +23,9 @@ import { useAjouteStock } from '../lib/donnees/barquettes.ts'
 type Lieu = 'frigo' | 'congelateur' | 'placard'
 
 type Vu = {
+  /** Où le modèle l'a vu. Il le rend AVANT de compter : c'est ce qui l'empêche
+      de fusionner deux groupes distincts du même produit. */
+  ou: string
   nom: string
   variete: string | null
   quantite: number | null
@@ -194,7 +197,7 @@ export function Photo({ retour, va }: { retour: () => void; va: (v: string) => v
                       {a.variete && <span className="text-doux"> {a.variete}</span>}
                     </span>
                     <span className="block text-[13px] text-doux mt-0.5">
-                      {NOM_LIEU[a.lieu]}
+                      {a.ou}
                       {a.remarque && ` · ${a.remarque}`}
                       {/* L'incertitude s'affiche, elle ne se cache pas. */}
                       {!sur && (

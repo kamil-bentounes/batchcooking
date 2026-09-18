@@ -41,17 +41,36 @@ export function fournisseurs(): Fournisseur[] {
   ].filter(Boolean) as Fournisseur[]
 }
 
-/** Le fournisseur qui SAIT VOIR. Groq n'a aucun modèle multimodal (relevé). */
-export function fournisseurVision(): Fournisseur | null {
+/**
+ * Les fournisseurs qui SAVENT VOIR, dans l'ordre d'essai.
+ *
+ * Aucun modèle de Groq n'est multimodal — le relevé du 18/09/2026 ne liste que
+ * du texte et de l'audio. Le repli ne peut donc pas être Groq.
+ *
+ * Il est ailleurs : le quota gratuit de Gemini est de **20 requêtes par jour ET
+ * PAR MODÈLE** (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, mesuré).
+ * Enchaîner trois modèles porte donc le budget à 60 photos par jour, et rend
+ * l'écran insensible au 429 comme au 503 « high demand » que Gemini renvoie
+ * régulièrement sur ses modèles les plus récents.
+ */
+export function fournisseursVision(): Fournisseur[] {
   const cle = Deno.env.get('LLM_VISION_API_KEY')
-  if (!cle) return null
-  return {
-    nom: 'vision',
-    base: Deno.env.get('LLM_VISION_BASE_URL')
-      ?? 'https://generativelanguage.googleapis.com/v1beta/openai',
-    modele: Deno.env.get('LLM_VISION_MODEL') ?? 'gemini-3.5-flash',
+  if (!cle) return []
+  const base = Deno.env.get('LLM_VISION_BASE_URL')
+    ?? 'https://generativelanguage.googleapis.com/v1beta/openai'
+
+  // Mesuré sur une vraie photo de frigo : `flash-lite` lit MIEUX que `flash`
+  // (il distingue un beurre entamé d'un citron) et cinq fois plus vite.
+  const modeles = (Deno.env.get('LLM_VISION_MODELS')
+    ?? 'gemini-3.5-flash-lite,gemini-flash-lite-latest,gemini-3.6-flash')
+    .split(',').map(m => m.trim()).filter(Boolean)
+
+  return modeles.map((modele, i) => ({
+    nom: i === 0 ? 'vision' : `vision-repli-${i}`,
+    base,
+    modele,
     cle,
-  }
+  }))
 }
 
 export type Message = {
@@ -80,7 +99,19 @@ async function unAppel<T>(
   const corps = {
     model: f.modele,
     messages,
-    temperature: 0.7,
+    /**
+     * ⚠️ Indispensable avec un schéma strict et un modèle à RAISONNEMENT.
+     *
+     * Les jetons de réflexion se comptent dans le budget : un prompt riche fait
+     * réfléchir davantage, le JSON se retrouve tronqué, et le décodage contraint
+     * rend alors un 400 « missing required content » — pas une réponse partielle,
+     * un échec sec. Mesuré sur gpt-oss-120b : le prompt long échouait à chaque
+     * appel, le prompt court passait.
+     */
+    max_completion_tokens: 8000,
+    // ⚠️ On NE POSE PAS la température. Google recommande fortement de laisser
+    //    les paramètres par défaut sur Gemini 3.x, et une lecture de photo est
+    //    une extraction, pas une création : rien à gagner à la faire varier.
     response_format: {
       type: 'json_schema',
       json_schema: { name: nomSchema, strict: true, schema },
