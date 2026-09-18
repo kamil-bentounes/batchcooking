@@ -239,15 +239,35 @@ async function caseOuCree(
   if (!virtuelle.id.startsWith('vide:')) return virtuelle.id
   const foyer = ou(await supabase.rpc('current_household'))
   if (!foyer) throw new Error('Aucun foyer.')
+
+  /*
+   * ⚠️ On ne TOUCHE PAS à une case qui existe déjà.
+   *
+   * Un `upsert … set state = 'prevu'` sur une case déjà « mangée » lève un
+   * 23514 (`meal_slot_mange_date` : mangé sans date), et sur une case « sautée »
+   * il effaçait en silence un jour renseigné (D33). Le cas arrive dès que deux
+   * téléphones regardent la même semaine, l'un cochant pendant que l'autre
+   * ajoute un extra.
+   *
+   * `ignoreDuplicates` rend donc la ligne existante intacte, et on la relit.
+   */
   const { data, error } = await supabase.from('meal_slot').upsert({
     household_id: foyer,
     user_profile_id: virtuelle.user_profile_id,
     day: virtuelle.day,
     meal: virtuelle.meal,
     state: 'prevu',
-  }, { onConflict: 'household_id,user_profile_id,day,meal' }).select('id').single()
+  }, { onConflict: 'household_id,user_profile_id,day,meal', ignoreDuplicates: true })
+    .select('id').maybeSingle()
   if (error) throw new Error(error.message)
-  return data.id
+  if (data) return data.id
+
+  // Elle existait : on la relit plutôt que de l'écraser.
+  const { data: deja, error: e2 } = await supabase.from('meal_slot').select('id')
+    .eq('user_profile_id', virtuelle.user_profile_id)
+    .eq('day', virtuelle.day).eq('meal', virtuelle.meal).single()
+  if (e2) throw new Error(e2.message)
+  return deja.id
 }
 
 export function useAjouteExtra({ onSuccess }: { onSuccess?: () => void } = {}) {

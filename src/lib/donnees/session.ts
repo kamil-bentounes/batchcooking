@@ -8,6 +8,18 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
+
+/** `.in()` porte ses valeurs dans l'URL : au-delà d'environ 205 identifiants,
+    la passerelle répond 414 plutôt que de tronquer. */
+const PAR_PAQUET = 150
+
+async function parPaquets<T>(ids: string[], lire: (lot: string[]) => Promise<T[]>): Promise<T[]> {
+  const sortie: T[] = []
+  for (let i = 0; i < ids.length; i += PAR_PAQUET) {
+    sortie.push(...await lire(ids.slice(i, i + PAR_PAQUET)))
+  }
+  return sortie
+}
 import type { Ligne } from '../supabase.ts'
 import { actionsDeLaSession } from '../plan/fusion.ts'
 import type { Etape } from '../plan/fusion.ts'
@@ -90,21 +102,34 @@ export function useChoisitAppareils() {
 }
 
 /** Charge les étapes des recettes choisies, prêtes pour la fusion. */
-async function etapesDuCycle(cycleId: string): Promise<Etape[]> {
+/** Exportée pour être éprouvée : c’est ELLE qui décide de ce que
+    l’ordonnanceur voit, et son ordre est un invariant du produit. */
+export async function etapesDuCycle(cycleId: string): Promise<Etape[]> {
   const choisies = ou(await supabase.from('cycle_recipe').select('recipe_id')
     .eq('cycle_id', cycleId))
   if (choisies.length === 0) return []
   const ids = choisies.map(c => c.recipe_id)
 
-  const [etapes, deps] = await Promise.all([
-    supabase.from('recipe_step').select('*').in('recipe_id', ids).order('ordinal'),
-    supabase.from('recipe_step_dependency').select('before_id, after_id'),
-  ])
+  // ⚠️ `.order('ordinal')` SEUL rendait les lignes ordinal-majeur, entrelacées
+  //    entre recettes : « R1 émince, R2 émince, R1 cuit, R2 cuit… ». La boucle
+  //    plus bas repart à zéro dès que la recette change, donc elle repartait à
+  //    CHAQUE ligne, et aucune dépendance implicite ne survivait. L'ordonnanceur
+  //    recevait un graphe entièrement plat — libre de placer « Enfournez » avant
+  //    « Préparez la pâte ». Mesuré : 0 étape sur 6 gardait son prédécesseur.
+  const lignes = ou(await supabase.from('recipe_step').select('*')
+    .in('recipe_id', ids).order('recipe_id').order('ordinal'))
 
-  const lignes = ou(etapes)
+  // Les dépendances déclarées, filtrées sur les étapes du cycle. La table
+  // entière se heurterait au plafond silencieux de 1 000 lignes, et un
+  // sous-ensemble arbitraire d'arcs n'est pas reproductible d'un téléphone à
+  // l'autre (D50) — le tirage semé de l'ordonnanceur n'y pourrait rien.
   const connues = new Set(lignes.map(e => e.id))
+  const deps = lignes.length === 0 ? [] : await parPaquets([...connues], async lot =>
+    ou(await supabase.from('recipe_step_dependency')
+      .select('before_id, after_id').in('after_id', lot).order('before_id')))
+
   const avant = new Map<string, string[]>()
-  for (const d of ou(deps)) {
+  for (const d of deps) {
     if (!connues.has(d.after_id) || !connues.has(d.before_id)) continue
     if (!avant.has(d.after_id)) avant.set(d.after_id, [])
     avant.get(d.after_id)!.push(d.before_id)
@@ -204,10 +229,23 @@ export function useEnregistrePlan() {
 
       ou(await supabase.from('session_task').delete().eq('cycle_id', cycleId).select())
 
+      /*
+       * ⚠️ On ne reprend PLUS l'identifiant de l'étape de recette.
+       *
+       * `session_task.id` est une clé primaire globale. Reprendre l'id de
+       * `recipe_step` rendait deux choses impossibles :
+       *
+       *  · **refaire une recette.** Le cycle de la semaine dernière garde ses
+       *    `session_task` (clore un cycle ne les efface pas) ; recuisiner le
+       *    même dahl levait un 23505, après que le `delete` avait déjà vidé le
+       *    plan courant — l'écran restait en erreur, sans plan.
+       *  · **cuisiner en même temps qu'un autre foyer.** Le second à enregistrer
+       *    se prenait un 23505 sur une ligne qu'il ne peut même pas lire.
+       *
+       * La base génère donc l'identifiant, et `parTache` relie les liens de
+       * recette et les dépendances aux lignes réellement écrites.
+       */
       const lignes = plan.taches.map((t, i) => ({
-        // On garde l'identifiant de l'étape d'origine : il relie l'action à sa
-        // recette et rend le plan reproductible d'un calcul à l'autre.
-        id: t.id,
         cycle_id: cycleId,
         household_id: foyer,
         label: t.label,
@@ -221,13 +259,26 @@ export function useEnregistrePlan() {
       }))
       const posees = ou(await supabase.from('session_task').insert(lignes).select())
 
-      const liens = plan.taches.flatMap(t =>
-        t.recettes.map(recipe_id => ({ task_id: t.id, recipe_id, household_id: foyer })))
+      // L'insert rend les lignes dans l'ordre envoyé : `position` fait le lien
+      // entre la tâche du plan et l'identifiant que la base a choisi.
+      const parPosition = new Map(posees.map(l => [l.position, l.id]))
+      const idDe = (tache: string) => {
+        const i = plan.taches.findIndex(x => x.id === tache)
+        return i < 0 ? null : parPosition.get(i) ?? null
+      }
+
+      const liens = plan.taches.flatMap((t, i) =>
+        t.recettes.map(recipe_id => ({
+          task_id: parPosition.get(i)!, recipe_id, household_id: foyer,
+        })))
       if (liens.length > 0) ou(await supabase.from('session_task_recipe').insert(liens).select())
 
-      const arcs = plan.taches.flatMap(t => t.dependDe
-        .filter(d => plan.taches.some(x => x.id === d))
-        .map(depends_on_id => ({ task_id: t.id, depends_on_id, household_id: foyer })))
+      const arcs = plan.taches.flatMap((t, i) => t.dependDe
+        .map(d => idDe(d))
+        .filter((id): id is string => id !== null)
+        .map(depends_on_id => ({
+          task_id: parPosition.get(i)!, depends_on_id, household_id: foyer,
+        })))
       if (arcs.length > 0) ou(await supabase.from('session_task_dependency').insert(arcs).select())
 
       return posees

@@ -129,8 +129,13 @@ export function Semaine({ userId, va }: { userId: string; va: (v: string) => voi
                     quand on regarde UNE personne : on ne saisit pas un repas
                     sans savoir de qui il s'agit. */}
                 {qui !== 'tous' && (
+                  // ⚠️ `cases`, pas `duJour` : ce dernier est déjà filtré par
+                  //    repas, si bien qu'avec le filtre « Dîner » l'écran
+                  //    proposait « Déjeuner » alors que la case existait —
+                  //    et l'ajout écrasait une case déjà mangée.
                   <HorsBarquette jour={j} userId={qui} frequents={frequents}
-                                 dejaLa={duJour} />
+                                 dejaLa={cases.filter(
+                                   c => c.day === j && c.user_profile_id === qui)} />
                 )}
               </section>
             )

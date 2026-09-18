@@ -243,7 +243,29 @@ describe('l’ordre du texte', () => {
     ].map(a)
     const liens = dependances(etapes)
     expect(liens[1], 'le préchauffage attend un épluchage').toEqual([])
+    // Enfourner demande les DEUX : les pommes de terre épluchées, et le four
+    // chaud. L'ancienne version ne gardait que le préchauffage, parce qu'il
+    // remplaçait la chaîne du texte au lieu de s'y ajouter.
+    expect(liens[2]).toEqual(['0', '1'])
+  })
+
+  it('ne fait PAS attendre ce qui ne se sert pas du four', () => {
+    // Le défaut : le préchauffage devenait le prédécesseur de tout ce qui
+    // suivait, épluchage compris. Douze minutes de four ajoutées au chemin
+    // critique pour rien — mesuré, 65 min au lieu de 53. Le four chauffe
+    // pendant qu'on travaille : c'est tout l'objet de D30.
+    const etapes = [
+      'Préchauffez le four à 180 °C.',
+      'Épluchez les pommes de terre.',
+      'Émincez les oignons.',
+      'Enfournez 40 minutes.',
+    ].map(a)
+    const liens = dependances(etapes)
+    expect(liens[1], 'l’épluchage attend le four').toEqual([])
     expect(liens[2]).toEqual(['1'])
+    // Et l'enfournage, lui, attend bien le four.
+    expect(liens[3]).toContain('0')
+    expect(liens[3]).toContain('2')
   })
 
   it('saute les phrases qui ne sont pas des gestes', () => {
@@ -295,5 +317,52 @@ describe('la couverture, sur des étapes réelles', () => {
   it('n’attribue jamais d’appareil à un geste de la main', () => {
     expect(a('Salez et poivrez.').appareil).toBeNull()
     expect(a('Battez les œufs en omelette.').appareil).toBeNull()
+  })
+})
+
+describe('le repos n’est pas du travail', () => {
+  /*
+   * Mesuré sur des recettes réelles : sept formulations sur dix comptaient
+   * comme du temps ACTIF. « Laissez décongeler 2 heures » n'a pas de verbe du
+   * référentiel — « laisser » n'en est pas un — mais elle a une durée, donc
+   * elle passait pour une action, donc pour 120 minutes de travail.
+   *
+   * Ces minutes entrent dans `recipe.active_time_min` par le trigger, c'est-à-dire
+   * dans le filtre principal du catalogue : la recette disparaissait de
+   * « 25 min actif » alors qu'elle n'en demande que cinq. Et l'ordonnanceur
+   * mobilisait un cuisinier deux heures pour regarder décongeler.
+   */
+  const repos = [
+    'Laissez reposer la pâte 1 heure.',
+    'Laissez décongeler 2 heures au réfrigérateur.',
+    'Laissez refroidir complètement, environ 30 minutes.',
+    'Laissez lever la pâte pendant 1 h 30.',
+    'Laissez mariner 2 heures au frais.',
+    'Réservez au frais 20 minutes.',
+    'Temps de repos : 45 minutes.',
+  ]
+
+  it('classe l’attente comme passive', () => {
+    const fautes = repos
+      .map(t => analyserEtape(t, REF))
+      .filter(e => e.estAction && e.charge !== 'passif')
+      .map(e => e.brut)
+    expect(fautes, 'du repos compté comme du travail').toEqual([])
+  })
+
+  it('garde actif ce qui demande la main, même en « laissant »', () => {
+    // « Laissez mijoter en remuant » n'est pas du repos : on est devant la
+    // casserole. Le test existe pour que le correctif ne parte pas trop loin.
+    // Le repos ne doit pas avaler les étapes où la main reste prise. Quand le
+    // référentiel a un avis sur le verbe, c'est lui qui tranche — « mijoter »
+    // est légitimement passif, la casserole travaille seule.
+    for (const t of [
+      'Émincez les oignons pendant 10 minutes.',
+      'Fouettez les blancs en neige.',
+      'Réservez la préparation dans un saladier.',
+    ]) {
+      const e = analyserEtape(t, REF)
+      if (e.estAction) expect(e.charge, t).not.toBe('passif')
+    }
   })
 })

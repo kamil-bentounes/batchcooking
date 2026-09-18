@@ -20,9 +20,18 @@ export type Repas = {
   day: string
   user_profile_id: string
   state: 'prevu' | 'mange' | 'saute'
-  /** Les macros de la barquette mangée, quand il y en a une. */
+  /** Les macros de la barquette. Ne comptent que si la case est « mangée ». */
   kcal: number
   protein_g: number
+  /**
+   * Ce qui a été mangé EN PLUS, et qui compte TOUJOURS.
+   *
+   * Un déjeuner au restaurant n'a pas de barquette : sa case reste « prévue »,
+   * et exiger « mangée » revenait à ne jamais compter les repas hors barquette
+   * — c'est-à-dire à faire exactement ce que D26 interdit.
+   */
+  kcalExtra: number
+  proteinExtra: number
 }
 
 export type Jour = {
@@ -86,13 +95,19 @@ export function serie(
 
   const lignes: Jour[] = jours.map(j => {
     const duJour = parJour.get(j) ?? []
-    // Rien du tout : on ne sait pas. Ce n'est pas un jour à jeun.
-    if (!duJour.some(r => r.state !== 'prevu')) return { jour: j, kcal: null, protein: null }
-    const manges = duJour.filter(r => r.state === 'mange')
+    // Rien du tout : on ne sait pas. Ce n'est pas un jour à jeun. Un repas
+    // noté hors barquette suffit à renseigner le jour, même sur une case
+    // restée « prévue ».
+    const connu = duJour.some(r => r.state !== 'prevu' || r.kcalExtra > 0 || r.proteinExtra > 0)
+    if (!connu) return { jour: j, kcal: null, protein: null }
+    const part = (r: Repas, quoi: 'kcal' | 'protein') => {
+      const barquette = r.state === 'mange' ? (quoi === 'kcal' ? r.kcal : r.protein_g) : 0
+      return barquette + (quoi === 'kcal' ? r.kcalExtra : r.proteinExtra)
+    }
     return {
       jour: j,
-      kcal: Math.round(manges.reduce((s, r) => s + r.kcal, 0)),
-      protein: Math.round(manges.reduce((s, r) => s + r.protein_g, 0)),
+      kcal: Math.round(duJour.reduce((s, r) => s + part(r, 'kcal'), 0)),
+      protein: Math.round(duJour.reduce((s, r) => s + part(r, 'protein'), 0)),
     }
   })
 
@@ -122,13 +137,23 @@ export type Budget = {
   paye: number
   /** Ce qu'on prévoyait, pour les articles dont on n'a pas le prix payé. */
   estimeRestant: number
-  /** Le budget mensuel du foyer. `null` = aucun budget fixé. */
+  /**
+   * Le budget du foyer RAPPORTÉ À LA PÉRIODE affichée.
+   *
+   * `food_budget_eur` est mensuel. Le comparer tel quel à trois mois de
+   * dépenses faisait afficher « 580 € au-dessus du budget » à un foyer qui
+   * dépense 300 € par mois pour un plafond de 320 — et, à sept jours, une
+   * jauge éternellement au quart pleine. `null` = aucun budget fixé.
+   */
   plafond: number | null
   /** Part du plafond consommée, entre 0 et 1. `null` sans plafond. */
   part: number | null
   /** Ce que coûte une part cuisinée. `null` tant qu'on n'a rien payé. */
   parPortion: number | null
 }
+
+/** Jours d'un mois moyen. Un budget mensuel se ramène à la période par lui. */
+const JOURS_PAR_MOIS = 30.44
 
 /**
  * Le budget de la période.
@@ -147,9 +172,15 @@ export function budget(
   articles: { est_price_eur: number | string | null; paid_price_eur: number | string | null }[],
   payeTickets: number,
   portionsDressees: number,
-  plafond: number | null,
+  /** Le budget MENSUEL du foyer, tel qu'il est posé dans les réglages. */
+  plafondMensuel: number | null,
+  /** Longueur de la période affichée, en jours. */
+  joursDeLaPeriode = JOURS_PAR_MOIS,
 ): Budget {
   const paye = arrondi(payeTickets)
+  const plafond = plafondMensuel === null
+    ? null
+    : arrondi(plafondMensuel * (joursDeLaPeriode / JOURS_PAR_MOIS))
   const estimeRestant = arrondi(articles
     .filter(a => a.paid_price_eur === null)
     .reduce((s, a) => s + Number(a.est_price_eur ?? 0), 0))

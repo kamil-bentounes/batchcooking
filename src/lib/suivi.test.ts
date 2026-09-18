@@ -13,7 +13,7 @@ import type { Repas } from './suivi.ts'
 const JOURS = ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04']
 const repas = (p: Partial<Repas>): Repas => ({
   day: '2026-09-01', user_profile_id: 'moi', state: 'mange',
-  kcal: 600, protein_g: 40, ...p,
+  kcal: 600, protein_g: 40, kcalExtra: 0, proteinExtra: 0, ...p,
 })
 
 describe('un jour non renseigné', () => {
@@ -49,6 +49,40 @@ describe('un jour non renseigné', () => {
     expect(s.jours[0].kcal).toBeNull()
     expect(s.renseignes).toBe(0)
     expect(s.kcalMoyen).toBeNull()
+  })
+})
+
+describe('un repas pris HORS barquette', () => {
+  /*
+   * Le cas de D26 : un déjeuner au restaurant n'a pas de barquette, donc sa
+   * case reste « prévue ». Exiger « mangée » revenait à ne jamais le compter —
+   * c'est-à-dire à écrire la saisie, à la documenter, et à ce qu'elle ne serve
+   * à rien. Ces trois tests ont échoué avant le correctif.
+   */
+  it('renseigne la journée, même sur une case restée « prévue »', () => {
+    const s = serie(JOURS, [
+      repas({ state: 'prevu', kcal: 0, protein_g: 0, kcalExtra: 900, proteinExtra: 35 }),
+    ], 'moi')
+    expect(s.renseignes, 'le jour est resté un trou').toBe(1)
+    expect(s.jours[0].kcal).toBe(900)
+    expect(s.kcalMoyen).toBe(900)
+  })
+
+  it('s’ajoute à la barquette quand les deux existent', () => {
+    const s = serie(JOURS, [
+      repas({ kcal: 620, protein_g: 34, kcalExtra: 180, proteinExtra: 6 }),
+    ], 'moi')
+    expect(s.jours[0].kcal).toBe(800)
+    expect(s.jours[0].protein).toBe(40)
+  })
+
+  it('compte même si la barquette prévue n’a PAS été mangée', () => {
+    // On avait prévu un dahl, on a mangé une pizza dehors : la pizza compte,
+    // le dahl non.
+    const s = serie(JOURS, [
+      repas({ state: 'prevu', kcal: 620, protein_g: 34, kcalExtra: 850, proteinExtra: 34 }),
+    ], 'moi')
+    expect(s.jours[0].kcal, 'la barquette non mangée a été comptée').toBe(850)
   })
 })
 
@@ -130,6 +164,24 @@ describe('le budget', () => {
 
   it('ne remplit la jauge qu’avec ce qui est vraiment sorti', () => {
     expect(budget(articles, TICKET, 10, 320).part).toBeCloseTo(13.68 / 320, 4)
+  })
+
+  it('rapporte un budget MENSUEL à la période affichée', () => {
+    // Sans cela, l'onglet « 3 mois » d'un foyer à 300 €/mois — donc SOUS son
+    // budget de 320 € — affichait « 580 € au-dessus du budget », et l'onglet
+    // « 7 jours » une jauge éternellement au quart pleine.
+    const trimestre = budget([], 900, 30, 320, 91)
+    expect(trimestre.plafond, 'le plafond n’a pas suivi la période').toBeCloseTo(956.6, 0)
+    expect(trimestre.part, 'un foyer sous son budget est annoncé au-dessus')
+      .toBeLessThan(1)
+
+    const semaine = budget([], 70, 10, 320, 7)
+    expect(semaine.plafond).toBeCloseTo(73.6, 0)
+    expect(semaine.part).toBeLessThan(1)
+  })
+
+  it('ne rapporte rien quand aucun budget n’est fixé', () => {
+    expect(budget([], 900, 30, null, 91).plafond).toBeNull()
   })
 
   it('n’a pas de jauge sans budget fixé', () => {

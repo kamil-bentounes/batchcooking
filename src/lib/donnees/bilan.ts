@@ -129,8 +129,13 @@ export function useBilan(depuis: Date, jusqu: Date) {
           day: x.day,
           user_profile_id: x.user_profile_id,
           state: x.state as Repas['state'],
-          kcal: Number(x.portion?.kcal ?? 0) + (e?.kcal ?? 0),
-          protein_g: Number(x.portion?.protein_g ?? 0) + (e?.protein ?? 0),
+          // Séparés : la barquette ne compte que si elle a été mangée, l'extra
+          // compte toujours. Les fondre ici faisait disparaître tout repas pris
+          // hors barquette, dont la case reste « prévue ».
+          kcal: Number(x.portion?.kcal ?? 0),
+          protein_g: Number(x.portion?.protein_g ?? 0),
+          kcalExtra: e?.kcal ?? 0,
+          proteinExtra: e?.protein ?? 0,
         }
       })
 
@@ -170,7 +175,9 @@ export function useBilan(depuis: Date, jusqu: Date) {
         budget: budget(ou(articles), paye, p.length,
           ou(foyer)?.food_budget_eur === null || ou(foyer)?.food_budget_eur === undefined
             ? null
-            : Number(ou(foyer)!.food_budget_eur)),
+            : Number(ou(foyer)!.food_budget_eur),
+          // Le budget est mensuel : la jauge le rapporte à ce que l'écran montre.
+          jours.length),
         personnes,
         recettes: [...parRecette.entries()]
           .map(([label, v]) => ({ label, ...v }))

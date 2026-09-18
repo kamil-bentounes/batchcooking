@@ -177,6 +177,9 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surSuppr
   const quantite = article.quantity !== null
     ? `${Math.round(Number(article.quantity))} ${article.unit ?? ''}`.trim()
     : null
+  // Ce que la génération n'a pas su convertir. Dans la note, pas dans le
+  // libellé : celui-ci sert de clé au rapprochement des tickets.
+  const note = article.note
 
   return (
     <li className="border-b border-brume/70 last:border-0">
@@ -201,6 +204,11 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surSuppr
             {article.label}
           </span>
           {quantite && <span className="text-[13px] text-doux ml-2">{quantite}</span>}
+          {note && (
+            <span className="block text-[13px] mt-0.5" style={{ color: '#8F5A0D' }}>
+              {note}
+            </span>
+          )}
         </button>
 
         {article.est_price_eur !== null && (

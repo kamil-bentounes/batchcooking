@@ -98,16 +98,32 @@ export type CaseConsommee = {
  */
 export function bilanDuJour(cases: CaseConsommee[], userId: string, j: string) {
   const duJour = cases.filter(c => c.day === j && c.user_profile_id === userId)
-  const mangees = duJour.filter(c => c.state === 'mange')
-  const somme = (prendre: (c: CaseConsommee) => number) =>
-    mangees.reduce((s, c) => s + prendre(c), 0)
+
+  /*
+   * ⚠️ Deux règles, et pas une seule.
+   *
+   *  · La BARQUETTE ne compte que si la case est « mangée » : on peut très bien
+   *    ne pas l'avoir mangée.
+   *  · L'EXTRA compte TOUJOURS. On ne l'a pas écrit par erreur — un déjeuner au
+   *    restaurant n'a pas de barquette, donc sa case reste « prévue », et
+   *    l'exiger « mangée » revenait à ne jamais compter les repas hors
+   *    barquette. C'est précisément ce que D26 dit de ne pas faire : sans eux,
+   *    le tableau de bord ment de ~900 kcal par jour.
+   */
+  const extras = (c: CaseConsommee, prendre: (e: CaseConsommee['extras'][number]) => number) =>
+    c.extras.reduce((s, e) => s + Number(prendre(e)), 0)
+  const somme = (barquette: (c: CaseConsommee) => number,
+                 extra: (e: CaseConsommee['extras'][number]) => number) =>
+    duJour.reduce((s, c) =>
+      s + (c.state === 'mange' ? barquette(c) : 0) + extras(c, extra), 0)
 
   return {
-    kcal: Math.round(somme(c =>
-      Number(c.portion?.kcal ?? 0) + c.extras.reduce((s, e) => s + Number(e.kcal), 0))),
-    proteinG: Math.round(somme(c =>
-      Number(c.portion?.protein_g ?? 0) + c.extras.reduce((s, e) => s + Number(e.protein_g), 0))),
-    renseignes: duJour.filter(c => c.state !== 'prevu').length,
+    kcal: Math.round(somme(c => Number(c.portion?.kcal ?? 0), e => Number(e.kcal))),
+    proteinG: Math.round(somme(
+      c => Number(c.portion?.protein_g ?? 0), e => Number(e.protein_g))),
+    // Un jour où l'on a noté un resto EST renseigné, même si la case est restée
+    // « prévue » faute de barquette à cocher.
+    renseignes: duJour.filter(c => c.state !== 'prevu' || c.extras.length > 0).length,
     prevus: duJour.length,
   }
 }

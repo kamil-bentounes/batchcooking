@@ -112,6 +112,14 @@ export function useGenereListe() {
       type Cumul = {
         label: string; food_id: string | null; groupe: string | null
         grammes: number | null; unite: string | null; quantite: number | null
+        /**
+         * ⚠️ `unite: null` est une VALEUR légitime — un compte nu, « 2 persil ».
+         *    S'en servir comme sentinelle « pas encore d'unité » faisait
+         *    dépendre le résultat de l'ordre physique des lignes : « 2 persil »
+         *    puis « 1 bouquet » donnait « 3 bouquet », l'ordre inverse
+         *    « 1 bouquet (+ 2 à compter) ». Deux téléphones, deux listes (D50).
+         */
+        uniteFixee: boolean
         /** Ce qu'on n'a pas su convertir et qu'on refuse de perdre. */
         nonConverti: number
       }
@@ -122,7 +130,8 @@ export function useGenereListe() {
         const nom = i.food?.name ?? i.raw_text
         const c = cumuls.get(cle) ?? {
           label: nom, food_id: i.food_id, groupe: i.food?.ciqual_group ?? null,
-          grammes: null, unite: null, quantite: null, nonConverti: 0,
+          grammes: null, unite: null, quantite: null,
+          uniteFixee: false, nonConverti: 0,
         }
         // Le poids appris par le foyer, quand il en a un : c'est LUI qui fait
         // qu'« 2 oignons » vaut quelque chose.
@@ -137,8 +146,9 @@ export function useGenereListe() {
         } else if (i.qty !== null) {
           // Sans conversion en grammes, on additionne à l'unité près, et
           // seulement entre unités identiques.
-          if (c.unite === null || c.unite === i.unit) {
+          if (!c.uniteFixee || c.unite === i.unit) {
             c.unite = i.unit
+            c.uniteFixee = true
             c.quantite = (c.quantite ?? 0) + Number(i.qty) * f
           } else {
             c.nonConverti += Number(i.qty) * f
@@ -168,11 +178,17 @@ export function useGenereListe() {
         const unite = c.grammes !== null ? 'g' : c.unite
         // Un compte qu'on n'a su ni convertir ni additionner ne DISPARAÎT pas :
         // « 500 g de poireaux » et « 2 poireaux » faisaient 500 g, et les deux
-        // poireaux s'évaporaient sans un mot. On le dit dans le libellé, où ça
-        // se corrige d'un geste dans le magasin.
+        // poireaux s'évaporaient sans un mot. On le dit dans la NOTE — jamais
+        // dans le libellé, qui sert de clé au rapprochement des tickets, aux
+        // habitudes et à l'inventaire.
         const reste = c.grammes !== null && c.quantite !== null
           ? c.quantite + c.nonConverti
           : c.nonConverti
+        // Un reste inférieur à un demi ne vaut pas une note : « + 0 à compter »
+        // n'aide personne. Il arrive avec un facteur d'échelle fractionnaire.
+        const note = reste >= 0.5
+          ? `+ ${Math.round(reste)} ${c.unite ?? 'à l’unité'} à compter`
+          : null
         const prix = connus.length === 0 ? null : estimation(
           { label: c.label, food_id: c.food_id, quantity: quantite, unit: unite },
           connus, magasin)
@@ -181,9 +197,8 @@ export function useGenereListe() {
           household_id: foyer,
           store_id: magasin,
           food_id: c.food_id,
-          label: reste > 0
-            ? `${c.label} (+ ${Math.round(reste)} à compter)`
-            : c.label,
+          label: c.label,
+          note,
           aisle: rayonDe({ groupe: c.groupe, libelle: c.label }),
           quantity: quantite,
           unit: unite,

@@ -1788,6 +1788,7 @@ export type Database = {
           household_id: string
           id: string
           label: string
+          note: string | null
           paid_price_eur: number | null
           quantity: number | null
           source: string
@@ -1805,6 +1806,7 @@ export type Database = {
           household_id: string
           id?: string
           label: string
+          note?: string | null
           paid_price_eur?: number | null
           quantity?: number | null
           source?: string
@@ -1822,6 +1824,7 @@ export type Database = {
           household_id?: string
           id?: string
           label?: string
+          note?: string | null
           paid_price_eur?: number | null
           quantity?: number | null
           source?: string

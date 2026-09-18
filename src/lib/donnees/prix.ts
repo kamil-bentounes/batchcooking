@@ -14,6 +14,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
 import { estimation } from '../prix.ts'
+import { jour } from './barquettes.ts'
 import type { LigneTicket, Rapprochement } from '../prix.ts'
 
 
@@ -70,7 +71,10 @@ export function useEnregistreTicket() {
         household_id: foyer,
         store_id: t.storeId,
         trip_id: tripId,
-        bought_at: t.date ?? new Date().toISOString().slice(0, 10),
+        // ⚠️ JAMAIS `toISOString().slice(0,10)` : à 23 h en France, cela rend
+        //    la veille — et le 1er du mois à 00 h 30, le mois précédent, c'est-à-dire
+        //    précisément la colonne sur laquelle le budget borne.
+        bought_at: t.date ?? jour(new Date()),
         total_eur: t.total,
         raw: t.brut as never,
       }).select().single())

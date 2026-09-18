@@ -172,6 +172,20 @@ describe('on ne moyenne jamais entre deux unités', () => {
     expect(p!.observations, 'la série n’a pas redémarré').toBe(1)
   })
 
+  it('ne jette pas la série quand poids et volume alternent', async () => {
+    // « CREME 20CL » lue tantôt en millilitres, tantôt en grammes : ce sont
+    // deux lectures correctes du même pot. Traiter le passage de l'une à
+    // l'autre comme un gain d'information remettait `observations` à 1 à chaque
+    // bascule, et la moyenne ne convergeait jamais.
+    for (const [q, u] of [[200, 'ml'], [200, 'ml'], [206, 'g'], [200, 'ml']] as const) {
+      const t = await ticketPour(alice, { store_id: magasin })
+      await ligne(t, { label: 'CREME 20CL', quantity: q, unit: u, price_eur: 1.22 })
+    }
+    const p = await prixDe(alice.householdId, 'CREME 20CL')
+    expect(p!.observations, 'la série a été jetée à chaque bascule')
+      .toBeGreaterThanOrEqual(3)
+  })
+
   it('reporte quand même le prix payé, même sans rien apprendre', async () => {
     // Ne pas apprendre n'est pas ne rien faire : le bilan attend ce chiffre.
     const { data: article } = await admin().from('shopping_item').insert({
@@ -209,6 +223,74 @@ describe('le prix payé remonte sur la liste', () => {
     const t = await ticketPour(alice, { store_id: magasin })
     await ligne(t, { label: 'SACS POUBELLE 30L', price_eur: 3.2, shopping_item_id: null })
     expect(await prixDe(alice.householdId, 'SACS POUBELLE 30L')).not.toBeNull()
+  })
+})
+
+describe('ce qui a déjà servi ne se supprime plus', () => {
+  it('protège une ligne cochée d’une régénération de liste', async () => {
+    // Une liste faite en magasin, vingt articles cochés, l'inventaire rempli :
+    // régénérer la rendait décochée, et les lignes d'inventaire orphelines se
+    // dédoublaient au cochage suivant.
+    const { data: a } = await admin().from('shopping_item').insert({
+      cycle_id: cycleAlice, household_id: alice.householdId, store_id: magasin,
+      label: 'article coché', source: 'recette',
+      checked_at: new Date().toISOString(), checked_rank: 1,
+    }).select().single()
+
+    await alice.client.from('shopping_item').delete()
+      .eq('cycle_id', cycleAlice).eq('source', 'recette')
+
+    const { data } = await admin().from('shopping_item').select('id').eq('id', a!.id)
+    expect(data ?? [], 'un article coché a été effacé').toHaveLength(1)
+  })
+
+  it('protège aussi une ligne dont le prix payé est connu', async () => {
+    const { data: a } = await admin().from('shopping_item').insert({
+      cycle_id: cycleAlice, household_id: alice.householdId, store_id: magasin,
+      label: 'article payé', source: 'recette', paid_price_eur: 2.5,
+    }).select().single()
+
+    await alice.client.from('shopping_item').delete()
+      .eq('cycle_id', cycleAlice).eq('source', 'recette')
+
+    const { data } = await admin().from('shopping_item').select('id').eq('id', a!.id)
+    expect(data ?? [], 'un article payé a été effacé').toHaveLength(1)
+  })
+
+  it('laisse partir une ligne qui n’a jamais servi', async () => {
+    const { data: a } = await admin().from('shopping_item').insert({
+      cycle_id: cycleAlice, household_id: alice.householdId, store_id: magasin,
+      label: 'article neuf', source: 'recette',
+    }).select().single()
+
+    await alice.client.from('shopping_item').delete()
+      .eq('cycle_id', cycleAlice).eq('source', 'recette').is('checked_at', null)
+
+    const { data } = await admin().from('shopping_item').select('id').eq('id', a!.id)
+    expect(data ?? [], 'une ligne neuve n’a pas pu être régénérée').toHaveLength(0)
+  })
+})
+
+describe('décocher défait ce que cocher avait fait', () => {
+  it('redescend le compteur d’habitude', async () => {
+    // Un doigt qui glisse dans le magasin doublait le chiffre qui classe les
+    // suggestions, et rien ne le redescendait.
+    const { data: a } = await admin().from('shopping_item').insert({
+      cycle_id: cycleAlice, household_id: alice.householdId, store_id: magasin,
+      label: 'lait de coco', aisle: 'Épicerie',
+    }).select().single()
+
+    const coche = () => admin().from('shopping_item')
+      .update({ checked_at: new Date().toISOString() }).eq('id', a!.id)
+    const decoche = () => admin().from('shopping_item')
+      .update({ checked_at: null }).eq('id', a!.id)
+
+    await coche(); await decoche(); await coche()
+
+    const { data } = await admin().from('shopping_habit')
+      .select('times_added').eq('household_id', alice.householdId)
+      .ilike('label', 'lait de coco').single()
+    expect(data!.times_added, 'un décochage n’a pas défait l’habitude').toBe(1)
   })
 })
 

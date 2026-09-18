@@ -279,7 +279,23 @@ export function analyserEtape(brut: string, ref: Referentiel): EtapeAnalysee {
     sourceDuree: estAction ? sourceDuree : null,
     temperatureC: tempEcrite ?? tempDefaut,
     sourceTemperature: tempEcrite !== null ? 'declaree' : tempDefaut !== null ? 'defaut' : null,
-    charge: ligne?.load_type ?? (estAction ? 'actif' : null),
+    // ⚠️ `'actif'` par défaut est FAUX pour un repos.
+    //
+    //    « Laissez décongeler 2 heures », « laissez reposer une nuit », « laissez
+    //    refroidir » : aucun verbe du référentiel, mais une durée déclarée —
+    //    donc `estAction`, donc 120 minutes comptées comme du TRAVAIL. Ces
+    //    minutes entrent dans `recipe.active_time_min`, c'est-à-dire dans le
+    //    filtre principal du catalogue : la recette disparaît de « 25 min
+    //    actif » alors qu'elle n'en demande que cinq. Et l'ordonnanceur
+    //    mobilise un cuisinier deux heures pour regarder décongeler.
+    //
+    //    Mesuré : sept formulations sur dix, sur des recettes réelles.
+    // La PHRASE l'emporte sur le verbe : « réservez la préparation » est un
+    // geste, « réservez au frais 20 minutes » est une attente, et c'est le même
+    // verbe. Le référentiel décide par défaut, la phrase quand elle est claire.
+    charge: !estAction ? null
+      : estRepos(texte) ? 'passif'
+      : ligne?.load_type ?? 'actif',
     echelle: ligne?.scaling ?? null,
     dureeBaseMin: ligne?.base_minutes ?? null,
     quantiteG: estAction ? quantite : null,
@@ -292,6 +308,25 @@ export function analyserEtape(brut: string, ref: Referentiel): EtapeAnalysee {
 }
 
 /**
+ * Une étape où l'on ATTEND, et rien d'autre.
+ *
+ * Elle n'a pas de verbe du référentiel — « laisser » n'en est pas un — mais
+ * elle a une durée, souvent longue. Sans ce test, elle passait pour du travail
+ * actif : deux heures de décongélation comptées comme deux heures de cuisine.
+ *
+ * On exige que l'étape ne porte QUE de l'attente : « laissez mijoter en remuant »
+ * demande la main, et le verbe le dira.
+ */
+export function estRepos(texte: string): boolean {
+  const t = texte.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const attente = /\b(laisse[rz]?|laissant|reserve[rz]?|patiente[rz]?)\b.{0,40}\b(repose|reposer|refroidi|refroidir|decongel|tiedir|lever|pousser|mariner|macerer|infuser|prendre|figer|durcir|degorger|dessale|tremper|au frais|au froid|au refrigerateur|au frigo|a temperature ambiante)/
+  const direct = /^\s*(repos|attente|temps de (repos|pousse|levee|pause))\b/
+  if (!attente.test(t) && !direct.test(t)) return false
+  // Un geste dans la même phrase rend la main : « laissez reposer puis fouettez ».
+  return !/\b(remu|fouett|melang|tourn|surveill|arros|retourn|verifi)/.test(t)
+}
+
+/**
  * Le graphe d'une recette : par défaut, l'ordre du texte.
  *
  * On ne bat pas les cartes d'une recette sous prétexte que personne n'a saisi
@@ -301,10 +336,33 @@ export function analyserEtape(brut: string, ref: Referentiel): EtapeAnalysee {
 export function dependances(etapes: EtapeAnalysee[]): string[][] {
   const liens: string[][] = []
   let precedente = -1
+  /**
+   * Le préchauffage attend d'être UTILISÉ.
+   *
+   * On lui retirait bien son arc entrant, mais on le posait ensuite comme
+   * prédécesseur de la suite : tout ce qui venait après attendait les douze
+   * minutes de four, épluchage compris. Mesuré : 65 min au lieu de 53, sur une
+   * recette réelle. Or le four chauffe pendant qu'on travaille — c'est
+   * exactement ce que D30 achète.
+   *
+   * Il devient donc le prédécesseur de la PREMIÈRE étape qui se sert du four,
+   * et de personne d'autre. La chaîne du texte, elle, l'enjambe.
+   */
+  let prechauffage = -1
   etapes.forEach((e, i) => {
     if (!e.estAction) { liens.push([]); return }
-    const libre = e.verbe === 'préchauffer'
-    liens.push(libre || precedente < 0 ? [] : [String(precedente)])
+    if (e.verbe === 'préchauffer') {
+      liens.push([])
+      prechauffage = i
+      return
+    }
+    const avant: string[] = []
+    if (precedente >= 0) avant.push(String(precedente))
+    if (prechauffage >= 0 && e.appareil === 'four') {
+      if (!avant.includes(String(prechauffage))) avant.push(String(prechauffage))
+      prechauffage = -1        // une fois utilisé, il ne retient plus personne
+    }
+    liens.push(avant)
     precedente = i
   })
   return liens

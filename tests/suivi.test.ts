@@ -108,6 +108,7 @@ describe('le bilan se remplit tout seul', () => {
     }[]).map(x => ({
       day: x.day, user_profile_id: x.user_profile_id, state: x.state,
       kcal: Number(x.portion?.kcal ?? 0), protein_g: Number(x.portion?.protein_g ?? 0),
+      kcalExtra: 0, proteinExtra: 0,
     }))
 
     const s = serie(

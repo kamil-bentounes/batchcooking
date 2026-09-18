@@ -62,8 +62,44 @@ const mots = (s: string) =>
  */
 const PENALITES = [
   /pr[ée]emball/i, /appertis/i, /surgel/i, /d[ée]shydrat/i, /reconstitu/i,
-  /aliment moyen/i, /enrichi/i, /pour nourrisson/i, /all[ée]g[ée]/i, /sp[ée]cialit/i,
+  /enrichi/i, /pour nourrisson/i, /all[ée]g[ée]/i, /sp[ée]cialit/i,
 ]
+
+/**
+ * Les mots qui disent qu'on a TRANSFORMÉ l'aliment.
+ *
+ * Mesuré sur trente ingrédients courants : dix-sept tombaient à côté, et
+ * toujours de la même façon — « tomate » rendait « Tomate, séchée », « œuf »
+ * rendait « Œuf, en poudre », « pâtes » rendait « Pâté breton ». Une recette
+ * calcule alors ses macros sur un aliment qui n'a plus rien à voir : la tomate
+ * séchée pèse cinq fois les calories de la fraîche.
+ *
+ * La pénalité est FORTE, parce qu'une recette qui écrit « tomate » sans
+ * précision ne parle jamais de tomate séchée. Elle reste franchissable : une
+ * recette qui écrit « tomates séchées » retrouve le mot, et le rappel compense.
+ */
+const TRANSFORMATIONS = [
+  /s[ée]ch[ée]/i, /en poudre/i, /fum[ée]/i, /pur[ée]e/i, /germ[ée]/i,
+  /confit/i, /marin[ée]/i, /pan[ée]/i, /farci/i, /au sirop/i, /en conserve/i,
+  /lyophilis/i, /concentr[ée]/i, /r[ée]hydrat/i, /pr[ée]par[ée]/i, /assaisonn/i,
+  /en croûte/i, /sauc[ée]/i, /aromatis/i, /sucr[ée]/i, /confiture/i,
+]
+
+/**
+ * Ce que CIQUAL ajoute pour dire « c'est l'état de base ».
+ *
+ * « Tomate, crue » et « tomate » désignent la même chose : compter « crue »
+ * comme un mot en trop faisait perdre l'entrée canonique contre n'importe
+ * quelle variante à un seul qualificatif. C'est la cause de la moitié des
+ * rattachements faux.
+ */
+const ETAT_DE_BASE = new Set(['cru', 'crue', 'entier', 'entiere', 'demi', 'standard'])
+
+/** Le nom générique que CIQUAL signale explicitement. */
+const GENERIQUE = /aliment moyen/i
+
+/** Chiffres, taux et unités : une spécification, jamais un autre aliment. */
+const SPEC = /^(\d+|mg|g|kg|ml|cl|l|uht|t\d+|[a-z]\d+)$/
 
 /**
  * Noms usuels que CIQUAL nomme autrement. Comme `default_duration`, cette table
@@ -79,11 +115,50 @@ export const SYNONYMES: Record<string, string> = {
   'potimarron': 'courge potimarron',
   'creme fraiche': 'creme fraiche epaisse',
   'gruyere': 'emmental',
-  'blanc de poulet': 'poulet blanc',
-  'filet de poulet': 'poulet blanc',
-  'escalope de poulet': 'poulet blanc',
+  'blanc de poulet': 'poulet filet sans peau cru',
+  'filet de poulet': 'poulet filet sans peau cru',
+  'escalope de poulet': 'poulet filet sans peau cru',
+  'poulet': 'poulet filet sans peau cru',
   'lardons': 'lard fume',
   'pomme de terre': 'pomme de terre chair ferme',
+
+  /*
+   * Ce que la MESURE a signalé, sur trente ingrédients courants (18/09/2026).
+   *
+   * Tous les cas où CIQUAL n'a pas d'entrée simple, et où le rattachement
+   * tombait donc sur la variante la plus proche par le nom plutôt que par la
+   * chose : « beurre » rendait « Haricot beurre », « pâtes » rendait « Pâté
+   * breton », « crème fraîche » rendait « Crème de cassis ».
+   *
+   * Cette table ne remplace pas le rattachement, elle le précède — et elle est
+   * courte à dessein : chaque ligne est une décision qu'on peut relire.
+   */
+  'beurre': 'beurre 82 mg doux',
+  'farine': 'farine de ble tendre froment t55',
+  'riz': 'riz blanc cuit non sale',
+  'pates': 'pates seches standard crues',
+  'pate': 'pates seches standard crues',
+  'spaghetti': 'pates seches standard crues',
+  'tagliatelles': 'pates seches standard crues',
+  'penne': 'pates seches standard crues',
+  'macaroni': 'pates seches standard crues',
+  'sucre': 'sucre blanc',
+  'sucre en poudre': 'sucre blanc',
+  'creme': 'creme de lait 30 mg epaisse',
+  'creme liquide': 'creme de lait 30 mg liquide',
+  'fromage frais': 'fromage blanc aliment moyen',
+  'fromage blanc': 'fromage blanc aliment moyen',
+  'yaourt': 'yaourt lait fermente ou specialite laitiere nature',
+  'yaourt nature': 'yaourt lait fermente ou specialite laitiere nature',
+  'jambon': 'jambon cuit superieur',
+  'lentilles': 'lentille bouillie cuite eau',
+  'lentille': 'lentille bouillie cuite eau',
+  'chocolat': 'chocolat noir croquer tablette',
+  'chocolat noir': 'chocolat noir croquer tablette',
+  'coulis de tomates': 'tomate coulis appertise puree',
+  'coulis de tomate': 'tomate coulis appertise puree',
+  'concentre de tomates': 'tomate concentre',
+  'huile': 'huile olive vierge extra',
 }
 
 export interface AlimentIndexe { id: string; name: string; state: string; _mots?: Set<string> }
@@ -105,11 +180,36 @@ function score(recherche: string[], cible: AlimentIndexe, prefereCru: boolean): 
   const communs = recherche.filter(m => c.has(m)).length
   if (!communs) return 0
 
+  // ⚠️ « Tomate, crue » ne parle pas d'autre chose que de tomate : les mots
+  //    d'ÉTAT DE BASE ne comptent pas comme des mots en trop. Sans cela,
+  //    l'entrée canonique perd contre n'importe quelle variante à un seul
+  //    qualificatif — « Tomate, séchée » gagnait, et les macros avec.
+  // Les chiffres et les unités décrivent une spécification, pas un autre
+  // aliment : « Beurre à 82% MG, doux » parle bien de beurre. Les compter
+  // comme des mots en trop faisait perdre le beurre contre le haricot beurre.
+  const enTrop = [...c].filter(m =>
+    !recherche.includes(m) && !ETAT_DE_BASE.has(m) && !SPEC.test(m)).length
+  const utiles = communs + enTrop
+
   const rappel = communs / recherche.length          // ai-je retrouvé ce que je cherche ?
-  const precision = communs / c.size                  // la cible parle-t-elle d'autre chose ?
+  const precision = communs / Math.max(1, utiles)     // la cible parle-t-elle d'autre chose ?
   let s = (2 * rappel * precision) / (rappel + precision)   // moyenne harmonique
 
-  for (const p of PENALITES) if (p.test(cible.name)) { s *= 0.6; break }
+  /*
+   * On ne pénalise QUE ce que la recette n'a pas demandé.
+   *
+   * Une recette qui écrit « tomate » ne parle jamais de tomate séchée — mais
+   * une qui écrit « coulis de tomates » demande bien une purée, et lui reprocher
+   * le mot « purée » revenait à lui refuser la seule entrée qui lui convienne.
+   * La pénalité porte sur l'écart au demandé, pas sur le mot en soi.
+   */
+  const demande = recherche.join(' ')
+  const pasDemande = (p: RegExp) => p.test(cible.name) && !p.test(demande)
+  for (const p of PENALITES) if (pasDemande(p)) { s *= 0.6; break }
+  for (const p of TRANSFORMATIONS) if (pasDemande(p)) { s *= 0.45; break }
+  // CIQUAL nomme ses entrées génériques : quand elle existe, c'est CELLE-LÀ
+  // qu'une recette sans précision désigne.
+  if (GENERIQUE.test(cible.name)) s *= 1.25
   if (prefereCru && cible.state === 'cuit') s *= 0.85
 
   /**
@@ -133,14 +233,36 @@ export function rattacher(
   index: AlimentIndexe[],
   options: { prefereCru?: boolean } = {},
 ): Correspondance | null {
-  const recherche = mots(SYNONYMES[pliure(nomRecette)] ?? nomRecette)
+  /*
+   * Le synonyme se cherche sur la forme NETTOYÉE, pas sur le texte brut :
+   * « de la farine » et « farine » désignent la même chose, et n'en trouver
+   * qu'une des deux dans la table revenait à ce que la moitié des recettes
+   * passe à côté. On cherche les deux, le texte brut d'abord — il peut porter
+   * une expression que le nettoyage casserait.
+   */
+  const nettoye = mots(nomRecette).join(' ')
+  const canonique = SYNONYMES[pliure(nomRecette)] ?? SYNONYMES[nettoye] ?? nomRecette
+  const recherche = mots(canonique)
   if (!recherche.length) return null
 
   let meilleur: AlimentIndexe | null = null
   let meilleurScore = 0
   for (const a of index) {
     const s = score(recherche, a, options.prefereCru ?? true)
-    if (s > meilleurScore) { meilleurScore = s; meilleur = a }
+    if (s > meilleurScore) { meilleurScore = s; meilleur = a; continue }
+    /*
+     * ⚠️ À score ÉGAL, le vainqueur dépendait de l'ordre de lecture de la base
+     *    — c'est-à-dire de `gen_random_uuid()`. La même URL ingérée deux fois
+     *    donnait deux aliments différents, donc deux jeux de macros, et un
+     *    `db reset` rebattait tout le catalogue. On départage sur le nom : le
+     *    plus court d'abord, qui est le plus générique, puis l'alphabet.
+     */
+    if (meilleur && Math.abs(s - meilleurScore) < 1e-9) {
+      if (a.name.length < meilleur.name.length
+          || (a.name.length === meilleur.name.length && a.name < meilleur.name)) {
+        meilleur = a
+      }
+    }
   }
 
   if (!meilleur || meilleurScore < SEUIL) return null

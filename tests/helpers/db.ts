@@ -53,6 +53,22 @@ export async function makeOrphan(): Promise<{ client: SupabaseClient; userId: st
   return { client, userId: data.user.id }
 }
 
+/**
+ * Connecte le client PARTAGÉ de `src/lib/supabase.ts` au compte de cet acteur.
+ *
+ * Nécessaire pour éprouver les fonctions de `src/lib/donnees/*` telles que
+ * l'application les appelle : elles utilisent ce client-là, pas celui du test.
+ * Sans session, la RLS répond « rien », et le test serait vert à vide.
+ */
+export async function connecteLeClientPartage(a: Actor) {
+  const { supabase } = await import('../../src/lib/supabase.ts')
+  const { error } = await supabase.auth.signInWithPassword({
+    email: a.email, password: PASSWORD,
+  })
+  if (error) throw error
+  return supabase
+}
+
 /** Jeton d'accès brut, pour appeler les Edge Functions en fetch direct. */
 export async function accessToken(client: SupabaseClient): Promise<string> {
   const { data } = await client.auth.getSession()
