@@ -11,6 +11,7 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@playwright/test@^1.63.0",
         "npm:@supabase/supabase-js@^2.116.0",
         "npm:@tailwindcss/vite@^4.3.3",
         "npm:@tanstack/react-query@^5.103.1",

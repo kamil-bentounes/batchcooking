@@ -112,10 +112,10 @@ Deno.serve(async (req) => {
 
   if (!r.ok) return reply({ erreur: r.erreur, restantes: QUOTA_MENSUEL - deja }, 502)
 
-  await admin.from('llm_usage').upsert({
-    household_id: foyer, month: mois, kind: 'ticket',
-    calls: deja + 1, cost_eur: Number(usage?.cost_eur ?? 0),
-  }, { onConflict: 'household_id,month,kind' })
+  // Incrément ATOMIQUE en base : deux appels simultanés lisaient la même
+  // valeur et en écrivaient une seule, si bien qu'un appel sur deux ne
+  // comptait pas. Un garde-fou qui ne compte pas ne garde rien.
+  await admin.rpc('llm_consomme', { p_household: foyer, p_kind: 'ticket' })
 
   // Remises déduites quand l'arithmétique le prouve, prix négatifs écartés.
   // Ce qui reste comme écart entre la somme des lignes et le total imprimé est

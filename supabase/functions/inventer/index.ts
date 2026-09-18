@@ -281,10 +281,10 @@ Deno.serve(async (req) => {
   // ── Le compteur, après, et seulement en cas de succès ──────────────────────
   // On repose cost_eur tel quel : un upsert remplace la ligne entière, et
   // remettre le coût à zéro ferait mentir le plafond du foyer.
-  await admin.from('llm_usage').upsert({
-    household_id: foyer, month: mois, kind: 'generation',
-    calls: deja + 1, cost_eur: Number(usage?.cost_eur ?? 0),
-  }, { onConflict: 'household_id,month,kind' })
+  // Incrément ATOMIQUE en base : deux appels simultanés lisaient la même
+  // valeur et en écrivaient une seule, si bien qu'un appel sur deux ne
+  // comptait pas. Un garde-fou qui ne compte pas ne garde rien.
+  await admin.rpc('llm_consomme', { p_household: foyer, p_kind: 'generation' })
 
   return reply({
     recette: r.valeur,

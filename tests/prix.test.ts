@@ -192,6 +192,61 @@ describe('le rattachement au foyer', () => {
   })
 })
 
+describe('le trigger n’écrit pas chez les autres', () => {
+  /*
+   * `tg_receipt_line_apprend` est `security definer` — il doit l'être, pour
+   * écrire dans `household_price` sans que le client ait ce droit. Mais
+   * `security definer` CONTOURNE la RLS : sans vérification explicite, la
+   * clause `where id = ...` suffit à écrire n'importe où.
+   *
+   * Ces deux tests ont ÉCHOUÉ avant le correctif de la migration 0027.
+   */
+  it('refuse de remplir le prix payé d’un article d’un autre foyer', async () => {
+    const { data: cycleB } = await admin().from('cycle')
+      .insert({ household_id: bob.householdId, week_of: '2031-01-06' }).select().single()
+    const { data: articleB } = await admin().from('shopping_item').insert({
+      cycle_id: cycleB!.id, household_id: bob.householdId, label: 'poulet de Bob',
+    }).select().single()
+
+    const t = await ticketPour(alice, { store_id: magasin })
+    await alice.client.from('receipt_line').insert({
+      receipt_id: t, household_id: alice.householdId,
+      label: 'DÉTOURNEMENT', price_eur: 99, shopping_item_id: articleB!.id,
+    })
+
+    const { data } = await admin().from('shopping_item')
+      .select('paid_price_eur').eq('id', articleB!.id).single()
+    expect(data!.paid_price_eur, 'un foyer a écrit dans la liste d’un autre').toBeNull()
+  })
+
+  it('ignore une enseigne qui appartient à un autre foyer', async () => {
+    // Sinon le prix appris serait rangé sous une enseigne invisible, et
+    // l'estimation le proposerait ensuite comme venant « d'ailleurs ».
+    const { data: magasinB } = await admin().from('store')
+      .insert({ household_id: bob.householdId, name: 'Enseigne de Bob' }).select().single()
+    const t = await ticketPour(alice, { store_id: magasinB!.id })
+    await ligne(t, { label: 'EMPRUNT', price_eur: 2.5 })
+
+    const p = await prixDe(alice.householdId, 'EMPRUNT')
+    expect(p!.store_id, 'un prix a été rangé sous l’enseigne d’un autre foyer').toBeNull()
+  })
+})
+
+describe('le quota se compte sans en perdre', () => {
+  it('incrémente atomiquement, même en parallèle', async () => {
+    // Le code lisait `calls` puis écrivait `calls + 1` : deux appels simultanés
+    // lisaient la même valeur et un appel sur deux ne comptait pas.
+    const a = admin()
+    await Promise.all(Array.from({ length: 8 }, () =>
+      a.rpc('llm_consomme', { p_household: alice.householdId, p_kind: 'ticket' })))
+
+    const mois = new Date().toISOString().slice(0, 8) + '01'
+    const { data } = await a.from('llm_usage').select('calls')
+      .eq('household_id', alice.householdId).eq('month', mois).eq('kind', 'ticket').single()
+    expect(data!.calls, 'des appels simultanés se sont écrasés').toBe(8)
+  })
+})
+
 describe('l’isolation entre foyers', () => {
   it('laisse le foyer lire ses propres prix', async () => {
     const { data } = await alice.client.from('price_knowledge').select('label')
