@@ -266,7 +266,7 @@ Sab'n'Pepper — uniquement du texte d'article.
 |---|---|---|
 | **A — Référentiel immuable et infrastructure** | `food`, `food_yield_factor`, `unit_weight`, `unit_conversion`, `density`, `default_temperature`, `default_duration`, **`typical_quantity`**, `appliance_catalog`, `ingestion_job`, `instance_setting` | Lecture pour tout utilisateur authentifié. Écriture réservée au **rôle de service**. |
 | **B — Catalogue partagé, écriture authentifiée et tracée** | `recipe`, `recipe_ingredient`, `recipe_step`, `recipe_step_dependency` | Lecture par tous. **Écriture par tout foyer authentifié**, limitée aux champs de confiance faible ou moyenne. **Les quatre tables portent `edited_by_household_id` et `edited_at`.** Conflit : dernier écrivain gagne, **et une session planifiée fige un instantané de ses recettes** (`session_recipe` copie les étapes retenues), pour qu'une correction d'un foyer ne modifie pas un plan déjà calculé chez un autre. |
-| **C — Données de foyer** | `household`, `user_profile`, `nutrition_target`, `invitation`, `household_appliance`, `household_unit_weight`, `household_ingredient_resolution`, **`household_duration_override`**, `weighing`, `session`, `session_recipe`, `session_portion`, `session_appliance_override`, `session_plan`, `plan_conflict`, `fridge_inventory`, `fridge_item`, `shopping_list`, `shopping_item`, `product`, `price_point`, `receipt`, `llm_usage` | RLS stricte — **trois formes de prédicat, pas une** (§5.0.1). |
+| **C — Données de foyer** | `household`, `user_profile`, `nutrition_target`, `invitation`, `household_appliance`, `household_unit_weight`, `household_ingredient_resolution`, **`household_duration_override`**, `weighing`, `session`, `session_recipe`, `session_portion`, `session_appliance_override`, `session_plan`, `plan_conflict`, `fridge_inventory`, `fridge_item`, `shopping_list`, `shopping_item`, `product`, `price_point`, `receipt`, `llm_usage`, **`portion`**, **`portion_event`**, **`frequent_food`** | RLS stricte — **trois formes de prédicat, pas une** (§5.0.1). |
 
 #### 5.0.1 Mécanique des policies — livrable 0a-1
 
@@ -389,6 +389,28 @@ durées ne sont pas confirmées, et l'affiche comme telle. `ingestion_job` est e
 
 `session`, `session_recipe`, `session_portion`, `session_plan`, `plan_conflict` — lot 1.
 `shopping_list` / `shopping_item` — lot 2. `fridge_inventory` / `fridge_item` — lot 3.
+
+**`portion`** — créée au lot 1 (la session la produit), consommée aux lots 3 et 6 :
+
+| Champ | Rôle |
+|---|---|
+| `session_id`, `recipe_id`, `household_id` | D'où elle vient |
+| `user_profile_id` NULL | À qui elle est destinée quand les parts sont inégales (D25) |
+| `grams`, `macros` jsonb | Calculées au dressage, en intervalle (D18) |
+| `cost_eur` | Le coût de la part (lot 5) |
+| **`etat`** | `frigo` \| `congelateur` \| `mangee` \| `jetee` |
+| `prepared_at` | Date et heure de préparation |
+| `stored_at` | Date et heure de la mise au froid **courant** |
+| `expires_at` | Recalculée à chaque transition : 3-4 j au frigo, 3 mois au congélateur, 24 h après décongélation (D27) |
+| `eaten_at`, `meal` | Quand, et à quel repas — `petit_dejeuner` \| `dejeuner` \| `diner` \| `collation` |
+
+`portion_event(portion_id, de_etat, vers_etat, at)` conserve **chaque** transition : c'est
+cet historique qui permet de dire combien vous jetez et ce que ça coûte (D36).
+
+**`frequent_food`** — lot 6, classe C : `household_id`, `label`, `food_id` NULL, `grams`,
+`macros` jsonb, `default_meal`, `usage_count`. Enregistré une fois, réutilisable en un geste
+sur un repas daté (D38). Les plus utilisés remontent en tête — c'est ce qui rend la saisie du
+midi tenable (D26, D34).
 `product`, `price_point`, `receipt` — lot 5.
 `llm_usage(household_id **NULL**, month, calls, cost_eur, kind)` — lot 0a-1. Plafond global dans `instance_setting.llm_global_monthly_cap_eur` (classe A), plafond par foyer dans `household.llm_monthly_cap_eur` :
 **`household_id` NULL = consommation système** (ingestion mutualisée, D11/D13), soumise au
