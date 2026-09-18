@@ -90,6 +90,58 @@ Le différenciateur est le point 2 : l'ordonnancement de la session sous contrai
 
 ---
 
+## 3. Le cycle
+
+**Cette section prime sur toutes les autres.** Le document a longtemps été organisé par lots de
+construction — schéma, ingestion, cuisiner, courses — c'est-à-dire par dépendance technique,
+exactement à l'envers de la séquence vécue. C'est la cause matérielle du « pas de fil conducteur ».
+
+L'application n'est pas un ensemble de fonctions, ni un calendrier : c'est **une machine à états
+sur une semaine**, et il n'y en a **qu'une instance courante à la fois**.
+
+### 3.1 Les états
+
+| État | Ce qui est vrai | Écran | Sortie |
+|---|---|---|---|
+| `vide` | Rien de prévu pour la semaine | Accueil | **Choisir** → `selection` |
+| `selection` | Recettes retenues, portions cibles, manques calculés | Choisir | **Valider** → `courses` |
+| `courses` | Une liste figée **par magasin**, budget estimé | Au magasin | **L'utilisateur déclare** → `pret` (D59) |
+| `pret` | Ingrédients au frigo, plan calculé, équipement connu | Plan | **Commencer** → `en_cuisine` |
+| `en_cuisine` | Horloge qui tourne, tâches cochées, **replanification continue** (D47) | En cuisine | Dernière tâche → `dressage` |
+| `interrompue` | Ce qui est fait, ce qui cuit, ce qui reste | Accueil, bandeau | **Reprendre** → `en_cuisine` replanifié |
+| `dressage` | Parts **réellement** obtenues, pesées, nommées, affectées (D53) | Dressage | **Valider** → `semaine` |
+| `semaine` | Chaque repas a un jour, un plat, une personne (D39) | La semaine | Dimanche → `cloture` |
+| `cloture` | Restes, jetés, coût réel | Accueil | **Préparer la suivante** → `selection` préchargée des restes (D54) |
+
+**Une porte latérale, jamais le chemin principal** : `dépannage` — « qu'est-ce que je peux faire
+avec ce que j'ai » — accessible depuis *Ce que j'ai*, quel que soit l'état du cycle. Elle produit
+soit un plat le soir même (une ou deux parts créées directement, sans session), soit un ajout à la
+`selection` en cours.
+
+### 3.2 Ce que le cycle impose
+
+- **L'accueil est la vue de l'état courant**, et ne pousse **qu'une seule action** (D42).
+- **Choisir, Au magasin, Plan/En cuisine et Dressage ne sont pas des destinations** : ce sont des
+  moments. On y entre depuis l'accueil. Les quatre destinations permanentes sont
+  **Accueil · Semaine · Ce que j'ai · Bilan** (D51, D52).
+- **Le jour de la semaine n'entre pas dans la machine.** Choisir ses recettes un mercredi ou un
+  samedi ne change rien : c'est l'état qui compte.
+- **Chaque transition produit une donnée**, jamais une ressaisie : cocher au magasin remplit le
+  frigo (D49), le dressage crée les parts (D53), la répartition décide du rangement (D40).
+
+### 3.3 Les trois tables qui portent le cycle
+
+| Table | Rôle |
+|---|---|
+| `cycle(household_id, week_start, etat, session_id, shopping_list_id)` | **Porte l'état du mercredi au dimanche.** Sans elle, il n'y a littéralement rien à quoi accrocher le fil. |
+| `meal_slot(cycle_id, date, meal, user_profile_id, portion_id, source, etat)` | À la fois la répartition, l'écran *La semaine*, et l'entrée du calcul frigo/congélateur. Unifie D24, D26, D33, D34 et D39, qui décrivaient jusqu'ici cinq saisies sans objet commun. |
+| `session_task_state(session_id, task_id, etat, started_at, done_at, by_user_profile_id)` | Donne d'un coup l'interruption, la reprise, **la cuisine à deux** (D50) et **la mesure des durées réelles** (D48). |
+
+Plus `session.scheduled_at` : sans date, aucune notification, aucun « fais les courses samedi »,
+aucune DLC relative au plan.
+
+---
+
 ## 3. Architecture et stack
 
 ```
@@ -732,9 +784,9 @@ interface PriceSource {
 | **0a-2 · Référentiels** | Import CIQUAL intégral, **groupes et sous-groupes compris** · accès OFF à la demande avec cache · **constitution à la main de `unit_conversion`, `density`, `default_temperature`, `default_duration` (avec `scaling`), `typical_quantity`** (~250 lignes de seed versionnées) | Le socle nutritionnel. Ne bloque que 0b et 0c. |
 | **0b · Ingestion** | Précédé de **R1b, R1, R2**. Politique de sélection des 5 000 recettes figée (§7.1). Worker MCP, découverte sitemap, extraction, durées pré-remplies à double ancrage (D15/D19), normalisation, calcul en intervalle (D18), file de relecture paresseuse (D17). **UI** : écran de relecture à la sélection. | ~5 000 recettes structurées et filtrables. |
 | **0c · Pesée** | Boucle d'apprentissage §5.2.1. **UI** : saisie des poids. | La promesse « strict » devient vraie. |
-| **1 · Cuisiner** | Optimiseur, équipement par session, Gantt, arbitrage du four, bilan par personne | **La session du dimanche fonctionne.** |
-| **2 · Courses** | Agrégation, édition, envoi par e-mail | La liste arrive le samedi. |
-| **3 · Frigo** | Autocomplétion, puis photo + vision (R3), soustraction à la liste | Plus d'achats en double. |
+| **1 · La boucle complète** ⚑ | **Livrée d'un bloc**, parce qu'elle n'a aucun sens en morceaux : Choisir → Au magasin → Plan/En cuisine (avec horloge, D47) → **Dressage** (D53) → **La semaine** (D39) → clôture (D54). Plus l'accueil, vue du cycle. | **Le cycle tourne pour de vrai.** |
+| ~~2 · Courses~~ | **Absorbé par le lot 1.** Une version qui permettrait de cuisiner sans avoir fait les courses n'a pas de sens. | — |
+| **3 · Ce que j'ai** | Saisie manuelle avec autocomplétion **d'abord** (D57) ; le contenu se remplit surtout **en cochant au magasin** (D49). La photo (R3) vient en accélérateur, et ne rend jamais de quantité. | Plus d'achats en double. |
 | **4 · Envies et propositions** | Le parcours de §10.1, en trois temps : recherche par ingrédients du frigo → filtres → **génération IA sur demande explicite uniquement**. | Le moteur de suggestion. |
 | **5 · Prix** | `PriceSource` + 4 adaptateurs, estimation du panier, veille nouveautés | Budget prévisible. |
 | **6 · Suivi** | Tableau de bord mensuel : calories et protéines par jour contre objectif (**deux graphiques, jamais deux axes**), budget en chiffre et jauge, coût par portion. Alimenté par les barquettes cochées (D24), complété par les repères en un geste (D34), et **honnête sur les jours non renseignés** (D33). | Le recul sur 3 mois. |
