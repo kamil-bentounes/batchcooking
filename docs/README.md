@@ -7,8 +7,10 @@
 | [`schema.md`](schema.md) | Modèle de données et règles d'isolation |
 | [`ingestion.md`](ingestion.md) | Remplir le catalogue de recettes |
 | [`llm.md`](llm.md) | Quel modèle, où, ce qu'il voit, ce qu'il coûte |
+| [`prix.md`](prix.md) | Le ticket de caisse, le rapprochement, les prix appris |
 | [`prompts.md`](prompts.md) | Les prompts, le schéma strict, la lecture de photo |
 | [`dev.md`](dev.md) | Lancer le projet en local |
 
 > Les documents de conception (spec, plan, mesures) sont dans `.design/` — ce sont des
 > brouillons de travail, pas de la documentation.
+
