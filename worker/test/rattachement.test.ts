@@ -62,7 +62,7 @@ const CORPUS: [string, RegExp][] = [
   ['poivron', /^Poivron/],
   ['saumon', /^Saumon, cru/],
   ['crème', /^Crème de lait/],
-  ['yaourt', /^Yaourt, lait fermenté/],
+  ['yaourt', /^Yaourt(,| ou)/],
   ['jambon', /^Jambon cuit/],
   ['thon', /^Thon, cru$/],
   ['lentilles', /^Lentille, bouillie/],
@@ -97,6 +97,19 @@ const CORPUS: [string, RegExp][] = [
   ['maïzena', /^Amidon de maïs/],
   ['thym', /^Thym/],
   ['paprika', /^Paprika$/],
+  /*
+   * Et les formes composées, relevées elles aussi sur la production : le score
+   * seul les envoyait au mauvais endroit parce que le nom CIQUAL canonique est
+   * long et que la précision le punissait. « Sel et poivre » rendait
+   * « Beurre à 80% MG, demi-sel » — 217 lignes de recette annonçaient du beurre
+   * là où il y a du sel.
+   */
+  ['sel et poivre', /^Sel /],
+  ['sel fin', /^Sel blanc/],
+  ['sauce tomate', /^Tomate, coulis/],
+  ['jambon', /^Jambon cuit/],
+  ['lentilles', /^Lentille, bouillie/],
+  ['lait', /^Lait entier/],
 ]
 
 describe('les trente ingrédients les plus courants', () => {

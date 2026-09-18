@@ -197,13 +197,48 @@ export const SYNONYMES: Record<string, string> = {
   'eau tiede': 'eau du robinet',
   'sauce soja': 'sauce soja preemballee',
   'soja sauce': 'sauce soja preemballee',
+
+  /*
+   * Et ceux que le score seul ne peut pas trancher, parce que le français
+   * courant et CIQUAL ne nomment pas la même chose : « jambon » veut dire
+   * jambon CUIT dans une recette française, et « 200 g de lentilles » est un
+   * poids de lentilles SÈCHES, celui qu'on achète et qu'on pèse.
+   */
+  'jambon': 'jambon cuit superieur',
+  'des de jambon': 'jambon cuit superieur',
+  'lait': 'lait entier uht',
+  'yaourt nature': 'yaourt lait fermente ou specialite laitiere nature',
+  'sauce tomate': 'tomate coulis appertise puree',
+  'eau de fleur d oranger': 'eau de fleur d oranger',
 }
 
-export interface AlimentIndexe { id: string; name: string; state: string; _mots?: Set<string> }
+export interface AlimentIndexe {
+  id: string
+  name: string
+  state: string
+  _mots?: Set<string>
+  /** Les mots de la TÊTE du nom : ce qui précède la première virgule. */
+  _tete?: Set<string>
+}
 
-/** Prépare l'index une fois : 3 185 aliments, on ne veut pas replier à chaque ligne. */
+/**
+ * Prépare l'index une fois : 3 185 aliments, on ne veut pas replier à chaque ligne.
+ *
+ * On garde la TÊTE à part, parce que CIQUAL nomme ses aliments « Tête,
+ * qualificatifs » : « Tomate, crue », « Beurre à 82% MG, doux », « Sel blanc
+ * alimentaire, iodé, non fluoré (marin, ignigène ou gemme) ». La tête est
+ * l'aliment ; le reste le précise.
+ *
+ * Compter la queue dans la précision punissait les entrées CANONIQUES, qui
+ * sont justement celles que CIQUAL décrit le plus longuement : « sel » perdait
+ * contre « Beurre à 80% MG, demi-sel », dont la tête ne parle même pas de sel.
+ * 217 lignes de recette annonçaient du beurre là où il y a du sel.
+ */
 export function indexer(aliments: AlimentIndexe[]): AlimentIndexe[] {
-  for (const a of aliments) a._mots = new Set(mots(a.name))
+  for (const a of aliments) {
+    a._mots = new Set(mots(a.name))
+    a._tete = new Set(mots(a.name.split(/[,(]/)[0]))
+  }
   return aliments
 }
 
@@ -213,7 +248,10 @@ export function indexer(aliments: AlimentIndexe[]): AlimentIndexe[] {
  * spécifique ne doit pas gagner contre une entrée générique).
  */
 function score(recherche: string[], cible: AlimentIndexe, prefereCru: boolean): number {
-  const c = cible._mots!
+  // La TÊTE porte l'aliment ; la queue le précise. On mesure sur la tête, et la
+  // queue ne peut qu'ajouter — jamais retrancher.
+  const c = cible._tete!.size > 0 ? cible._tete! : cible._mots!
+  const queue = cible._mots!
   if (!recherche.length || !c.size) return 0
   const communs = recherche.filter(m => c.has(m)).length
   if (!communs) return 0
@@ -257,8 +295,8 @@ function score(recherche: string[], cible: AlimentIndexe, prefereCru: boolean): 
   if (COMPOSITE.test(tete) && !COMPOSITE.test(demande)) s *= 0.5
   // CIQUAL nomme ses entrées génériques : quand elle existe, c'est CELLE-LÀ
   // qu'une recette sans précision désigne.
-  if (GENERIQUE.test(cible.name)) s *= 1.25
-  if (prefereCru && cible.state === 'cuit') s *= 0.85
+  if (GENERIQUE.test(cible.name)) s *= 1.08
+  if (prefereCru && cible.state === 'cuit') s *= 0.75
 
   /**
    * ⚠️ Sans cela, « carotte » choisit « Bœuf aux carottes » : un plat composé a
@@ -269,6 +307,11 @@ function score(recherche: string[], cible: AlimentIndexe, prefereCru: boolean): 
    */
   const teteCible = [...c][0]
   if (teteCible && teteCible === recherche[0]) s *= 1.35
+
+  // Ce que la recette demande et que seule la QUEUE porte : « lait demi-écrémé »
+  // contre « Lait demi-écrémé, UHT ». Un bonus, jamais une pénalité.
+  const dansLaQueue = recherche.filter(m => !c.has(m) && queue.has(m)).length
+  if (dansLaQueue > 0) s *= 1 + 0.12 * dansLaQueue
 
   return s
 }
@@ -314,5 +357,17 @@ export function rattacher(
   }
 
   if (!meilleur || meilleurScore < SEUIL) return null
-  return { foodId: meilleur.id, nom: meilleur.name, score: Number(meilleurScore.toFixed(3)) }
+  /*
+   * Le score RENDU est borné à 1, celui qui a servi à comparer ne l'est pas.
+   *
+   * Les bonus sont multiplicatifs — tête de nom, entrée générique, mot trouvé
+   * dans la queue — et peuvent dépasser 1. C'est sans importance pour choisir
+   * le vainqueur, mais `confidence` est une CONFIANCE : elle se lit entre 0 et
+   * 1, la base le vérifie, et c'est elle qui décide du verrou de relecture.
+   */
+  return {
+    foodId: meilleur.id,
+    nom: meilleur.name,
+    score: Number(Math.min(1, meilleurScore).toFixed(3)),
+  }
 }
