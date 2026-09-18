@@ -739,5 +739,107 @@
       "lustrer": "beurrer",
       "débiter": "couper"
     }
+  },
+  "suggested_item": {
+    "_note": "Propositions du bouton « Compléter ma liste ». Hors-alimentaire pour l'essentiel : aucun rattachement CIQUAL, donc exclus du calcul nutritionnel mais comptés au budget (D43). Chaque article prend le magasin par défaut du foyer, modifiable.",
+    "categories": {
+      "Entretien": [
+        "Liquide vaisselle",
+        "Pastilles lave-vaisselle",
+        "Sel régénérant",
+        "Liquide de rinçage",
+        "Éponges",
+        "Éponge grattante",
+        "Lessive",
+        "Adoucissant",
+        "Produit WC",
+        "Produit vitres",
+        "Dégraissant",
+        "Détartrant",
+        "Javel",
+        "Désodorisant",
+        "Sacs poubelle",
+        "Essuie-tout",
+        "Serpillière",
+        "Gants de ménage",
+        "Recharge balai"
+      ],
+      "Hygiène": [
+        "Savon",
+        "Gel douche",
+        "Shampoing",
+        "Après-shampoing",
+        "Dentifrice",
+        "Brosse à dents",
+        "Fil dentaire",
+        "Bain de bouche",
+        "Déodorant",
+        "Rasoirs",
+        "Mousse à raser",
+        "Cire à épiler",
+        "Bandes d'épilation",
+        "Coton",
+        "Cotons-tiges",
+        "Mouchoirs",
+        "Papier toilette",
+        "Protections périodiques",
+        "Crème hydratante",
+        "Crème solaire"
+      ],
+      "Épicerie": [
+        "Café",
+        "Thé",
+        "Infusion",
+        "Sucre",
+        "Sel",
+        "Poivre",
+        "Huile d'olive",
+        "Huile de tournesol",
+        "Vinaigre",
+        "Farine",
+        "Pâtes",
+        "Riz",
+        "Lentilles",
+        "Pois chiches",
+        "Conserve de tomates",
+        "Lait de coco",
+        "Miel",
+        "Confiture",
+        "Moutarde",
+        "Ketchup",
+        "Mayonnaise",
+        "Bouillon cube"
+      ],
+      "Frais du quotidien": [
+        "Skyr",
+        "Yaourts",
+        "Fromage blanc",
+        "Lait",
+        "Œufs",
+        "Beurre",
+        "Crème fraîche",
+        "Fromage râpé",
+        "Jambon",
+        "Pain",
+        "Pain de mie"
+      ],
+      "Boissons": [
+        "Eau",
+        "Eau pétillante",
+        "Jus d'orange",
+        "Soda",
+        "Bière",
+        "Vin"
+      ],
+      "Maison": [
+        "Film alimentaire",
+        "Papier cuisson",
+        "Sacs congélation",
+        "Boîtes de conservation",
+        "Aluminium",
+        "Piles",
+        "Ampoules"
+      ]
+    }
   }
 }
