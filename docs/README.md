@@ -8,6 +8,7 @@
 | [`ingestion.md`](ingestion.md) | Remplir le catalogue de recettes |
 | [`llm.md`](llm.md) | Quel modèle, où, ce qu'il voit, ce qu'il coûte |
 | [`prix.md`](prix.md) | Le ticket de caisse, le rapprochement, les prix appris |
+| [`suivi.md`](suivi.md) | Le tableau de bord : jours non renseignés, deux graphiques, budget |
 | [`prompts.md`](prompts.md) | Les prompts, le schéma strict, la lecture de photo |
 | [`dev.md`](dev.md) | Lancer le projet en local |
 

@@ -449,18 +449,21 @@ export type Database = {
       household: {
         Row: {
           created_at: string
+          food_budget_eur: number | null
           id: string
           llm_monthly_cap_eur: number
           name: string
         }
         Insert: {
           created_at?: string
+          food_budget_eur?: number | null
           id?: string
           llm_monthly_cap_eur?: number
           name: string
         }
         Update: {
           created_at?: string
+          food_budget_eur?: number | null
           id?: string
           llm_monthly_cap_eur?: number
           name?: string

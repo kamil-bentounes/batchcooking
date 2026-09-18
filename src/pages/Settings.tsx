@@ -4,6 +4,8 @@ import { Page, Groupe, Bouton, Champ, Message } from '../ui/kit'
 
 export function Settings() {
   const [plafond, setPlafond] = useState(5)
+  /** Vide = pas de budget fixé. Ne pas s'en fixer est un choix légitime. */
+  const [courses, setCourses] = useState('')
   const [reste, setReste] = useState<number | null>(null)
   const [invite, setInvite] = useState('')
   const [lien, setLien] = useState('')
@@ -11,8 +13,11 @@ export function Settings() {
 
   async function charger() {
     const { data: h } = await supabase.from('household')
-      .select('llm_monthly_cap_eur').maybeSingle()
-    if (h) setPlafond(Number(h.llm_monthly_cap_eur))
+      .select('llm_monthly_cap_eur, food_budget_eur').maybeSingle()
+    if (h) {
+      setPlafond(Number(h.llm_monthly_cap_eur))
+      setCourses(h.food_budget_eur === null ? '' : String(Number(h.food_budget_eur)))
+    }
     const { data: r } = await supabase.rpc('llm_budget_remaining')
     setReste(r === null ? null : Number(r))
   }
@@ -26,6 +31,16 @@ export function Settings() {
     const { error } = await supabase.from('household')
       .update({ llm_monthly_cap_eur: plafond }).eq('id', hh)
     dire(error ? error.message : 'Plafond enregistré.', !!error)
+    if (!error) charger()
+  }
+
+  async function enregistrerCourses() {
+    const { data: hh } = await supabase.rpc('current_household')
+    if (!hh) return dire('Aucun foyer.', true)
+    const v = courses.trim() === '' ? null : Number(courses.replace(',', '.'))
+    if (v !== null && !(v > 0)) return dire('Un budget se compte en euros, au-dessus de zéro.', true)
+    const { error } = await supabase.from('household').update({ food_budget_eur: v }).eq('id', hh)
+    dire(error ? error.message : v === null ? 'Budget retiré.' : 'Budget enregistré.', !!error)
     if (!error) charger()
   }
 
@@ -76,6 +91,22 @@ export function Settings() {
             <Bouton variante="discret" onClick={enregistrerPlafond}>Enregistrer le plafond</Bouton>
           </div>
         </Groupe></div>
+      </section>
+
+      <section className="mt-12">
+        <h2 className="titre text-xl text-herbe">Budget des courses</h2>
+        <p className="mt-1 text-doux text-[15px]">
+          Le repère du bilan. Laisse vide si tu n’en veux pas : l’app affichera
+          ce qui est sorti du compte, sans jauge et sans jugement.
+        </p>
+        <div className="mt-4 space-y-4">
+          <Champ label="Par mois (€)" type="number" step="10" min="0" value={courses}
+                 placeholder="320"
+                 onChange={e => setCourses(e.target.value)} />
+          <Bouton variante="discret" onClick={enregistrerCourses}>
+            Enregistrer le budget
+          </Bouton>
+        </div>
       </section>
 
       <section className="mt-12">
