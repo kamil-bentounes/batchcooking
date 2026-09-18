@@ -20,6 +20,38 @@ describe('RGPD', () => {
     expect(data.profiles.every((p: any) => p.household_id === alice.householdId)).toBe(true)
   })
 
+  it("n'oublie aucune table de données de foyer", async () => {
+    // Ce test existe pour une raison précise : l'export a déjà pris du retard
+    // sur le schéma une fois. Il doit échouer le jour où l'on ajoute une table
+    // de classe C sans l'ajouter à `export_my_data`.
+    const { data: tables } = await admin().rpc('tables_de_foyer')
+    const { data: exporte } = await alice.client.rpc('export_my_data')
+    const cles = new Set(Object.keys(exporte))
+
+    // Correspondance table → clé de l'export. Le pluriel est celui du JSON.
+    const attendu: Record<string, string> = {
+      household: 'household', user_profile: 'profiles',
+      nutrition_target: 'nutrition_targets', invitation: 'invitations',
+      llm_usage: 'llm_usage', cycle: 'cycles', cycle_recipe: 'cycle_recipes',
+      store: 'stores', aisle_order: 'aisle_order', shopping_item: 'shopping_items',
+      shopping_trip: 'shopping_trips', shopping_habit: 'shopping_habits',
+      session_task: 'session_tasks', session_appliance: 'session_appliances',
+      duration_observation: 'duration_observations', portion: 'portions',
+      portion_event: 'portion_events', meal_slot: 'meal_slots',
+      meal_extra: 'meal_extras', frequent_food: 'frequent_foods',
+      stock_item: 'stock_items',
+    }
+
+    const oubliees = (tables as { table_name: string }[])
+      .map(t => t.table_name)
+      // Ces deux-là n'ont pas de colonne household_id propre : elles suivent
+      // leur parent, déjà exporté.
+      .filter(t => !['session_task_recipe', 'session_task_dependency'].includes(t))
+      .filter(t => !cles.has(attendu[t] ?? t))
+
+    expect(oubliees, 'tables de foyer absentes de l’export').toEqual([])
+  })
+
   it('supprime le compte et ses données en cascade', async () => {
     const victim = await makeActor('victime')
     await victim.client.from('nutrition_target').insert({

@@ -422,3 +422,8 @@ verify_jwt = false
 
 [functions.accept-invite]
 verify_jwt = false
+
+# Le jeton est vérifié dans la fonction elle-même : verify_jwt = true ferait
+# échouer le préflight CORS, qui ne porte aucun en-tête d'autorisation.
+[functions.inventer]
+verify_jwt = false

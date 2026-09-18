@@ -58,6 +58,14 @@ await charger('non_action_pattern',
   c.non_action.motifs.map(m => ({ pattern: m })), 'pattern')
 await charger('default_duration',    c.default_duration,    'verb,appliance_type')
 
+// Le catalogue du bouton « Compléter ma liste » (D43). La position garde
+// l'ordre de la liste écrite à la main : elle vaut mieux que l'alphabétique,
+// qui séparerait « Éponges » de « Éponge grattante ».
+await charger('suggested_item',
+  Object.entries(c.suggested_item.categories).flatMap(([category, labels]) =>
+    labels.map((label, position) => ({ category, label, position }))),
+  'category,label')
+
 // La densité pointe sur un aliment : on résout le code CIQUAL en identifiant.
 const codes = c.density.map(d => d.ciqual_code)
 const { data: refs, error } = await db.from('food')

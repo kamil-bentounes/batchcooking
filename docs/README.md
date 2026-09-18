@@ -3,6 +3,7 @@
 | Doc | Contenu |
 |---|---|
 | [`api.md`](api.md) | Surface d'API : tables, verbes autorisés, fonctions RPC, Edge Functions |
+| [`cycle.md`](cycle.md) | Le cycle : les états, la séquence, ce que produit une session |
 | [`schema.md`](schema.md) | Modèle de données et règles d'isolation |
 | [`dev.md`](dev.md) | Lancer le projet en local |
 

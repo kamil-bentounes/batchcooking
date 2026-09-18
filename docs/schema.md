@@ -1,12 +1,27 @@
 # Schéma
 
-20 tables, trois classes d'isolation. Toute policy RLS découle de la classe.
+41 tables, trois classes d'isolation. Toute policy RLS découle de la classe.
 
 | Classe | Règle | Tables |
 |---|---|---|
-| **A — référentiel** | Lecture : tout authentifié. Écriture : rôle de service. | `food`, `food_yield_factor`, `unit_weight`, `unit_conversion`, `density`, `default_temperature`, `default_duration`, `typical_quantity`, `appliance_catalog`, `ingestion_job`, `instance_setting` |
+| **A — référentiel** | Lecture : tout authentifié. Écriture : rôle de service. | `food`, `food_yield_factor`, `unit_weight`, `unit_conversion`, `density`, `default_temperature`, `default_duration`, `typical_quantity`, `appliance_catalog`, `ingestion_job`, `instance_setting`, `non_action_pattern`, `suggested_item`, `cycle_transition` |
 | **B — catalogue partagé** | Lecture : tous. `UPDATE` tracé, refusé si `confidence >= 0.8`. Ni `INSERT` ni `DELETE`. | `recipe`, `recipe_ingredient`, `recipe_step`, `recipe_step_dependency` |
-| **C — foyer** | RLS stricte, trois formes de prédicat. | `household`, `user_profile`, `nutrition_target`, `invitation`, `llm_usage` |
+| **C — foyer** | RLS stricte, trois formes de prédicat. | `household`, `user_profile`, `nutrition_target`, `invitation`, `llm_usage` + les 18 tables du lot 1 (ci-dessous) |
+
+## Les tables du lot 1
+
+| Domaine | Tables | Ce qu'elles portent |
+|---|---|---|
+| Le cycle | `cycle`, `cycle_recipe` | L'état de la semaine, les recettes choisies. Voir [`cycle.md`](cycle.md) |
+| Les courses | `store`, `aisle_order`, `shopping_item`, `shopping_trip`, `shopping_habit` | Une sortie par magasin, l'ordre des rayons appris du geste |
+| La session | `session_task`, `session_task_recipe`, `session_task_dependency`, `session_appliance`, `duration_observation` | Le plan calculé et persisté, les durées mesurées |
+| Les barquettes | `portion`, `portion_event` | L'unité de suivi, et son journal |
+| La semaine | `meal_slot`, `meal_extra`, `frequent_food` | Ce qui est prévu, ce qui a été mangé en plus |
+| L'inventaire | `stock_item` | Frigo, congélateur, placard |
+
+Les quatre policies (`select`, `insert`, `update`, `delete`) sont écrites
+**séparément** sur chacune. Jamais `for all` : la leçon a déjà été payée sur
+`household`, où `for all` incluait `DELETE`.
 
 ## Les trois prédicats de la classe C
 
@@ -33,6 +48,16 @@ remettrait `current_household()` à `NULL` et lui permettrait de créer un secon
 | `is_service_role()` | `current_user = 'service_role'`, plus le claim JWT en secours. |
 | `tg_class_b_guard` | `BEFORE UPDATE` sur les 4 tables de classe B. Pose la traçabilité, refuse les lignes sûres. Générique via `to_jsonb(old) ? 'confidence'`. |
 | `tg_nutrition_target_household` | `BEFORE INSERT` : remplit `household_id`. S'exécute avant `NOT NULL` et avant le `WITH CHECK`. |
+| `current_cycle()` | Le cycle vivant du foyer, ou `NULL`. |
+| `open_cycle(week, servings)` | Rend le cycle vivant s'il y en a un, refuse de rouvrir une semaine close. |
+| `tg_cycle_transition` | `BEFORE UPDATE OF state` : refuse toute transition absente de `cycle_transition`, horodate `started_at` et `closed_at`. |
+| `tg_derive_household` | Générique. Dérive `household_id` du parent (`TG_ARGV`) : RLS empêche d'écrire au nom d'un autre foyer, pas de s'accrocher à SON cycle. |
+| `tg_portion_peremption` | Pose `expires_at` selon le lieu : frigo 4 j, congélateur 90 j, décongelée **24 h**. Sortir du congélateur *est* une décongélation. |
+| `tg_portion_journal` | `AFTER` : écrit `portion_event`. Le journal n'a ni `INSERT`, ni `UPDATE`, ni `DELETE` pour personne. |
+| `tg_shopping_check` | Cocher = rang + ordre des rayons appris + entrée à l'inventaire + habitude retenue. **En base**, parce que deux téléphones cochent la même liste. |
+| `tg_session_task_duree` / `_mesure` | La durée réelle est mesurée entre « je prends » et « c'est fait », jamais demandée. Alimente `duration_observation`. |
+| `tg_meal_slot_consomme` | Une case passée à « mangé » consomme sa barquette. |
+| `tables_de_foyer()` | Introspection, rôle de service. Sert au test qui empêche `export_my_data` de prendre du retard sur le schéma. |
 
 ## Budget LLM
 

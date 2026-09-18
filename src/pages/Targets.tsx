@@ -63,9 +63,13 @@ export function Targets({ userId }: { userId: string }) {
   useEffect(() => { charger() }, [userId])
 
   async function enregistrer() {
+    // Le trigger redérive household_id, mais la colonne est NOT NULL : on la
+    // pose quand même, pour que le code dise ce que la base exige.
+    const { data: hh } = await supabase.rpc('current_household')
+    if (!hh) { setErr(true); setMsg('Aucun foyer.'); return }
     // INSERT, jamais UPDATE : les objectifs sont historisés.
     const { error } = await supabase.from('nutrition_target')
-      .insert({ user_profile_id: userId, ...v })
+      .insert({ user_profile_id: userId, household_id: hh, ...v })
     setErr(!!error); setMsg(error ? error.message : 'Objectif enregistré.')
     if (!error) charger()
   }

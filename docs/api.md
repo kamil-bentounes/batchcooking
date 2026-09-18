@@ -14,6 +14,9 @@ Tout passe par PostgREST sauf les Edge Functions. Les droits sont appliqués par
 | `nutrition_target` | ✅ | ✅² | ✅² | ✅² | Lecture : le foyer. Écriture : soi |
 | `invitation` | ✅ | ✅ | ✅ | ✅ | Son foyer |
 | `llm_usage` | ✅ | ❌ | ❌ | ❌ | Ses lignes. La ligne système (`household_id IS NULL`) reste invisible |
+| `suggested_item`, `cycle_transition` | ✅ | ❌ | ❌ | ❌ | Référentiel global |
+| `cycle`, `cycle_recipe`, `store`, `aisle_order`, `shopping_item`, `shopping_trip`, `shopping_habit`, `session_task`, `session_task_recipe`, `session_task_dependency`, `session_appliance`, `portion`, `meal_slot`, `meal_extra`, `frequent_food`, `stock_item` | ✅ | ✅ | ✅ | ✅ | Son foyer, les quatre verbes |
+| `portion_event`, `duration_observation` | ✅ | ❌ | ❌ | ❌ | Journaux : écrits par trigger, jamais réécrits |
 
 ¹ Refusé si `confidence >= 0.8`. Chaque écriture pose `edited_by_household_id` et `edited_at`.
 ² `id` / `user_profile_id` doit valoir `auth.uid()`. Sur `nutrition_target`, `household_id` est posé par trigger : ne pas l'envoyer.
@@ -26,10 +29,18 @@ Tout passe par PostgREST sauf les Edge Functions. Les droits sont appliqués par
 | `create_household` | `p_name text` | `uuid` | authentifié **sans** foyer, si l'instance est ouverte |
 | `llm_budget_remaining` | — | `numeric` (€) | authentifié |
 | `llm_global_budget_remaining` | — | `numeric` (€) | **rôle de service uniquement** |
+| `current_cycle` | — | `uuid` \| `null` | authentifié |
+| `open_cycle` | `p_week_of date`, `p_servings int` | `uuid` | authentifié |
 | `export_my_data` | — | `jsonb` | authentifié |
 | `delete_my_account` | — | `void` | authentifié |
 
 `create_household` lève `déjà rattaché à un foyer` (23505) ou `création de foyer fermée` (42501).
+`open_cycle` rend le cycle vivant s'il y en a un, et lève `unique_violation` si la semaine
+demandée a déjà son cycle clos — on n'efface pas un bilan pour recommencer.
+
+**Transitions d'état** : `PATCH /cycle` avec `state` lève `check_violation`
+(`transition de cycle interdite : X -> Y`) pour tout ce qui n'est pas dans
+`cycle_transition`. Le client ne double pas la machine à états.
 
 ## Edge Functions — `POST /functions/v1/<nom>`
 
@@ -37,6 +48,14 @@ Tout passe par PostgREST sauf les Edge Functions. Les droits sont appliqués par
 |---|---|---|---|
 | `invite` | `{ email }` | `{ token, link }` | 401 non authentifié · 403 aucun foyer · 400 e-mail manquant · 409 invitation déjà en attente |
 | `accept-invite` | `{ token }` | `{ household_id }` | 401 · 400 token manquant · 404 inconnue · 409 déjà utilisée ou déjà rattaché · 410 expirée |
+| `inventer` | `{ envie, perimetre, proteinesMin, kcalMax, minutesMax, appareils, parts }` | `{ recette, restantes, quota }` | 401 · 403 aucun foyer · 429 quota mensuel atteint · 502 modèle injoignable ou illisible · 503 aucun modèle configuré |
+
+`inventer` : **10 générations par foyer et par mois**, vérifiées *avant* l'appel.
+Le prompt est construit côté serveur — le modèle reçoit des bornes chiffrées
+(« au moins 30 g de protéines »), jamais un objectif nominatif.
+Variables d'environnement : `LLM_API_KEY` (requise), `LLM_BASE_URL`
+(défaut `https://api.openai.com/v1`), `LLM_MODEL` (défaut `gpt-4o-mini`).
+Toute API compatible OpenAI convient, y compris auto-hébergée.
 
 `OPTIONS` répond 200 avec `Access-Control-Allow-Origin: *`. Les deux fonctions valident le JWT elles-mêmes.
 

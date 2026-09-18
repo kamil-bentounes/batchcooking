@@ -1,18 +1,30 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
+import { useRoute } from './lib/route.ts'
 import { SignIn } from './pages/SignIn'
 import { Password } from './pages/Password'
 import { Onboarding } from './pages/Onboarding'
 import { Targets } from './pages/Targets'
 import { Settings } from './pages/Settings'
 import { AcceptInvite } from './pages/AcceptInvite'
+import { Accueil } from './pages/Accueil.tsx'
+import { Choisir } from './pages/Choisir.tsx'
+import { Magasin } from './pages/Magasin.tsx'
+import { Plan } from './pages/Plan.tsx'
+import { Cuisine } from './pages/Cuisine.tsx'
+import { Dressage } from './pages/Dressage.tsx'
+import { Semaine } from './pages/Semaine.tsx'
+import { Stock } from './pages/Stock.tsx'
+import { Bilan } from './pages/Bilan.tsx'
+import { Inventer } from './pages/Inventer.tsx'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [foyer, setFoyer] = useState<string | null>(null)
   const [mdpPose, setMdpPose] = useState(true)
   const [pret, setPret] = useState(false)
+  const { ici, va, retour } = useRoute()
 
   const relire = useCallback(async () => {
     const { data } = await supabase.auth.getSession()
@@ -35,21 +47,9 @@ export default function App() {
     return () => sub.subscription.unsubscribe()
   }, [relire])
 
-  // Aperçu visuel des écrans sans session. Retiré du bundle de production par
-  // le tree-shaking : import.meta.env.DEV vaut false à la compilation.
-  if (import.meta.env.DEV) {
-    const apercu = new URLSearchParams(window.location.search).get('apercu')
-    if (apercu === 'objectifs') return <Targets userId="00000000-0000-0000-0000-000000000000" />
-    if (apercu === 'reglages') return <Settings />
-    if (apercu === 'foyer') return <Onboarding onDone={() => {}} />
-  }
-
   if (!pret) return <main className="min-h-dvh grid place-items-center text-doux">Un instant…</main>
 
-  // Retire le préfixe de base (/batchcooking/ sur GitHub Pages, / en local).
-  const chemin = '/' + window.location.pathname
-    .slice(import.meta.env.BASE_URL.length).replace(/^\/+/, '')
-  const invitation = chemin.match(/^\/invite\/(.+)$/)
+  const invitation = ici.match(/^\/invite\/(.+)$/)
 
   // L'ordre compte. Une invitation prime sur tout : sans cela, l'invité se voit
   // proposer de créer SON foyer au lieu de rejoindre celui qui l'attend.
@@ -57,6 +57,30 @@ export default function App() {
   if (invitation) return <AcceptInvite token={invitation[1]} />
   if (!foyer) return <Onboarding onDone={relire} />
   if (!mdpPose) return <Password userId={session.user.id} onDone={relire} />
-  if (chemin.startsWith('/settings')) return <Settings />
-  return <Targets userId={session.user.id} />
+
+  const moi = session.user.id
+  // Retour à l'accueil plutôt qu'à l'historique du navigateur : un passage
+  // ouvert depuis une notification n'a pas de page précédente.
+  const sortie = () => (window.history.length > 1 ? retour() : va('/'))
+
+  switch (ici) {
+    // Les quatre destinations permanentes.
+    case '/semaine': return <Semaine userId={moi} va={va} />
+    case '/stock': return <Stock va={va} />
+    case '/bilan': return <Bilan va={va} />
+
+    // Les passages du cycle : une seule sortie, pas de barre du bas.
+    case '/choisir': return <Choisir retour={sortie} va={va} />
+    case '/magasin': return <Magasin retour={sortie} va={va} />
+    case '/plan': return <Plan retour={sortie} va={va} />
+    case '/cuisine': return <Cuisine userId={moi} va={va} />
+    case '/dressage': return <Dressage retour={sortie} va={va} />
+    case '/inventer': return <Inventer userId={moi} retour={sortie} va={va} />
+
+    // Les réglages, hors cycle.
+    case '/objectifs': return <Targets userId={moi} />
+    case '/reglages': return <Settings />
+
+    default: return <Accueil userId={moi} va={va} />
+  }
 }

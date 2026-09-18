@@ -22,6 +22,7 @@ export function Settings() {
 
   async function enregistrerPlafond() {
     const { data: hh } = await supabase.rpc('current_household')
+    if (!hh) return dire('Aucun foyer.', true)
     const { error } = await supabase.from('household')
       .update({ llm_monthly_cap_eur: plafond }).eq('id', hh)
     dire(error ? error.message : 'Plafond enregistré.', !!error)

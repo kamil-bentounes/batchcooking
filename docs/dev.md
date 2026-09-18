@@ -24,6 +24,17 @@ npm run dev               # http://localhost:5173
 
 Les Edge Functions nécessitent un second terminal : `npx supabase functions serve`.
 
+`inventer` a besoin d'un modèle. Toute API compatible OpenAI convient :
+
+```bash
+# .env local, ou `supabase secrets set` en production
+LLM_API_KEY=...
+LLM_BASE_URL=https://api.openai.com/v1   # ou un serveur local (llama.cpp, vLLM, Ollama)
+LLM_MODEL=gpt-4o-mini
+```
+
+Sans clé, l'écran « Envie spéciale » répond 503 et le dit — il ne plante pas.
+
 ## Production
 
 | | |
@@ -31,13 +42,14 @@ Les Edge Functions nécessitent un second terminal : `npx supabase functions ser
 | Projet | `mjlxfffdirlqmmjzhorg` · **West EU (Paris)** `eu-west-3` |
 | URL | `https://mjlxfffdirlqmmjzhorg.supabase.co` |
 | Connexion psql | `postgresql://postgres.mjlxfffdirlqmmjzhorg:<mdp>@aws-1-eu-west-3.pooler.supabase.com:5432/postgres` |
-| Vérifié | 9 migrations appliquées · **RLS active sur 20/20 tables** · 2 Edge Functions, préflight CORS 200, POST sans jeton 401 |
+| Vérifié | 22 migrations · **RLS active sur toutes les tables** · 3 Edge Functions, préflight CORS 200, POST sans jeton 401 |
 
 ```bash
 export SUPABASE_ACCESS_TOKEN=<jeton>
 npx supabase db push                          # migrations
-npx supabase functions deploy invite accept-invite
+npx supabase functions deploy invite accept-invite inventer
 npx supabase secrets set RESEND_API_KEY=<clé> APP_BASE_URL=<url>
+npx supabase secrets set LLM_API_KEY=<clé>            # « Envie spéciale »
 ```
 
 ⚠️ **À faire une fois vos deux comptes créés** — refermer la création de foyer, sinon
