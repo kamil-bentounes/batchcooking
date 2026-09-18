@@ -1,0 +1,242 @@
+{
+  "_note": "Découpage de référence, fait à la main sur 10 recettes réelles du corpus. Sert d'étalon pour mesurer un modèle bon marché ou local sur R1c. Chaque action : verbe de default_duration, appareil, load_type, et les signaux trouvés dans le texte.",
+  "_verbes_hors_table": ["sabler", "foncer", "laminer", "écaler", "émulsionner", "pocher", "débiter", "émietter la viande"],
+  "recettes": [
+    { "id": "R0", "titre": "Iron compote", "appareil_principal": "robot_cuiseur",
+      "etapes": [
+        { "brut": 0, "actions": [
+          {"verbe":"disposer","aliment":"framboises, confiture, eau","appareil":"robot_cuiseur","load":"actif"},
+          {"verbe":"cuire","appareil":"robot_cuiseur","load":"passif"},
+          {"verbe":"disposer","aliment":"verrines","load":"actif"},
+          {"verbe":"réfrigérer","load":"passif"}]},
+        { "brut": 1, "actions": [
+          {"verbe":"disposer","aliment":"pommes, sucre, curcuma, chia, eau","appareil":"robot_cuiseur","load":"actif"}]},
+        { "brut": 2, "actions": [
+          {"verbe":"cuire sous pression","appareil":"autocuiseur","load":"passif","duree_declaree":5}]},
+        { "brut": 3, "actions": [
+          {"verbe":"mixer","appareil":"robot_cuiseur","load":"passif"},
+          {"verbe":"disposer","aliment":"verrines","load":"actif"}]}
+      ]},
+
+    { "id": "R1", "titre": "Saumon grillé semoule aux agrumes",
+      "etapes": [
+        { "brut": 0, "actions": [
+          {"verbe":"réchauffer","aliment":"semoule","appareil":"micro_ondes","load":"passif","duree_declaree":5},
+          {"verbe":"refroidir","load":"passif"},
+          {"verbe":"laver","aliment":"roquette","load":"actif"},
+          {"verbe":"hacher","aliment":"roquette","load":"actif"},
+          {"verbe":"mélanger","load":"actif"},
+          {"verbe":"assaisonner","load":"actif"},
+          {"verbe":"réserver","load":"actif"}]},
+        { "brut": 1, "actions": [
+          {"verbe":"zester","aliment":"citron, orange","load":"actif"}]},
+        { "brut": 2, "actions": [
+          {"verbe":"mélanger","load":"actif"},
+          {"verbe":"hacher","aliment":"ail","load":"actif","precision":"finement"},
+          {"verbe":"mélanger","load":"actif"}]},
+        { "brut": 3, "actions": [
+          {"verbe":"faire chauffer","appareil":"poele","load":"passif"},
+          {"verbe":"disposer","aliment":"pavés de saumon","appareil":"poele","load":"actif"},
+          {"verbe":"cuire","appareil":"poele","load":"passif","duree_declaree":10},
+          {"verbe":"dresser","load":"actif"}]}
+      ]},
+
+    { "id": "R2", "titre": "Tartelettes citron confit et ricotta",
+      "etapes": [
+        { "brut": 0, "actions": [{"verbe":"mélanger","aliment":"sucre, farine, cannelle","load":"actif"}]},
+        { "brut": 1, "actions": [
+          {"verbe":"mélanger","aliment":"beurre","load":"actif","hors_table":"sabler"},
+          {"verbe":"pétrir","load":"actif"},
+          {"verbe":"rouler","load":"actif","note":"former une boule"}]},
+        { "brut": 2, "actions": [
+          {"verbe":"étaler","load":"actif","hors_table":"foncer"},
+          {"verbe":"réfrigérer","load":"passif"}]},
+        { "brut": 3, "actions": [{"verbe":"mélanger","aliment":"ricotta, lait, sucre, oeufs","load":"actif"}]},
+        { "brut": 4, "actions": [
+          {"verbe":"zester","aliment":"citron","load":"actif"},
+          {"verbe":"couper","aliment":"citron","load":"actif"},
+          {"verbe":"mélanger","load":"actif"}]},
+        { "brut": 5, "actions": [
+          {"verbe":"disposer","load":"actif"},
+          {"verbe":"préchauffer","appareil":"four","load":"passif","temperature":200,"implicite":true,
+           "note":"« à four préchauffé » : le préchauffage est mentionné comme un état, pas comme une étape. L'ordonnanceur doit le créer et le remonter au début."},
+          {"verbe":"enfourner","appareil":"four","load":"passif","temperature":200,"duree_declaree":32}]}
+      ]},
+
+    { "id": "R3", "titre": "Delícia de café",
+      "etapes": [
+        { "brut": 0, "actions": [{"verbe":"séparer les blancs","aliment":"oeufs","load":"actif"}]},
+        { "brut": 1, "actions": [{"verbe":"mélanger","aliment":"lait concentré, jaunes","load":"actif"}]},
+        { "brut": 2, "actions": [
+          {"verbe":"porter à ébullition","appareil":"casserole","load":"bloquant",
+           "note":"« tout en remuant » : c'est bloquant, pas passif — les mains sont prises."}]},
+        { "brut": 3, "actions": [
+          {"verbe":"disposer","load":"actif"},
+          {"verbe":"refroidir","load":"passif"}]},
+        { "brut": 4, "actions": [
+          {"verbe":"tremper","aliment":"biscuits","load":"actif"},
+          {"verbe":"disposer","load":"actif"}]},
+        { "brut": 5, "actions": [
+          {"verbe":"réfrigérer","aliment":"crème","load":"passif","duree_declaree":720,
+           "note":"« la veille » : 12 h. Une durée de cette ampleur doit sortir de la session et devenir une préparation de la veille."},
+          {"verbe":"battre","aliment":"crème","appareil":"batteur","load":"actif"}]},
+        { "brut": 6, "actions": [{"verbe":"battre","aliment":"sucre","appareil":"batteur","load":"actif"}]},
+        { "brut": 7, "actions": [
+          {"verbe":"mélanger","load":"actif"},
+          {"verbe":"disposer","load":"actif"}]},
+        { "brut": 8, "actions": [
+          {"verbe":"couper","aliment":"biscuits","load":"actif","hors_table":"émietter"},
+          {"verbe":"décorer","load":"actif"}]},
+        { "brut": 9, "actions": [
+          {"verbe":"réfrigérer","load":"passif","duree_declaree":210}],
+          "non_action_partielle":"« Servez et dégustez » est écarté" }
+      ]},
+
+    { "id": "R4", "titre": "Truffes au chocolat",
+      "etapes": [
+        { "brut": 0, "actions": [{"verbe":"faire chauffer","aliment":"crème","appareil":"micro_ondes","load":"passif","duree_declaree":0.5}]},
+        { "brut": 1, "actions": [
+          {"verbe":"couper","aliment":"chocolat","load":"actif"},
+          {"verbe":"laisser reposer","load":"passif","duree_declaree":5},
+          {"verbe":"mélanger","load":"actif"}]},
+        { "brut": 2, "actions": [{"verbe":"réfrigérer","load":"passif","duree_declaree":60}]},
+        { "brut": 3, "actions": [{"verbe":"rouler","load":"actif","scaling_visible":true,
+          "note":"« des truffes » : la quantité dépend du nombre de portions — c'est le cas type de lineaire_plafonne."}]},
+        { "brut": 4, "actions": [
+          {"verbe":"disposer","aliment":"poudre chocolatée","load":"actif"},
+          {"verbe":"rouler","load":"actif"}]},
+        { "brut": 5, "actions": [{"verbe":"réfrigérer","load":"passif","duree_declaree":60}]}
+      ]},
+
+    { "id": "R5", "titre": "Ravioles fromage frais, tomates, épinards",
+      "etapes": [
+        { "brut": 0, "actions": [
+          {"verbe":"disposer","aliment":"farine","load":"actif"},
+          {"verbe":"battre","aliment":"oeufs, eau, huile","load":"actif"},
+          {"verbe":"assaisonner","load":"actif"},
+          {"verbe":"pétrir","load":"actif"},
+          {"verbe":"étaler","load":"actif","hors_table":"laminer"}]},
+        { "brut": 1, "actions": [
+          {"verbe":"mélanger","aliment":"brousse, concentré, basilic","load":"actif"},
+          {"verbe":"ciseler","aliment":"basilic","load":"actif"},
+          {"verbe":"assaisonner","load":"actif"},
+          {"verbe":"disposer","load":"actif"},
+          {"verbe":"beurrer","load":"actif","note":"« badigeonner d'eau »"}]},
+        { "brut": 2, "actions": [
+          {"verbe":"éplucher","aliment":"oignon, ail","load":"actif"},
+          {"verbe":"hacher","aliment":"oignon, ail","load":"actif"},
+          {"verbe":"faire revenir","appareil":"poele","load":"bloquant"},
+          {"verbe":"mélanger","aliment":"concentré, mascarpone","load":"actif"},
+          {"verbe":"mijoter","appareil":"casserole","load":"passif","duree_declaree":10},
+          {"verbe":"assaisonner","load":"actif"},
+          {"verbe":"cuire","aliment":"épinards","load":"passif","duree_declaree":5}]},
+        { "brut": 3, "actions": [
+          {"verbe":"porter à ébullition","appareil":"casserole","load":"passif"},
+          {"verbe":"cuire","aliment":"ravioles","appareil":"casserole","load":"passif"},
+          {"verbe":"égoutter","load":"actif"},
+          {"verbe":"mélanger","load":"actif"}]}
+      ]},
+
+    { "id": "R6", "titre": "Tarte aux carottes et à la feta", "parallelisme_explicite": true,
+      "etapes": [
+        { "brut": 0, "actions": [
+          {"verbe":"couper","aliment":"carottes","load":"actif","implicite":true,
+           "note":"« préalablement coupées en dés » : l'action n'est pas une étape du texte, il faut la créer."},
+          {"verbe":"cuire","aliment":"carottes","appareil":"casserole","load":"passif","duree_declaree":20}]},
+        { "brut": 1, "parallele_de": [0], "signal":"« Pendant que les carottes cuisent »", "actions": [
+          {"verbe":"émincer","aliment":"oignons","load":"actif"},
+          {"verbe":"dorer","aliment":"oignons","appareil":"poele","load":"bloquant"}]},
+        { "brut": 2, "actions": [
+          {"verbe":"préchauffer","appareil":"four","load":"passif","temperature":180,
+           "note":"écrit en 3e position, doit être remonté au tout début par l'ordonnanceur."}]},
+        { "brut": 3, "actions": [{"verbe":"mélanger","aliment":"oeufs, feta, crème, concentré","load":"actif"}]},
+        { "brut": 4, "actions": [
+          {"verbe":"égoutter","aliment":"carottes","load":"actif"},
+          {"verbe":"mélanger","load":"actif"}]},
+        { "brut": 5, "actions": [
+          {"verbe":"dérouler","aliment":"pâte brisée","load":"actif"},
+          {"verbe":"piquer","load":"actif"}]},
+        { "brut": 6, "actions": [
+          {"verbe":"râper","aliment":"comté","load":"actif","implicite":true,"note":"« le conté râpé » : état, pas geste — mais l'achat peut être déjà râpé. Ambigu."},
+          {"verbe":"disposer","load":"actif"},
+          {"verbe":"mélanger","load":"actif"}]},
+        { "brut": 7, "actions": [{"verbe":"enfourner","appareil":"four","load":"passif","temperature":180,"duree_declaree":30}]},
+        { "brut": 8, "non_action": true, "texte":"A déguster chaud, tiède ou froid !" }
+      ]},
+
+    { "id": "R7", "titre": "Oeuf cocotte au jambon",
+      "etapes": [
+        { "brut": 0, "actions": [{"verbe":"préchauffer","appareil":"four","load":"passif","temperature":240}]},
+        { "brut": 1, "actions": [{"verbe":"mélanger","aliment":"crème, ketchup, tabasco","load":"actif"}]},
+        { "brut": 2, "actions": [
+          {"verbe":"disposer","load":"actif"},
+          {"verbe":"couper","aliment":"jambon","load":"actif","implicite":true,"note":"« des dés de jambon »"}]},
+        { "brut": 3, "actions": [
+          {"verbe":"disposer","aliment":"oeufs","load":"actif"},
+          {"verbe":"assaisonner","load":"actif"},
+          {"verbe":"disposer","load":"actif"}]},
+        { "brut": 4, "actions": [
+          {"verbe":"décorer","aliment":"emmental râpé","load":"actif"},
+          {"verbe":"enfourner","appareil":"four","load":"passif","temperature":240,"duree_declaree":10}]}
+      ]},
+
+    { "id": "R8", "titre": "Grand aïoli",
+      "etapes": [
+        { "brut": 0, "actions": [
+          {"verbe":"éplucher","aliment":"pommes de terre, carottes","load":"actif"},
+          {"verbe":"couper","aliment":"chou-fleur","load":"actif"},
+          {"verbe":"couper","aliment":"pommes de terre, carottes, courgettes","load":"actif"},
+          {"verbe":"cuire","appareil":"casserole","load":"passif",
+           "note":"« chaque légume séparément » : 4 cuissons distinctes, non fusionnables — contre-exemple utile à D35."},
+          {"verbe":"égoutter","load":"actif"}]},
+        { "brut": 1, "actions": [
+          {"verbe":"cuire","aliment":"oeufs","appareil":"casserole","load":"passif","duree_declaree":10},
+          {"verbe":"refroidir","load":"passif"},
+          {"verbe":"éplucher","aliment":"oeufs","load":"actif","hors_table":"écaler"},
+          {"verbe":"réserver","load":"actif"}]},
+        { "brut": 2, "actions": [
+          {"verbe":"éplucher","aliment":"ail","load":"actif"},
+          {"verbe":"mixer","load":"actif","note":"au mortier, donc actif et non passif : l'appareil change le load_type."},
+          {"verbe":"mélanger","load":"actif"},
+          {"verbe":"battre","load":"bloquant","hors_table":"émulsionner",
+           "note":"« versez progressivement tout en émulsionnant » : les deux mains sont prises, c'est bloquant."}]},
+        { "brut": 3, "actions": [
+          {"verbe":"disposer","aliment":"morue","appareil":"casserole","load":"actif"},
+          {"verbe":"assaisonner","load":"actif"},
+          {"verbe":"cuire","appareil":"casserole","load":"passif","duree_declaree":10,"hors_table":"pocher"}]},
+        { "brut": 4, "actions": [
+          {"verbe":"égoutter","load":"actif"},
+          {"verbe":"dresser","load":"actif"},
+          {"verbe":"couper","aliment":"oeufs","load":"actif"},
+          {"verbe":"dresser","load":"actif"}]}
+      ]},
+
+    { "id": "R9", "titre": "Spaghetti bolognaise", "parallelisme_explicite": true,
+      "etapes": [
+        { "brut": 0, "actions": [
+          {"verbe":"porter à ébullition","appareil":"casserole","load":"passif"},
+          {"verbe":"cuire","aliment":"spaghetti","appareil":"casserole","load":"passif"},
+          {"verbe":"égoutter","load":"actif"},
+          {"verbe":"réserver","load":"actif"}]},
+        { "brut": 1, "parallele_de": [0], "signal":"« Pendant que les spaghetti cuisent »", "actions": [
+          {"verbe":"éplucher","aliment":"oignons, ail","load":"actif"},
+          {"verbe":"hacher","aliment":"oignons, ail","load":"actif"},
+          {"verbe":"laver","aliment":"carotte","load":"actif"},
+          {"verbe":"éplucher","aliment":"carotte","load":"actif"},
+          {"verbe":"couper","aliment":"carotte","load":"actif"}]},
+        { "brut": 2, "actions": [
+          {"verbe":"faire chauffer","appareil":"poele","load":"passif"},
+          {"verbe":"faire revenir","aliment":"viande","appareil":"poele","load":"bloquant",
+           "note":"« en l'émiettant et en remuant » : bloquant."}]},
+        { "brut": 3, "actions": [
+          {"verbe":"mélanger","load":"actif"},
+          {"verbe":"mijoter","appareil":"casserole","load":"passif","duree_declaree":5}]},
+        { "brut": 4, "actions": [
+          {"verbe":"mélanger","aliment":"purée de tomates","load":"actif"},
+          {"verbe":"cuire","load":"passif","duree_declaree":5}]},
+        { "brut": 5, "actions": [
+          {"verbe":"mélanger","aliment":"spaghetti","load":"actif"},
+          {"verbe":"dresser","load":"actif"}]}
+      ]}
+  ]
+}

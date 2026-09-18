@@ -716,5 +716,28 @@
       "^utilise[rz] du",
       "^r[ée]p[ée]t(?:er|ez) l.op[ée]ration"
     ]
+  },
+  "verbe_alias": {
+    "_note": "Verbes de recette qui se ramènent à un verbe de default_duration. Trouvés dans l'étalon R1c : 7 sur 141 actions.",
+    "alias": {
+      "sabler": "mélanger",
+      "foncer": "étaler",
+      "laminer": "étaler",
+      "abaisser": "étaler",
+      "écaler": "éplucher",
+      "émulsionner": "battre",
+      "pocher": "cuire",
+      "émietter": "couper",
+      "concasser": "couper",
+      "ciseler": "ciseler",
+      "monder": "éplucher",
+      "suer": "faire revenir",
+      "nacrer": "faire revenir",
+      "singer": "mélanger",
+      "chemiser": "beurrer",
+      "napper": "décorer",
+      "lustrer": "beurrer",
+      "débiter": "couper"
+    }
   }
 }
