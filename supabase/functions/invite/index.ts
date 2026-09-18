@@ -19,15 +19,27 @@ Deno.serve(async (req) => {
     .from('user_profile').select('household_id').eq('id', userRes.user.id).maybeSingle()
   if (!profile) return reply('Aucun foyer', 403)
 
-  const { email } = await req.json().catch(() => ({ email: null }))
-  if (!email) return reply('Email manquant', 400)
+  const { email: brut } = await req.json().catch(() => ({ email: null }))
+  if (typeof brut !== 'string' || !brut.trim()) return reply('Email manquant', 400)
+
+  /*
+   * ⚠️ `ilike` interprète `%` et `_` : l'entrée brute était donc un MOTIF.
+   *    `invite({ email: 'victime-%@test.local' })` rendait le jeton d'une
+   *    invitation qu'on n'avait pas créée — et l'envoyait à l'adresse à jokers
+   *    si Resend est configuré. On valide la forme, puis on compare à l'égalité
+   *    sur la casse basse : une adresse n'est pas un motif.
+   */
+  const email = brut.trim().toLowerCase()
+  if (!/^[^\s@%_]+@[^\s@%_]+\.[^\s@%_]+$/.test(email)) {
+    return reply('Adresse e-mail invalide', 400)
+  }
 
   // Une invitation déjà en attente pour cette adresse n'est pas une erreur :
   // on rend le lien existant. L'index unique invitation_pending_unique garantit
   // qu'il n'y en a qu'une, et l'utilisateur veut le lien, pas un message.
   const { data: dejaLa } = await admin.from('invitation')
     .select('*').eq('household_id', profile.household_id)
-    .ilike('email', email).is('accepted_at', null).maybeSingle()
+    .eq('email', email).is('accepted_at', null).maybeSingle()
 
   let inv = dejaLa
   if (inv && new Date(inv.expires_at) < new Date()) {

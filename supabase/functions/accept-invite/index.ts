@@ -29,15 +29,37 @@ Deno.serve(async (req) => {
     .from('user_profile').select('id').eq('id', user.id).maybeSingle()
   if (existing) return reply('Déjà rattaché à un foyer', 409)
 
+  /*
+   * ⚠️ ON CONSOMME LE JETON D'ABORD, et la condition `accepted_at is null` fait
+   *    la course pour nous.
+   *
+   *    L'ordre inverse — rattacher puis marquer — laissait deux POST simultanés
+   *    avec le même jeton réussir tous les deux : mesuré, le foyer passait de
+   *    un à trois membres. « Usage unique » n'était pas une propriété du
+   *    système, seulement une intention.
+   *
+   *    `update … select` ne rend une ligne que si la condition tenait AU MOMENT
+   *    de l'écriture : c'est le verrou, et il est atomique.
+   */
+  const { data: consommee, error: ce } = await admin.from('invitation')
+    .update({ accepted_at: new Date().toISOString() })
+    .eq('id', inv.id).is('accepted_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .select().maybeSingle()
+  if (ce) return reply(ce.message, 500)
+  if (!consommee) return reply('Invitation déjà utilisée', 409)
+
   const { error: pe } = await admin.from('user_profile').insert({
     id: user.id,
     household_id: inv.household_id,
     display_name: (user.email ?? 'invité').split('@')[0],
   })
-  if (pe) return reply(pe.message, 500)
-
-  await admin.from('invitation')
-    .update({ accepted_at: new Date().toISOString() }).eq('id', inv.id)
+  if (pe) {
+    // Le rattachement a échoué : on rend le jeton, sinon l'invitation est
+    // perdue pour de bon et personne ne peut plus rejoindre le foyer.
+    await admin.from('invitation').update({ accepted_at: null }).eq('id', inv.id)
+    return reply(pe.message, 500)
+  }
 
   return reply({ household_id: inv.household_id })
 })

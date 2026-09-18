@@ -34,12 +34,16 @@ async function chargeFoyer(): Promise<Foyer | null> {
     supabase.from('user_profile').select('*').order('created_at'),
     // Les objectifs sont historisés (un INSERT par changement) : on ne garde
     // que le dernier de chaque personne.
-    supabase.from('nutrition_target').select('*').order('valid_from', { ascending: false }),
+    supabase.from('nutrition_target_courante').select('*').order('valid_from', { ascending: false }),
   ])
 
   const h = ou(maison)
+  // La vue rend UNE ligne par personne, et toutes ses colonnes nullables au
+  // typage : on écarte ce qui ne peut pas arriver plutôt que de forcer.
   const derniers = new Map<string, Ligne<'nutrition_target'>>()
-  for (const o of ou(objectifs)) if (!derniers.has(o.user_profile_id)) derniers.set(o.user_profile_id, o)
+  for (const o of ou(objectifs)) {
+    if (o.user_profile_id) derniers.set(o.user_profile_id, o as Ligne<'nutrition_target'>)
+  }
 
   return {
     id: h.id,

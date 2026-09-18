@@ -79,7 +79,10 @@ export function useBilan(depuis: Date, jusqu: Date) {
         supabase.from('shopping_item').select('est_price_eur, paid_price_eur, created_at')
           .gte('created_at', minuit(depuis)).lte('created_at', finDuJour(jusqu)),
         supabase.from('user_profile').select('id, display_name'),
-        supabase.from('nutrition_target').select('*').order('valid_from', { ascending: false }),
+        // La vue rend UNE ligne par personne : les cibles sont historisées, et
+        // au bout de mille lignes la dernière sortait de la fenêtre de
+        // PostgREST — le client transformait alors « inconnu » en zéro.
+        supabase.from('nutrition_target_courante').select('*'),
         supabase.from('household').select('food_budget_eur').limit(1).maybeSingle(),
       ])
 
@@ -139,9 +142,11 @@ export function useBilan(depuis: Date, jusqu: Date) {
         }
       })
 
-      const cibles = new Map<string, Ligne<'nutrition_target'>>()
+      // Une vue rend toutes ses colonnes nullables au typage : on écarte ce
+      // qui ne peut pas arriver plutôt que de forcer.
+      const cibles = new Map<string, { kcal: number | null; protein_g: number | null }>()
       for (const o of ou(objectifs)) {
-        if (!cibles.has(o.user_profile_id)) cibles.set(o.user_profile_id, o)
+        if (o.user_profile_id) cibles.set(o.user_profile_id, o)
       }
 
       const jours = joursEntre(depuis, jusqu)

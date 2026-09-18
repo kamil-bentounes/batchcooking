@@ -67,6 +67,25 @@ export function parts(v: unknown): number | null {
   for (const x of liste) {
     if (typeof x === 'number' && x > 0) return Math.round(x)
     if (typeof x !== 'string') continue
+
+    /*
+     * ⚠️ Prendre le PREMIER nombre est faux sur la forme la plus courante des
+     *    tartes, quiches et cakes français : « 1 tarte pour 8 personnes »
+     *    rendait 1, donc des macros multipliées par huit.
+     *
+     *    On cherche d'abord le nombre qui porte le mot « personne » ou « part » ;
+     *    à défaut seulement, le premier nombre plausible.
+     */
+    const nomme = x.match(/(\d+)\s*(?:à\s*\d+\s*)?(?:personnes?|parts?|portions?|convives?)/i)
+    if (nomme) {
+      const n = Number(nomme[1])
+      if (n > 0 && n <= 50) return n
+    }
+    const apres = x.match(/pour\s+(\d+)/i)
+    if (apres) {
+      const n = Number(apres[1])
+      if (n > 0 && n <= 50) return n
+    }
     const m = x.match(/(\d+)/)
     if (m) {
       const n = Number(m[1])

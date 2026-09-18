@@ -234,10 +234,19 @@ export function quantiteCitee(texte: string, ingredients: IngredientPret[]): num
     if (nom.length < 4) continue
     const racine = nom.split(/\s+/)[0]
     if (racine.length < 4) continue
-    if (new RegExp(`\\b${racine}`).test(plie)) { total += g.grams_reference; vu = true }
+    // ⚠️ La racine vient du TEXTE DE LA RECETTE : « 200 g de chocolat(noir 70% »
+    //    construisait une expression invalide et faisait perdre la recette
+    //    entière sur un SyntaxError. On échappe ce qui vient du dehors.
+    if (new RegExp(`\\b${echappe(racine)}`).test(plie)) {
+      total += g.grams_reference
+      vu = true
+    }
   }
   return vu ? Math.round(total) : null
 }
+
+/** Ce qui vient d'une page web n'entre jamais tel quel dans une expression. */
+const echappe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 const pliureSimple = (s: string) =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')

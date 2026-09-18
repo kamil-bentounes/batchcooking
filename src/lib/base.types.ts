@@ -2207,6 +2207,35 @@ export type Database = {
       }
     }
     Views: {
+      nutrition_target_courante: {
+        Row: {
+          carb_g: number | null
+          fat_g: number | null
+          fiber_g: number | null
+          household_id: string | null
+          id: string | null
+          kcal: number | null
+          protein_g: number | null
+          user_profile_id: string | null
+          valid_from: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_target_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_target_user_profile_id_fkey"
+            columns: ["user_profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       price_knowledge: {
         Row: {
           avg_price_eur: number | null

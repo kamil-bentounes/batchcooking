@@ -213,3 +213,32 @@ describe('la recette complète', () => {
     expect(r.etapes).toHaveLength(2)
   })
 })
+
+describe('le nombre de parts', () => {
+  /*
+   * Prendre le premier nombre est faux sur la forme la plus courante des
+   * tartes, quiches et cakes français : « 1 tarte pour 8 personnes » rendait 1,
+   * et les macros par part se retrouvaient multipliées par huit.
+   */
+  it('lit le nombre qui porte le mot « personnes »', () => {
+    expect(parts('1 tarte pour 8 personnes')).toBe(8)
+    expect(parts('2 plaques, 12 parts')).toBe(12)
+    expect(parts('1 cake (10 portions)')).toBe(10)
+  })
+
+  it('lit « pour N » à défaut', () => {
+    expect(parts('Recette pour 6')).toBe(6)
+  })
+
+  it('garde le cas simple', () => {
+    expect(parts('4')).toBe(4)
+    expect(parts(6)).toBe(6)
+    expect(parts('4 personnes')).toBe(4)
+  })
+
+  it('ignore ce qui n’est pas un nombre de parts', () => {
+    expect(parts('1 kg')).toBe(1)          // faute de mieux, mais borné
+    expect(parts('environ 500 g')).toBeNull()
+    expect(parts(null)).toBeNull()
+  })
+})
