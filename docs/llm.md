@@ -28,23 +28,32 @@ npx supabase secrets set LLM_API_KEY=... LLM_BASE_URL=... LLM_MODEL=...
 
 Le critère est le prix : **aucune raison de payer** pour dix générations par mois.
 
-| Fournisseur | `LLM_BASE_URL` | Gratuit | Carte ? | Limite |
+| Fournisseur | `LLM_BASE_URL` | `LLM_MODEL` | Gratuit | Carte ? |
 |---|---|---|---|---|
-| **Groq** | `https://api.groq.com/openai/v1` | oui, sans fin | non | 1 000 req/jour |
-| **Anthropic** | `https://api.anthropic.com/v1/` | ~5 $ offerts | oui (vérification) | le crédit |
-| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | oui, sans fin | non | généreuse |
-| Mistral | `https://api.mistral.ai/v1` | oui (Experiment) | non | ~1 req/min |
-| OpenAI | `https://api.openai.com/v1` | non | oui | — |
+| **Groq** ← en place | `https://api.groq.com/openai/v1` | `openai/gpt-oss-120b` | oui, sans fin | non |
+| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | `gemini-2.5-flash` | oui, sans fin | non |
+| Anthropic | `https://api.anthropic.com/v1/` | `claude-haiku-4-5-20251001` | ~5 $ offerts | vérification |
+| Mistral | `https://api.mistral.ai/v1` | `mistral-small-latest` | oui (Experiment) | non |
+| OpenAI | `https://api.openai.com/v1` | `gpt-5-mini` | non | oui |
 
-**Groq d'abord.** Gratuit sans échéance, sans carte, cent fois notre besoin, et
-le protocole est déjà le bon. Modèle : `llama-3.3-70b-versatile`.
+**Groq est configuré.** Gratuit sans échéance, sans carte, mille requêtes par
+jour contre dix par mois de besoin. Mesuré en production : une recette cohérente
+en **6,8 s**, JSON valide du premier coup, appareils et charges correctement
+étiquetés.
 
-**Anthropic si la qualité déçoit.** ~5 $ offerts à l'ouverture d'un compte sur
-`console.anthropic.com` (une carte est demandée pour vérification, pas débitée).
-À dix générations par mois, ces 5 $ tiennent des années. La couche de
-compatibilité OpenAI suffit ici — la doc d'Anthropic la réserve aux tests, ce
-qui vaut pour du cache de prompt ou des sorties structurées avancées, pas pour
-un appel JSON par semaine.
+⚠️ **`llama-3.3-70b` n'est plus au catalogue de Groq** (relevé le 18/09/2026).
+Les modèles de conversation disponibles sont `openai/gpt-oss-120b`,
+`openai/gpt-oss-20b`, `qwen/qwen3.8-27b` et `groq/compound`. Une liste de
+modèles se périme : `curl https://api.groq.com/openai/v1/models` avant de choisir.
+
+Changer de fournisseur, c'est trois variables et trente secondes :
+
+```bash
+npx supabase secrets set LLM_API_KEY=... LLM_BASE_URL=... LLM_MODEL=...
+```
+
+Tous ceux du tableau acceptent `response_format: {"type":"json_object"}`, que la
+fonction envoie. C'est la seule exigence du code.
 
 ⚠️ **Un abonnement ChatGPT Plus / Claude Pro ne donne AUCUN accès à l'API.**
 Ce sont deux facturations séparées. Payer l'une ne paie pas l'autre.
