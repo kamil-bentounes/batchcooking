@@ -71,6 +71,32 @@ const CORPUS: [string, RegExp][] = [
   ['basilic', /^Basilic, frais$/],
   ['citron', /^Citron, pulpe/],
   ['vinaigre', /^Vinaigre$/],
+  /*
+   * Ceux-ci ne viennent pas d'une liste écrite d'avance : ils viennent d'un
+   * COMPTAGE de ce qui est réellement rattaché en production, fait après le
+   * premier correctif. Les deux aliments les plus rattachés du catalogue
+   * tombaient encore à côté, et le corpus ci-dessus ne les couvrait pas :
+   *
+   *  · « sel » rendait « Sel au céleri » — 658 lignes ;
+   *  · « eau » rendait « Eau de vie », de l'alcool à 40° là où la recette met
+   *    de l'eau — 171 lignes.
+   *
+   * La leçon mérite d'être gardée avec eux : trente cas bien choisis ne
+   * remplacent pas un comptage sur ce qui sert vraiment.
+   */
+  ['sel', /^Sel blanc/],
+  ['gros sel', /^Sel marin/],
+  ['eau', /^Eau du robinet$/],
+  ['sauce soja', /^Sauce soja/],
+  ['poivre', /^Poivre noir/],
+  ['levure', /^Levure/],
+  ['miel', /^Miel$/],
+  ['parmesan', /^Parmesan$/],
+  ['moutarde', /^Moutarde$/],
+  ['vin blanc', /^Vin blanc/],
+  ['maïzena', /^Amidon de maïs/],
+  ['thym', /^Thym/],
+  ['paprika', /^Paprika$/],
 ]
 
 describe('les trente ingrédients les plus courants', () => {

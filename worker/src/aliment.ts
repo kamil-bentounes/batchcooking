@@ -245,8 +245,16 @@ function score(recherche: string[], cible: AlimentIndexe, prefereCru: boolean): 
   const pasDemande = (p: RegExp) => p.test(cible.name) && !p.test(demande)
   for (const p of PENALITES) if (pasDemande(p)) { s *= 0.6; break }
   for (const p of TRANSFORMATIONS) if (pasDemande(p)) { s *= 0.45; break }
-  // Un composite doit perdre contre l'aliment simple, sauf si on l'a demandé.
-  if (COMPOSITE.test(cible.name) && !COMPOSITE.test(demande)) s *= 0.5
+  /*
+   * Un composite doit perdre contre l'aliment simple, sauf si on l'a demandé.
+   *
+   * On ne regarde que la TÊTE du nom — avant la première virgule, la première
+   * parenthèse et le premier « ou ». « Sel au céleri » est bien un composite ;
+   * « Fromage blanc nature ou aux fruits (aliment moyen) » ne l'est pas, son
+   * « aux » ouvre une alternative, pas un mélange.
+   */
+  const tete = cible.name.split(/[,(]|\bou\b/)[0]
+  if (COMPOSITE.test(tete) && !COMPOSITE.test(demande)) s *= 0.5
   // CIQUAL nomme ses entrées génériques : quand elle existe, c'est CELLE-LÀ
   // qu'une recette sans précision désigne.
   if (GENERIQUE.test(cible.name)) s *= 1.25
