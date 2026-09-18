@@ -11,24 +11,11 @@
  * 0024). Deux téléphones peuvent enregistrer le même ticket, et un invariant du
  * produit ne peut pas dépendre de celui qui a appuyé (D50).
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
 import { estimation } from '../prix.ts'
 import type { LigneTicket, Rapprochement } from '../prix.ts'
 
-export const CLE = {
-  prix: ['prix'] as const,
-  tickets: (cycleId: string | undefined) => ['tickets', cycleId] as const,
-}
-
-/** Ce que le foyer sait des prix, enseigne par enseigne. */
-export function usePrixAppris() {
-  return useQuery({
-    queryKey: CLE.prix,
-    queryFn: async () => ou(await supabase.from('price_knowledge').select('*')),
-    staleTime: 60_000,
-  })
-}
 
 export type TicketLu = {
   enseigne: string | null
@@ -119,18 +106,6 @@ export function useEnregistreTicket() {
       return { ticket, lignes: lignes.length }
     },
     onSuccess: () => qc.invalidateQueries(),
-  })
-}
-
-/** Les tickets déjà enregistrés pour ce cycle. */
-export function useTickets(cycleId: string | undefined) {
-  return useQuery({
-    queryKey: CLE.tickets(cycleId),
-    enabled: !!cycleId,
-    queryFn: async () => ou(await supabase.from('receipt')
-      .select('id, bought_at, total_eur, store_id, trip_id')
-      .order('bought_at', { ascending: false }).limit(20)),
-    staleTime: 10_000,
   })
 }
 

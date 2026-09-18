@@ -15,6 +15,7 @@ import {
   budget, organise, useAjouteArticle, useCoche, useListe, useMajArticle,
   useOrdreDesRayons, useSortie, useSuggestions, useSupprimeArticle,
 } from '../lib/donnees/courses.ts'
+import { useEstimeListe } from '../lib/donnees/prix.ts'
 import type { Article } from '../lib/donnees/courses.ts'
 import { RAYONS } from '../lib/rayons.ts'
 
@@ -29,6 +30,7 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
   const ajoute = useAjouteArticle()
   const sortie = useSortie()
   const change = useChangeEtat()
+  const estime = useEstimeListe()
   const [ouvert, setOuvert] = useState<'ajout' | 'completer' | null>(null)
   const [detaille, setDetaille] = useState<string | null>(null)
 
@@ -126,6 +128,22 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
                      storeId: magasins.find(m => m.is_default)?.id ?? null,
                    })} />
       )}
+
+      {/* Une liste faite AVANT qu'on connaisse les prix n'a pas d'estimation,
+          et la régénérer effacerait ce qui a été ajouté à la main. D'où ce
+          bouton, qui ne remplit que les lignes encore vides. */}
+      {articles.some(a => a.est_price_eur === null && a.paid_price_eur === null) && (
+        <button onClick={() => estime.mutate(cycle.id)} disabled={estime.isPending}
+                className="mt-4 w-full h-[46px] rounded-[16px] bg-brume/50 text-[15px]
+                           hover:bg-brume transition-colors">
+          {estime.isPending
+            ? 'J’estime…'
+            : estime.data
+              ? `${estime.data.remplis} prix estimés sur ${estime.data.sur}`
+              : 'Estimer les prix d’après mes tickets'}
+        </button>
+      )}
+      <Erreur de={estime.error} />
 
       {/* Le ticket (lot 5). Sa place est ici : on le photographie en sortant
           de caisse, pas depuis un écran de réglages où personne n'irait. */}
