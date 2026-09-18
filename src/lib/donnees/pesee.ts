@@ -8,7 +8,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
-import { regroupe } from '../pesee.ts'
+import { nomCourt, regroupe } from '../pesee.ts'
 import type { APeser, Connu, LigneAPeser } from '../pesee.ts'
 
 export const CLE = {
@@ -71,7 +71,7 @@ export function useAPeser(cycleId: string | undefined) {
       }
 
       return regroupe(
-        lignes.map(l => ({ ...l, nom: l.food?.name ?? l.raw_text })),
+        lignes.map(l => ({ ...l, nom: nomCourt(l.food?.name ?? l.raw_text) })),
         connus, references)
     },
     staleTime: 15_000,

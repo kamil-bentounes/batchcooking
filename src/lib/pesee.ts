@@ -94,6 +94,18 @@ export function regroupe(
     || a.nom.localeCompare(b.nom, 'fr'))
 }
 
+/**
+ * Le nom d'un aliment, tel qu'on peut le montrer à quelqu'un.
+ *
+ * CIQUAL écrit « Courgette, pulpe et peau, crue » — c'est un nom de catalogue,
+ * précis et fait pour être indexé, pas pour être lu dans une cuisine. On garde
+ * la tête du nom, qui est la seule partie que quelqu'un reconnaît.
+ */
+export function nomCourt(nom: string): string {
+  const tete = nom.split(',')[0].trim()
+  return tete.length > 0 ? tete : nom
+}
+
 /** Les bornes d'acceptation d'une observation (§5.2.1, règle 2). */
 export const BORNE_BASSE = 0.4
 export const BORNE_HAUTE = 2.5

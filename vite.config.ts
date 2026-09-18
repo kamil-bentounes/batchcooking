@@ -24,4 +24,10 @@ export default defineConfig({
       },
     }),
   ],
+  test: {
+    // Les tests de FUMÉE en navigateur appartiennent à Playwright, qui a son
+    // propre lanceur. Les laisser ici les ferait échouer au chargement — et
+    // faire cohabiter deux lanceurs sur le même fichier n'a aucun sens.
+    exclude: ['node_modules/**', 'dist/**', 'e2e/**'],
+  },
 })

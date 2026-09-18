@@ -18,7 +18,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
-  Chiffre, Erreur, Passage, Principal, Secondaire, Surface, Vide,
+  BoutonPhoto, Chiffre, Erreur, Passage, Principal, Secondaire, Surface, Vide,
 } from '../ui/coque.tsx'
 import { callFunction } from '../lib/supabase.ts'
 import { prepare } from '../lib/photo.ts'
@@ -131,19 +131,9 @@ export function Ticket({ retour, va }: { retour: () => void; va: (v: string) => 
             </div>
           )}
 
-          <label className="mt-7 block">
-            <span className="sr-only">Prendre ou choisir une photo du ticket</span>
-            <input type="file" accept="image/*" capture="environment"
-                   disabled={lit.isPending}
-                   onChange={e => {
-                     const f = e.target.files?.[0]
-                     if (f) lit.mutate(f)
-                   }}
-                   className="block w-full text-[15px] text-doux
-                              file:mr-4 file:h-[58px] file:px-6 file:rounded-[18px]
-                              file:border-0 file:bg-herbe file:text-fond file:text-[17px]
-                              file:font-medium" />
-          </label>
+          <BoutonPhoto texte={lit.isPending ? 'Je lis…' : 'Photographier le ticket'}
+                       disabled={lit.isPending}
+                       onFichier={f => lit.mutate(f)} />
 
           {lit.isPending && (
             <p className="mt-6 text-[15px] text-doux">Je lis… une vingtaine de secondes.</p>

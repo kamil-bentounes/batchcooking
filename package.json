@@ -16,7 +16,8 @@
     "banc": "vite-node scripts/banc.mjs --",
     "banc-vision": "vite-node scripts/banc-vision.mjs --",
     "banc-ticket": "vite-node scripts/banc-ticket.mjs --",
-    "recalcule": "vite-node scripts/recalcule.mjs --"
+    "recalcule": "vite-node scripts/recalcule.mjs --",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",
@@ -26,6 +27,7 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",

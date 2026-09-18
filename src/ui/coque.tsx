@@ -110,6 +110,39 @@ export function Secondaire({ children, ...rest }: React.ComponentProps<'button'>
 }
 
 /** Une surface, pas une boîte : on sépare par la matière, pas par un trait. */
+/**
+ * Le bouton qui ouvre l'appareil photo.
+ *
+ * Un `<input type="file">` nu affiche « Choose File / No file chosen », en
+ * ANGLAIS, dans une application entièrement en français : le libellé du bouton
+ * natif n'est pas modifiable, et aucun navigateur ne le traduit d'après la
+ * langue du document. On masque donc l'input et on habille son `<label>`, qui
+ * déclenche exactement le même geste — y compris `capture`, qui ouvre
+ * l'appareil photo sur téléphone.
+ */
+export function BoutonPhoto({ texte, onFichier, disabled = false }: {
+  texte: string
+  onFichier: (f: File) => void
+  disabled?: boolean
+}) {
+  return (
+    <label className={`mt-7 w-full h-[58px] rounded-[18px] bg-herbe text-fond text-[17px]
+                       font-medium grid place-items-center cursor-pointer transition-colors
+                       ${disabled ? 'bg-brume text-doux cursor-default' : ''}`}>
+      {texte}
+      <input type="file" accept="image/*" capture="environment" className="sr-only"
+             disabled={disabled}
+             onChange={e => {
+               const f = e.target.files?.[0]
+               if (f) onFichier(f)
+               // Reprendre DEUX FOIS la même photo doit marcher : sans cela, le
+               // second choix du même fichier ne déclenche aucun `change`.
+               e.target.value = ''
+             }} />
+    </label>
+  )
+}
+
 export function Surface({ children, className = '' }:
   { children: ReactNode; className?: string }) {
   return <div className={`rounded-[22px] bg-surface p-[17px] ${className}`}>{children}</div>

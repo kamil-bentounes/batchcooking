@@ -6,7 +6,7 @@
  * partout, si) et le REJET des aberrantes annoncé AVANT l'enregistrement.
  */
 import { describe, expect, it } from 'vitest'
-import { poidsRetenu, regroupe, seraRetenue } from './pesee.ts'
+import { nomCourt, poidsRetenu, regroupe, seraRetenue } from './pesee.ts'
 import type { Connu, LigneAPeser } from './pesee.ts'
 
 const ligne = (p: Partial<LigneAPeser>): LigneAPeser => ({
@@ -93,6 +93,22 @@ describe('l’aberrante annoncée avant d’enregistrer', () => {
 
   it('refuse une quantité nulle plutôt que de diviser par zéro', () => {
     expect(seraRetenue(100, 0, 110)).toBe(false)
+  })
+})
+
+describe('le nom montré', () => {
+  it('garde la tête du nom de catalogue', () => {
+    // CIQUAL écrit pour être indexé, pas pour être lu dans une cuisine.
+    expect(nomCourt('Courgette, pulpe et peau, crue')).toBe('Courgette')
+    expect(nomCourt('Oignon, cru')).toBe('Oignon')
+  })
+
+  it('laisse tel quel un nom déjà court', () => {
+    expect(nomCourt('Banane')).toBe('Banane')
+  })
+
+  it('ne rend jamais une chaîne vide', () => {
+    expect(nomCourt(', cru')).toBe(', cru')
   })
 })
 

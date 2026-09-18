@@ -63,3 +63,25 @@ update public.instance_setting
 set value = '{"enabled": false}'::jsonb
 where key = 'allow_household_creation';
 ```
+
+## Les tests de fumée en navigateur
+
+```bash
+npm run e2e          # Playwright, Chromium, format téléphone
+```
+
+Ils existent pour une raison vérifiée : **525 tests passaient pendant que trois
+écrans n'avaient jamais été rendus une seule fois**. `tsc` dit qu'un composant
+compile ; il ne dit pas qu'il s'affiche, ni qu'un `Number(null)` au premier
+rendu ne fait pas une page blanche.
+
+Ils ne comparent **pas** des pixels : une référence d'image casserait à chaque
+changement d'espacement et finirait ignorée, ce qui est pire que pas de test.
+Ils vérifient qu'un écran s'ouvre, qu'il montre ce qu'il promet, et qu'aucune
+erreur n'est tombée dans la console. Les captures atterrissent dans `.shots/`
+pour être **regardées**, ce qu'aucune assertion ne remplace.
+
+> ⚠️ Le serveur de test construit avec `--mode development`. Sans ce drapeau,
+> `vite build` prend le mode « production », donc `.env.production`, donc la
+> **base de production** — et le test se connecterait à une base où son foyer
+> n'existe pas.

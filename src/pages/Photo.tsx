@@ -15,7 +15,9 @@
  */
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { Chiffre, Erreur, Passage, Principal, Secondaire, Surface, Vide } from '../ui/coque.tsx'
+import {
+  BoutonPhoto, Chiffre, Erreur, Passage, Principal, Secondaire, Surface, Vide,
+} from '../ui/coque.tsx'
 import { callFunction } from '../lib/supabase.ts'
 import { prepare } from '../lib/photo.ts'
 import { useAjouteStock } from '../lib/donnees/barquettes.ts'
@@ -112,20 +114,9 @@ export function Photo({ retour, va }: { retour: () => void; va: (v: string) => v
             ))}
           </div>
 
-          <label className="mt-7 block">
-            <span className="sr-only">Prendre ou choisir une photo</span>
-            {/* `capture` ouvre l'appareil photo sur mobile, la galerie ailleurs. */}
-            <input type="file" accept="image/*" capture="environment"
-                   disabled={lit.isPending}
-                   onChange={e => {
-                     const f = e.target.files?.[0]
-                     if (f) lit.mutate(f)
-                   }}
-                   className="block w-full text-[15px] text-doux
-                              file:mr-4 file:h-[58px] file:px-6 file:rounded-[18px]
-                              file:border-0 file:bg-herbe file:text-fond file:text-[17px]
-                              file:font-medium" />
-          </label>
+          <BoutonPhoto texte={lit.isPending ? 'Je regarde…' : 'Prendre la photo'}
+                       disabled={lit.isPending}
+                       onFichier={f => lit.mutate(f)} />
 
           {lit.isPending && (
             <p className="mt-6 text-[15px] text-doux">Je regarde… une quinzaine de secondes.</p>
