@@ -101,7 +101,7 @@ async function urls() {
 
 /** Le référentiel, chargé une fois : il ne change pas d'une page à l'autre. */
 async function contexte() {
-  const [durees, alias, nonActions, conversions, aliments, densites, temperatures] =
+  const [durees, alias, nonActions, conversions, aliments, densites, temperatures, typiques] =
     await Promise.all([
       db.from('default_duration').select('*'),
       Promise.resolve({ data: lireSeed().verbe_alias.alias }),
@@ -110,9 +110,10 @@ async function contexte() {
       tousLesAliments(),
       db.from('density').select('food_id, grams_per_ml'),
       db.from('default_temperature').select('*'),
+      db.from('typical_quantity').select('ciqual_subgroup, grams'),
     ])
 
-  for (const r of [durees, nonActions, conversions, aliments, densites, temperatures]) {
+  for (const r of [durees, nonActions, conversions, aliments, densites, temperatures, typiques]) {
     if (r.error) throw new Error(r.error.message)
   }
 
@@ -129,6 +130,8 @@ async function contexte() {
     conversions: conversions.data,
     sousGroupes: new Map(aliments.data.map(a => [a.id, a.ciqual_subgroup])),
     densites: new Map(densites.data.map(d => [d.food_id, Number(d.grams_per_ml)])),
+    nutriments: new Map(aliments.data.map(a => [a.id, a.nutrients])),
+    typiques: new Map(typiques.data.map(t => [t.ciqual_subgroup, Number(t.grams)])),
   }
 }
 
@@ -145,7 +148,9 @@ async function tousLesAliments() {
   const tout = []
   for (let debut = 0; ; debut += PAGE) {
     const { data, error } = await db.from('food')
-      .select('id, name, state, ciqual_subgroup')
+      // `nutrients` alourdit la page, mais c'est LUI qui permet de calculer les
+      // macros par part — donc les filtres du catalogue.
+      .select('id, name, state, ciqual_subgroup, nutrients')
       .eq('source', 'ciqual').order('id').range(debut, debut + PAGE - 1)
     if (error) return { data: null, error }
     tout.push(...data)
@@ -195,6 +200,16 @@ async function ecrire(pret) {
       const { error: e2 } = await db.from('recipe_step_dependency').insert(arcs)
       if (e2) throw new Error(e2.message)
     }
+  }
+
+  // Les macros par part servent aux FILTRES : sans elles, « plus de 30 g de
+  // protéines » ne peut pas s'écrire en SQL.
+  if (pret.nutrition) {
+    const { error: e3 } = await db.from('recipe_nutrition')
+      .upsert({ recipe_id: recette.id, ...pret.nutrition }, { onConflict: 'recipe_id' })
+    if (e3) throw new Error(e3.message)
+  } else {
+    await db.from('recipe_nutrition').delete().eq('recipe_id', recette.id)
   }
   return recette
 }

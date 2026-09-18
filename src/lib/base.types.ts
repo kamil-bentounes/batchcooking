@@ -947,10 +947,13 @@ export type Database = {
       }
       recipe: {
         Row: {
+          active_time_min: number | null
+          appliances: string[]
           cook_time_min: number | null
           created_at: string
           edited_at: string | null
           edited_by_household_id: string | null
+          freezable: boolean | null
           id: string
           license_note: string | null
           origin: string
@@ -959,16 +962,20 @@ export type Database = {
           prep_time_min: number | null
           source_name: string | null
           source_url: string | null
+          step_count: number
           title: string | null
           total_time_min: number | null
           visibility: string
           yield_servings: number | null
         }
         Insert: {
+          active_time_min?: number | null
+          appliances?: string[]
           cook_time_min?: number | null
           created_at?: string
           edited_at?: string | null
           edited_by_household_id?: string | null
+          freezable?: boolean | null
           id?: string
           license_note?: string | null
           origin?: string
@@ -977,16 +984,20 @@ export type Database = {
           prep_time_min?: number | null
           source_name?: string | null
           source_url?: string | null
+          step_count?: number
           title?: string | null
           total_time_min?: number | null
           visibility?: string
           yield_servings?: number | null
         }
         Update: {
+          active_time_min?: number | null
+          appliances?: string[]
           cook_time_min?: number | null
           created_at?: string
           edited_at?: string | null
           edited_by_household_id?: string | null
+          freezable?: boolean | null
           id?: string
           license_note?: string | null
           origin?: string
@@ -995,6 +1006,7 @@ export type Database = {
           prep_time_min?: number | null
           source_name?: string | null
           source_url?: string | null
+          step_count?: number
           title?: string | null
           total_time_min?: number | null
           visibility?: string
@@ -1057,6 +1069,56 @@ export type Database = {
             foreignKeyName: "recipe_ingredient_recipe_id_fkey"
             columns: ["recipe_id"]
             isOneToOne: false
+            referencedRelation: "recipe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_nutrition: {
+        Row: {
+          carb_g: number
+          computed_at: string
+          coverage: number
+          fat_g: number
+          fiber_g: number
+          grams: number
+          kcal: number
+          kcal_margin: number
+          protein_g: number
+          protein_g_margin: number
+          recipe_id: string
+        }
+        Insert: {
+          carb_g: number
+          computed_at?: string
+          coverage: number
+          fat_g: number
+          fiber_g: number
+          grams: number
+          kcal: number
+          kcal_margin?: number
+          protein_g: number
+          protein_g_margin?: number
+          recipe_id: string
+        }
+        Update: {
+          carb_g?: number
+          computed_at?: string
+          coverage?: number
+          fat_g?: number
+          fiber_g?: number
+          grams?: number
+          kcal?: number
+          kcal_margin?: number
+          protein_g?: number
+          protein_g_margin?: number
+          recipe_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_nutrition_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: true
             referencedRelation: "recipe"
             referencedColumns: ["id"]
           },
@@ -1805,6 +1867,12 @@ export type Database = {
       open_cycle: {
         Args: { p_servings?: number; p_week_of: string }
         Returns: string
+      }
+      tables_de_foyer: {
+        Args: never
+        Returns: {
+          table_name: string
+        }[]
       }
     }
     Enums: {
