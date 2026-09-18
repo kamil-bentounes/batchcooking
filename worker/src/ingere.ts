@@ -32,6 +32,14 @@ export interface Contexte {
   sousGroupes: Map<string, string | null>
   /** `food_id` → g/ml, quand la densité est connue. */
   densites: Map<string, number>
+  /**
+   * `food_id` → poids d'UNE unité, quand on le connaît (§5.2.1).
+   *
+   * C'est ce qui fait qu'« 2 oignons » vaut 220 g plutôt que rien. Le
+   * référentiel donne un ordre de grandeur ; la pesée du foyer le remplacera
+   * sur SES oignons, mais l'ingestion est partagée : elle n'a que la référence.
+   */
+  poidsUnitaires?: Map<string, number>
   /** `food_id` → valeurs pour 100 g. Sert à calculer les macros de la recette. */
   nutriments?: Map<string, unknown>
   /** sous-groupe → grammes typiques, pour les lignes sans quantité. */
@@ -166,11 +174,14 @@ function enGrammes(
       const g = precise?.grams ?? generale?.grams
       return g === undefined ? null : Math.round(ligne.qte * g * 10) / 10
     }
-    // « 2 oignons » : il faudrait `unit_weight`, qui n'est pas encore rempli.
-    // On rend `null` plutôt qu'un chiffre inventé — les macros afficheront une
-    // fourchette, et c'est exactement ce qu'il faut (D18).
-    default:
-      return null
+    // « 2 oignons » : c'est `unit_weight` qui répond, quand il connaît
+    // l'aliment. Sinon `null` plutôt qu'un chiffre inventé — les macros
+    // s'afficheront en fourchette, et c'est exactement ce qu'il faut (D18).
+    default: {
+      if (!foodId) return null
+      const unitaire = ctx.poidsUnitaires?.get(foodId)
+      return unitaire === undefined ? null : Math.round(ligne.qte * unitaire * 10) / 10
+    }
   }
 }
 

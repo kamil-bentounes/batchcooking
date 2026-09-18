@@ -15,7 +15,8 @@
     "sonde": "vite-node scripts/sonde.mjs --",
     "banc": "vite-node scripts/banc.mjs --",
     "banc-vision": "vite-node scripts/banc-vision.mjs --",
-    "banc-ticket": "vite-node scripts/banc-ticket.mjs --"
+    "banc-ticket": "vite-node scripts/banc-ticket.mjs --",
+    "recalcule": "vite-node scripts/recalcule.mjs --"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

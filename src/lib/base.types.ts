@@ -467,6 +467,52 @@ export type Database = {
         }
         Relationships: []
       }
+      household_ingredient_resolution: {
+        Row: {
+          food_id: string | null
+          grams: number | null
+          household_id: string
+          recipe_ingredient_id: string
+          updated_at: string
+        }
+        Insert: {
+          food_id?: string | null
+          grams?: number | null
+          household_id: string
+          recipe_ingredient_id: string
+          updated_at?: string
+        }
+        Update: {
+          food_id?: string | null
+          grams?: number | null
+          household_id?: string
+          recipe_ingredient_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_ingredient_resolution_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "food"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_ingredient_resolution_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_ingredient_resolution_recipe_ingredient_id_fkey"
+            columns: ["recipe_ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_ingredient"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       household_price: {
         Row: {
           avg_price_eur: number
@@ -524,6 +570,54 @@ export type Database = {
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "store"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      household_unit_weight: {
+        Row: {
+          actif: boolean
+          food_id: string
+          grams: number
+          household_id: string
+          observations: number
+          seuil: number
+          unit_label: string
+          updated_at: string
+        }
+        Insert: {
+          actif?: boolean
+          food_id: string
+          grams: number
+          household_id: string
+          observations: number
+          seuil: number
+          unit_label: string
+          updated_at?: string
+        }
+        Update: {
+          actif?: boolean
+          food_id?: string
+          grams?: number
+          household_id?: string
+          observations?: number
+          seuil?: number
+          unit_label?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_unit_weight_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "food"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_unit_weight_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
             referencedColumns: ["id"]
           },
         ]
@@ -2034,6 +2128,71 @@ export type Database = {
           },
         ]
       }
+      weighing: {
+        Row: {
+          at: string
+          cycle_id: string | null
+          food_id: string
+          grams: number
+          household_id: string
+          id: string
+          qty_observed: number
+          recipe_ingredient_id: string | null
+          unit_observed: string
+        }
+        Insert: {
+          at?: string
+          cycle_id?: string | null
+          food_id: string
+          grams: number
+          household_id: string
+          id?: string
+          qty_observed: number
+          recipe_ingredient_id?: string | null
+          unit_observed: string
+        }
+        Update: {
+          at?: string
+          cycle_id?: string | null
+          food_id?: string
+          grams?: number
+          household_id?: string
+          id?: string
+          qty_observed?: number
+          recipe_ingredient_id?: string | null
+          unit_observed?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weighing_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "cycle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weighing_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "food"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weighing_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weighing_recipe_ingredient_id_fkey"
+            columns: ["recipe_ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_ingredient"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       price_knowledge: {
@@ -2080,6 +2239,7 @@ export type Database = {
       current_household: { Args: never; Returns: string }
       delete_my_account: { Args: never; Returns: undefined }
       export_my_data: { Args: never; Returns: Json }
+      export_my_data_base: { Args: never; Returns: Json }
       is_service_role: { Args: never; Returns: boolean }
       lieu_du_rayon: { Args: { rayon: string }; Returns: string }
       llm_budget_remaining: { Args: never; Returns: number }
@@ -2087,6 +2247,10 @@ export type Database = {
       open_cycle: {
         Args: { p_servings?: number; p_week_of: string }
         Returns: string
+      }
+      poids_unitaire: {
+        Args: { p_food_id: string; p_unit?: string }
+        Returns: number
       }
       tables_de_foyer: {
         Args: never

@@ -69,17 +69,33 @@ await charger('suggested_item',
     labels.map((label, position) => ({ category, label, position }))),
   'category,label')
 
-// La densité pointe sur un aliment : on résout le code CIQUAL en identifiant.
-const codes = c.density.map(d => d.ciqual_code)
+// Densités et poids unitaires pointent sur un aliment : on résout le code
+// CIQUAL en identifiant, une fois pour les deux.
+const codes = [...c.density, ...c.unit_weight].map(d => d.ciqual_code)
 const { data: refs, error } = await db.from('food')
   .select('id, source_code').eq('source', 'ciqual').in('source_code', codes)
 if (error) throw error
 const parCode = Object.fromEntries(refs.map(f => [f.source_code, f.id]))
+
 const densites = c.density
   .filter(d => parCode[d.ciqual_code])
   .map(d => ({ food_id: parCode[d.ciqual_code], grams_per_ml: d.grams_per_ml }))
 await charger('density', densites, 'food_id')
 if (densites.length < c.density.length)
   console.warn(`  ⚠️  ${c.density.length - densites.length} densité(s) sans aliment correspondant`)
+
+// Les poids unitaires de référence (§5.2.1). Sans eux, « 2 oignons » ne se
+// convertit pas en grammes, et la moitié des recettes n'a pas de macros. Ce
+// sont des ordres de grandeur : la pesée du foyer les remplace dès trois
+// observations, sur SES oignons plutôt que sur une médiane américaine.
+const poids = c.unit_weight
+  .filter(u => parCode[u.ciqual_code])
+  .map(u => ({ food_id: parCode[u.ciqual_code], label: u.label,
+               grams: u.grams, confidence: u.confidence, source: 'usda' }))
+await charger('unit_weight', poids, 'food_id,label')
+if (poids.length < c.unit_weight.length) {
+  const manquants = c.unit_weight.filter(u => !parCode[u.ciqual_code]).map(u => u.label)
+  console.warn(`  ⚠️  ${manquants.length} poids sans aliment : ${manquants.join(', ')}`)
+}
 
 console.log('\nTerminé.\n')

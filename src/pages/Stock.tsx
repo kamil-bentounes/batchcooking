@@ -107,9 +107,20 @@ export function Stock({ va }: { va: (v: string) => void }) {
       </div>
       {ajout && <FormulaireStock lieu={onglet} surFini={() => setAjout(false)} />}
 
+      {/* La pesée (lot 0c) : c'est elle qui rend les macros vraies. Sa place
+          est ici, à côté de la photo — le même geste d'entretien, fait une
+          fois puis oublié. */}
+      <button onClick={() => va('/peser')}
+              className="mt-4 w-full h-[46px] rounded-[16px] bg-brume/50 text-[15px]
+                         hover:bg-brume transition-colors">
+        Peser ce qu’on compte à l’unité
+      </button>
+
       <p className="mt-6 text-[13px] text-doux leading-relaxed">
         La photo accélère la saisie, elle ne la remplace pas : le modèle propose,
         tu valides ligne par ligne, et tout reste corrigeable à la main.
+        « 2 oignons » ne fait des grammes qu’une fois pesé — trois fois, puis
+        plus jamais.
       </p>
     </Ecran>
   )

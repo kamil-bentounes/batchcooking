@@ -1,5 +1,5 @@
 {
-  "_note": "Tables construites à la main. Aucune base ouverte ne les fournit telles quelles. Valeurs issues de références culinaires standard et des poids de portions USDA FoodData Central. Chacune est corrigeable, et les corrections des foyers les enrichissent à l'usage.",
+  "_note": "Tables construites à la main. Aucune base ouverte ne les fournit telles quelles. Valeurs issues de références culinaires standard et des poids de portions USDA FoodData Central. Chacune est corrigeable, et les corrections des foyers les enrichissent à l'usage. unit_weight : poids unitaires de référence (USDA FoodData Central, taille « medium », et références culinaires françaises). Ce sont des ordres de grandeur par lesquels on commence ; la pesée du foyer les remplace dès trois observations (§5.2.1).",
   "unit_conversion": [
     {
       "unit_label": "c. à soupe",
@@ -854,5 +854,319 @@
         "Ampoules"
       ]
     }
-  }
+  },
+  "unit_weight": [
+    {
+      "ciqual_code": "20034",
+      "label": "oignon",
+      "grams": 110,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "20238",
+      "label": "oignon rouge",
+      "grams": 115,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "20097",
+      "label": "échalote",
+      "grams": 25,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "11000",
+      "label": "gousse d’ail",
+      "grams": 5,
+      "confidence": 0.7
+    },
+    {
+      "ciqual_code": "11074",
+      "label": "morceau de gingembre",
+      "grams": 15,
+      "confidence": 0.4
+    },
+    {
+      "ciqual_code": "11014",
+      "label": "bouquet de persil",
+      "grams": 25,
+      "confidence": 0.4
+    },
+    {
+      "ciqual_code": "11033",
+      "label": "bouquet de basilic",
+      "grams": 20,
+      "confidence": 0.4
+    },
+    {
+      "ciqual_code": "11053",
+      "label": "feuille de laurier",
+      "grams": 0.2,
+      "confidence": 0.7
+    },
+    {
+      "ciqual_code": "20151",
+      "label": "piment",
+      "grams": 15,
+      "confidence": 0.4
+    },
+    {
+      "ciqual_code": "20009",
+      "label": "carotte",
+      "grams": 80,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "4008",
+      "label": "pomme de terre",
+      "grams": 150,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "20047",
+      "label": "tomate",
+      "grams": 120,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "20172",
+      "label": "tomate cerise",
+      "grams": 10,
+      "confidence": 0.7
+    },
+    {
+      "ciqual_code": "20020",
+      "label": "courgette",
+      "grams": 200,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "20053",
+      "label": "aubergine",
+      "grams": 250,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "20041",
+      "label": "poivron",
+      "grams": 150,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "20087",
+      "label": "poivron rouge",
+      "grams": 155,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "20019",
+      "label": "concombre",
+      "grams": 300,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "20039",
+      "label": "poireau",
+      "grams": 150,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "20064",
+      "label": "navet",
+      "grams": 120,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "20091",
+      "label": "betterave",
+      "grams": 150,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "20023",
+      "label": "branche de céleri",
+      "grams": 40,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "20056",
+      "label": "champignon de Paris",
+      "grams": 15,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "20028",
+      "label": "fenouil",
+      "grams": 230,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "20045",
+      "label": "radis",
+      "grams": 10,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "20026",
+      "label": "endive",
+      "grams": 100,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "20057",
+      "label": "brocoli",
+      "grams": 500,
+      "confidence": 0.4
+    },
+    {
+      "ciqual_code": "20016",
+      "label": "chou-fleur",
+      "grams": 600,
+      "confidence": 0.4
+    },
+    {
+      "ciqual_code": "20069",
+      "label": "chou vert",
+      "grams": 900,
+      "confidence": 0.4
+    },
+    {
+      "ciqual_code": "4101",
+      "label": "patate douce",
+      "grams": 180,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "20138",
+      "label": "butternut",
+      "grams": 900,
+      "confidence": 0.4
+    },
+    {
+      "ciqual_code": "20044",
+      "label": "potiron",
+      "grams": 2000,
+      "confidence": 0.3
+    },
+    {
+      "ciqual_code": "13009",
+      "label": "citron",
+      "grams": 100,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "13067",
+      "label": "citron vert",
+      "grams": 70,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "13034",
+      "label": "orange",
+      "grams": 150,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "13039",
+      "label": "pomme",
+      "grams": 150,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "13037",
+      "label": "poire",
+      "grams": 170,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "13005",
+      "label": "banane",
+      "grams": 120,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "13004",
+      "label": "avocat",
+      "grams": 140,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "13021",
+      "label": "kiwi",
+      "grams": 75,
+      "confidence": 0.6
+    },
+    {
+      "ciqual_code": "22000",
+      "label": "œuf",
+      "grams": 50,
+      "confidence": 0.8
+    },
+    {
+      "ciqual_code": "22001",
+      "label": "blanc d’œuf",
+      "grams": 33,
+      "confidence": 0.8
+    },
+    {
+      "ciqual_code": "22002",
+      "label": "jaune d’œuf",
+      "grams": 17,
+      "confidence": 0.8
+    },
+    {
+      "ciqual_code": "36017",
+      "label": "blanc de poulet",
+      "grams": 150,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "36002",
+      "label": "cuisse de poulet",
+      "grams": 130,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "36304",
+      "label": "escalope de dinde",
+      "grams": 120,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "6254",
+      "label": "steak haché",
+      "grams": 125,
+      "confidence": 0.7
+    },
+    {
+      "ciqual_code": "26036",
+      "label": "pavé de saumon",
+      "grams": 130,
+      "confidence": 0.5
+    },
+    {
+      "ciqual_code": "19590",
+      "label": "boule de mozzarella",
+      "grams": 125,
+      "confidence": 0.7
+    },
+    {
+      "ciqual_code": "19593",
+      "label": "pot de yaourt",
+      "grams": 125,
+      "confidence": 0.8
+    },
+    {
+      "ciqual_code": "7001",
+      "label": "baguette",
+      "grams": 250,
+      "confidence": 0.7
+    },
+    {
+      "ciqual_code": "7200",
+      "label": "tranche de pain de mie",
+      "grams": 30,
+      "confidence": 0.7
+    }
+  ]
 }

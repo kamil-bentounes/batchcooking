@@ -101,7 +101,8 @@ async function urls() {
 
 /** Le référentiel, chargé une fois : il ne change pas d'une page à l'autre. */
 async function contexte() {
-  const [durees, alias, nonActions, conversions, aliments, densites, temperatures, typiques] =
+  const [durees, alias, nonActions, conversions, aliments, densites, poids,
+         temperatures, typiques] =
     await Promise.all([
       db.from('default_duration').select('*'),
       Promise.resolve({ data: lireSeed().verbe_alias.alias }),
@@ -109,11 +110,13 @@ async function contexte() {
       db.from('unit_conversion').select('*'),
       tousLesAliments(),
       db.from('density').select('food_id, grams_per_ml'),
+      db.from('unit_weight').select('food_id, grams, confidence'),
       db.from('default_temperature').select('*'),
       db.from('typical_quantity').select('ciqual_subgroup, grams'),
     ])
 
-  for (const r of [durees, nonActions, conversions, aliments, densites, temperatures, typiques]) {
+  for (const r of [durees, nonActions, conversions, aliments, densites, poids,
+                   temperatures, typiques]) {
     if (r.error) throw new Error(r.error.message)
   }
 
@@ -130,6 +133,11 @@ async function contexte() {
     conversions: conversions.data,
     sousGroupes: new Map(aliments.data.map(a => [a.id, a.ciqual_subgroup])),
     densites: new Map(densites.data.map(d => [d.food_id, Number(d.grams_per_ml)])),
+    // Le plus sûr l'emporte : deux libellés (« oignon », « oignon rouge ») ne
+    // pèsent pas pareil, mais l'ingestion ne sait pas lequel elle tient.
+    poidsUnitaires: new Map([...poids.data]
+      .sort((a, b) => Number(a.confidence) - Number(b.confidence))
+      .map(w => [w.food_id, Number(w.grams)])),
     nutriments: new Map(aliments.data.map(a => [a.id, a.nutrients])),
     typiques: new Map(typiques.data.map(t => [t.ciqual_subgroup, Number(t.grams)])),
   }
