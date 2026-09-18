@@ -11,7 +11,8 @@
     "test": "vitest run --fileParallelism=false",
     "db:reset": "supabase db reset",
     "seed": "node scripts/seed.mjs",
-    "ingest": "vite-node scripts/ingest.mjs --"
+    "ingest": "vite-node scripts/ingest.mjs --",
+    "sonde": "vite-node scripts/sonde.mjs --"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

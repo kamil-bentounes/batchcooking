@@ -52,6 +52,40 @@ donc le premier — aucune étape retenue n'entre dans un plan sans durée.
 | **Un compte reste `null`** (« 2 oignons ») | `unit_weight` n'est pas rempli. Un poids inventé vaut moins qu'une fourchette assumée (D18) |
 | **CIQUAL se charge par pages de 1000** | PostgREST plafonne à `db.max-rows` **sans le dire**. Un `.limit(5000)` rend 1000 lignes et zéro erreur — c'est ce qui faisait tomber le rattachement à 52 % |
 
+## Quels sites — mesuré, pas supposé
+
+`npm run sonde` interroge un site sans rien écrire : publie-t-il du
+`schema.org/Recipe` ? ses étapes sont-elles datables ? ses ingrédients se
+rattachent-ils à CIQUAL ? que dit son robots.txt ?
+
+Sondé le 18 septembre 2026, 4 pages par site, une requête par seconde.
+
+| Site | Recettes lues | Étapes datées | Ingr. → CIQUAL | Verdict |
+|---|:-:|:-:|:-:|---|
+| **marmiton.org** | 4/4 | 100 % | 95 % | ✅ le plus gros catalogue |
+| **cuisineaz.com** | 4/4 | 100 % | 90 % | ✅ |
+| **cuisine.journaldesfemmes.fr** | 4/4 | 100 % | **100 %** | ✅ |
+| **jow.fr** | 4/4 | 100 % | **100 %** | ✅ quantités très propres |
+| **ptitchef.com** | 4/4 | 100 % | 90 % | ✅ |
+| **cuisineactuelle.fr** | 4/4 | 100 % | 83 % | ✅ |
+| **recetteproteine.fr** | 4/4 | 100 % | 91 % | ✅ **protéiné** |
+| chefsimon.com | 1/4 | 100 % | 100 % | ⚠️ beaucoup de pages hors recettes |
+| fitnessmith.fr | 1/4 | 100 % | 100 % | ⚠️ idem, mais **musculation** |
+| 750g.com | 0/4 | — | — | ❌ aucun `schema.org/Recipe` |
+| recettes.de · quitoque.fr · croquonslavie.fr · mangerbouger.fr | 0/4 | — | — | ❌ idem |
+| papillesetpupilles.fr · odelices.com · atelierdeschefs.fr · natura-force.com | — | — | — | ❓ **bloquent notre robot** — non concluant, pas « ne publie rien » |
+
+Ce que la mesure a appris et qu'aucun article ne disait :
+
+- **750g, pourtant cité partout, ne publie pas de données structurées.** Sa
+  popularité ne dit rien de son exploitabilité.
+- **Un site déclare dix sitemaps** (news, images, vidéos, tags…). Prendre les
+  premiers, c'est sonder les vidéos et conclure qu'il n'y a pas de recettes —
+  c'est ce que faisait la sonde à son premier jet, et elle donnait Marmiton
+  pour inexploitable.
+- **Quatre sites renvoient une page de challenge** à notre agent. On ne
+  contourne pas : on les note indéterminés.
+
 ## `plannable`
 
 Une recette n'entre au choix du mercredi que si son plan ne mentira pas :

@@ -6,6 +6,7 @@
 | [`cycle.md`](cycle.md) | Le cycle : les états, la séquence, ce que produit une session |
 | [`schema.md`](schema.md) | Modèle de données et règles d'isolation |
 | [`ingestion.md`](ingestion.md) | Remplir le catalogue de recettes |
+| [`llm.md`](llm.md) | Quel modèle, où, ce qu'il voit, ce qu'il coûte |
 | [`dev.md`](dev.md) | Lancer le projet en local |
 
 > Les documents de conception (spec, plan, mesures) sont dans `.design/` — ce sont des
