@@ -1,7 +1,7 @@
 # Design — Application de batch cooking, diet et budget
 
 - **Date** : 2026-09-17
-- **Version** : 19 — la répartition de la semaine, chaînon manquant ; l'application devient une machine à états
+- **Version** : 20 — la liste de courses accepte le hors-alimentaire et un magasin ; aucune API drive n'existe
 - **Statut** : design validé, en attente du plan d'implémentation du **lot 0a-1**
 - **Utilisateurs** : un foyer de 2 personnes au départ, puis d'autres foyers **sur invitation**
 
@@ -47,6 +47,10 @@ Le différenciateur est le point 2 : l'ordonnancement de la session sous contrai
 | D40 | **Le rangement découle du planning, jamais l'inverse.** On ne choisit pas « frigo ou congélateur » : on dit **quand** on mange la part, l'application en déduit le rangement. Déplacer un plat de jeudi à lundi le **sort** du congélateur ; le repousser l'y met. | Deux décisions séparées : quand manger, et où ranger | Deux décisions pour une seule intention, c'est deux occasions de se tromper et un état incohérent garanti — un plat prévu lundi qui dort au congélateur. En cas de refus de la proposition, l'utilisateur reprend la main complète. |
 | D41 | **Un repas prévu mais non consommé est traité, pas ignoré** : l'application propose de **décaler** la part, ou de la **congeler** si elle ne tient pas jusqu'au prochain créneau. | Laisser la part expirer en silence | C'est le cas le plus fréquent de la vraie vie — on mange dehors, on n'a pas faim. Une application qui ne le prévoit pas devient fausse dès la première semaine, et c'est là qu'on cesse de s'en servir. |
 | D42 | **L'application est une machine à états sur un cycle**, pas un calendrier : `repos → recettes choisies → aux courses → courses faites → en cuisine → répartition → semaine en cours`. **L'accueil est la vue de cet état et ne propose qu'UNE seule action.** | Une navigation par fonctionnalités | Choisir ses recettes un mercredi ou un samedi ne change rien : c'est l'état qui compte, pas le jour. Et une application qui oblige à choisir quoi faire en l'ouvrant n'a pas de fil conducteur — c'est le reproche qui a déclenché cette refonte. |
+| D43 | **La liste de courses accepte des articles SANS aliment CIQUAL** : `shopping_item.food_id` est nullable, avec un libellé libre et un rayon. Desserts, café, produits d'entretien. | N'accepter que ce qui est rattaché à un aliment | Une liste de courses qui refuse le liquide vaisselle n'est pas la liste de courses du foyer — on en tient une deuxième à côté, et l'application ne sert plus à rien. Ces articles n'entrent simplement pas dans le calcul nutritionnel. |
+| D44 | **Un magasin par défaut, et une liste par magasin** : table `store`, `shopping_list.store_id`. Changeable à tout moment. | Une liste unique | Les prix, les rayons et l'ordre de parcours diffèrent d'une enseigne à l'autre. Et on ne fait pas ses courses d'entretien là où on fait son frais. |
+| D45 | **Les articles ajoutés à la main reviennent en proposition** : même mécanique que les aliments fréquents (D38), appliquée aux courses. | Repartir d'une liste vide à chaque fois | Le café, le dessert, l'essuie-tout ne viennent d'aucune recette : ils seraient ressaisis chaque semaine. C'est exactement le genre de friction répétée qui fait abandonner un outil. |
+| D46 | **Aucune intégration « panier drive ». La liste s'exporte, elle ne se pousse pas.** | Construire un panier chez Carrefour ou Leclerc | **Vérifié** : aucune enseigne française n'expose d'API publique. Les intégrations existantes parsent le HTML — panier local seulement, aucune synchronisation avec le compte, catalogue national et non le magasin, et cassé à chaque refonte du site. L'export (mail, partage, copier-coller) ne tombera jamais en panne. |
 | D31 | **La durée de session se décompose en « à cuisiner » et « d'attente »**, et l'attente est qualifiée : **au milieu** (échec d'ordonnancement) ou **en fin** (normale, on quitte la cuisine). | Afficher un makespan unique | Le temps d'attente **est la note de l'optimiseur** : un creux au milieu signifie qu'une cuisson n'a pas été couverte par une préparation. L'afficher rend la qualité du calcul visible. Et « 3 h dont 1 h passive » n'engage pas le même effort que « 3 h de travail ». |
 | D32 | **La cible de durée est un repère, jamais une barrière.** Tout dépassement est annoncé avec son ampleur **et la part d'attente qu'il contient**, puis deux boutons — *Ça me va* / *Raccourcir*. **Accepter est toujours possible**, à 2 h 09 comme à 3 h. | Refuser, ou écarter des recettes d'autorité | L'utilisateur seul sait si les recettes valent l'heure supplémentaire. L'application constate, donne le fait qui permet de décider, et n'a pas d'avis. Le ton n'est jamais celui du reproche. |
 | D33 | **Trois états de saisie par repas, jamais deux** : `barquette` (compté au gramme), `estimé` (compté, **marqué comme tel**), `vide` (**exclu du calcul**). Le tableau de bord affiche toujours « N jours renseignés sur M ». | Traiter l'absence de saisie comme zéro | Un jour vide n'est pas un jour à jeun. Compter les blancs comme des zéros fait mentir les moyennes **vers le bas** — le pire sens : on croit manquer de protéines alors qu'on n'a simplement rien saisi. |
@@ -395,7 +399,12 @@ durées ne sont pas confirmées, et l'affiche comme telle. `ingestion_job` est e
 ### 5.4 Reste
 
 `session`, `session_recipe`, `session_portion`, `session_plan`, `plan_conflict` — lot 1.
-`shopping_list` / `shopping_item` — lot 2. `fridge_inventory` / `fridge_item` — lot 3.
+`shopping_list` / `shopping_item` — lot 2.
+`shopping_item` porte `food_id` **nullable**, `label` libre, `rayon`, `qty`, `unit`, `origine`
+(`recette` \| `manuel` \| `habituel`), `coche_par` (qui l'a mis dans le caddie). Les articles
+sans `food_id` (entretien, café, dessert) n'entrent pas dans le calcul nutritionnel (D43).
+`store(id, household_id, nom, enseigne, par_defaut)` et `shopping_list.store_id` (D44).
+`frequent_shopping_item(household_id, label, rayon, usage_count)` pour les propositions (D45). `fridge_inventory` / `fridge_item` — lot 3.
 
 **`portion`** — créée au lot 1 (la session la produit), consommée aux lots 3 et 6 :
 
