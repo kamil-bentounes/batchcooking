@@ -1,12 +1,13 @@
 import { motion } from 'motion/react'
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes } from 'react'
 
-/* Navigation : deux liens, discrets. Le courant est en encre, l'autre en doux. */
+/* Navigation des écrans HORS cycle : objectifs et réglages, plus la sortie vers
+   l'accueil. Les écrans du cycle ont leur propre coque (`ui/coque.tsx`). */
 function Nav() {
   const b = import.meta.env.BASE_URL
   const ici = '/' + window.location.pathname.slice(b.length).replace(/^\/+/, '')
   const lien = (href: string, texte: string) => {
-    const actif = href === '/' ? ici === '/' : ici.startsWith(href)
+    const actif = ici === href
     return (
       <a href={(b + href.slice(1)).replace(/\/\//g, '/')}
          className={`py-2 transition-colors ${actif ? 'text-encre' : 'text-doux hover:text-encre'}`}>
@@ -16,8 +17,9 @@ function Nav() {
   }
   return (
     <nav className="mx-auto w-full max-w-lg flex gap-6 text-[15px] mb-8">
-      {lien('/', 'Objectifs')}
-      {lien('/settings', 'Réglages')}
+      {lien('/', '← Accueil')}
+      {lien('/objectifs', 'Objectifs')}
+      {lien('/reglages', 'Réglages')}
     </nav>
   )
 }
