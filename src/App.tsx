@@ -51,6 +51,8 @@ export default function App() {
     .slice(import.meta.env.BASE_URL.length).replace(/^\/+/, '')
   const invitation = chemin.match(/^\/invite\/(.+)$/)
 
+  // L'ordre compte. Une invitation prime sur tout : sans cela, l'invité se voit
+  // proposer de créer SON foyer au lieu de rejoindre celui qui l'attend.
   if (!session) return <SignIn redirectTo={window.location.href} />
   if (invitation) return <AcceptInvite token={invitation[1]} />
   if (!foyer) return <Onboarding onDone={relire} />
