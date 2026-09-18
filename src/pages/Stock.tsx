@@ -93,16 +93,23 @@ export function Stock({ va }: { va: (v: string) => void }) {
         </>
       )}
 
-      <button onClick={() => setAjout(a => !a)}
-              className="mt-8 w-full h-[46px] rounded-[16px] bg-brume/50 text-[15px]
-                         hover:bg-brume transition-colors">
-        + Ajouter à la main
-      </button>
+      <div className="mt-8 flex gap-3">
+        <button onClick={() => setAjout(a => !a)}
+                className="flex-1 h-[46px] rounded-[16px] bg-brume/50 text-[15px]
+                           hover:bg-brume transition-colors">
+          + À la main
+        </button>
+        <button onClick={() => va('/photo')}
+                className="flex-1 h-[46px] rounded-[16px] bg-brume/50 text-[15px]
+                           hover:bg-brume transition-colors">
+          Photo du frigo
+        </button>
+      </div>
       {ajout && <FormulaireStock lieu={onglet} surFini={() => setAjout(false)} />}
 
       <p className="mt-6 text-[13px] text-doux leading-relaxed">
-        La photo du frigo viendra accélérer cette saisie. Elle ne la remplacera
-        pas : on doit pouvoir tout corriger à la main.
+        La photo accélère la saisie, elle ne la remplace pas : le modèle propose,
+        tu valides ligne par ligne, et tout reste corrigeable à la main.
       </p>
     </Ecran>
   )

@@ -18,6 +18,7 @@ import { Semaine } from './pages/Semaine.tsx'
 import { Stock } from './pages/Stock.tsx'
 import { Bilan } from './pages/Bilan.tsx'
 import { Inventer } from './pages/Inventer.tsx'
+import { Photo } from './pages/Photo.tsx'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -76,6 +77,7 @@ export default function App() {
     case '/cuisine': return <Cuisine userId={moi} va={va} />
     case '/dressage': return <Dressage retour={sortie} va={va} />
     case '/inventer': return <Inventer userId={moi} retour={sortie} va={va} />
+    case '/photo': return <Photo retour={sortie} va={va} />
 
     // Les réglages, hors cycle.
     case '/objectifs': return <Targets userId={moi} />

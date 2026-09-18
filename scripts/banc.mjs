@@ -33,11 +33,11 @@ const GEMINI = cle('gemini')
 
 const MODELES = [
   GROQ && { nom: 'groq · gpt-oss-120b', base: 'https://api.groq.com/openai/v1', modele: 'openai/gpt-oss-120b', cle: GROQ },
-  GROQ && { nom: 'groq · gpt-oss-20b', base: 'https://api.groq.com/openai/v1', modele: 'openai/gpt-oss-20b', cle: GROQ },
   GROQ && { nom: 'groq · qwen3.8-27b', base: 'https://api.groq.com/openai/v1', modele: 'qwen/qwen3.8-27b', cle: GROQ },
+  // ⚠️ Gemini 3.8 et flash-latest rendent 503 « high demand » ou ne répondent
+  //    pas du tout sur le palier gratuit. 3.5-flash, lui, tient.
+  GEMINI && { nom: 'gemini · 3.5-flash', base: 'https://generativelanguage.googleapis.com/v1beta/openai', modele: 'gemini-3.5-flash', cle: GEMINI },
   GEMINI && { nom: 'gemini · 3.8-flash', base: 'https://generativelanguage.googleapis.com/v1beta/openai', modele: 'gemini-3.8-flash', cle: GEMINI },
-  GEMINI && { nom: 'gemini · flash-latest', base: 'https://generativelanguage.googleapis.com/v1beta/openai', modele: 'gemini-flash-latest', cle: GEMINI },
-  GEMINI && { nom: 'gemini · 2.5-flash-lite', base: 'https://generativelanguage.googleapis.com/v1beta/openai', modele: 'gemini-2.5-flash-lite', cle: GEMINI },
 ].filter(Boolean)
 
 // ── Le cas d'essai : exactement ce que la fonction envoie ───────────────────
@@ -75,7 +75,17 @@ const PROMPT = [
   SCHEMA,
 ].join('\n')
 
-async function appelle(m) {
+const dors = ms => new Promise(r => setTimeout(r, ms))
+
+/**
+ * Un appel, avec reprise sur les échecs qui ne disent rien du modèle.
+ *
+ * ⚠️ Sans cela, le banc mesure deux choses à la fois : la qualité du modèle ET
+ *    la santé du fournisseur. Un 429 provoqué par MES propres appels faisait
+ *    tomber gpt-oss de 93 % à 75 % — la note ne mesurait plus rien.
+ *    La DISPONIBILITÉ est comptée à part : elle compte aussi, mais séparément.
+ */
+async function appelle(m, reprises = 2) {
   const t0 = Date.now()
   try {
     const res = await fetch(`${m.base}/chat/completions`, {
@@ -90,14 +100,29 @@ async function appelle(m) {
           { role: 'user', content: PROMPT },
         ],
       }),
-      signal: AbortSignal.timeout(90000),
+      signal: AbortSignal.timeout(75000),
     })
     const ms = Date.now() - t0
-    if (!res.ok) return { ms, erreur: `HTTP ${res.status} ${(await res.text()).slice(0, 90)}` }
+    if (!res.ok) {
+      const corps = (await res.text()).slice(0, 90)
+      // 429 et 5xx ne disent rien du modèle : on retente après une pause.
+      if (reprises > 0 && (res.status === 429 || res.status >= 500)) {
+        await dors(6000)
+        const encore = await appelle(m, reprises - 1)
+        return { ...encore, indisponible: (encore.indisponible ?? 0) + 1 }
+      }
+      return { ms, erreur: `HTTP ${res.status} ${corps}`, indisponible: 1 }
+    }
     const j = await res.json()
     return { ms, brut: j.choices?.[0]?.message?.content ?? '', jetons: j.usage?.total_tokens ?? null }
   } catch (e) {
-    return { ms: Date.now() - t0, erreur: String(e.message ?? e).slice(0, 90) }
+    const ms = Date.now() - t0
+    if (reprises > 0) {
+      await dors(4000)
+      const encore = await appelle(m, reprises - 1)
+      return { ...encore, indisponible: (encore.indisponible ?? 0) + 1 }
+    }
+    return { ms, erreur: String(e.message ?? e).slice(0, 90), indisponible: 1 }
   }
 }
 
@@ -151,12 +176,18 @@ for (const m of MODELES) {
   // Un compteur PAR critère : la note globale dit qui gagne, le détail dit
   // pourquoi l'autre perd — et c'est le détail qui sert à choisir.
   const reussites = CRITERES.map(() => 0)
+  let repondus = 0
+  let coupures = 0
 
   for (let i = 0; i < ESSAIS; i++) {
+    // Une pause entre deux tirages : c'est moi qui provoquais les 429.
+    if (i > 0) await dors(3000)
     const r = await appelle(m)
     latences.push(r.ms)
+    coupures += r.indisponible ?? 0
     if (r.jetons) jetons.push(r.jetons)
     if (r.erreur) { echecs.push(r.erreur); continue }
+    repondus++
     const objet = analyse(r.brut)
     if (objet?.titre) titres.push(objet.titre)
     CRITERES.forEach(([, test], k) => {
@@ -167,26 +198,29 @@ for (const m of MODELES) {
   const total = reussites.reduce((a, b) => a + b, 0)
   resultats.push({
     modele: m,
-    note: total / (ESSAIS * CRITERES.length),
+    repondus, coupures,
+    // La note porte sur ce qui a RÉPONDU : c'est la qualité du modèle.
+    note: repondus > 0 ? total / (repondus * CRITERES.length) : 0,
     latence: latences.reduce((a, b) => a + b, 0) / latences.length,
     jetons: jetons.length ? Math.round(jetons.reduce((a, b) => a + b, 0) / jetons.length) : null,
     reussites, echecs, titres,
   })
 
   const d = resultats.at(-1)
-  const rates = CRITERES.map(([nom], k) => (reussites[k] < ESSAIS ? nom : null)).filter(Boolean)
-  console.log(`  ${m.nom.padEnd(26)} ${(d.note * 100).toFixed(0).padStart(3)} %`
+  const rates = CRITERES.map(([nom], k) => (reussites[k] < repondus ? nom : null)).filter(Boolean)
+  console.log(`  ${m.nom.padEnd(24)} ${(d.note * 100).toFixed(0).padStart(3)} %`
+    + `  ${repondus}/${ESSAIS} rép.`
     + `  ${(d.latence / 1000).toFixed(1).padStart(5)} s`
-    + `  ${String(d.jetons ?? '—').padStart(6)} jetons`
-    + (echecs.length ? `  ⚠️ ${echecs.length} échec(s) : ${echecs[0]}` : '')
+    + (coupures ? `  ${coupures} reprise(s)` : '')
     + (rates.length ? `  rate : ${rates.join(', ')}` : ''))
 }
 
-console.log(`\n${'modèle'.padEnd(26)} ${'note'.padStart(6)} ${'latence'.padStart(9)} ${'jetons'.padStart(8)}`)
-console.log('-'.repeat(54))
+console.log(`\n${'modèle'.padEnd(24)} ${'qualité'.padStart(8)} ${'dispo'.padStart(7)} ${'latence'.padStart(9)} ${'jetons'.padStart(8)}`)
+console.log('-'.repeat(60))
 for (const r of [...resultats].sort((a, b) => b.note - a.note || a.latence - b.latence)) {
-  console.log(r.modele.nom.padEnd(26)
-    + `${(r.note * 100).toFixed(0)} %`.padStart(7)
+  console.log(r.modele.nom.padEnd(24)
+    + `${(r.note * 100).toFixed(0)} %`.padStart(9)
+    + `${r.repondus}/${ESSAIS}`.padStart(8)
     + `${(r.latence / 1000).toFixed(1)} s`.padStart(10)
     + String(r.jetons ?? '—').padStart(9))
 }
@@ -195,7 +229,7 @@ console.log(`${'critère'.padEnd(16)}${resultats.map(r => r.modele.nom.split(' �
 console.log('-'.repeat(16 + resultats.length * 11))
 CRITERES.forEach(([nom], k) => {
   console.log(nom.padEnd(16)
-    + resultats.map(r => `${r.reussites[k]}/${ESSAIS}`.padStart(11)).join(''))
+    + resultats.map(r => `${r.reussites[k]}/${r.repondus}`.padStart(11)).join(''))
 })
 
 console.log()

@@ -427,3 +427,6 @@ verify_jwt = false
 # échouer le préflight CORS, qui ne porte aucun en-tête d'autorisation.
 [functions.inventer]
 verify_jwt = false
+
+[functions.frigo]
+verify_jwt = false
