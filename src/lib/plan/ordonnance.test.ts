@@ -23,6 +23,8 @@ function tache(id: string, p: Partial<Tache> = {}): Tache {
     recettes: ['r1'],
     verbe: null,
     quantiteG: null,
+    echelle: null,
+    dureeBaseMin: null,
     ...p,
   }
 }
@@ -121,6 +123,29 @@ describe('les promesses du produit', () => {
     expect(plan.attenteMin).toBe(30)  // exactement la cuisson
   })
 
+  it('ne compte pas un repos au frigo comme du temps en cuisine', () => {
+    // Un gratin qui repose trois heures ne retient personne. Un four qui tourne,
+    // si : il faudra revenir le vider.
+    const taches = [
+      tache('prepare', { dureeMin: 20 }),
+      tache('repos', { dureeMin: 210, actif: false, appareil: null, dependDe: ['prepare'] }),
+    ]
+    const plan = planifie(taches, SEUL, { graine: 'repos' })
+    expect(plan.dureeMin, 'le repos doit rester dans la durée totale').toBe(230)
+    expect(plan.finEnCuisineMin, 'le repos a retenu quelqu’un en cuisine').toBe(20)
+    expect(plan.attenteMin).toBe(0)
+  })
+
+  it('compte en revanche un four qui tourne : il faudra le vider', () => {
+    const taches = [
+      tache('prepare', { dureeMin: 20 }),
+      tache('cuit', { dureeMin: 40, actif: false, appareil: 'four', dependDe: ['prepare'] }),
+    ]
+    const plan = planifie(taches, SEUL, { graine: 'four2' })
+    expect(plan.finEnCuisineMin).toBe(60)
+    expect(plan.attenteMin).toBe(40)
+  })
+
   it('deux personnes vont deux fois plus vite sur des gestes indépendants', () => {
     const taches = Array.from({ length: 6 }, (_, i) => tache(`g${i}`, { dureeMin: 10 }))
     const seul = planifie(taches, SEUL, { graine: 'duo' })
@@ -162,6 +187,24 @@ describe('les promesses du produit', () => {
 })
 
 describe('déterminisme et tenue en charge', () => {
+  it('ne dépend jamais de l’horloge : même graine, même plan, dix fois', () => {
+    // Le test qui a trouvé le défaut : s'arrêter au bout d'un budget en
+    // millisecondes rendait un plan différent d'une exécution à l'autre.
+    const taches = Array.from({ length: 26 }, (_, i) =>
+      tache(`t${i}`, {
+        dureeMin: 1 + (i % 17),
+        actif: i % 3 !== 0,
+        appareil: i % 3 === 0 ? 'four' : null,
+        dependDe: i > 3 ? [`t${i - 4}`] : [],
+      }))
+    const reference = planifie(taches, SEUL, { graine: 'horloge' })
+      .taches.map(t => [t.id, t.debutMin])
+    for (let n = 0; n < 10; n++) {
+      expect(planifie(taches, SEUL, { graine: 'horloge' }).taches.map(t => [t.id, t.debutMin]))
+        .toEqual(reference)
+    }
+  })
+
   it('rend le même plan pour la même graine (D50)', () => {
     const taches = Array.from({ length: 25 }, (_, i) =>
       tache(`t${i}`, {
@@ -197,9 +240,11 @@ describe('déterminisme et tenue en charge', () => {
         dependDe: i > 5 ? [`t${i - 6}`] : [],
       }))
     const debut = performance.now()
-    const plan = planifie(taches, SEUL, { graine: 'charge', budgetMs: 60 })
+    const plan = planifie(taches, SEUL, { graine: 'charge' })
     const ecoule = performance.now() - debut
     expect(plan.taches).toHaveLength(60)
-    expect(ecoule).toBeLessThan(150)
+    // Le coût est borné par la TAILLE, jamais par l'horloge : c'est ce qui rend
+    // le plan identique sur les deux téléphones (D50).
+    expect(ecoule).toBeLessThan(400)
   })
 })

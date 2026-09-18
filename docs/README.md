@@ -5,6 +5,7 @@
 | [`api.md`](api.md) | Surface d'API : tables, verbes autorisés, fonctions RPC, Edge Functions |
 | [`cycle.md`](cycle.md) | Le cycle : les états, la séquence, ce que produit une session |
 | [`schema.md`](schema.md) | Modèle de données et règles d'isolation |
+| [`ingestion.md`](ingestion.md) | Remplir le catalogue de recettes |
 | [`dev.md`](dev.md) | Lancer le projet en local |
 
 > Les documents de conception (spec, plan, mesures) sont dans `.design/` — ce sont des

@@ -7,9 +7,12 @@
  * identiques et ADDITIONNE les quantités, ce qui change à la fois le plan et ce
  * que l'écran affiche : « Émince 500 g d'oignons — pour le dahl et la basquaise ».
  *
- * Ce qu'on économise n'est PAS le geste, c'est sa mise en place. On ne prétend
- * donc jamais qu'émincer 500 g va deux fois plus vite qu'émincer deux fois 250 g.
+ * Ce qu'on économise n'est PAS le geste, c'est sa mise en place — sauf quand le
+ * référentiel dit comment la durée réagit à la quantité (`scaling`, D19) : on
+ * recalcule alors depuis le total, plafond compris.
  */
+import { dureeDe } from './duree.ts'
+import type { Echelle } from './duree.ts'
 import type { Tache } from './types.ts'
 
 /**
@@ -32,6 +35,9 @@ export type Etape = {
   /** `actif` | `passif` | `bloquant` — voir recipe_step.load_type. */
   charge: string | null
   dependDe: string[]
+  /** Du référentiel `default_duration`. Sert à recalculer après fusion. */
+  echelle?: Echelle | null
+  dureeBaseMin?: number | null
 }
 
 /**
@@ -61,15 +67,31 @@ export function construitTaches(etapes: Etape[]): Tache[] {
     recettes: [e.recetteId],
     verbe: e.verbe,
     quantiteG: e.quantiteG,
+    echelle: e.echelle ?? null,
+    dureeBaseMin: e.dureeBaseMin ?? null,
   }))
 }
 
+/**
+ * Les seuls gestes qu'on rapproche SANS connaître les quantités.
+ *
+ * Un seul, et il mérite son exception : deux recettes qui préchauffent le même
+ * four ne le préchauffent qu'une fois. Partout ailleurs, l'absence de quantité
+ * veut dire qu'on ne sait pas si c'est le même travail — et deux gratins au
+ * four sont deux gratins, pas un. On préfère un plan trop long à un plan faux.
+ */
+const PARTAGEABLES = new Set(['préchauffer'])
+
 /** Deux actions ne se rapprochent que si elles font vraiment la même chose. */
 function memeGeste(a: Tache, b: Tache): boolean {
+  const mesurable = a.quantiteG !== null && b.quantiteG !== null
+  if (!mesurable && !(a.verbe !== null && PARTAGEABLES.has(a.verbe))) return false
+
   return (
     a.verbe !== null && a.verbe === b.verbe &&
     a.appareil === b.appareil &&
     a.actif === b.actif &&
+    a.echelle === b.echelle &&
     // Deux recettes, pas deux fois la même : fusionner deux étapes d'une seule
     // recette casserait sa séquence (« émince » avant et après la cuisson).
     a.recettes.every(r => !b.recettes.includes(r))
@@ -77,11 +99,24 @@ function memeGeste(a: Tache, b: Tache): boolean {
 }
 
 /**
- * La durée d'un geste fusionné : la somme des gestes, moins la mise en place
- * qu'on ne paie plus qu'une fois. Émincer 500 g prend bien deux fois le temps
- * d'émincer 250 g — on ne gagne que sur la planche.
+ * La durée d'un geste fusionné. Trois cas, dans cet ordre :
+ *
+ * 1. `lineaire_plafonne` avec les deux quantités connues — on RECALCULE depuis
+ *    la quantité totale (D19). C'est le cas juste, et c'est là que le plafond
+ *    joue : émincer 800 g ne prend pas trois fois émincer 250 g.
+ * 2. Ni l'une ni l'autre n'a de quantité — préchauffer, laisser reposer. Deux
+ *    préchauffages du même four n'en font qu'un : `max`, pas la somme.
+ * 3. Sinon — on additionne, moins la mise en place payée une seule fois. C'est
+ *    un repli conservateur : il ne prétend jamais gagner plus qu'une planche.
  */
 function dureeFusionnee(a: Tache, b: Tache): number {
+  if (a.echelle === 'lineaire_plafonne' && a.dureeBaseMin !== null
+      && a.quantiteG !== null && b.quantiteG !== null) {
+    return dureeDe(a.dureeBaseMin, a.echelle, a.quantiteG + b.quantiteG)
+  }
+  if (a.quantiteG === null && b.quantiteG === null) {
+    return Math.max(a.dureeMin, b.dureeMin)
+  }
   const economie = Math.min(MISE_EN_PLACE_MIN, Math.min(a.dureeMin, b.dureeMin) / 2)
   return a.dureeMin + b.dureeMin - economie
 }
@@ -119,6 +154,8 @@ function fusionneDeux(a: Tache, b: Tache): Tache {
     recettes: [...new Set([...a.recettes, ...b.recettes])],
     verbe: a.verbe,
     quantiteG: quantite,
+    echelle: a.echelle,
+    dureeBaseMin: a.dureeBaseMin,
   }
 }
 

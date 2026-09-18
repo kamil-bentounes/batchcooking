@@ -30,6 +30,8 @@ function tache(id: string, p: Partial<Tache> = {}): Tache {
     recettes: ['dahl'],
     verbe: 'emincer',
     quantiteG: 250,
+    echelle: null,
+    dureeBaseMin: null,
     ...p,
   }
 }
@@ -107,12 +109,21 @@ describe('la fusion (D35)', () => {
     expect(r).toHaveLength(2)
   })
 
+  it('ne fusionne rien quand une quantité manque', () => {
+    // Sans les deux quantités, on ne sait pas si c'est le même travail.
+    const r = fusionne([
+      tache('a', { quantiteG: 300, recettes: ['dahl'] }),
+      tache('b', { quantiteG: null, recettes: ['basquaise'] }),
+    ])
+    expect(r).toHaveLength(2)
+  })
+
   it('refuse une fusion qui rendrait le plan circulaire', () => {
     // a précède x, x précède b : rapprocher a et b ferait dépendre a de lui-même.
     const r = fusionne([
-      tache('a', { recettes: ['dahl'] }),
-      tache('x', { verbe: 'cuire', recettes: ['dahl'], dependDe: ['a'] }),
-      tache('b', { recettes: ['basquaise'], dependDe: ['x'] }),
+      tache('a', { quantiteG: 100, recettes: ['dahl'] }),
+      tache('x', { verbe: 'cuire', quantiteG: null, recettes: ['dahl'], dependDe: ['a'] }),
+      tache('b', { quantiteG: 100, recettes: ['basquaise'], dependDe: ['x'] }),
     ])
     expect(r).toHaveLength(3)
   })
@@ -138,14 +149,58 @@ describe('la fusion (D35)', () => {
     expect(r[0].recettes).toHaveLength(3)
   })
 
-  it('laisse la quantité inconnue quand une des deux manque', () => {
-    // Additionner 300 g et « on ne sait pas » ne donne pas 300 g.
+  it('recalcule depuis le total quand le référentiel dit comment (D19)', () => {
+    // 300 + 500 = 800 g, soit 3,2 × la quantité de référence — donc le plafond.
     const [r] = fusionne([
-      tache('a', { quantiteG: 300, recettes: ['dahl'] }),
-      tache('b', { quantiteG: null, recettes: ['basquaise'] }),
+      tache('a', { quantiteG: 300, dureeMin: 4, echelle: 'lineaire_plafonne',
+        dureeBaseMin: 3, recettes: ['dahl'] }),
+      tache('b', { quantiteG: 500, dureeMin: 6, echelle: 'lineaire_plafonne',
+        dureeBaseMin: 3, recettes: ['basquaise'] }),
+    ])
+    expect(r.quantiteG).toBe(800)
+    expect(r.dureeMin, 'la fusion a additionné au lieu de recalculer').toBe(9)
+  })
+
+  it('ne fait qu’un seul préchauffage de deux', () => {
+    // Le même four préchauffé deux fois ne l'est qu'une.
+    const [r] = fusionne([
+      tache('p1', { verbe: 'préchauffer', appareil: 'four', actif: false,
+        quantiteG: null, dureeMin: 12, echelle: 'constant', recettes: ['dahl'] }),
+      tache('p2', { verbe: 'préchauffer', appareil: 'four', actif: false,
+        quantiteG: null, dureeMin: 10, echelle: 'constant', recettes: ['basquaise'] }),
+    ])
+    expect(r.dureeMin, 'deux préchauffages ont été additionnés').toBe(12)
+  })
+
+  it('ne fusionne PAS deux cuissons dont on ignore les quantités', () => {
+    // Deux gratins au four sont deux gratins. Sans quantité, on ne sait pas si
+    // c'est le même travail : on préfère un plan trop long à un plan faux.
+    const r = fusionne([
+      tache('c1', { verbe: 'cuire', appareil: 'four', actif: false,
+        quantiteG: null, dureeMin: 35, echelle: 'constant', recettes: ['dahl'] }),
+      tache('c2', { verbe: 'cuire', appareil: 'four', actif: false,
+        quantiteG: null, dureeMin: 35, echelle: 'constant', recettes: ['basquaise'] }),
+    ])
+    expect(r, 'deux cuissons distinctes ont été confondues').toHaveLength(2)
+  })
+
+  it('ne fusionne pas deux gestes dont l’échelle diffère', () => {
+    const r = fusionne([
+      tache('a', { echelle: 'constant', recettes: ['dahl'] }),
+      tache('b', { echelle: 'lineaire_plafonne', recettes: ['basquaise'] }),
+    ])
+    expect(r).toHaveLength(2)
+  })
+
+  it('garde son libellé d’origine quand il n’a pas de quantité à annoncer', () => {
+    const [r] = fusionne([
+      tache('p1', { verbe: 'préchauffer', appareil: 'four', actif: false,
+        quantiteG: null, recettes: ['dahl'] }),
+      tache('p2', { verbe: 'préchauffer', appareil: 'four', actif: false,
+        quantiteG: null, recettes: ['basquaise'] }),
     ])
     expect(r.quantiteG).toBeNull()
-    expect(r.label).toBe('a')
+    expect(r.label).toBe('p1')
   })
 })
 

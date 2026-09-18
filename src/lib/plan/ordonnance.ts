@@ -155,6 +155,10 @@ export function ordonnance(
 function mesure(taches: TachePlanifiee[]): Omit<Plan, 'taches' | 'chemin'> {
   const dureeMin = taches.reduce((m, t) => Math.max(m, t.finMin), 0)
   const travailMin = taches.reduce((s, t) => s + (t.actif ? t.dureeMin : 0), 0)
+  // Ce qui retient en cuisine : un geste, ou un appareil qu'il faudra vider.
+  // Un repos sans appareil — au frigo, à température ambiante — ne retient pas.
+  const finEnCuisineMin = taches.reduce(
+    (m, t) => (t.actif || t.appareil !== null ? Math.max(m, t.finMin) : m), 0)
 
   // Union des intervalles actifs : deux personnes qui travaillent en même temps
   // ne font pas passer le temps deux fois.
@@ -173,7 +177,10 @@ function mesure(taches: TachePlanifiee[]): Omit<Plan, 'taches' | 'chemin'> {
   }
   if (curFin >= 0) occupeMin += curFin - curDeb
 
-  return { dureeMin, travailMin, occupeMin, attenteMin: Math.max(0, dureeMin - occupeMin) }
+  return {
+    dureeMin, finEnCuisineMin, travailMin, occupeMin,
+    attenteMin: Math.max(0, finEnCuisineMin - occupeMin),
+  }
 }
 
 /**
@@ -261,10 +268,20 @@ function prioriteInitiale(taches: Tache[]): string[] {
 export type OptionsPlan = {
   /** Sème le tirage. Passer `cycle.id` : le plan devient reproductible. */
   graine?: string
-  /** Budget de recherche. Au-delà, on rend le meilleur trouvé. */
-  budgetMs?: number
+  /**
+   * Nombre d'essais. Par défaut, proportionnel au nombre d'actions.
+   *
+   * ⚠️ PAS de budget en millisecondes : s'arrêter à l'horloge rendrait un plan
+   *    différent sur un téléphone lent et sur un rapide, ce qui viole D50 —
+   *    deux téléphones doivent voir la MÊME chose. Le coût est borné par la
+   *    taille du problème, et mesuré (voir le test de tenue en charge).
+   */
   iterationsMax?: number
 }
+
+/** Essais par action. Au-delà, la recherche locale ne gratte plus rien. */
+const ESSAIS_PAR_ACTION = 30
+const ESSAIS_MAX = 1500
 
 /**
  * Le point d'entrée. Rend le meilleur plan trouvé dans le budget, jamais un
@@ -274,17 +291,21 @@ export function planifie(
   taches: Tache[], ressources: Ressources, options: OptionsPlan = {},
 ): Plan {
   if (taches.length === 0) {
-    return { taches: [], dureeMin: 0, travailMin: 0, occupeMin: 0, attenteMin: 0, chemin: [] }
+    return {
+      taches: [], dureeMin: 0, finEnCuisineMin: 0,
+      travailMin: 0, occupeMin: 0, attenteMin: 0, chemin: [],
+    }
   }
-  const { graine = 'batch', budgetMs = 60, iterationsMax = 2000 } = options
+  const {
+    graine = 'batch',
+    iterationsMax = Math.min(ESSAIS_MAX, ESSAIS_PAR_ACTION * taches.length),
+  } = options
 
   let meilleureListe = prioriteInitiale(taches)
   let meilleur = ordonnance(taches, ressources, meilleureListe)
 
   const rnd = semeur(graineDe(graine))
-  const depart = Date.now()
   for (let i = 0; i < iterationsMax; i++) {
-    if (i % 32 === 0 && Date.now() - depart > budgetMs) break
 
     // Voisinage : on déplace UNE tâche ailleurs dans la liste. Déplacer plutôt
     // qu'échanger, parce que c'est ce qui débloque un goulot — remonter la
@@ -297,8 +318,13 @@ export function planifie(
     liste.splice(vers, 0, x)
 
     const essai = ordonnance(taches, ressources, liste)
-    if (essai.dureeMin < meilleur.dureeMin - EPS ||
-        (Math.abs(essai.dureeMin - meilleur.dureeMin) < EPS &&
+    // On minimise d'abord le temps passé EN CUISINE (D31) : c'est ce qui rend
+    // une session pénible. La durée totale, repos compris, ne départage qu'après.
+    if (essai.finEnCuisineMin < meilleur.finEnCuisineMin - EPS ||
+        (Math.abs(essai.finEnCuisineMin - meilleur.finEnCuisineMin) < EPS &&
+         essai.dureeMin < meilleur.dureeMin - EPS) ||
+        (Math.abs(essai.finEnCuisineMin - meilleur.finEnCuisineMin) < EPS &&
+         Math.abs(essai.dureeMin - meilleur.dureeMin) < EPS &&
          essai.attenteMin < meilleur.attenteMin - EPS)) {
       meilleur = essai
       meilleureListe = liste

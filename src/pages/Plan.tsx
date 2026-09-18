@@ -73,15 +73,22 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
 
   return (
     <Passage retour={retour}>
-      <h1 className="titre text-[44px]">{duree(base.dureeMin)}</h1>
+      <h1 className="titre text-[44px]">{duree(base.finEnCuisineMin)}</h1>
       <p className="mt-3 text-[15px] text-doux">
-        dont {duree(base.attenteMin)} d’attente · {base.taches.length} actions
+        en cuisine, dont {duree(base.attenteMin)} d’attente · {base.taches.length} actions
         pour {simulation.ressources.cuisiniers > 1
           ? `${simulation.ressources.cuisiniers} personnes` : 'une personne'}
       </p>
       <p className="mt-1.5 text-[15px] text-doux">
         <Chiffre valeur={duree(base.occupeMin)} taille={20} /> les mains prises.
       </p>
+      {/* Un repos au frigo ne retient personne : on le dit à part, jamais dans
+          le chiffre principal — « 4 h 57 » serait exact et parfaitement inutile. */}
+      {base.dureeMin > base.finEnCuisineMin + 1 && (
+        <p className="mt-1.5 text-[15px] text-doux">
+          Puis {duree(base.dureeMin - base.finEnCuisineMin)} de repos, sans toi.
+        </p>
+      )}
 
       {/* L'arbitrage (D5) : on chiffre le coût de l'appareil et on laisse trancher. */}
       {bloquant && gainSiElargi > 2 && (

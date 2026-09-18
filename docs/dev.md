@@ -11,7 +11,9 @@ npm install
 npx supabase start        # imprime les clés à mettre dans .env
 cp .env.example .env      # puis renseigner VITE_SUPABASE_ANON_KEY et SUPABASE_SERVICE_ROLE_KEY
 npm run db:reset          # applique les migrations
-npm run test              # suite d'isolation
+npm run seed              # référentiels : CIQUAL, conversions, durées
+npm run ingest -- --sitemap <url> --limite 25   # quelques recettes
+npm run test              # 382 tests
 npm run dev               # http://localhost:5173
 ```
 

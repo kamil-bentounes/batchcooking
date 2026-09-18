@@ -166,7 +166,12 @@ export function useSimule(cycleId: string | undefined) {
           Object.entries(capacites).map(([c, n]) => [c, Math.max(2, n)])),
       }, { graine: cycleId! })
 
-      return { actions, base, elargi, ressources, gainSiElargi: base.dureeMin - elargi.dureeMin }
+      return {
+        actions, base, elargi, ressources,
+        // L'écart qui parle est celui du temps passé EN CUISINE : c'est lui
+        // qu'on troque contre un deuxième plat au four.
+        gainSiElargi: base.finEnCuisineMin - elargi.finEnCuisineMin,
+      }
     },
   })
 }

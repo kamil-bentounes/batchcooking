@@ -718,7 +718,7 @@
     ]
   },
   "verbe_alias": {
-    "_note": "Verbes de recette qui se ramènent à un verbe de default_duration. Trouvés dans l'étalon R1c : 7 sur 141 actions.",
+    "_note": "Verbes de recette qui se ramènent à un verbe de default_duration. 18 trouvés dans l'étalon R1c, 13 ajoutés après mesure sur le corpus d'étapes du lot 0b — chacun est un synonyme strict, jamais une approximation de commodité.",
     "alias": {
       "sabler": "mélanger",
       "foncer": "étaler",
@@ -737,7 +737,20 @@
       "chemiser": "beurrer",
       "napper": "décorer",
       "lustrer": "beurrer",
-      "débiter": "couper"
+      "débiter": "couper",
+      "rincer": "laver",
+      "ajouter": "mélanger",
+      "verser": "mélanger",
+      "incorporer": "mélanger",
+      "remuer": "mélanger",
+      "fouetter": "battre",
+      "saupoudrer": "assaisonner",
+      "parsemer": "décorer",
+      "trancher": "couper",
+      "détailler": "couper",
+      "badigeonner": "beurrer",
+      "garnir": "farcir",
+      "couvrir": "réserver"
     }
   },
   "suggested_item": {

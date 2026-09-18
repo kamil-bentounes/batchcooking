@@ -6,6 +6,11 @@
 |---|---|---|
 | **A — référentiel** | Lecture : tout authentifié. Écriture : rôle de service. | `food`, `food_yield_factor`, `unit_weight`, `unit_conversion`, `density`, `default_temperature`, `default_duration`, `typical_quantity`, `appliance_catalog`, `ingestion_job`, `instance_setting`, `non_action_pattern`, `suggested_item`, `cycle_transition` |
 | **B — catalogue partagé** | Lecture : tous. `UPDATE` tracé, refusé si `confidence >= 0.8`. Ni `INSERT` ni `DELETE`. | `recipe`, `recipe_ingredient`, `recipe_step`, `recipe_step_dependency` |
+
+`recipe_step` porte `verb` et `quantity_g` (migration 0019) : la fusion des
+gestes entre recettes (D35) compare des verbes, pas des phrases, et la mesure
+des durées (D48) s'agrège par verbe — une étape n'est jamais refaite, un verbe
+l'est toutes les semaines. Remplis par l'ingestion, voir [`ingestion.md`](ingestion.md).
 | **C — foyer** | RLS stricte, trois formes de prédicat. | `household`, `user_profile`, `nutrition_target`, `invitation`, `llm_usage` + les 18 tables du lot 1 (ci-dessous) |
 
 ## Les tables du lot 1

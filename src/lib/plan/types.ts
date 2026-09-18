@@ -1,3 +1,5 @@
+import type { Echelle } from './duree.ts'
+
 /**
  * Le vocabulaire du plan de session.
  *
@@ -25,6 +27,14 @@ export type Tache = {
   recettes: string[]
   verbe: string | null
   quantiteG: number | null
+  /**
+   * Comment la durée réagit à la quantité (D19). Portée par la tâche parce que
+   * la FUSION doit pouvoir recalculer : 300 g puis 200 g d'oignons émincés
+   * ensemble ne font pas la somme des deux durées.
+   */
+  echelle: Echelle | null
+  /** Durée pour `QUANTITE_REFERENCE_G`, avant mise à l'échelle. */
+  dureeBaseMin: number | null
 }
 
 /** Ce dont on dispose. Les capacités viennent de `session_appliance` (D8). */
@@ -44,8 +54,17 @@ export type TachePlanifiee = Tache & {
 
 export type Plan = {
   taches: TachePlanifiee[]
-  /** Du premier geste au dernier signal : ce que dure la session. */
+  /** Du premier geste au dernier signal, repos compris. */
   dureeMin: number
+  /**
+   * Le moment où l'on peut quitter la cuisine. C'est CELA que l'écran annonce
+   * comme « la session ».
+   *
+   * La nuance qui compte : un four qui tourne vous RETIENT — il faudra sortir le
+   * plat. Un gratin qui repose 3 h 30 au réfrigérateur ne retient personne : on
+   * s'en va. Annoncer « 4 h 57 » serait exact et parfaitement inutile.
+   */
+  finEnCuisineMin: number
   /** Somme des durées actives, toutes personnes confondues. Le vrai coût humain. */
   travailMin: number
   /** Temps pendant lequel au moins une personne a les mains prises. */

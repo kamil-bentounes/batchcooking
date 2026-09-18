@@ -1,0 +1,346 @@
+[
+ {
+  "url": "https://www.ptitchef.com/recettes/plat/timbale-de-rigatoni-au-four-a-la-saucisse-a-la-bechamel-et-a-la-mozzarella-fid-1614135",
+  "recette": {
+   "@context": "https://schema.org/",
+   "@type": "Recipe",
+   "@id": "https://www.ptitchef.com/recettes/plat/timbale-de-rigatoni-au-four-a-la-saucisse-a-la-bechamel-et-a-la-mozzarella-fid-1614135#recipe",
+   "name": "Gratin de rigatoni au four à la saucisse, à la béchamel et à la mozzarella",
+   "inLanguage": "fr",
+   "recipeCategory": "Plat",
+   "recipeCuisine": "Fr",
+   "image": "https://www.ptitchef.com/imgupl/recipe/gratin-de-rigatoni-au-four-a-la-saucisse-a-la-bechamel-et-a-la-mozzarella--503329p906885.webp",
+   "author": {
+    "@type": "Person",
+    "name": "Daniele Mainieri",
+    "url": "https://www.ptitchef.com/team/daniele-mainieri-tmid-6"
+   },
+   "datePublished": "2026-09-01T10:30:05+02:00",
+   "dateModified": "2026-09-04T10:52:39+02:00",
+   "description": " Le plat de pâtes qui arrive à table et fait tout de suite son petit effet ! \r\nAvec ses rigatoni dressés à la verticale, sa sauce généreuse à la chair à saucisse, sa béchamel bien crémeuse et sa mozzarella fondante, cette timbale a tout du plat convivial qu’on adore partager. À la découpe, on découvre un cœur moelleux, bien gratiné et ultra gourmand.\r\n Parfaite pour un repas du dimanche, un déjeuner en famille ou une belle occasion , cette recette demande un peu de montage, mais reste vraiment accessible. Et une fois servie bien chaude, avec le fromage qui fond et la sauce qui enrobe les pâtes, difficile de ne pas se resservir !",
+   "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": 5,
+    "bestRating": 5,
+    "ratingCount": 2
+   },
+   "prepTime": "PT35M",
+   "cookTime": "PT25M",
+   "totalTime": "PT1H10M",
+   "recipeYield": "4",
+   "nutrition": {
+    "@type": "NutritionInformation",
+    "servingSize": "437g",
+    "calories": "903Kcal",
+    "carbohydrateContent": "86.7g",
+    "fatContent": "40.2g",
+    "saturatedFatContent": "17.4g",
+    "proteinContent": "38.7g",
+    "fiberContent": "5.1g",
+    "sugarContent": "10.5g",
+    "sodiumContent": "1.7g"
+   },
+   "recipeIngredient": [
+    "400 gr de rigatoni",
+    "250 gr de chair à saucisse",
+    "1/2 oignon",
+    "125 gr de mozzarella",
+    "400 gr de coulis de tomates",
+    "4 cl de vin blanc",
+    "30 gr de parmesan râpé",
+    "Huile d'olive",
+    "Sel",
+    "Poivre",
+    "40 cl de lait",
+    "30 gr de beurre",
+    "30 gr de farine",
+    "Noix de muscade",
+    "Poivre",
+    "Sel"
+   ],
+   "estimatedCost": {
+    "@type": "MonetaryAmount",
+    "currency": "EUR",
+    "value": "7.03"
+   },
+   "recipeInstructions": [
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380395.jpg",
+     "text": "Hacher finement l'oignon et le faire revenir dans l'huile. Ajouter la chair à saucisse, l'émietter et la faire revenir pendant 6 minutes. Déglacer avec le vin et laisser s'évaporer."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380396.jpg",
+     "text": "Ajouter le coulis de tomates, saler et poivrer."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380397.jpg",
+     "text": "Faire cuire la sauce à feu moyen-doux pendant 20 à 25 minutes, en remuant de temps en temps."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380398.jpg",
+     "text": "Pour la béchamel : Faire chauffer le lait dans une petite casserole. Dans une autre petite casserole, faire fondre le beurre et ajouter la farine. Mélanger jusqu’à obtenir un roux."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380399.jpg",
+     "text": "Délayer le roux avec un peu de lait chaud, en remuant avec un fouet. Ajouter progressivement le reste du lait et faire cuire à feu doux jusqu'à obtenir une consistance crémeuse."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380400.jpg",
+     "text": "Faire cuire les rigatoni dans une grande quantité d'eau salée et égouttez-les lorsqu'elles sont encore très al dente, environ 3 à 4 minutes avant le temps indiqué sur l'emballage."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380401.jpg",
+     "text": "Verser au fond du moule à charnière 4 cuillères à soupe de sauce et 4 cuillères à soupe de béchamel."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380403.jpg",
+     "text": "Répartissez uniformément la sauce au fond du plat et verser un peu de béchamel également sur les bords. Disposer les rigatoni à la verticale, en commençant par l'extérieur du moule."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380402.jpg",
+     "text": "Continuer à disposer les rigatoni à la verticale jusqu'à ce que le moule soit entièrement rempli, en veillant à ce qu'ils soient bien serrés les uns contre les autres."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380404.jpg",
+     "text": "Répartir sur la surface la moitié de la sauce, la moitié de la mozzarella coupée en petits morceaux et la moitié de la béchamel."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380405.jpg",
+     "text": "Ajouter le reste de la sauce et l'étaler à l'aide d'une cuillère en bois."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380406.jpg",
+     "text": "Recouvrir avec le reste de béchamel et de mozzarella, puis saupoudrer généreusement de parmesan râpé."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380407.jpg",
+     "text": "Faire cuire dans un four à chaleur tournante préchauffé à 190 °C pendant 25 minutes. Sortir le timbale de rigatoni du four et le laisser reposer pendant 10 minutes."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380408.jpg",
+     "text": "Passer délicatement un couteau le long des bords du moule, puis ouvrir la charnière et démouler soigneusement."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503329s2380409.jpg",
+     "text": "A servir encore bien chaud, bon appétit ! ;)"
+    }
+   ],
+   "keywords": "au-four,gratin,mozzarella,saucisse,gratin a la mozzarella,gratin aux saucisses,plat"
+  }
+ },
+ {
+  "url": "https://www.ptitchef.com/recettes/entree/flans-sales-aux-olives-et-fromage-frais-au-air-fryer-fid-1614169",
+  "recette": {
+   "@context": "https://schema.org/",
+   "@type": "Recipe",
+   "@id": "https://www.ptitchef.com/recettes/entree/flans-sales-aux-olives-et-fromage-frais-au-air-fryer-fid-1614169#recipe",
+   "name": "Flans salés aux olives et fromage frais au air fryer",
+   "inLanguage": "fr",
+   "recipeCategory": "Entrée",
+   "recipeCuisine": "Fr",
+   "image": "https://www.ptitchef.com/imgupl/recipe/flans-sales-aux-olives-et-fromage-frais-au-air-fryer--503362p907060.webp",
+   "author": {
+    "@type": "Person",
+    "name": "Daniele Mainieri",
+    "url": "https://www.ptitchef.com/team/daniele-mainieri-tmid-6"
+   },
+   "datePublished": "2026-09-03T11:00:04+02:00",
+   "dateModified": "2026-09-05T21:30:09+02:00",
+   "description": " Des petits flans salés moelleux, prêts en un rien de temps ? Parfait pour l’apéro ! \r\nAvec du fromage frais, quelques olives noires et un peu de basilic, on prépare de petites bouchées fondantes, bien parfumées et toutes simples à réaliser. Leur texture est à mi-chemin entre le muffin salé et le flan : légèrement dorée à l’extérieur, toute tendre et crémeuse à l’intérieur.  Cuits au air fryer , ces petits flans sont pratiques, rapides et parfaits pour utiliser un reste de fromage frais. À servir tièdes en entrée, à l’apéritif ou sur un buffet, pour une recette facile qui change des flans classiques ! ;)",
+   "prepTime": "PT5M",
+   "cookTime": "PT14M",
+   "totalTime": "PT21M",
+   "recipeYield": "2",
+   "nutrition": {
+    "@type": "NutritionInformation",
+    "servingSize": "136g",
+    "calories": "215Kcal",
+    "carbohydrateContent": "18.3g",
+    "fatContent": "9.9g",
+    "saturatedFatContent": "3.3g",
+    "proteinContent": "11.4g",
+    "fiberContent": "2.9g",
+    "sugarContent": "1.1g",
+    "sodiumContent": "0.9g"
+   },
+   "recipeIngredient": [
+    "90 gr de fromage frais (type Saint-Moret ou Philadelphia)",
+    "1 œuf",
+    "45 gr de farine",
+    "½ cuillère à café de levure chimique",
+    "1 cuillère à soupe d'eau",
+    "12 olives noires",
+    "quelques feuilles de basilic",
+    "Sel",
+    "Poivre"
+   ],
+   "estimatedCost": {
+    "@type": "MonetaryAmount",
+    "currency": "EUR",
+    "value": "1.28"
+   },
+   "recipeInstructions": [
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503362s2380697.jpg",
+     "text": "Mettre le fromage frais dans un saladier et l'écraser à la fourchette."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503362s2380699.jpg",
+     "text": "Ajouter l'œuf et mélanger à l'aide d'un fouet jusqu'à obtenir un mélange homogène."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503362s2380698.jpg",
+     "text": "Mélanger la farine et la levure dans un saladier à part."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503362s2380700.jpg",
+     "text": "Incorporer petit à petit la farine et la levure au mélange d'œuf et de Philadelphia. Ajouter une cuillère à soupe d'eau et continuez à mélanger jusqu'à obtenir une pâte homogène."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503362s2380701.jpg",
+     "text": "Mélanger les olives noires hachées, le basilic ciselé, le sel et un peu de poivre dans la pâte."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503362s2380702.jpg",
+     "text": "Verser la pâte dans les moules préalablement beurrés, en les remplissant aux trois quarts environ. Tapoter délicatement les moules sur le plan de travail pour tasser la préparation."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503362s2380703.jpg",
+     "text": "Faire cuire au air fryer à 165 °C pendant 13 à 14 minutes. Vérifier la cuisson à l'aide d'un cure-dent : celui-ci doit ressortir presque sec et la surface doit être dorée."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503362s2380704.jpg",
+     "text": "Laisser reposer 2 à 3 minutes avant de démouler. Bon appétit !"
+    }
+   ],
+   "keywords": "air fryer,recettes au fromage,flan,recettes de flan en entree,olive,recettes d'entree aux olives,entree"
+  }
+ },
+ {
+  "url": "https://www.ptitchef.com/recettes/aperitif/sardines-en-conserve-facon-escabeche-fid-1614171",
+  "recette": {
+   "@context": "https://schema.org/",
+   "@type": "Recipe",
+   "@id": "https://www.ptitchef.com/recettes/aperitif/sardines-en-conserve-facon-escabeche-fid-1614171#recipe",
+   "name": "Sardines en conserve façon escabèche",
+   "inLanguage": "fr",
+   "recipeCategory": "Apéritif",
+   "recipeCuisine": "Fr",
+   "image": "https://www.ptitchef.com/imgupl/recipe/sardines-en-conserve-facon-escabeche--503375p907157.webp",
+   "author": {
+    "@type": "Person",
+    "name": "Mirella Mendonça",
+    "url": "https://www.ptitchef.com/team/mirella-mendonca-tmid-2"
+   },
+   "datePublished": "2026-09-04T09:00:04+02:00",
+   "dateModified": "2026-09-05T21:30:03+02:00",
+   "description": " Une escabèche express avec une simple boîte de sardines ? Voilà une idée qui change tout ! \r\nDans cette version rapide et pratique, les sardines en conserve sont recouvertes d’une marinade chaude aux oignons, tomate, ail, vinaigre et herbes fraîches. Après un petit passage au frais, elles s’imprègnent de toutes ces saveurs acidulées et parfumées, pour un résultat bien relevé et ultra savoureux.\r\n Parfaites à servir à l’apéro, en entrée ou sur des toasts , ces sardines marinées façon escabèche sont économiques, faciles à préparer et encore meilleures quand elles reposent quelques heures. Une recette toute simple, mais pleine de caractère !",
+   "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": 3.8,
+    "bestRating": 5,
+    "ratingCount": 6
+   },
+   "prepTime": "PT5M",
+   "cookTime": "PT10M",
+   "totalTime": "PT1H15M",
+   "recipeYield": "2",
+   "nutrition": {
+    "@type": "NutritionInformation",
+    "servingSize": "116g",
+    "calories": "206Kcal",
+    "carbohydrateContent": "3.1g",
+    "fatContent": "14.4g",
+    "saturatedFatContent": "2.8g",
+    "proteinContent": "14.3g",
+    "fiberContent": "2.5g",
+    "sugarContent": "2.1g",
+    "sodiumContent": "0.5g"
+   },
+   "recipeIngredient": [
+    "1 boîte de sardines au naturel (70 gr égouttées)",
+    "½ petit oignon",
+    "1 tomate",
+    "½ gousse d'ail",
+    "Huile d'olive",
+    "1 cuillère à soupe de vinaigre de vin blanc (ou de cidre)",
+    "1 cuillère à soupe d'eau",
+    "1 cuillère à soupe de coriandre (ou de persil)",
+    "1 petite feuille de laurier",
+    "Sel",
+    "Poivre"
+   ],
+   "estimatedCost": {
+    "@type": "MonetaryAmount",
+    "currency": "EUR",
+    "value": "2.47"
+   },
+   "recipeInstructions": [
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503375s2380801.jpg",
+     "text": "Préparez les ingrédients : coupez l'oignon en fines lamelles, la tomate en morceaux, et hachez finement l'ail et la coriandre."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503375s2380802.jpg",
+     "text": "Faites chauffer l'huile d'olive dans une poêle à feu moyen. Ajoutez l'oignon et faites-le revenir environ 3 minutes, jusqu'à ce qu'il soit translucide. Ajoutez l'ail et faites revenir encore 30 secondes."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503375s2380803.jpg",
+     "text": "Ajoutez la tomate et la feuille de laurier. Assaisonnez avec un peu de sel et de poivre. Laissez cuire 2 à 3 minutes. La tomate doit ramollir, mais il ne faut pas qu'elle se transforme en sauce."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503375s2380804.jpg",
+     "text": "Ajoutez le vinaigre et l'eau. Mélangez et laissez bouillir pendant environ 1 minute. Éteignez le feu."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503375s2380805.jpg",
+     "text": "Versez la moitié du mélange d'oignons et de tomates dans un petit récipient."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503375s2380806.jpg",
+     "text": "Disposez les filets de sardines (déjà égouttés) par-dessus et recouvrez-les du reste de la marinade. Terminez par de la coriandre et, si vous le souhaitez, un filet d'huile d'olive."
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503375s2380807.jpg",
+     "text": "Laissez refroidir, enveloppez-le dans du film alimentaire et mettez-le au réfrigérateur pendant au moins 1 heure avant de le servir. Si vous pouvez le laisser reposer 3 à 4 heures, ce sera encore mieux !"
+    },
+    {
+     "@type": "HowToStep",
+     "image": "https://www.ptitchef.com/imgupl/recipe-step/503375s2380808.jpg",
+     "text": "Vous pouvez les servir sur des toasts de pain grillé pour l'apéro, bon appétit ;)"
+    }
+   ],
+   "keywords": "escabeche,sardine,recettes d'aperitif a la sardine,aperitif"
+  }
+ }
+]
