@@ -198,7 +198,19 @@ async function ecrire(pret) {
   if (pret.etapes.length > 0) {
     const { data: posees, error: e } = await db.from('recipe_step')
       .insert(pret.etapes.map(s => ({ ...s, recipe_id: recette.id }))).select('id, ordinal')
-    if (e) throw new Error(e.message)
+    if (e) {
+      /*
+       * ⚠️ On a DÉJÀ effacé les anciennes étapes. Laisser la recette telle
+       *    quelle la rend « planifiable » avec zéro étape — et le catalogue la
+       *    sert. Déclencheur mesuré : « 1 pincée de paprika » vaut 0,4 g, que
+       *    `Math.round` ramène à 0, que `check (quantity_g > 0)` refuse, ce qui
+       *    fait échouer TOUTES les étapes de la recette d'un coup.
+       *
+       *    On la sort donc du catalogue plutôt que d'y laisser une coquille.
+       */
+      await db.from('recipe').update({ plannable: false }).eq('id', recette.id)
+      throw new Error(`étapes refusées, recette rendue non planifiable : ${e.message}`)
+    }
 
     const parOrdinal = new Map(posees.map(s => [s.ordinal, s.id]))
     const arcs = pret.dependances

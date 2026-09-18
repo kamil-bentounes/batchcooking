@@ -85,7 +85,11 @@ export default function App() {
 
     // Les réglages, hors cycle.
     case '/objectifs': return <Targets userId={moi} />
-    case '/reglages': return <Settings />
+    case '/reglages': return <Settings va={va} />
+    // Changer son mot de passe : l'écran existait, sans aucun chemin pour y
+    // aller une fois le premier posé.
+    case '/motdepasse':
+      return <Password userId={moi} change onDone={() => va('/reglages')} />
 
     default: return <Accueil userId={moi} va={va} />
   }

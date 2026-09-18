@@ -153,7 +153,29 @@ export function useDistribue() {
     }) => {
       const foyer = ou(await supabase.rpc('current_household'))
       if (!foyer) throw new Error('Aucun foyer.')
-      return ou(await supabase.from('meal_slot').upsert(cases.map(c => ({
+
+      /*
+       * ⚠️ On n'écrase JAMAIS une case déjà renseignée.
+       *
+       * L'upsert posait `state: 'prevu'` sur tout : une seule case déjà mangée
+       * dans les jours visés levait un 23514 (`meal_slot_mange_date`) et
+       * faisait échouer TOUTE la distribution — une seule instruction. Et sur
+       * une case « sautée », il effaçait en silence un jour renseigné (D33).
+       *
+       * On écarte donc ce qui porte déjà une réponse, et on distribue le reste.
+       */
+      const jours = [...new Set(cases.map(c => c.jour))]
+      const prises = new Set(
+        ou(await supabase.from('meal_slot')
+          .select('user_profile_id, day, meal')
+          .in('day', jours).neq('state', 'prevu'))
+          .map(x => `${x.user_profile_id}|${x.day}|${x.meal}`))
+
+      const libres = cases.filter(
+        c => !prises.has(`${c.userId}|${c.jour}|${c.repas}`))
+      if (libres.length === 0) return []
+
+      return ou(await supabase.from('meal_slot').upsert(libres.map(c => ({
         household_id: foyer,
         cycle_id: cycleId,
         user_profile_id: c.userId,

@@ -275,6 +275,20 @@ export function estPlanifiable(etapes: EtapePrete[]): { oui: boolean; motifs: st
   return { oui: motifs.length === 0, motifs }
 }
 
+/**
+ * Un poids qui s'arrondit à ZÉRO n'est pas un poids.
+ *
+ * « 1 pincée de paprika » vaut 0,4 g, que l'arrondi ramène à 0, que la base
+ * refuse (`check quantity_g > 0`) — et le refus emportait TOUTES les étapes de
+ * la recette, laissant une coquille planifiable dans le catalogue. Une pincée
+ * ne met pas une étape à l'échelle : on rend `null`, qui veut dire ce qu'il dit.
+ */
+function poidsUtile(g: number | null): number | null {
+  if (g === null) return null
+  const arrondi = Math.round(g)
+  return arrondi > 0 ? arrondi : null
+}
+
 function enEtapePrete(
   e: EtapeAnalysee, ordinal: number, quantiteDeduite: number | null,
 ): EtapePrete {
@@ -283,7 +297,7 @@ function enEtapePrete(
     text: e.brut,
     verb: e.verbe,
     // Écrite dans l'étape d'abord ; à défaut, déduite des ingrédients cités.
-    quantity_g: e.quantiteG ?? quantiteDeduite,
+    quantity_g: poidsUtile(e.quantiteG ?? quantiteDeduite),
     duration_min: e.dureeMin,
     duration_source: e.sourceDuree,
     appliance_type: e.appareil,

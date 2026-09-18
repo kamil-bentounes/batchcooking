@@ -126,15 +126,3 @@ export function seraRetenue(
   const unitaire = grammes / quantite
   return unitaire >= reference * BORNE_BASSE && unitaire <= reference * BORNE_HAUTE
 }
-
-/**
- * Le poids qui fait foi pour ce foyer : l'appris s'il est actif, sinon la
- * référence, sinon rien.
- *
- * Rendre `null` plutôt qu'un chiffre est délibéré : c'est ce qui fait afficher
- * une fourchette au lieu d'une fausse précision (D18).
- */
-export function poidsRetenu(connu: Connu | undefined, reference: number | null): number | null {
-  if (connu?.actif) return connu.grams
-  return reference
-}

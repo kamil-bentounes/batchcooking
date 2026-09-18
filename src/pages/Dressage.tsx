@@ -92,7 +92,21 @@ export function Dressage({ va, retour }: { va: (v: string) => void; retour: () =
         }
       }
       if (lots.length === 0) throw new Error('Rien à dresser.')
-      await dresse.mutateAsync({ cycleId: cycle.id, lots })
+      /*
+       * ⚠️ REPRENABLE.
+       *
+       * Quatre écritures en série, sans transaction. Si la distribution échoue
+       * — il suffit d'une case déjà mangée dans les jours visés — le bouton
+       * reste actif, l'erreur s'affiche, et la personne réappuie. Sans ce test,
+       * `dresse` réinsérait la TOTALITÉ des lots : dix barquettes en devenaient
+       * vingt, et la distribution s'étalait sur le double de jours.
+       *
+       * Le dressage n'a lieu qu'une fois par cycle. S'il a déjà eu lieu, on
+       * reprend à l'étape suivante.
+       */
+      const { count: deja } = await supabase.from('portion')
+        .select('id', { count: 'exact', head: true }).eq('cycle_id', cycle.id)
+      if (!deja) await dresse.mutateAsync({ cycleId: cycle.id, lots })
 
       // La distribution suit immédiatement : sans elle, personne ne sait ce
       // qu'on mange ce soir (D39). Elle reste déplaçable sur l'écran Semaine.

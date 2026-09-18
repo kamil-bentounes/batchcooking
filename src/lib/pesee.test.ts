@@ -6,7 +6,7 @@
  * partout, si) et le REJET des aberrantes annoncé AVANT l'enregistrement.
  */
 import { describe, expect, it } from 'vitest'
-import { nomCourt, poidsRetenu, regroupe, seraRetenue } from './pesee.ts'
+import { nomCourt, regroupe, seraRetenue } from './pesee.ts'
 import type { Connu, LigneAPeser } from './pesee.ts'
 
 const ligne = (p: Partial<LigneAPeser>): LigneAPeser => ({
@@ -109,25 +109,5 @@ describe('le nom montré', () => {
 
   it('ne rend jamais une chaîne vide', () => {
     expect(nomCourt(', cru')).toBe(', cru')
-  })
-})
-
-describe('le poids qui fait foi', () => {
-  const appris = (actif: boolean): Connu =>
-    ({ food_id: 'oignon', grams: 118, observations: 3, seuil: 3, actif })
-
-  it('est celui du foyer dès qu’il est actif', () => {
-    expect(poidsRetenu(appris(true), 110)).toBe(118)
-  })
-
-  it('reste la référence tant que le seuil n’est pas atteint', () => {
-    // Deux pesées ne font pas une médiane : la référence prime, et l'écran
-    // affiche le compteur.
-    expect(poidsRetenu(appris(false), 110)).toBe(110)
-  })
-
-  it('est null quand on ne sait rien', () => {
-    // Un chiffre inventé vaudrait moins qu'une fourchette honnête (D18).
-    expect(poidsRetenu(undefined, null)).toBeNull()
   })
 })

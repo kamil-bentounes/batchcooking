@@ -88,14 +88,28 @@ export function useEnregistreTicket() {
           label: r.ligne.label,
           quantity: r.ligne.quantity ?? null,
           unit: r.ligne.unit ?? null,
-          price_eur: r.ligne.price_eur,
+          // Une remise supérieure au prix donnerait un montant négatif, qu'on
+          // n'apprend pas — et une ligne à zéro apprendrait « c'est gratuit ».
+          price_eur: Math.max(0.01, r.ligne.price_eur),
           shopping_item_id: r.article?.id ?? null,
           food_id: r.article?.food_id ?? null,
           confidence: Math.round(r.score * 100) / 100,
         }))
 
       if (lignes.length > 0) {
-        ou(await supabase.from('receipt_line').insert(lignes).select())
+        /*
+         * ⚠️ Le ticket porte déjà son TOTAL. Si les lignes sont refusées — une
+         *    quantité lue à zéro, un prix devenu négatif après déduction d'une
+         *    remise — il resterait en base, compté au budget, sans avoir rien
+         *    appris. La personne recommence, et le budget double.
+         *
+         *    On le retire donc plutôt que de laisser une trace à moitié écrite.
+         */
+        const { error } = await supabase.from('receipt_line').insert(lignes)
+        if (error) {
+          await supabase.from('receipt').delete().eq('id', ticket.id)
+          throw new Error(error.message)
+        }
       }
 
       // Le total de la sortie : c'est ce chiffre que le bilan compare à

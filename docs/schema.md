@@ -136,3 +136,17 @@ unique nulls not distinct (a, b)   -- PostgreSQL 15+
 Concernées : `default_duration` (`appliance_type`), `unit_conversion` (`ciqual_subgroup`),
 `llm_usage` (`household_id`). Un test de non-régression le vérifie
 (`tests/referentiels.test.ts`).
+
+## Ce qui existe sans être branché
+
+Relevé honnêtement plutôt que laissé à découvrir. Ces objets sont créés, testés
+et documentés, mais **aucun écran ne les lit** :
+
+| Objet | Ce qui manque |
+|---|---|
+| `household_ingredient_resolution` | La correction d'un rattachement PAR LE FOYER (D3, D16). La table, la RLS et les tests existent ; l'écran qui permettrait de corriger « crème » quand il tombe sur la crème dessert n'est pas écrit. |
+| `duration_observation` → `default_duration` | La boucle D48 est à moitié fermée : la durée réelle est bien MESURÉE et consignée à chaque session, mais rien ne la réagrège vers `default_duration`. Les durées par défaut restent donc celles du seed. |
+| `poids_unitaire()` | La règle « poids appris s'il est actif, sinon la référence » est appliquée côté client dans `courses.ts`. La fonction SQL dit la même chose et n'a pas d'appelant. |
+
+> Les deux premières lignes sont des fonctionnalités promises par la conception.
+> La troisième est une duplication à résorber le jour où la règle bougera.

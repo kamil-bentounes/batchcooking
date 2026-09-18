@@ -18,6 +18,17 @@ function href(vers: string): string {
   return (BASE + vers.replace(/^\/+/, '')).replace(/\/{2,}/g, '/')
 }
 
+/**
+ * Un lien ABSOLU vers un chemin de l'application.
+ *
+ * `window.location.origin` seul perd le préfixe de déploiement : le site est
+ * servi sous `/batchcooking/` sur GitHub Pages, et un lien d'invitation
+ * construit sans lui tombait sur une 404.
+ */
+export function lienDeploye(vers: string): string {
+  return `${window.location.origin}${href(vers)}`
+}
+
 export function useRoute() {
   const [ici, setIci] = useState(chemin)
 

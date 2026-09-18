@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { supabase, callFunction } from '../lib/supabase'
+import { lienDeploye } from '../lib/route.ts'
+import { useCreeMagasin, useMagasins, useSupprimeMagasin } from '../lib/donnees/foyer.ts'
 import { Page, Groupe, Bouton, Champ, Message } from '../ui/kit'
 
-export function Settings() {
+export function Settings({ va }: { va: (v: string) => void }) {
   const [plafond, setPlafond] = useState(5)
   /** Vide = pas de budget fixé. Ne pas s'en fixer est un choix légitime. */
   const [courses, setCourses] = useState('')
@@ -49,7 +51,10 @@ export function Settings() {
       const r = await callFunction('invite', { email: invite })
       // Le lien est le vrai livrable : sans clé Resend aucun e-mail ne part, et
       // même avec, le destinataire peut l'avoir classé en indésirable.
-      setLien(`${window.location.origin}/invite/${r.token}`)
+      // ⚠️ `origin` seul perd le préfixe de déploiement : sur GitHub Pages le
+      //    site est servi sous /batchcooking/, et le lien tombait sur une 404.
+      //    `lienDeploye` fait le calcul, et il existait déjà sans appelant.
+      setLien(lienDeploye(`/invite/${r.token}`))
       dire(`Invitation créée pour ${invite}. Envoie-lui le lien ci-dessous.`)
     }
     catch (e) { dire(String((e as Error).message), true) }
@@ -133,6 +138,26 @@ export function Settings() {
       </section>
 
       <section className="mt-12">
+        <h2 className="titre text-xl text-herbe">Tes magasins</h2>
+        <p className="mt-1 text-doux text-[15px]">
+          Chaque article porte son enseigne, et la liste se scinde par magasin.
+        </p>
+        <Magasins />
+      </section>
+
+      <section className="mt-12">
+        <h2 className="titre text-xl text-herbe">Ton mot de passe</h2>
+        <p className="mt-1 text-doux text-[15px]">
+          Celui qui te fait entrer. Le changer prend dix secondes.
+        </p>
+        <div className="mt-4">
+          <Bouton variante="discret" onClick={() => va('/motdepasse')}>
+            Changer mon mot de passe
+          </Bouton>
+        </div>
+      </section>
+
+      <section className="mt-12">
         <h2 className="titre text-xl text-herbe">Tes données</h2>
         <p className="mt-1 text-doux text-[15px]">
           Tout ce que le foyer a enregistré, dans un fichier. Ou plus rien du tout.
@@ -145,5 +170,55 @@ export function Settings() {
 
       <Message texte={msg} erreur={err} />
     </Page>
+  )
+}
+
+/**
+ * Les magasins du foyer.
+ *
+ * `useSupprimeMagasin` existait sans aucun appelant : en retirer un était
+ * simplement impossible, et une enseigne où l'on ne va plus restait à
+ * encombrer la liste et le sélecteur du ticket.
+ */
+function Magasins() {
+  const { data: magasins = [] } = useMagasins()
+  const cree = useCreeMagasin()
+  const supprime = useSupprimeMagasin()
+  const [nom, setNom] = useState('')
+
+  return (
+    <div className="mt-4">
+      {magasins.length > 0 && (
+        <ul className="divide-y divide-brume/70">
+          {magasins.map(m => (
+            <li key={m.id} className="flex items-center gap-3 py-2">
+              <span className="grow text-[15px]">
+                {m.name}
+                {m.is_default && <span className="text-doux text-[13px]"> · par défaut</span>}
+              </span>
+              <button onClick={() => {
+                        if (confirm(`Retirer ${m.name} ? Les articles qui le portent`
+                                  + ` deviennent « sans magasin ».`)) supprime.mutate(m.id)
+                      }}
+                      className="h-11 px-3 text-[14px] underline underline-offset-2">
+                retirer
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form className="mt-3 flex gap-2" onSubmit={e => {
+        e.preventDefault()
+        if (nom.trim()) {
+          cree.mutate({ nom, parDefaut: magasins.length === 0 },
+            { onSuccess: () => setNom('') })
+        }
+      }}>
+        <input value={nom} onChange={e => setNom(e.target.value)} placeholder="Lidl"
+               className="grow rounded-xl border border-brume bg-fond px-4 py-2.5
+                          outline-none focus:border-herbe" />
+        <button className="px-5 rounded-xl bg-herbe text-fond text-[15px]">Ajouter</button>
+      </form>
+    </div>
   )
 }

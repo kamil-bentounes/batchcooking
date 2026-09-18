@@ -13,11 +13,11 @@ import { useChangeEtat, useCycle } from '../lib/donnees/cycle.ts'
 import { useCreeMagasin, useMagasins } from '../lib/donnees/foyer.ts'
 import {
   budget, organise, useAjouteArticle, useCoche, useListe, useMajArticle,
-  useOrdreDesRayons, useSortie, useSuggestions, useSupprimeArticle,
+  useHabitudes, useOrdreDesRayons, useSortie, useSuggestions, useSupprimeArticle,
 } from '../lib/donnees/courses.ts'
 import { useEstimeListe } from '../lib/donnees/prix.ts'
 import type { Article } from '../lib/donnees/courses.ts'
-import { RAYONS } from '../lib/rayons.ts'
+import { RAYONS, rayonDe } from '../lib/rayons.ts'
 
 export function Magasin({ retour, va }: { retour: () => void; va: (v: string) => void }) {
   const { data: cycle } = useCycle()
@@ -333,6 +333,7 @@ function Completer({ dejaLa, surAjoute }: {
   surAjoute: (label: string, rayon: string) => void
 }) {
   const { data: suggestions = [] } = useSuggestions()
+  const { data: habitudes = [] } = useHabitudes()
   const [categorie, setCategorie] = useState<string | null>(null)
 
   const categories = useMemo(
@@ -354,6 +355,31 @@ function Completer({ dejaLa, surAjoute }: {
           </button>
         ))}
       </div>
+      {/* D45 : ce que le foyer reprend à chaque fois finit par se proposer
+          seul. Le trigger alimente `shopping_habit` à chaque cochage — mais
+          aucun écran ne la lisait, si bien que la promesse ne se voyait nulle
+          part. Les habitudes passent devant : ce sont elles qu'on reprend. */}
+      {habitudes.length > 0 && (
+        <>
+          <p className="mt-4 text-[13px] text-doux uppercase tracking-[0.04em]">
+            Ce que vous reprenez souvent
+          </p>
+          <div className="mt-2 flex gap-2 flex-wrap">
+            {habitudes
+              .filter(h => !dejaLa.has(h.label.toLowerCase()))
+              .slice(0, 10)
+              .map(h => (
+                <button key={h.id} onClick={() => surAjoute(h.label, rayonDe({ libelle: h.label }))}
+                        className="px-3.5 py-2 rounded-full bg-surface text-[14px]
+                                   hover:bg-brume/60 transition-colors">
+                  {h.label}
+                  <span className="text-doux"> ×{h.times_added}</span>
+                </button>
+              ))}
+          </div>
+        </>
+      )}
+
       <div className="mt-4 flex gap-2 flex-wrap">
         {affichees.map(s => {
           const pris = dejaLa.has(s.label.toLowerCase())

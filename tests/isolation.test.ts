@@ -162,9 +162,14 @@ describe('classe A — référentiel', () => {
   })
 
   it('est inscriptible par le rôle de service', async () => {
+    const code = `four-${Date.now()}`
     const { error } = await admin()
-      .from('appliance_catalog').insert({ code: `four-${Date.now()}`, label: 'Four' })
+      .from('appliance_catalog').insert({ code, label: 'Four' })
     expect(error).toBeNull()
+    // ⚠️ On NETTOIE. `appliance_catalog` est du référentiel, lu par l'écran
+    //    Plan : sans cela, chaque exécution du test ajoutait un four à la liste
+    //    des appareils du foyer. La base locale en comptait déjà quatre.
+    await admin().from('appliance_catalog').delete().eq('code', code)
   })
 })
 
