@@ -269,49 +269,21 @@
   ],
   "default_duration": [
     {
-      "verb": "éplucher",
-      "appliance_type": null,
-      "base_minutes": 4,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
+      "verb": "air fryer",
+      "appliance_type": "air_fryer",
+      "base_minutes": 18,
+      "load_type": "passif",
+      "scaling": "constant"
     },
     {
-      "verb": "émincer",
+      "verb": "ajouter",
       "appliance_type": null,
-      "base_minutes": 3,
+      "base_minutes": 1,
       "load_type": "actif",
-      "scaling": "lineaire_plafonne"
+      "scaling": "constant"
     },
     {
-      "verb": "hacher",
-      "appliance_type": null,
-      "base_minutes": 3,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "couper",
-      "appliance_type": null,
-      "base_minutes": 3,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "râper",
-      "appliance_type": null,
-      "base_minutes": 3,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "laver",
-      "appliance_type": null,
-      "base_minutes": 2,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "mélanger",
+      "verb": "arroser",
       "appliance_type": null,
       "base_minutes": 1,
       "load_type": "actif",
@@ -325,254 +297,16 @@
       "scaling": "constant"
     },
     {
+      "verb": "badigeonner",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
       "verb": "battre",
       "appliance_type": null,
       "base_minutes": 3,
-      "load_type": "actif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "pétrir",
-      "appliance_type": null,
-      "base_minutes": 8,
-      "load_type": "actif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "étaler",
-      "appliance_type": null,
-      "base_minutes": 4,
-      "load_type": "actif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "dresser",
-      "appliance_type": null,
-      "base_minutes": 4,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "préchauffer",
-      "appliance_type": "four",
-      "base_minutes": 12,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "enfourner",
-      "appliance_type": "four",
-      "base_minutes": 25,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "gratiner",
-      "appliance_type": "four",
-      "base_minutes": 8,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "rôtir",
-      "appliance_type": "four",
-      "base_minutes": 40,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "faire revenir",
-      "appliance_type": "poele",
-      "base_minutes": 6,
-      "load_type": "bloquant",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "saisir",
-      "appliance_type": "poele",
-      "base_minutes": 4,
-      "load_type": "bloquant",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "sauter",
-      "appliance_type": "poele",
-      "base_minutes": 7,
-      "load_type": "bloquant",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "dorer",
-      "appliance_type": "poele",
-      "base_minutes": 5,
-      "load_type": "bloquant",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "porter à ébullition",
-      "appliance_type": "casserole",
-      "base_minutes": 8,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "cuire",
-      "appliance_type": "casserole",
-      "base_minutes": 12,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "mijoter",
-      "appliance_type": "casserole",
-      "base_minutes": 35,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "réduire",
-      "appliance_type": "casserole",
-      "base_minutes": 10,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "blanchir",
-      "appliance_type": "casserole",
-      "base_minutes": 3,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "air fryer",
-      "appliance_type": "air_fryer",
-      "base_minutes": 18,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "mixer",
-      "appliance_type": "blender",
-      "base_minutes": 2,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "réchauffer",
-      "appliance_type": "micro_ondes",
-      "base_minutes": 3,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "laisser reposer",
-      "appliance_type": null,
-      "base_minutes": 30,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "laisser lever",
-      "appliance_type": null,
-      "base_minutes": 60,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "réfrigérer",
-      "appliance_type": null,
-      "base_minutes": 60,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "mariner",
-      "appliance_type": null,
-      "base_minutes": 30,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "refroidir",
-      "appliance_type": null,
-      "base_minutes": 20,
-      "load_type": "passif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "égoutter",
-      "appliance_type": null,
-      "base_minutes": 2,
-      "load_type": "actif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "réserver",
-      "appliance_type": null,
-      "base_minutes": 1,
-      "load_type": "actif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "ciseler",
-      "appliance_type": null,
-      "base_minutes": 3,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "zester",
-      "appliance_type": null,
-      "base_minutes": 2,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "séparer les blancs",
-      "appliance_type": null,
-      "base_minutes": 2,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "décortiquer",
-      "appliance_type": null,
-      "base_minutes": 7,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "gratter",
-      "appliance_type": null,
-      "base_minutes": 5,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "presser",
-      "appliance_type": null,
-      "base_minutes": 2,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "rouler",
-      "appliance_type": null,
-      "base_minutes": 6,
-      "load_type": "actif",
-      "scaling": "lineaire_plafonne"
-    },
-    {
-      "verb": "dérouler",
-      "appliance_type": null,
-      "base_minutes": 2,
-      "load_type": "actif",
-      "scaling": "constant"
-    },
-    {
-      "verb": "piquer",
-      "appliance_type": null,
-      "base_minutes": 1,
       "load_type": "actif",
       "scaling": "constant"
     },
@@ -584,23 +318,65 @@
       "scaling": "constant"
     },
     {
-      "verb": "farcir",
+      "verb": "blanchir",
+      "appliance_type": "casserole",
+      "base_minutes": 3,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "ciseler",
       "appliance_type": null,
-      "base_minutes": 6,
+      "base_minutes": 3,
       "load_type": "actif",
       "scaling": "lineaire_plafonne"
     },
     {
-      "verb": "plier",
+      "verb": "couper",
       "appliance_type": null,
-      "base_minutes": 1,
+      "base_minutes": 3,
       "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "couvrir",
+      "appliance_type": null,
+      "base_minutes": 0.5,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "cuire",
+      "appliance_type": "casserole",
+      "base_minutes": 12,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "cuire sous pression",
+      "appliance_type": "autocuiseur",
+      "base_minutes": 15,
+      "load_type": "passif",
       "scaling": "constant"
     },
     {
       "verb": "disposer",
       "appliance_type": null,
       "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "dorer",
+      "appliance_type": "poele",
+      "base_minutes": 5,
+      "load_type": "bloquant",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "dresser",
+      "appliance_type": null,
+      "base_minutes": 4,
       "load_type": "actif",
       "scaling": "lineaire_plafonne"
     },
@@ -612,7 +388,49 @@
       "scaling": "lineaire_plafonne"
     },
     {
-      "verb": "retirer du feu",
+      "verb": "décortiquer",
+      "appliance_type": null,
+      "base_minutes": 7,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "déglacer",
+      "appliance_type": "poele",
+      "base_minutes": 2,
+      "load_type": "bloquant",
+      "scaling": "constant"
+    },
+    {
+      "verb": "démouler",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "déposer",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "dérouler",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "enfourner",
+      "appliance_type": "four",
+      "base_minutes": 25,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "essorer",
       "appliance_type": null,
       "base_minutes": 1,
       "load_type": "actif",
@@ -633,17 +451,290 @@
       "scaling": "constant"
     },
     {
-      "verb": "déglacer",
+      "verb": "faire revenir",
       "appliance_type": "poele",
+      "base_minutes": 6,
+      "load_type": "bloquant",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "farcir",
+      "appliance_type": null,
+      "base_minutes": 6,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "garnir",
+      "appliance_type": null,
+      "base_minutes": 3,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "gratiner",
+      "appliance_type": "four",
+      "base_minutes": 8,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "gratter",
+      "appliance_type": null,
+      "base_minutes": 5,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "hacher",
+      "appliance_type": null,
+      "base_minutes": 3,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "incorporer",
+      "appliance_type": null,
       "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "laisser lever",
+      "appliance_type": null,
+      "base_minutes": 60,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "laisser reposer",
+      "appliance_type": null,
+      "base_minutes": 30,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "laver",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "mariner",
+      "appliance_type": null,
+      "base_minutes": 30,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "mijoter",
+      "appliance_type": "casserole",
+      "base_minutes": 35,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "mixer",
+      "appliance_type": "blender",
+      "base_minutes": 2,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "mélanger",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "napper",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "parsemer",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "peler",
+      "appliance_type": null,
+      "base_minutes": 5,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "piquer",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "plier",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "poivrer",
+      "appliance_type": null,
+      "base_minutes": 0.5,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "porter à ébullition",
+      "appliance_type": "casserole",
+      "base_minutes": 8,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "presser",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "préchauffer",
+      "appliance_type": "four",
+      "base_minutes": 12,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "pétrir",
+      "appliance_type": null,
+      "base_minutes": 8,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "refroidir",
+      "appliance_type": null,
+      "base_minutes": 20,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "remuer",
+      "appliance_type": null,
+      "base_minutes": 1,
       "load_type": "bloquant",
       "scaling": "constant"
     },
     {
-      "verb": "cuire sous pression",
-      "appliance_type": "autocuiseur",
-      "base_minutes": 15,
+      "verb": "retirer du feu",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "rincer",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "rouler",
+      "appliance_type": null,
+      "base_minutes": 6,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "râper",
+      "appliance_type": null,
+      "base_minutes": 3,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "réchauffer",
+      "appliance_type": "micro_ondes",
+      "base_minutes": 3,
       "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "réduire",
+      "appliance_type": "casserole",
+      "base_minutes": 10,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "réfrigérer",
+      "appliance_type": null,
+      "base_minutes": 60,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "réserver",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "rôtir",
+      "appliance_type": "four",
+      "base_minutes": 40,
+      "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "saisir",
+      "appliance_type": "poele",
+      "base_minutes": 4,
+      "load_type": "bloquant",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "saler",
+      "appliance_type": null,
+      "base_minutes": 0.5,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "sauter",
+      "appliance_type": "poele",
+      "base_minutes": 7,
+      "load_type": "bloquant",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "séparer les blancs",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "trancher",
+      "appliance_type": null,
+      "base_minutes": 4,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "transvaser",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
       "scaling": "constant"
     },
     {
@@ -651,6 +742,55 @@
       "appliance_type": null,
       "base_minutes": 120,
       "load_type": "passif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "verser",
+      "appliance_type": null,
+      "base_minutes": 1,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "vider",
+      "appliance_type": null,
+      "base_minutes": 3,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "zester",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "égoutter",
+      "appliance_type": null,
+      "base_minutes": 2,
+      "load_type": "actif",
+      "scaling": "constant"
+    },
+    {
+      "verb": "émincer",
+      "appliance_type": null,
+      "base_minutes": 3,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "éplucher",
+      "appliance_type": null,
+      "base_minutes": 4,
+      "load_type": "actif",
+      "scaling": "lineaire_plafonne"
+    },
+    {
+      "verb": "étaler",
+      "appliance_type": null,
+      "base_minutes": 4,
+      "load_type": "actif",
       "scaling": "constant"
     }
   ],
@@ -729,28 +869,16 @@
       "pocher": "cuire",
       "émietter": "couper",
       "concasser": "couper",
-      "ciseler": "ciseler",
       "monder": "éplucher",
       "suer": "faire revenir",
       "nacrer": "faire revenir",
       "singer": "mélanger",
       "chemiser": "beurrer",
-      "napper": "décorer",
       "lustrer": "beurrer",
       "débiter": "couper",
-      "rincer": "laver",
-      "ajouter": "mélanger",
-      "verser": "mélanger",
-      "incorporer": "mélanger",
-      "remuer": "mélanger",
       "fouetter": "battre",
       "saupoudrer": "assaisonner",
-      "parsemer": "décorer",
-      "trancher": "couper",
-      "détailler": "couper",
-      "badigeonner": "beurrer",
-      "garnir": "farcir",
-      "couvrir": "réserver"
+      "détailler": "couper"
     }
   },
   "suggested_item": {

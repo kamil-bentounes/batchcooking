@@ -204,10 +204,8 @@ export const SYNONYMES: Record<string, string> = {
    * jambon CUIT dans une recette française, et « 200 g de lentilles » est un
    * poids de lentilles SÈCHES, celui qu'on achète et qu'on pèse.
    */
-  'jambon': 'jambon cuit superieur',
   'des de jambon': 'jambon cuit superieur',
   'lait': 'lait entier uht',
-  'yaourt nature': 'yaourt lait fermente ou specialite laitiere nature',
   'sauce tomate': 'tomate coulis appertise puree',
   'eau de fleur d oranger': 'eau de fleur d oranger',
 }

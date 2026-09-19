@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { indexer, rattacher, SEUIL, type AlimentIndexe } from '../src/aliment'
+import { SYNONYMES, indexer, rattacher, SEUIL, type AlimentIndexe } from '../src/aliment'
 
 let index: AlimentIndexe[]
 beforeAll(() => {
@@ -70,5 +70,36 @@ describe('rattachement à CIQUAL', () => {
   it('le foodId permet de retrouver les nutriments', () => {
     const r = rattacher('lentille verte', index)
     expect(r!.foodId).toMatch(/^\d+$/)
+  })
+})
+
+describe('la table des synonymes', () => {
+  it('n’a aucune clé en double', () => {
+    /*
+     * Un doublon dans un littéral d'objet est SILENCIEUX en JavaScript : la
+     * seconde écrase la première, sans un mot. Deux s'étaient glissés à force
+     * d'ajouter des entrées par vagues — ils étaient identiques, donc sans
+     * conséquence, mais le suivant ne le sera pas.
+     *
+     * Le fichier se relit, parce que la table est un objet : à ce stade, les
+     * doublons ont déjà disparu.
+     */
+    const source = readFileSync(new URL('../src/aliment.ts', import.meta.url), 'utf8')
+    const bloc = source.slice(source.indexOf('export const SYNONYMES'))
+    const cles = [...bloc.slice(0, bloc.indexOf('\n}\n')).matchAll(/^\s*'([^']+)':/gm)]
+      .map(m => m[1])
+    const vus = new Set<string>()
+    const doubles = cles.filter(k => (vus.has(k) ? true : (vus.add(k), false)))
+    expect(doubles, 'clés en double dans SYNONYMES').toEqual([])
+    expect(cles.length, 'la table est vide : le test ne vérifie rien').toBeGreaterThan(20)
+  })
+
+  it('ne pointe que vers des aliments qui existent', () => {
+    // Un synonyme qui vise un nom absent de CIQUAL ne fait rien — il retombe
+    // silencieusement sur le rattachement ordinaire, et on croit l'avoir réglé.
+    const perdus = Object.entries(SYNONYMES)
+      .filter(([, cible]) => rattacher(cible, index) === null)
+      .map(([k, v]) => `${k} → ${v}`)
+    expect(perdus, 'synonymes sans aliment correspondant').toEqual([])
   })
 })

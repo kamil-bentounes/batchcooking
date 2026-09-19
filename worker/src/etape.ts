@@ -96,15 +96,41 @@ function radical(verbe: string): string {
   const premier = v.split(/\s+/)[0]
   return premier
     .replace(/er$/, '')      // éplucher → épluch
+    // ⚠️ Les verbes en -vrir et -frir ne gardent pas le « i » : « couvrir » se
+    //    conjugue « couvrez », pas « couvrissez ». Le radical « couvri » ne
+    //    reconnaissait donc aucune forme réelle, et l'étape passait pour muette.
+    .replace(/([vf])rir$/, '$1r')   // couvrir → couvr, offrir → offr
     .replace(/ir$/, 'i')     // saisir → saisi
     .replace(/re$/, '')      // cuire → cui
+}
+
+/**
+ * Sous cette longueur, un radical attrape n'importe quoi.
+ *
+ * « saler » donne « sal », et `\bsal` reconnaît « saladier » et « salade » : la
+ * phrase « Dans un grand saladier » devenait une action, avec une durée et un
+ * cuisinier mobilisé. Le commentaire de `radical` disait déjà « un radical de
+ * cinq lettres est rarement ambigu » — il fallait l'appliquer.
+ */
+const RADICAL_MIN = 5
+
+/**
+ * Pour un radical court, on ne préfixe pas : on énumère les formes.
+ *
+ * Ce sont celles qu'une recette écrit — l'infinitif, l'impératif, le participe,
+ * le gérondif — et la borne de fin de mot fait le reste.
+ */
+function formesCourtes(tete: string): RegExp {
+  return new RegExp(`\\b${tete}(?:er|ez|e|es|ee|ees|ant|ons)\\b`)
 }
 
 /** Le motif d'un verbe, composés compris (« faire revenir », « porter à ébullition »). */
 function motifDe(verbe: string): RegExp {
   const mots = pliure(verbe).split(/\s+/)
   const tete = radical(verbe)
-  if (mots.length === 1) return new RegExp(`\\b${tete}`)
+  if (mots.length === 1) {
+    return tete.length < RADICAL_MIN ? formesCourtes(tete) : new RegExp(`\\b${tete}`)
+  }
   // « faire revenir » : le premier mot se conjugue, les suivants suivent de près.
   const suite = mots.slice(1).map(m => m.replace(/er$/, '')).join('\\S*\\s+')
   return new RegExp(`\\b${tete}\\S*\\s+(?:\\w+\\s+){0,2}${suite}`)

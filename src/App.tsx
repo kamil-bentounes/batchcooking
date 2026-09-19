@@ -21,6 +21,7 @@ import { Inventer } from './pages/Inventer.tsx'
 import { Photo } from './pages/Photo.tsx'
 import { Ticket } from './pages/Ticket.tsx'
 import { Peser } from './pages/Peser.tsx'
+import { Importer } from './pages/Importer.tsx'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -82,6 +83,7 @@ export default function App() {
     case '/photo': return <Photo retour={sortie} va={va} />
     case '/ticket': return <Ticket retour={sortie} va={va} />
     case '/peser': return <Peser retour={sortie} />
+    case '/importer': return <Importer retour={sortie} va={va} />
 
     // Les réglages, hors cycle.
     case '/objectifs': return <Targets userId={moi} />

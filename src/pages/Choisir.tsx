@@ -206,6 +206,14 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
                            hover:bg-brume transition-colors">
           Rien ne va ? Invente-moi une recette
         </button>
+
+        {/* Coller la sienne : d'un carnet, d'un message, d'un site qu'on
+            n'ingère pas. Sa place est ici, au moment où l'on cherche. */}
+        <button onClick={() => va('/importer')}
+                className="mt-3 w-full py-3.5 rounded-[16px] bg-brume/40 text-[15px]
+                           hover:bg-brume transition-colors">
+          J’ai ma propre recette à coller
+        </button>
       </section>
 
     </Passage>

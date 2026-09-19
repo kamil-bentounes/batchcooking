@@ -1236,6 +1236,7 @@ export type Database = {
           edited_by_household_id: string | null
           freezable: boolean | null
           id: string
+          import_note: string | null
           license_note: string | null
           origin: string
           owner_household_id: string | null
@@ -1258,6 +1259,7 @@ export type Database = {
           edited_by_household_id?: string | null
           freezable?: boolean | null
           id?: string
+          import_note?: string | null
           license_note?: string | null
           origin?: string
           owner_household_id?: string | null
@@ -1280,6 +1282,7 @@ export type Database = {
           edited_by_household_id?: string | null
           freezable?: boolean | null
           id?: string
+          import_note?: string | null
           license_note?: string | null
           origin?: string
           owner_household_id?: string | null

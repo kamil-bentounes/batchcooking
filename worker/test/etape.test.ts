@@ -366,3 +366,49 @@ describe('le repos n’est pas du travail', () => {
     }
   })
 })
+
+describe('les radicaux courts', () => {
+  /*
+   * « saler » donne le radical « sal », et un préfixe de trois lettres attrape
+   * « saladier » et « salade » : la phrase « Dans un grand saladier » devenait
+   * une action, avec une durée et un cuisinier mobilisé pour rien.
+   *
+   * Le commentaire de `radical` disait déjà qu'un radical de cinq lettres est
+   * rarement ambigu. Sous cette longueur, on énumère les formes au lieu de
+   * préfixer.
+   */
+  it('ne confondent pas un ustensile avec un geste', () => {
+    for (const t of [
+      'Dans un grand saladier.',
+      'Mettez la salade dans un saladier.',
+      'Versez dans une poêle.',
+    ]) {
+      const e = a(t)
+      expect(e.verbe, `${t} → ${e.verbe}`).not.toBe('saler')
+    }
+  })
+
+  it('reconnaissent quand même le geste', () => {
+    expect(a('Salez généreusement.').verbe).toBe('saler')
+    expect(a('Poivrez à votre goût.').verbe).toBe('poivrer')
+    // « Saler et poivrer » en contient deux : l'un ou l'autre convient, ce qui
+    // compte est qu'on ne rende pas null.
+    expect(['saler', 'poivrer']).toContain(a('Saler et poivrer.').verbe)
+  })
+
+  it('reconnaissent les gestes ajoutés au référentiel', () => {
+    // Vingt verbes manquaient. Sans eux, l'étape n'a ni verbe ni durée : elle
+    // n'est pas une action, et elle DISPARAÎT du plan en silence.
+    for (const [texte, attendu] of [
+      ['Ajoutez les lentilles.', 'ajouter'],
+      ['Versez sur la pâte.', 'verser'],
+      ['Incorporez les blancs.', 'incorporer'],
+      ['Couvrez et laissez cuire.', 'couvrir'],
+      ['Rincez les lentilles.', 'rincer'],
+      ['Parsemez de persil.', 'parsemer'],
+      ['Démoulez le gâteau.', 'démouler'],
+    ] as const) {
+      expect(a(texte).verbe, texte).toBe(attendu)
+    }
+  })
+})
