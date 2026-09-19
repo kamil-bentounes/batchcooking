@@ -72,6 +72,22 @@ test.describe('les écrans s’ouvrent', () => {
 })
 
 test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
+  test('on valide les recettes SANS descendre au bas de la liste', async ({ page }) => {
+    // Le bouton était sous quatre-vingts recettes, et le compteur de parts —
+    // la seule chose qui décide du choix — disparaissait dès la deuxième carte.
+    await connecte(page)
+    await page.goto('/choisir')
+    const barre = page.locator('.fixed.bottom-0')
+    await expect(barre).toBeVisible({ timeout: 10_000 })
+    await expect(barre.getByText(/parts/)).toBeVisible()
+    await expect(barre.getByRole('button', { name: /faire la liste/i })).toBeVisible()
+
+    // Toujours là après avoir déroulé jusqu'en bas.
+    await page.mouse.wheel(0, 6000)
+    await page.waitForTimeout(250)
+    await expect(barre.getByRole('button', { name: /faire la liste/i })).toBeVisible()
+  })
+
   test('le catalogue filtre sur le temps actif, pas sur le temps total', async ({ page }) => {
     await connecte(page)
     await page.goto('/choisir')

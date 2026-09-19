@@ -19,7 +19,7 @@
  */
 import { useMemo, useState } from 'react'
 import {
-  Attente, Chiffre, Erreur, Passage, Principal, Surface, Vide, duree,
+  Attente, BarreAction, Chiffre, Erreur, Passage, Surface, Vide, duree,
 } from '../ui/coque.tsx'
 import {
   useChangeEtat, useChoisitRecette, useCycle, useMajCycle, useRecettesDuCycle, useRetireRecette,
@@ -75,22 +75,50 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
   }
 
   return (
-    <Passage retour={retour}>
+    <Passage retour={retour} barre={
+      /*
+       * Le compteur de parts et la validation, TOUJOURS sous les yeux.
+       *
+       * Ils étaient au-dessus et en dessous d'une liste de quatre-vingts
+       * recettes : il fallait remonter pour savoir où l'on en était, et
+       * descendre tout en bas pour valider. C'est la liste qui est longue, pas
+       * la décision.
+       */
+      <BarreAction>
+        <div className="flex items-center gap-4">
+          <span className="grow">
+            <Chiffre valeur={`${partsPrises} / ${cible}`} taille={22} unite="parts" />
+            <span className="block text-[13px] text-doux mt-0.5">
+              {choisies.length === 0
+                ? 'Aucune recette choisie'
+                : `${choisies.length} recette${choisies.length > 1 ? 's' : ''}`}
+              {partsPrises > 0 && partsPrises < cible
+                && ` · il en manque ${cible - partsPrises}`}
+            </span>
+          </span>
+          <button onClick={versLesCourses}
+                  disabled={choisies.length === 0 || genere.isPending || change.isPending}
+                  className="h-[52px] px-5 rounded-[16px] bg-herbe text-fond text-[16px]
+                             font-medium shrink-0 disabled:bg-brume disabled:text-doux
+                             transition-colors">
+            {genere.isPending ? 'Je prépare…' : 'Faire la liste'}
+          </button>
+        </div>
+        <Erreur de={genere.error ?? change.error} />
+      </BarreAction>
+    }>
       <h1 className="titre text-[40px]">Ce qu’on<br />cuisine dimanche</h1>
       <p className="mt-3.5 text-[15px] text-doux max-w-[34ch]">
         {membres > 1 ? `À ${membres}, ` : ''}il faut couvrir {cible} parts.
         On les cuisine dimanche, on les mange la semaine d’après.
       </p>
 
-      {/* Le compteur : la seule chose qui doit rester sous les yeux. */}
+      {/* Le compteur vit maintenant dans la barre du bas, où il reste visible.
+          Ici on ne garde que ce qui se règle une fois : combien de parts viser. */}
       <Surface className="mt-6 flex items-center gap-4">
-        <div className="grow">
-          <Chiffre valeur={`${partsPrises} / ${cible}`} taille={28} unite="parts" />
-          <p className="text-[13px] text-doux mt-1">
-            {choisies.length} recette{choisies.length > 1 ? 's' : ''} choisie
-            {choisies.length > 1 ? 's' : ''}
-          </p>
-        </div>
+        <p className="grow text-[14px] text-doux">
+          Combien de parts cette semaine ?
+        </p>
         <label className="text-right">
           <span className="block text-[13px] text-doux">Parts visées</span>
           <input type="number" min={1} max={40} value={cible}
@@ -180,18 +208,6 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
         </button>
       </section>
 
-      <div className="mt-10">
-        <Principal onClick={versLesCourses}
-                   disabled={choisies.length === 0 || genere.isPending || change.isPending}>
-          {genere.isPending ? 'Je prépare la liste…' : 'Faire la liste de courses'}
-        </Principal>
-        <Erreur de={genere.error ?? change.error} />
-        {partsPrises < cible && choisies.length > 0 && (
-          <p className="mt-3 text-[14px] text-doux text-center">
-            Il manque {cible - partsPrises} parts. Tu peux y aller quand même.
-          </p>
-        )}
-      </div>
     </Passage>
   )
 }

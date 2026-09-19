@@ -65,10 +65,32 @@ export function Ecran({ actif, va, children }:
 }
 
 /** Un passage : une seule sortie, en haut à gauche, et rien en bas. */
-export function Passage({ retour, retourTexte = 'Accueil', children }:
-  { retour: () => void; retourTexte?: string; children: ReactNode }) {
+/**
+ * Une barre d'action COLLÉE en bas de l'écran.
+ *
+ * Elle existe pour les écrans dont la liste est longue : sur « Choisir », il
+ * fallait descendre sous quatre-vingts recettes pour valider, et le compteur de
+ * parts — la seule chose qui décide du choix — disparaissait dès la deuxième
+ * carte. Paginer aurait été pire : on choisit EN FONCTION de ce compteur, et
+ * changer de page le ferait perdre.
+ *
+ * Elle laisse passer le fond derrière elle, pour qu'on voie qu'il reste du
+ * contenu dessous.
+ */
+export function BarreAction({ children }: { children: ReactNode }) {
   return (
-    <main className="min-h-dvh px-6 pt-14 pb-16">
+    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-brume/70
+                    bg-fond/92 backdrop-blur-sm
+                    pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+      <div className="mx-auto w-full max-w-lg px-6">{children}</div>
+    </div>
+  )
+}
+
+export function Passage({ retour, retourTexte = 'Accueil', barre, children }:
+  { retour: () => void; retourTexte?: string; barre?: ReactNode; children: ReactNode }) {
+  return (
+    <main className={`min-h-dvh px-6 pt-14 ${barre ? 'pb-40' : 'pb-16'}`}>
       <div className="mx-auto w-full max-w-lg">
         <button onClick={retour}
                 className="inline-flex items-center gap-2 text-[15px] text-doux hover:text-encre">
@@ -80,6 +102,9 @@ export function Passage({ retour, retourTexte = 'Accueil', children }:
         </button>
         <div className="mt-7">{children}</div>
       </div>
+      {/* La barre passe par-dessus, et la marge basse du `main` lui fait place :
+          sans elle, le dernier élément de la liste resterait dessous. */}
+      {barre}
     </main>
   )
 }
