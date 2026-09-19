@@ -56,6 +56,7 @@ test.describe('les écrans s’ouvrent', () => {
     ['/ticket', /ticket/i],
     ['/peser', /peser/i],
     ['/photo', /photo/i],
+    ['/importer', /coller/i],
     ['/objectifs', /objectif|cible/i],
     ['/reglages', /réglage/i],
   ] as const) {
@@ -153,6 +154,30 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
       .toBeVisible({ timeout: 10_000 })
   })
 
+  test('l’import montre la zone de texte ET le champ de précision', async ({ page }) => {
+    // Écrit sans avoir jamais été rendu — la même erreur que celle qui avait
+    // laissé « Choose File » en anglais sur deux écrans.
+    await connecte(page)
+    await page.goto('/importer')
+    await expect(page.getByRole('textbox').first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/une précision à ajouter/i)).toBeVisible()
+    // Le bouton reste hors d'atteinte tant que le texte est trop court : on ne
+    // fait pas dépenser un appel de modèle pour trois mots.
+    const bouton = page.getByRole('button', { name: /ranger la recette/i })
+    await expect(bouton).toBeDisabled()
+    await page.getByRole('textbox').first().fill(
+      'Tarte aux poireaux pour 6\n3 poireaux\n200 g de crème\nÉmincer les poireaux.\n'
+      + 'Faire revenir 10 minutes.\nEnfourner 35 minutes.')
+    await expect(bouton).toBeEnabled()
+  })
+
+  test('on atteint l’import depuis l’écran de choix', async ({ page }) => {
+    await connecte(page)
+    await page.goto('/choisir')
+    await page.getByRole('button', { name: /ma propre recette à coller/i }).click()
+    await expect(page.getByRole('heading', { name: /coller/i })).toBeVisible()
+  })
+
   test('aucun bouton natif en anglais sur les écrans de photo', async ({ page }) => {
     // Un `<input type="file">` nu affiche « Choose File », en anglais, dans une
     // application entièrement en français — et ce libellé n'est pas modifiable.
@@ -177,7 +202,8 @@ test.describe('les captures de référence', () => {
     // Pas une comparaison : une trace. Elles servent à REGARDER l'application
     // après un changement, ce qu'aucune assertion ne remplace.
     await connecte(page)
-    for (const c of ['/', '/choisir', '/magasin', '/bilan', '/ticket', '/peser', '/stock']) {
+    for (const c of ['/', '/choisir', '/magasin', '/bilan', '/ticket', '/peser',
+                     '/stock', '/importer', '/semaine']) {
       await page.goto(c)
       await page.waitForTimeout(400)
       await page.screenshot({
