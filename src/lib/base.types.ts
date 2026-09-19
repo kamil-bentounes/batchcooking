@@ -2143,6 +2143,21 @@ export type Database = {
           },
         ]
       }
+      verbe_alias: {
+        Row: {
+          depuis: string
+          vers: string
+        }
+        Insert: {
+          depuis: string
+          vers: string
+        }
+        Update: {
+          depuis?: string
+          vers?: string
+        }
+        Relationships: []
+      }
       weighing: {
         Row: {
           at: string

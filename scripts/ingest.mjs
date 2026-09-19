@@ -105,7 +105,9 @@ async function contexte() {
          temperatures, typiques] =
     await Promise.all([
       db.from('default_duration').select('*'),
-      Promise.resolve({ data: lireSeed().verbe_alias.alias }),
+      // La base, pas le fichier : c'est ce qui garantit que l'ingestion et
+      // l'import d'une recette collée appliquent EXACTEMENT les mêmes alias.
+      db.from('verbe_alias').select('depuis, vers'),
       db.from('non_action_pattern').select('pattern'),
       db.from('unit_conversion').select('*'),
       tousLesAliments(),
@@ -123,7 +125,7 @@ async function contexte() {
   return {
     referentiel: {
       durees: durees.data,
-      alias: alias.data,
+      alias: Object.fromEntries(alias.data.map(a => [a.depuis, a.vers])),
       nonActions: nonActions.data.map(p => new RegExp(pliure(p.pattern), 'i')),
       temperatures: temperatures.data.map(t => ({
         preparation: t.preparation, celsius: t.temperature_c,

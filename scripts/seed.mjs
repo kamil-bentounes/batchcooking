@@ -60,6 +60,11 @@ await charger('default_temperature', c.default_temperature, 'preparation')
 await charger('non_action_pattern',
   c.non_action.motifs.map(m => ({ pattern: m })), 'pattern')
 await charger('default_duration',    c.default_duration,    'verb,appliance_type')
+// Les alias vivaient dans ce fichier seulement, donc hors de portée d'une Edge
+// Function — qui ne lit pas de fichier. Ils entrent au référentiel avec le reste.
+await charger('verbe_alias',
+  Object.entries(c.verbe_alias.alias).map(([depuis, vers]) => ({ depuis, vers })),
+  'depuis')
 
 // Le catalogue du bouton « Compléter ma liste » (D43). La position garde
 // l'ordre de la liste écrite à la main : elle vaut mieux que l'alphabétique,

@@ -157,3 +157,38 @@ describe('les trente ingrédients les plus courants', () => {
     expect(rattacher('zorglub des cavernes', index)).toBeNull()
   })
 })
+
+describe('les plats composés « X au Y »', () => {
+  /*
+   * La pénalité sur les composites devait épargner ceux qu'on DEMANDE — « riz
+   * au lait » est un dessert, pas du riz. La garde ne se déclenchait jamais :
+   * elle comparait aux mots retenus, et « au »/« aux » sont des mots vides, donc
+   * absents. Et `\b` ne s'apparie pas autour d'un accent, si bien que « à la »
+   * et « fourré » n'étaient jamais reconnus non plus.
+   *
+   * Conséquence la plus coûteuse : « mozzarella », dont le composite est la
+   * SEULE entrée CIQUAL, tombait sous le seuil et n'avait plus aucun
+   * rattachement — donc disparaissait des macros, et pouvait faire tomber la
+   * couverture d'une recette sous 75 %, la privant de macros entièrement.
+   */
+  it.each([
+    ['mozzarella', /^Mozzarella/],
+    ['riz au lait', /^Riz au lait/],
+    ['pain au lait', /^Pain au lait/],
+    ['croissant au beurre', /^Croissant au beurre/],
+    ['omelette aux fines herbes', /^Omelette aux fines herbes/],
+    ['boeuf aux carottes', /^Boeuf aux carottes/],
+    ['chausson aux pommes', /^Chausson aux pommes/],
+  ])('rattache %s', (ecrit, attendu) => {
+    const r = rattacher(ecrit, index)
+    expect(r?.nom ?? 'AUCUN').toMatch(attendu)
+  })
+
+  it('pénalise encore le composé qu’on n’a PAS demandé', () => {
+    // Le correctif ne doit pas rouvrir la porte : « sel » ne doit toujours pas
+    // rendre « Sel au céleri », qui était l'aliment le plus rattaché du
+    // catalogue avec 658 lignes.
+    expect(rattacher('sel', index)?.nom).not.toMatch(/Sel au céleri/)
+    expect(rattacher('lait', index)?.nom).not.toMatch(/ au /)
+  })
+})

@@ -403,12 +403,51 @@ describe('les radicaux courts', () => {
       ['Ajoutez les lentilles.', 'ajouter'],
       ['Versez sur la pâte.', 'verser'],
       ['Incorporez les blancs.', 'incorporer'],
-      ['Couvrez et laissez cuire.', 'couvrir'],
+      // ⚠️ PAS « Couvrez et laissez cuire » : `cuire` occupe un appareil, donc
+      //    il l'emporte par la règle 1, et ce cas ne passait que tant que
+      //    `cuire` était cassé. Il encodait la régression au lieu de l'attraper.
+      ['Couvrez le plat.', 'couvrir'],
       ['Rincez les lentilles.', 'rincer'],
       ['Parsemez de persil.', 'parsemer'],
       ['Démoulez le gâteau.', 'démouler'],
     ] as const) {
       expect(a(texte).verbe, texte).toBe(attendu)
     }
+  })
+})
+
+describe('les verbes de cuisson', () => {
+  /*
+   * `RADICAL_MIN` n'énumérait que les formes du PREMIER groupe. « cuire »
+   * (radical « cui »), « rôtir » (« roti ») et « battre » (« batt ») tombent
+   * sous la borne une fois leur terminaison retirée : ils n'étaient plus
+   * reconnus du tout.
+   *
+   * Ce n'est pas une étape perdue, c'est pire : sans verbe, l'étape perd la
+   * charge « passif » du référentiel et retombe sur « actif ». Mesuré sur cinq
+   * gestes courants, le temps de travail passait de 6 minutes à 167 — et c'est
+   * ce chiffre que lit le filtre principal du catalogue.
+   */
+  it.each([
+    ['Faire cuire les pâtes.', 'cuire'],
+    ['Cuire au four 30 minutes.', 'cuire'],
+    ['Cuisez les légumes 10 minutes.', 'cuire'],
+    ['Rôtir le poulet.', 'rôtir'],
+    ['Rôtissez 40 minutes.', 'rôtir'],
+    ['Battre les œufs en omelette.', 'battre'],
+    ['Battez les blancs en neige.', 'battre'],
+  ])('reconnaît %s', (texte, attendu) => {
+    expect(a(texte).verbe).toBe(attendu)
+  })
+
+  it('garde la charge passive d’une cuisson', () => {
+    // C'est toute la conséquence : une cuisson sans verbe devient du travail.
+    expect(a('Laisser cuire 45 minutes à feu doux.').charge).toBe('passif')
+  })
+
+  it('ne confond pas une cuillère avec une cuisson', () => {
+    // « cui » en préfixe ouvert attraperait « cuillère » : c'est la borne de
+    // fin de mot qui l'en empêche, et elle doit rester.
+    expect(a('Ajoutez une cuillère de moutarde.').verbe).not.toBe('cuire')
   })
 })

@@ -117,11 +117,26 @@ const RADICAL_MIN = 5
 /**
  * Pour un radical court, on ne préfixe pas : on énumère les formes.
  *
- * Ce sont celles qu'une recette écrit — l'infinitif, l'impératif, le participe,
- * le gérondif — et la borne de fin de mot fait le reste.
+ * ⚠️ Et on les énumère PAR GROUPE. La première version ne connaissait que le
+ *    premier groupe, si bien que « cuire », « rôtir » et « battre » — dont le
+ *    radical tombe sous la borne une fois la terminaison retirée — n'étaient
+ *    plus reconnus du tout. Mesuré : cinq gestes de cuisson courants passaient
+ *    de 6 minutes de travail à 167, parce qu'une étape sans verbe perd la
+ *    charge « passif » du référentiel et retombe sur « actif ».
+ *
+ * La borne de fin de mot fait le reste du travail : elle écarte « cuillère »
+ * pour « cuire », et « saladier » pour « saler ».
  */
-function formesCourtes(tete: string): RegExp {
-  return new RegExp(`\\b${tete}(?:er|ez|e|es|ee|ees|ant|ons)\\b`)
+function formesCourtes(tete: string, infinitif: string): RegExp {
+  const fins = infinitif.endsWith('ir')
+    // rôtir → roti : rôtir, rôtit, rôti, rôtis, rôtissez, rôtissant
+    ? 'r|t|ts|s|e|es|ssez|ssent|ssons|ssant'
+    : infinitif.endsWith('re')
+      // cuire → cui : cuire, cuit, cuite, cuisez, cuisant · battre → batt : battre, battez
+      ? 're|res|t|te|tes|ts|sez|sent|sons|sant|s|ez|e|es'
+      // saler → sal : saler, salez, sale, salé, salés, salant
+      : 'er|ez|e|es|ee|ees|ant|ons'
+  return new RegExp(`\\b${tete}(?:${fins})\\b`)
 }
 
 /** Le motif d'un verbe, composés compris (« faire revenir », « porter à ébullition »). */
@@ -129,7 +144,9 @@ function motifDe(verbe: string): RegExp {
   const mots = pliure(verbe).split(/\s+/)
   const tete = radical(verbe)
   if (mots.length === 1) {
-    return tete.length < RADICAL_MIN ? formesCourtes(tete) : new RegExp(`\\b${tete}`)
+    return tete.length < RADICAL_MIN
+      ? formesCourtes(tete, pliure(verbe))
+      : new RegExp(`\\b${tete}`)
   }
   // « faire revenir » : le premier mot se conjugue, les suivants suivent de près.
   const suite = mots.slice(1).map(m => m.replace(/er$/, '')).join('\\S*\\s+')

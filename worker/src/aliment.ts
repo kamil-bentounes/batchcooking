@@ -110,7 +110,7 @@ const GENERIQUE = /aliment moyen/i
  * composite ne payait rien pour ce qu'il ajoute. La pénalité ne s'applique que
  * si la recette n'a pas demandé le complément.
  */
-const COMPOSITE = /\b(au|aux|à la|à l'|fourré|fourrée|sauce)\b/i
+const COMPOSITE = /\b(au|aux|a la|a l|fourre|fourree|sauce)\b/
 
 /** Chiffres, taux et unités : une spécification, jamais un autre aliment. */
 const SPEC = /^(\d+|mg|g|kg|ml|cl|l|uht|t\d+|[a-z]\d+)$/
@@ -245,7 +245,11 @@ export function indexer(aliments: AlimentIndexe[]): AlimentIndexe[] {
  * CIQUAL, moins une pénalité pour les mots CIQUAL en trop (une entrée très
  * spécifique ne doit pas gagner contre une entrée générique).
  */
-function score(recherche: string[], cible: AlimentIndexe, prefereCru: boolean): number {
+function score(
+  recherche: string[], cible: AlimentIndexe, prefereCru: boolean,
+  /** La demande PLIÉE, accents retirés. Voir `pasDemande`. */
+  demandePliee: string,
+): number {
   // La TÊTE porte l'aliment ; la queue le précise. On mesure sur la tête, et la
   // queue ne peut qu'ajouter — jamais retrancher.
   const c = cible._tete!.size > 0 ? cible._tete! : cible._mots!
@@ -277,8 +281,16 @@ function score(recherche: string[], cible: AlimentIndexe, prefereCru: boolean): 
    * le mot « purée » revenait à lui refuser la seule entrée qui lui convienne.
    * La pénalité porte sur l'écart au demandé, pas sur le mot en soi.
    */
-  const demande = recherche.join(' ')
-  const pasDemande = (p: RegExp) => p.test(cible.name) && !p.test(demande)
+  /*
+   * ⚠️ On compare à la demande PLIÉE, pas aux mots retenus.
+   *
+   *    `mots()` retire les mots vides, dont « au » et « aux » — si bien que la
+   *    garde « sauf si on l'a demandé » ne se déclenchait JAMAIS pour un
+   *    composite : « riz au lait » perdait contre « Riz, mélange de variétés ».
+   *    Et `\b` ne s'apparie pas autour d'un accent, donc « à la » et « fourré »
+   *    n'étaient jamais reconnus non plus.
+   */
+  const pasDemande = (p: RegExp) => p.test(cible.name) && !p.test(demandePliee)
   for (const p of PENALITES) if (pasDemande(p)) { s *= 0.6; break }
   for (const p of TRANSFORMATIONS) if (pasDemande(p)) { s *= 0.45; break }
   /*
@@ -289,8 +301,15 @@ function score(recherche: string[], cible: AlimentIndexe, prefereCru: boolean): 
    * « Fromage blanc nature ou aux fruits (aliment moyen) » ne l'est pas, son
    * « aux » ouvre une alternative, pas un mélange.
    */
-  const tete = cible.name.split(/[,(]|\bou\b/)[0]
-  if (COMPOSITE.test(tete) && !COMPOSITE.test(demande)) s *= 0.5
+  const tete = pliure(cible.name.split(/[,(]|\bou\b/)[0])
+  /*
+   * 0,7 et non 0,5 : à 0,5 la pénalité faisait passer sous le seuil des
+   * aliments dont le composite est la SEULE entrée — « mozzarella » n'avait
+   * plus aucun rattachement, donc disparaissait des macros, donc pouvait faire
+   * tomber la couverture de la recette sous 75 % et la priver de macros.
+   * Elle doit départager, pas éliminer.
+   */
+  if (COMPOSITE.test(tete) && !COMPOSITE.test(demandePliee)) s *= 0.7
   // CIQUAL nomme ses entrées génériques : quand elle existe, c'est CELLE-LÀ
   // qu'une recette sans précision désigne.
   if (GENERIQUE.test(cible.name)) s *= 1.08
@@ -334,10 +353,11 @@ export function rattacher(
   const recherche = mots(canonique)
   if (!recherche.length) return null
 
+  const demandePliee = pliure(canonique)
   let meilleur: AlimentIndexe | null = null
   let meilleurScore = 0
   for (const a of index) {
-    const s = score(recherche, a, options.prefereCru ?? true)
+    const s = score(recherche, a, options.prefereCru ?? true, demandePliee)
     if (s > meilleurScore) { meilleurScore = s; meilleur = a; continue }
     /*
      * ⚠️ À score ÉGAL, le vainqueur dépendait de l'ordre de lecture de la base

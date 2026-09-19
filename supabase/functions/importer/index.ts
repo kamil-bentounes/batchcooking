@@ -107,10 +107,11 @@ Deno.serve(async (req) => {
   await admin.rpc('llm_consomme', { p_household: foyer, p_kind: 'import' })
 
   // ── Le déterministe reprend la main ────────────────────────────────────
-  const [aliments, durees, nonActions, conversions, densites, temperatures, poids] =
+  const [aliments, durees, alias, nonActions, conversions, densites, temperatures, poids] =
     await Promise.all([
       tout(admin, 'food', 'id, name, state, ciqual_subgroup, nutrients'),
       admin.from('default_duration').select('*'),
+      admin.from('verbe_alias').select('depuis, vers'),
       admin.from('non_action_pattern').select('pattern'),
       admin.from('unit_conversion').select('*'),
       admin.from('density').select('food_id, grams_per_ml'),
@@ -122,7 +123,18 @@ Deno.serve(async (req) => {
     ({ id: a.id, name: a.name, state: a.state })))
   const referentiel: Referentiel = {
     durees: durees.data ?? [],
-    alias: {},
+    /*
+     * ⚠️ PAS `{}`. L'ingestion charge les dix-neuf alias du seed ; les passer
+     *    vides ici faisait disparaître les gestes qui n'existent QUE comme
+     *    alias — « fouettez », « concassez », « pochez », « émiettez »,
+     *    « abaissez », « saupoudrez » — puisqu'une étape sans verbe ni durée
+     *    n'est pas une action et se fait filtrer.
+     *
+     *    Une recette collée n'avait donc PAS la même forme qu'une recette
+     *    ingérée, ce qui est pourtant toute la promesse de cette fonction.
+     */
+    alias: Object.fromEntries(
+      (alias.data ?? []).map((a: { depuis: string; vers: string }) => [a.depuis, a.vers])),
     nonActions: (nonActions.data ?? []).map(p => new RegExp(p.pattern, 'i')),
     temperatures: (temperatures.data ?? []).map(t =>
       ({ preparation: t.preparation, celsius: t.temperature_c })),

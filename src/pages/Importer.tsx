@@ -57,7 +57,21 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
   // ── L'écran de saisie ────────────────────────────────────────────────────
   if (!lue) {
     return (
-      <Passage retour={retour} retourTexte="Choisir">
+      <Passage retour={retour} retourTexte="Choisir" barre={
+        /* ⚠️ Par `barre`, pas en enfant : c'est ce qui fait passer `Passage` en
+           `pb-40` et réserve la place sous la barre. Posée en enfant, elle
+           recouvrait les vingt-trois derniers pixels de la page, que rien ne
+           permettait d'atteindre. */
+        <BarreAction>
+          <button onClick={() => lit.mutate()}
+                  disabled={texte.trim().length < 40 || lit.isPending}
+                  className="w-full h-[58px] rounded-[18px] bg-herbe text-fond text-[17px]
+                             font-medium disabled:bg-brume disabled:text-doux
+                             transition-colors">
+            {lit.isPending ? 'Je range…' : 'Ranger la recette'}
+          </button>
+        </BarreAction>
+      }>
         <h1 className="titre text-[40px]">Coller<br />une recette</h1>
         <p className="mt-3.5 text-[15px] text-doux max-w-[36ch]">
           D’un carnet, d’un message, d’un site. Elle rejoint le catalogue avec
@@ -95,15 +109,6 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
         )}
         <Erreur de={lit.error} />
 
-        <BarreAction>
-          <button onClick={() => lit.mutate()}
-                  disabled={texte.trim().length < 40 || lit.isPending}
-                  className="w-full h-[58px] rounded-[18px] bg-herbe text-fond text-[17px]
-                             font-medium disabled:bg-brume disabled:text-doux
-                             transition-colors">
-            {lit.isPending ? 'Je range…' : 'Ranger la recette'}
-          </button>
-        </BarreAction>
       </Passage>
     )
   }
