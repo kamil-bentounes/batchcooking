@@ -19,8 +19,18 @@ export default defineConfig({
         lang: 'fr',
         start_url: base,
         display: 'standalone',
+        description: 'Cuisiner une fois, manger toute la semaine.',
         background_color: '#F2F4EF',
         theme_color: '#2F5D45',
+        icons: [
+          { src: `${base}icone-192.png`, sizes: '192x192', type: 'image/png' },
+          { src: `${base}icone-512.png`, sizes: '512x512', type: 'image/png' },
+          // `maskable` : le système la recadre dans SA forme — cercle, goutte,
+          // carré arrondi. Elle porte donc son fond jusqu'aux bords et garde la
+          // marque au centre, sinon les coins se font rogner.
+          { src: `${base}icone-maskable.png`, sizes: '512x512', type: 'image/png',
+            purpose: 'maskable' },
+        ],
       },
     }),
   ],

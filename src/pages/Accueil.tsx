@@ -10,7 +10,7 @@
  * boîte autour. On le lit si on veut. On n'a rien à en faire.
  */
 import { useMemo } from 'react'
-import { Chiffre, Ecran, Principal, Secondaire, Vide, dateLongue, duree } from '../ui/coque.tsx'
+import { Chiffre, Ecran, Principal, Secondaire, Vide, dateLongue, duree, Marque } from '../ui/coque.tsx'
 import { GESTE, useCycle, useOuvreCycle } from '../lib/donnees/cycle.ts'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
@@ -52,8 +52,11 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   return (
     <Ecran actif="accueil" va={va}>
       <div className="flex items-center justify-between">
-        <span className="text-[14px] text-doux first-letter:uppercase">
-          {dateLongue(aujourdhui)}
+        <span className="flex items-center gap-2.5 text-herbe">
+          <Marque taille={26} />
+          <span className="text-[14px] text-doux first-letter:uppercase">
+            {dateLongue(aujourdhui)}
+          </span>
         </span>
         <button onClick={() => va('/reglages')} aria-label="Réglages"
                 className="w-[34px] h-[34px] rounded-full bg-herbe text-fond text-[13px]

@@ -87,6 +87,29 @@ export function BarreAction({ children }: { children: ReactNode }) {
   )
 }
 
+/**
+ * La marque, en SVG inline.
+ *
+ * Inline plutôt qu'un `<img>` : elle prend la couleur du texte quand on le lui
+ * demande, elle n'ajoute pas de requête, et elle ne clignote pas au premier
+ * rendu. Le fichier `public/logo.svg` reste la source de l'onglet et des
+ * icônes d'installation — les deux doivent rester d'accord.
+ */
+export function Marque({ taille = 24 }: { taille?: number }) {
+  return (
+    <svg width={taille} height={taille} viewBox="0 0 64 64" aria-hidden="true"
+         className="shrink-0">
+      <g fill="currentColor">
+        <rect x="3" y="34" width="15" height="7" rx="3.5" />
+        <rect x="46" y="34" width="15" height="7" rx="3.5" />
+        <path d="M10 29.5h44l-3.1 18.6A8 8 0 0 1 43 54.8H21a8 8 0 0 1-7.9-6.7z" />
+        <rect x="5" y="19.5" width="54" height="8" rx="4" />
+      </g>
+      <path fill="#E8A33D" d="M25 19.5a7 7 0 0 1 14 0z" />
+    </svg>
+  )
+}
+
 export function Passage({ retour, retourTexte = 'Accueil', barre, children }:
   { retour: () => void; retourTexte?: string; barre?: ReactNode; children: ReactNode }) {
   return (

@@ -178,6 +178,25 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
     await expect(page.getByRole('heading', { name: /coller/i })).toBeVisible()
   })
 
+  test('la marque est dans l’onglet ET sur l’accueil', async ({ page }) => {
+    // Le favicon était encore celui du gabarit : un logo violet, sans rapport
+    // avec une application verte et crème. Et rien ne le liait dans la page.
+    await connecte(page)
+    const icone = page.locator('link[rel="icon"][type="image/svg+xml"]')
+    await expect(icone).toHaveAttribute('href', /logo\.svg$/)
+
+    // Le fichier doit exister : un href juste vers un fichier absent donne la
+    // même page qu'un href absent, en silence.
+    const r = await page.request.get(await icone.getAttribute('href') ?? '')
+    expect(r.status(), 'le favicon renvoie une erreur').toBe(200)
+    expect(await r.text()).toContain('svg')
+
+    // Et la marque se voit dans l'application, pas seulement dans l'onglet.
+    await page.goto('/')
+    await expect(page.locator('header svg, h1 ~ svg, svg').first())
+      .toBeVisible({ timeout: 10_000 })
+  })
+
   test('aucun bouton natif en anglais sur les écrans de photo', async ({ page }) => {
     // Un `<input type="file">` nu affiche « Choose File », en anglais, dans une
     // application entièrement en français — et ce libellé n'est pas modifiable.

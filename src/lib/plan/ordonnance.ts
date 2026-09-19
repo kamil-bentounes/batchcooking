@@ -41,7 +41,17 @@ type Reservation = { debut: number; fin: number }
  *    On suit donc chaque unité séparément, et une tâche doit en trouver UNE
  *    libre du début à la fin.
  */
-type Pool = Reservation[][]
+/**
+ * Une unité garde son total de charge et sa dernière fin.
+ *
+ * Les deux sont maintenus à l'écriture plutôt que recalculés à la lecture. Le
+ * suivi unité par unité avait fait passer une grosse session de 300 à 430 ms
+ * sur un téléphone : `charge()` reparcourait toutes les réservations à chaque
+ * unité et à chaque créneau candidat, et `libre()` aussi. Avec `fin`, une unité
+ * libre depuis longtemps se reconnaît en une comparaison.
+ */
+type Unite = { res: Reservation[]; charge: number; fin: number }
+type Pool = Unite[]
 type Occupation = Map<string, Pool>
 
 /** Capacité d'un pool. Un appareil inconnu de la session compte pour un. */
@@ -61,22 +71,19 @@ function pools(t: Tache): string[] {
 function poolDe(occ: Occupation, nom: string, cap: number): Pool {
   let p = occ.get(nom)
   if (!p) {
-    p = Array.from({ length: cap }, () => [] as Reservation[])
+    p = Array.from({ length: cap }, () => ({ res: [], charge: 0, fin: 0 }))
     occ.set(nom, p)
   }
   return p
 }
 
 /** Cette unité est-elle libre sur TOUT l'intervalle ? */
-function libre(unite: Reservation[], debut: number, fin: number): boolean {
+function libre(u: Unite, debut: number, fin: number): boolean {
+  // Le cas courant, réglé sans rien parcourir : plus rien après `debut`.
+  if (debut >= u.fin - EPS) return true
   // Une réservation de durée nulle n'occupe rien : elle ne bloque personne.
-  return unite.every(r => r.fin <= r.debut + EPS
+  return u.res.every(r => r.fin <= r.debut + EPS
     || r.fin <= debut + EPS || fin <= r.debut + EPS)
-}
-
-/** Le temps déjà réservé sur cette unité. Sert à répartir la charge. */
-function charge(unite: Reservation[]): number {
-  return unite.reduce((s, r) => s + (r.fin - r.debut), 0)
 }
 
 /**
@@ -91,10 +98,22 @@ function uniteLibre(pool: Pool, debut: number, fin: number): number | null {
   let min = Infinity
   for (let i = 0; i < pool.length; i++) {
     if (!libre(pool[i], debut, fin)) continue
-    const c = charge(pool[i])
-    if (c < min - EPS) { min = c; choix = i }
+    if (pool[i].charge < min - EPS) { min = pool[i].charge; choix = i }
   }
   return choix
+}
+
+/** Une unité libre par pool à cet instant précis, ou `null` si l'un manque. */
+function essaie(
+  t: Tache, debut: number, occ: Occupation, ressources: Ressources, concernes: string[],
+): Map<string, number> | null {
+  const unites = new Map<string, number>()
+  for (const nom of concernes) {
+    const i = uniteLibre(poolDe(occ, nom, capacite(ressources, nom)), debut, debut + t.dureeMin)
+    if (i === null) return null
+    unites.set(nom, i)
+  }
+  return unites
 }
 
 /**
@@ -110,28 +129,36 @@ function premierCreneau(
   const concernes = pools(t)
   if (concernes.length === 0) return { debut: apres, unites: new Map() }
 
-  const candidats = new Set<number>([apres])
+  /*
+   * Le cas courant d'abord : commencer TOUT DE SUITE.
+   *
+   * La plupart des tâches le peuvent, et le vérifier coûte une comparaison par
+   * unité. Construire l'ensemble des créneaux candidats, le trier et le
+   * parcourir pour retomber sur `apres` était le gros du temps de calcul —
+   * répété quinze cents fois par la recherche locale.
+   */
+  const tout_de_suite = essaie(t, apres, occ, ressources, concernes)
+  if (tout_de_suite) return { debut: apres, unites: tout_de_suite }
+
+  const candidats = new Set<number>()
   for (const nom of concernes) {
     for (const u of poolDe(occ, nom, capacite(ressources, nom))) {
-      for (const r of u) if (r.fin > apres + EPS) candidats.add(r.fin)
+      // Une unité déjà libre à `apres` n'ouvre aucun créneau plus tard : ses
+      // fins de réservation ne sont pas des candidats utiles.
+      if (u.fin <= apres + EPS) continue
+      for (const r of u.res) if (r.fin > apres + EPS) candidats.add(r.fin)
     }
   }
 
   for (const c of [...candidats].sort((a, b) => a - b)) {
-    const unites = new Map<string, number>()
-    let possible = true
-    for (const nom of concernes) {
-      const i = uniteLibre(poolDe(occ, nom, capacite(ressources, nom)), c, c + t.dureeMin)
-      if (i === null) { possible = false; break }
-      unites.set(nom, i)
-    }
-    if (possible) return { debut: c, unites }
+    const unites = essaie(t, c, occ, ressources, concernes)
+    if (unites) return { debut: c, unites }
   }
 
   // Inatteignable : passé la dernière fin de tous les pools concernés, tout est
   // libre. On le garde pour ne jamais rendre un plan sans début.
   const apresTout = Math.max(apres, ...concernes.flatMap(nom =>
-    poolDe(occ, nom, capacite(ressources, nom)).flatMap(u => u.map(r => r.fin))))
+    poolDe(occ, nom, capacite(ressources, nom)).map(u => u.fin)))
   const unites = new Map<string, number>()
   for (const nom of concernes) unites.set(nom, 0)
   return { debut: apresTout, unites }
@@ -181,8 +208,10 @@ export function ordonnance(
       cuisinier: t.actif ? unites.get(CUISINIER) ?? 0 : null,
     }
     for (const nom of pools(t)) {
-      poolDe(occ, nom, capacite(ressources, nom))[unites.get(nom) ?? 0]
-        .push({ debut, fin })
+      const u = poolDe(occ, nom, capacite(ressources, nom))[unites.get(nom) ?? 0]
+      u.res.push({ debut, fin })
+      u.charge += fin - debut
+      if (fin > u.fin) u.fin = fin
     }
     posees.set(t.id, pl)
     planifiees.push(pl)
@@ -321,9 +350,27 @@ export type OptionsPlan = {
   iterationsMax?: number
 }
 
-/** Essais par action. Au-delà, la recherche locale ne gratte plus rien. */
+/**
+ * Essais par action. Au-delà, la recherche locale ne gratte plus rien.
+ *
+ * MESURÉ le 19 septembre 2026, sur douze sessions de quarante actions, en
+ * regardant ce que les itérations achètent vraiment — le temps passé en
+ * cuisine, qui est ce qu'on minimise (D31) :
+ *
+ *   itérations │   0     100    250    500   1000   1500   3000
+ *   en cuisine │ 434    400    398    397    394    392    392  min
+ *   coût       │   1     24     54     92    194    290    578  ms
+ *
+ * Tout le gain est dans les cent premières : 34 minutes. Les mille quatre
+ * cents suivantes en rendent sept, pour dix fois le temps de calcul — et
+ * au-delà de mille cinq cents, plus rien du tout.
+ *
+ * Six cents tient donc le plan à une demi-minute de l'optimum atteignable, et
+ * laisse la marge qu'il faut sur un téléphone : c'est un calcul qu'on ATTEND,
+ * l'écran ne montre rien pendant ce temps.
+ */
 const ESSAIS_PAR_ACTION = 30
-const ESSAIS_MAX = 1500
+const ESSAIS_MAX = 600
 
 /**
  * Le point d'entrée. Rend le meilleur plan trouvé dans le budget, jamais un

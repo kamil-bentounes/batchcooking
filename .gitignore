@@ -10,3 +10,4 @@ supabase/functions/.env
 .design/sources/
 test-results/
 playwright-report/
+.apercu/
