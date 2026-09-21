@@ -62,6 +62,23 @@ export function useCycle() {
   })
 }
 
+/**
+ * Un cycle DÉSIGNÉ, et non « le mien ».
+ *
+ * `useCycle` passe par `current_cycle()`, qui ne connaît que le foyer de celui
+ * qui demande. Un convive suit la session de quelqu'un d'autre : il lui faut
+ * l'identifiant, et la RLS décide s'il a le droit (0037).
+ */
+export function useCycleParId(id: string | undefined) {
+  return useQuery({
+    queryKey: ['cycle-par-id', id] as const,
+    enabled: !!id,
+    queryFn: async (): Promise<Cycle | null> =>
+      (await supabase.from('cycle').select('*').eq('id', id!).maybeSingle()).data,
+    staleTime: 15_000,
+  })
+}
+
 export function useOuvreCycle() {
   const qc = useQueryClient()
   return useMutation({

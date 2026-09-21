@@ -1620,6 +1620,58 @@ export type Database = {
           },
         ]
       }
+      session_convive: {
+        Row: {
+          created_at: string
+          cycle_id: string
+          hote_id: string
+          id: string
+          invite_id: string
+          invite_le: string
+          rejoint_le: string | null
+        }
+        Insert: {
+          created_at?: string
+          cycle_id: string
+          hote_id: string
+          id?: string
+          invite_id: string
+          invite_le?: string
+          rejoint_le?: string | null
+        }
+        Update: {
+          created_at?: string
+          cycle_id?: string
+          hote_id?: string
+          id?: string
+          invite_id?: string
+          invite_le?: string
+          rejoint_le?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_convive_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "cycle"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_convive_hote_id_fkey"
+            columns: ["hote_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_convive_invite_id_fkey"
+            columns: ["invite_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_task: {
         Row: {
           actual_min: number | null
@@ -2384,12 +2436,15 @@ export type Database = {
           id: string
         }[]
       }
+      recettes_partagees: { Args: never; Returns: string[] }
+      sessions_partagees: { Args: never; Returns: string[] }
       tables_de_foyer: {
         Args: never
         Returns: {
           table_name: string
         }[]
       }
+      taches_partagees: { Args: never; Returns: string[] }
     }
     Enums: {
       [_ in never]: never

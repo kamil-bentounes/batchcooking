@@ -16,6 +16,7 @@ import {
   Attente, Chiffre, Erreur, Passage, Principal, Secondaire, Surface, Vide, duree,
 } from '../ui/coque.tsx'
 import { useChangeEtat, useCycle, useMajCycle } from '../lib/donnees/cycle.ts'
+import { useConvie, useFoyersAmis } from '../lib/donnees/convives.ts'
 import { useAppareils } from '../lib/donnees/foyer.ts'
 import {
   goulot, useAppareilsDeLaSession, useChoisitAppareils, useEnregistrePlan, useSimule,
@@ -37,7 +38,10 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
   const enregistre = useEnregistrePlan()
   const change = useChangeEtat()
   const majCycle = useMajCycle()
+  const convie = useConvie()
+  const { data: foyersAmis = [] } = useFoyersAmis()
   const [reglages, setReglages] = useState(false)
+  const [convies, setConvies] = useState<string[]>([])
 
   const capacites = useMemo(
     () => Object.fromEntries(choisis.map(a => [a.appliance_code, a.capacity])),
@@ -49,6 +53,10 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
     if (!cycle.cook_at) {
       await majCycle.mutateAsync({ id: cycle.id, cook_at: new Date().toISOString() })
     }
+    // Les convives AVANT le changement d'état : si l'invitation échoue, on ne
+    // veut pas d'une session déjà commencée à laquelle personne n'est convié
+    // sans qu'on l'ait su.
+    if (convies.length > 0) await convie.mutateAsync({ cycleId: cycle.id, foyers: convies })
     await change.mutateAsync({ id: cycle.id, vers: 'en_cuisine' })
     va('/cuisine')
   }
@@ -116,11 +124,43 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
 
       <Frise plan={base} nomAppareil={nomAppareil} />
 
+      {/*
+        * Qui cuisine avec toi ?
+        *
+        * La question se pose ICI et pas en cuisine : une fois les mains dans la
+        * farine, personne n'ouvre un écran de réglages. Et elle ne se pose que
+        * s'il y a quelqu'un à convier — sinon c'est une case vide de plus.
+        */}
+      {foyersAmis.length > 0 && (
+        <Surface className="mt-8">
+          <h2 className="text-[15px] font-medium">Qui cuisine avec toi ?</h2>
+          <p className="mt-1.5 text-[14px] text-doux">
+            Tes amis suivront l’avancement et pourront prendre des gestes. Ils
+            verront l’invitation en ouvrant l’application — il n’y a pas de
+            notification.
+          </p>
+          <ul className="mt-3.5 space-y-2.5">
+            {foyersAmis.map(f => (
+              <li key={f.id}>
+                <label className="flex items-center gap-3 text-[15px]">
+                  <input type="checkbox" checked={convies.includes(f.id)}
+                         onChange={e => setConvies(c => e.target.checked
+                           ? [...c, f.id] : c.filter(x => x !== f.id))}
+                         className="w-5 h-5 accent-herbe" />
+                  {f.nom}
+                </label>
+              </li>
+            ))}
+          </ul>
+        </Surface>
+      )}
+
       <div className="mt-10">
-        <Principal onClick={commence} disabled={enregistre.isPending || change.isPending}>
+        <Principal onClick={commence}
+                   disabled={enregistre.isPending || change.isPending || convie.isPending}>
           Commencer la session
         </Principal>
-        <Erreur de={enregistre.error ?? change.error} />
+        <Erreur de={enregistre.error ?? change.error ?? convie.error} />
         <Secondaire onClick={() => setReglages(r => !r)}>
           {reglages ? 'Masquer l’équipement' : 'Changer l’équipement du jour'}
         </Secondaire>

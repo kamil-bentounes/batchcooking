@@ -18,6 +18,7 @@ import {
 } from '../lib/donnees/barquettes.ts'
 import type { Case } from '../lib/donnees/barquettes.ts'
 import { usePlanEnregistre } from '../lib/donnees/session.ts'
+import { useInvitations, useRejoint } from '../lib/donnees/convives.ts'
 import { urgence } from '../lib/peremption.ts'
 
 export function Accueil({ userId, va }: { userId: string; va: (v: string) => void }) {
@@ -29,6 +30,8 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   const { data: plan = [] } = usePlanEnregistre(cycle?.id)
   const mange = useMange()
   const ouvre = useOuvreCycle()
+  const { data: invitations = [] } = useInvitations()
+  const rejoint = useRejoint()
 
   const moi = foyer?.membres.find(m => m.id === userId)
   const objectif = moi?.objectif
@@ -64,6 +67,31 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
           {(moi?.display_name ?? '?').slice(0, 1).toUpperCase()}
         </button>
       </div>
+
+      {/*
+        * « Alice cuisine maintenant. »
+        *
+        * Au-dessus de tout, parce que c'est la seule chose de cet écran qui ne
+        * peut pas attendre : une session se suit pendant qu'elle a lieu. Il n'y
+        * a pas de notification poussée — c'est ici qu'on l'apprend, donc ici que
+        * ça doit sauter aux yeux.
+        */}
+      {invitations.map(i => (
+        <div key={i.id} className="mt-6 rounded-[18px] bg-herbe text-fond p-4">
+          <p className="text-[15px]">
+            <strong className="font-medium">{i.nom}</strong>
+            {i.rejoint ? ' cuisine — tu suis la session.' : ' t’invite à cuisiner.'}
+          </p>
+          <button onClick={() => i.rejoint
+                    ? va(`/cuisine/${i.cycle_id}`)
+                    : rejoint.mutate(i.id, { onSuccess: () => va(`/cuisine/${i.cycle_id}`) })}
+                  disabled={rejoint.isPending}
+                  className="mt-3 h-[44px] px-4 rounded-[14px] bg-fond text-herbe
+                             text-[15px] font-medium">
+            {i.rejoint ? 'Reprendre la session' : 'Rejoindre'}
+          </button>
+        </div>
+      ))}
 
       {/* LA chose du moment. Rien ne lui dispute la place. */}
       {etat === 'semaine' && prochain

@@ -7,20 +7,41 @@
  *
  * Deux téléphones, une seule session : chacun voit son geste à lui, et
  * « Pendant ce temps » sert de preuve que le four tourne pour de vrai.
+ *
+ * Deux téléphones, vraiment : l'écran s'abonne aux changements de la session
+ * (0037). Sans cela on avait le droit de lire la même chose sans jamais être
+ * prévenu, et deux personnes prenaient le même geste.
+ *
+ * L'écran sert aussi au CONVIVE — un foyer ami convié à la session. Il voit le
+ * même plan et prend des gestes ; il n'interrompt pas la session de son hôte et
+ * ne la fait pas avancer. La base le lui interdit ; ici on ne lui montre pas
+ * des boutons qui échoueraient.
  */
 import { useEffect, useState } from 'react'
 import { Attente, Erreur, Vide, duree } from '../ui/coque.tsx'
-import { useChangeEtat, useCycle } from '../lib/donnees/cycle.ts'
+import { useChangeEtat, useCycle, useCycleParId } from '../lib/donnees/cycle.ts'
 import { useFoyer } from '../lib/donnees/foyer.ts'
+import { useConvives, usePrenoms } from '../lib/donnees/convives.ts'
+import { useTempsReel } from '../lib/temps-reel.ts'
 import {
   avancement, useCommenceAction, usePlanEnregistre, useTermineAction,
 } from '../lib/donnees/session.ts'
 import type { Action } from '../lib/donnees/session.ts'
 
-export function Cuisine({ userId, va }: { userId: string; va: (v: string) => void }) {
-  const { data: cycle } = useCycle()
+export function Cuisine({ userId, va, cycleId }:
+  { userId: string; va: (v: string) => void; cycleId?: string }) {
+  // `cycleId` n'est présent que pour un convive : il suit la session d'un autre
+  // foyer, que `current_cycle()` ne connaît évidemment pas.
+  const chezMoi = useCycle()
+  const chezUnAmi = useCycleParId(cycleId)
+  const cycle = cycleId ? chezUnAmi.data : chezMoi.data
+  const invite = !!cycleId
+
   const { data: foyer } = useFoyer()
+  const { data: convives = [] } = useConvives(invite ? undefined : cycle?.id)
+  const { data: prenoms } = usePrenoms()
   const { data: plan = [], isPending } = usePlanEnregistre(cycle?.id)
+  useTempsReel(cycle?.id)
   const prend = useCommenceAction()
   const termine = useTermineAction()
   const change = useChangeEtat()
@@ -44,7 +65,7 @@ export function Cuisine({ userId, va }: { userId: string; va: (v: string) => voi
   const aFaire = mien ?? etat.suivantes[0] ?? null
   const passives = plan.filter(a => !a.is_active && a.started_at && !a.done_at)
   const nomDe = (id: string | null) =>
-    foyer?.membres.find(m => m.id === id)?.display_name ?? null
+    id === userId ? 'toi' : id ? prenoms?.get(id) ?? null : null
 
   const fini = etat.faites === etat.total
 
@@ -55,7 +76,7 @@ export function Cuisine({ userId, va }: { userId: string; va: (v: string) => voi
           Session en cours · {duree(etat.ecoulesMin)}
         </span>
         <span className="flex -space-x-2">
-          {foyer?.membres.map((m, i) => (
+          {(invite ? [] : foyer?.membres ?? []).map((m, i) => (
             <span key={m.id} aria-hidden="true"
                   className="w-[30px] h-[30px] rounded-full text-[12px] grid place-items-center
                              border-2 border-encre text-fond"
@@ -66,12 +87,35 @@ export function Cuisine({ userId, va }: { userId: string; va: (v: string) => voi
         </span>
       </header>
 
+      {/* Qui d'autre est là. On ne l'affiche que s'il y a quelqu'un. */}
+      {convives.length > 0 && (
+        <p className="mt-2.5 text-[13px] opacity-55">
+          {convives.filter(c => c.rejoint).length > 0
+            ? `Avec ${convives.filter(c => c.rejoint).map(c => c.nom).join(', ')}.`
+            : `${convives.map(c => c.nom).join(', ')} — invité${convives.length > 1 ? 's' : ''}, pas encore là.`}
+        </p>
+      )}
+      {invite && (
+        <p className="mt-2.5 text-[13px] opacity-55">
+          Tu cuisines chez quelqu’un d’autre : tu prends des gestes, tu ne
+          touches pas au plan.
+        </p>
+      )}
+
       {fini ? (
         <section className="mt-12">
           <h1 className="titre text-[42px]">C’est cuit.</h1>
           <p className="mt-3.5 text-[15px] opacity-65">
-            {etat.total} actions en {duree(etat.ecoulesMin)}. Il reste à dresser.
+            {etat.total} actions en {duree(etat.ecoulesMin)}.
+            {invite ? ' Le dressage revient à ton hôte.' : ' Il reste à dresser.'}
           </p>
+          {invite ? (
+            <button onClick={() => va('/')}
+                    className="w-full h-[58px] mt-8 rounded-[18px] bg-safran text-encre
+                               text-[17px] font-semibold">
+              Revenir chez moi
+            </button>
+          ) : (
           <button onClick={async () => {
             await change.mutateAsync({ id: cycle.id, vers: 'dressage' })
             va('/dressage')
@@ -81,13 +125,16 @@ export function Cuisine({ userId, va }: { userId: string; va: (v: string) => voi
                              text-[17px] font-semibold">
             Passer au dressage
           </button>
+          )}
           <Erreur de={change.error} />
         </section>
       ) : aFaire ? (
         <section className="mt-11">
           <p className="text-[14px] text-safran">
             {aFaire.assignee_id
-              ? `À ${nomDe(aFaire.assignee_id) ?? 'toi'}`
+              // ⚠️ Pas de repli sur « toi » : un geste pris par quelqu'un dont
+              //    on ignore le prénom n'est PAS le sien.
+              ? `À ${nomDe(aFaire.assignee_id) ?? 'quelqu’un'}`
               : `À prendre · ${etat.faites} sur ${etat.total} faites`}
           </p>
           <h1 className="titre text-[42px] mt-2.5">{aFaire.label}</h1>
@@ -157,11 +204,12 @@ export function Cuisine({ userId, va }: { userId: string; va: (v: string) => voi
       )}
 
       <button onClick={async () => {
+        if (invite) { va('/'); return }
         await change.mutateAsync({ id: cycle.id, vers: 'interrompue' })
         va('/')
       }}
               className="mt-12 w-full h-[46px] rounded-[16px] text-[15px] opacity-60">
-        Interrompre la session
+        {invite ? 'Quitter la session' : 'Interrompre la session'}
       </button>
     </Sombre>
   )

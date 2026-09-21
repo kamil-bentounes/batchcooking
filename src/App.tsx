@@ -76,6 +76,9 @@ export default function App() {
 
   const invitation = ici.match(/^\/invite\/(.+)$/)
   const amitie = ici.match(/^\/ami\/(.+)$/)
+  // La session d'un AUTRE foyer, où l'on est convié. Le seul chemin de l'app
+  // qui porte un identifiant : « la » session de quelqu'un ne se devine pas.
+  const sessionAmie = ici.match(/^\/cuisine\/(.+)$/)
 
   // L'ordre compte. Une invitation prime sur tout : sans cela, l'invité se voit
   // proposer de créer SON foyer au lieu de rejoindre celui qui l'attend.
@@ -96,6 +99,7 @@ export default function App() {
   //    foyer : rejoindre des amis suppose qu'on a déjà un foyer à soi, et on
   //    n'entre jamais sans avoir posé son mot de passe.
   if (amitie) return <AccepteAmi jeton={amitie[1]} va={va} />
+  if (sessionAmie) return <Cuisine userId={moi} va={va} cycleId={sessionAmie[1]} />
 
   switch (ici) {
     // Les quatre destinations permanentes.
