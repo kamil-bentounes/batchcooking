@@ -27,6 +27,15 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [foyer, setFoyer] = useState<string | null>(null)
   const [mdpPose, setMdpPose] = useState(true)
+  /**
+   * On revient d'un lien de RÉINITIALISATION.
+   *
+   * C'est ce qui manquait : l'écran du mot de passe ne s'affichait que si
+   * `password_set` valait faux, si bien que quelqu'un qui en avait déjà un
+   * était simplement reconnecté par son lien « mot de passe oublié » — et
+   * n'avait jamais l'occasion d'en poser un nouveau.
+   */
+  const [reinitialise, setReinitialise] = useState(false)
   const [pret, setPret] = useState(false)
   const { ici, va, retour } = useRoute()
 
@@ -47,7 +56,13 @@ export default function App() {
 
   useEffect(() => {
     relire()
-    const { data: sub } = supabase.auth.onAuthStateChange(() => relire())
+    const { data: sub } = supabase.auth.onAuthStateChange(evenement => {
+      // Supabase émet cet événement quand la session vient d'un lien de
+      // réinitialisation. C'est le seul signal fiable : l'URL est nettoyée
+      // avant qu'on puisse la lire.
+      if (evenement === 'PASSWORD_RECOVERY') setReinitialise(true)
+      relire()
+    })
     return () => sub.subscription.unsubscribe()
   }, [relire])
 
@@ -60,7 +75,16 @@ export default function App() {
   if (!session) return <SignIn redirectTo={window.location.href} />
   if (invitation) return <AcceptInvite token={invitation[1]} />
   if (!foyer) return <Onboarding onDone={relire} />
-  if (!mdpPose) return <Password userId={session.user.id} onDone={relire} />
+  // Tant qu'aucun mot de passe n'est posé, on n'entre pas — sinon on repart
+  // sur un lien par mail à chaque connexion. Et au retour d'une
+  // réinitialisation, on le redemande QUOI QU'IL ARRIVE : c'est la raison même
+  // du lien qu'on vient d'ouvrir.
+  if (!mdpPose || reinitialise) {
+    return (
+      <Password userId={session.user.id} change={reinitialise}
+                onDone={() => { setReinitialise(false); relire() }} />
+    )
+  }
 
   const moi = session.user.id
   // Retour à l'accueil plutôt qu'à l'historique du navigateur : un passage

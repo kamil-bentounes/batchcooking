@@ -178,6 +178,28 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
     await expect(page.getByRole('heading', { name: /coller/i })).toBeVisible()
   })
 
+  test('les trois chemins d’entrée sont SÉPARÉS', async ({ page }) => {
+    /*
+     * Un seul bouton disait « Première fois, ou mot de passe oublié ? », et les
+     * deux envoyaient le même lien de connexion : quelqu'un qui avait oublié
+     * son mot de passe était simplement reconnecté, sans jamais pouvoir en
+     * poser un nouveau.
+     */
+    await page.goto('/')
+    await expect(page.getByRole('button', { name: /^se connecter$/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /première connexion/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /mot de passe oublié/i })).toBeVisible()
+
+    // Et chacun annonce ce qu'il fait, pas la même chose.
+    await page.getByRole('button', { name: /mot de passe oublié/i }).click()
+    await expect(page.getByText(/lien de réinitialisation/i)).toBeVisible()
+    await expect(page.getByRole('button', { name: /réinitialiser mon mot de passe/i }))
+      .toBeVisible()
+
+    await page.getByRole('button', { name: /première connexion/i }).click()
+    await expect(page.getByText(/ensuite tu choisis ton mot de passe/i)).toBeVisible()
+  })
+
   test('la marque est dans l’onglet ET sur l’accueil', async ({ page }) => {
     // Le favicon était encore celui du gabarit : un logo violet, sans rapport
     // avec une application verte et crème. Et rien ne le liait dans la page.

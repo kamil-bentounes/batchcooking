@@ -31,7 +31,8 @@ export function Password({ userId, onDone, change = false }:
     <Page centre nav={change}
           titre={change ? 'Changer ton mot de passe' : 'Choisis ton mot de passe'}
           chapeau={change
-            ? 'Le précédent cessera de fonctionner tout de suite.'
+            ? 'Celui d’avant cesse de fonctionner tout de suite. Tu ne peux pas '
+              + 'sauter cette étape : c’est la raison du lien que tu viens d’ouvrir.'
             : 'C’est la dernière fois qu’on te demande un e-mail pour entrer.'}>
       <div className="space-y-5">
         <Champ label="Mot de passe" type="password" value={mdp} autoComplete="new-password"
