@@ -222,8 +222,68 @@ describe('les arcs d’une recette qu’on ne voit pas', () => {
     ]).select()
     await admin().from('recipe_step_dependency')
       .insert({ before_id: e![0].id, after_id: e![1].id })
-    const { error } = await bob.client.from('recipe_step_dependency')
-      .update({ origin: 'confirme' }).eq('after_id', e![1].id)
+    // ⚠️ `.select()` et la LONGUEUR, pas seulement `error`. Un UPDATE
+    //    entièrement refusé par la RLS rend `error: null` et zéro ligne : sans
+    //    ça, ce test resterait vert le jour où l'on fermerait le catalogue par
+    //    erreur — et c'est le seul garde-fou de D16 sur les arcs.
+    const { data, error } = await bob.client.from('recipe_step_dependency')
+      .update({ origin: 'confirme' }).eq('after_id', e![1].id).select()
     expect(error, `la correction du catalogue a été refusée : ${error?.message}`).toBeNull()
+    expect(data ?? [], 'la correction n’a rien écrit').toHaveLength(1)
+  })
+
+  /**
+   * Un arc relie deux étapes du MÊME plat.
+   *
+   * Vérifier chaque bout séparément ne dit pas cela : on pouvait repointer un
+   * arc du catalogue vers une autre recette du catalogue — l'ordonnanceur lève
+   * alors « dépendances circulaires » chez tout le monde — ou le tirer vers sa
+   * propre recette privée, ce qui le rendait invisible pour tous. Une
+   * contrainte d'ordre supprimée sans droit de suppression.
+   */
+  it('ne se repointent pas d’une recette du catalogue vers une autre', async () => {
+    const { data: e } = await admin().from('recipe_step').insert([
+      { recipe_id: duCatalogue, ordinal: 30, text: 'p' },
+      { recipe_id: duCatalogue, ordinal: 31, text: 'q' },
+    ]).select()
+    await admin().from('recipe_step_dependency')
+      .insert({ before_id: e![0].id, after_id: e![1].id })
+
+    // Une SECONDE recette du catalogue, que bob a tout autant le droit de
+    // corriger — mais pas de mélanger avec la première.
+    const { data: autre } = await admin().from('recipe')
+      .insert({ source_url: `https://x/${Date.now()}-${Math.random()}` }).select().single()
+    const { data: ailleurs } = await admin().from('recipe_step')
+      .insert({ recipe_id: autre!.id, ordinal: 1, text: 'ailleurs' }).select().single()
+
+    const { data: melange } = await bob.client.from('recipe_step_dependency')
+      .update({ before_id: ailleurs!.id }).eq('after_id', e![1].id).select()
+    expect(melange ?? [], 'un arc relie deux recettes différentes').toHaveLength(0)
+
+    const { data: apres } = await admin().from('recipe_step_dependency')
+      .select('before_id').eq('after_id', e![1].id).single()
+    expect(apres!.before_id).toBe(e![0].id)
+  })
+
+  it('ne se posent pas depuis l’étape d’un autre', async () => {
+    // L'INSERT ne regardait que `after_id` : on posait un arc dont l'origine
+    // est l'étape privée de quelqu'un d'autre.
+    const { data: privee } = await alice.client.from('recipe').insert({
+      title: 'À moi seule', origin: 'manuelle', visibility: 'privee',
+      owner_household_id: alice.householdId, yield_servings: 2,
+    }).select().single()
+    const { data: sienne } = await alice.client.from('recipe_step')
+      .insert({ recipe_id: privee!.id, ordinal: 1, text: 'secret' }).select().single()
+
+    const { data: aBob } = await bob.client.from('recipe').insert({
+      title: 'À Bob', origin: 'manuelle', owner_household_id: bob.householdId,
+      yield_servings: 2,
+    }).select().single()
+    const { data: etapeBob } = await bob.client.from('recipe_step')
+      .insert({ recipe_id: aBob!.id, ordinal: 1, text: 'la sienne' }).select().single()
+
+    const { error } = await bob.client.from('recipe_step_dependency')
+      .insert({ before_id: sienne!.id, after_id: etapeBob!.id })
+    expect(error, 'un arc est parti de l’étape privée d’un autre').not.toBeNull()
   })
 })

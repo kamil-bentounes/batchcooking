@@ -310,6 +310,12 @@ export function useTermineAction() {
       // Terminer sans avoir commencé arrive : on coche l'action qu'on a faite
       // sans toucher au téléphone. On pose alors le début à la durée prévue en
       // arrière — mieux qu'une mesure de zéro seconde qui fausserait D48.
+      //
+      // ⚠️ Chez SOI seulement. Dans la session d'un hôte, la base repose
+      //    `started_at` à `now()` (0039) : un convive ne dicte pas une mesure
+      //    qui ira nourrir les durées par défaut d'une autre cuisine. Le
+      //    chemin ne s'atteint de toute façon pas — on ne termine là-bas qu'un
+      //    geste qu'on a pris, donc déjà commencé.
       const t = ou(await supabase.from('session_task')
         .select('started_at, duration_min').eq('id', id).single())
       const fin = new Date()

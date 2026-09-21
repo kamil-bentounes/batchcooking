@@ -287,14 +287,20 @@ describe('la mesure ne se dicte pas', () => {
     expect(ecart, 'le client a antidaté son geste').toBeLessThan(60_000)
   })
 
-  it('n’empoisonne donc pas le journal de durées de l’hôte', async () => {
+  it('l’observation qui part chez l’hôte est celle du temps réellement passé', async () => {
+    /*
+     * Le convive écrit BIEN une observation dans le journal de son hôte, et
+     * c'est voulu : il a cuisiné dans cette cuisine-là. Ce qu'il ne peut pas,
+     * c'est en choisir la valeur. Ici il a pris le geste il y a un instant :
+     * la mesure vaut une fraction de minute, pas les cinq heures annoncées.
+     */
     await session.convive.client.from('session_task')
       .update({ done_at: new Date().toISOString() }).eq('id', session.geste)
     const { data } = await admin().from('duration_observation')
       .select('actual_min').eq('household_id', session.hote.householdId)
     expect(data ?? [], 'rien n’a été observé').toHaveLength(1)
     expect(Number(data![0].actual_min), 'cinq heures pour éplucher des pommes de terre')
-      .toBeLessThan(5)
+      .toBeLessThan(1)
   })
 
   it('ne change pas l’identifiant d’un geste', async () => {
@@ -315,6 +321,18 @@ describe('la mesure ne se dicte pas', () => {
     const { error } = await session.convive.client.from('session_task')
       .update({ assignee_id: null, started_at: null }).eq('id', t!.id)
     expect(error, `on ne peut pas rendre son propre geste : ${error?.message}`).toBeNull()
+
+    // Et celui d'un autre reste à lui.
+    const { data: sien } = await admin().from('session_task').insert({
+      cycle_id: session.cycle, household_id: session.hote.householdId,
+      label: 'Sortir le plat', duration_min: 1, planned_start_min: 9,
+    }).select().single()
+    await session.hote.client.from('session_task')
+      .update({ assignee_id: session.hote.userId, started_at: new Date().toISOString() })
+      .eq('id', sien!.id)
+    const { error: vol } = await session.convive.client.from('session_task')
+      .update({ assignee_id: null }).eq('id', sien!.id)
+    expect(vol, 'le convive a rendu le geste de son hôte').not.toBeNull()
   })
 
   it('laisse passer le rôle de service', async () => {
