@@ -256,10 +256,13 @@ describe('les arcs d’une recette qu’on ne voit pas', () => {
     const { data: ailleurs } = await admin().from('recipe_step')
       .insert({ recipe_id: autre!.id, ordinal: 1, text: 'ailleurs' }).select().single()
 
-    // Un seul bout : la paire intermédiaire enjambe deux recettes.
-    const { data: unBout } = await bob.client.from('recipe_step_dependency')
-      .update({ before_id: ailleurs!.id }).eq('after_id', e![1].id).select()
-    expect(unBout ?? [], 'un arc relie deux recettes différentes').toHaveLength(0)
+    // Un seul bout : l'arc enjamberait deux recettes. C'est le trigger qui
+    // refuse, pas la policy — il passe avant le `with check`, donc on vérifie
+    // le MESSAGE plutôt que de se contenter d'un refus quelconque.
+    const { error: unBout } = await bob.client.from('recipe_step_dependency')
+      .update({ before_id: ailleurs!.id }).eq('after_id', e![1].id)
+    expect(unBout?.message, 'un arc relie deux recettes différentes')
+      .toMatch(/du même plat/)
 
     /*
      * ⚠️ LES DEUX BOUTS D'UN COUP, et c'est là que tout se joue.
@@ -274,7 +277,8 @@ describe('les arcs d’une recette qu’on ne voit pas', () => {
     const { data: lesDeux, error } = await bob.client.from('recipe_step_dependency')
       .update({ before_id: ailleurs!.id, after_id: autreEtape!.id })
       .eq('after_id', e![1].id).select()
-    expect(error, 'un arc a changé de recette en déplaçant ses deux bouts').not.toBeNull()
+    expect(error?.message, 'un arc a changé de recette en déplaçant ses deux bouts')
+      .toMatch(/ne change pas de recette/)
     expect(lesDeux ?? [], 'un arc a changé de recette').toHaveLength(0)
 
     const { data: apres } = await admin().from('recipe_step_dependency')
@@ -310,11 +314,51 @@ describe('les arcs d’une recette qu’on ne voit pas', () => {
     const { error } = await bob.client.from('recipe_step_dependency')
       .update({ before_id: cat![1].id, after_id: cat![0].id })
       .eq('after_id', siennes![1].id)
-    expect(error, 'un arc a été poussé dans le catalogue').not.toBeNull()
+    expect(error?.message, 'un arc a été poussé dans le catalogue')
+      .toMatch(/ne change pas de recette/)
 
     const { data: dansLeCatalogue } = await admin().from('recipe_step_dependency')
       .select('before_id').eq('after_id', cat![0].id)
     expect(dansLeCatalogue ?? [], 'le catalogue a gagné un arc').toHaveLength(0)
+  })
+
+  it('ne se déménagent pas en déménageant l’étape', async () => {
+    /*
+     * ⚠️ Le même invariant, une table plus loin.
+     *
+     *    Interdire à l'ARC de changer de recette ne sert à rien tant que
+     *    l'ÉTAPE peut changer de recette : on réattache l'étape du catalogue à
+     *    sa propre recette, et l'arc suit sans que le trigger soit consulté.
+     *    La recette d'origine perd ses étapes, ses ingrédients et ses macros —
+     *    pour tout le monde, et sans droit de suppression.
+     */
+    const { data: e } = await admin().from('recipe_step').insert([
+      { recipe_id: duCatalogue, ordinal: 50, text: 'avant' },
+      { recipe_id: duCatalogue, ordinal: 51, text: 'après' },
+    ]).select()
+    const { data: ing } = await admin().from('recipe_ingredient')
+      .insert({ recipe_id: duCatalogue, ordinal: 50, raw_text: '1 carotte' })
+      .select().single()
+
+    const { data: mienne } = await bob.client.from('recipe').insert({
+      title: 'Le déménagement', origin: 'manuelle',
+      owner_household_id: bob.householdId, yield_servings: 2,
+    }).select().single()
+
+    for (const etape of e!) {
+      const { error } = await bob.client.from('recipe_step')
+        .update({ recipe_id: mienne!.id }).eq('id', etape.id)
+      expect(error?.message, 'une étape du catalogue a changé de recette')
+        .toMatch(/ne change pas de recette/)
+    }
+    const { error: eIng } = await bob.client.from('recipe_ingredient')
+      .update({ recipe_id: mienne!.id }).eq('id', ing!.id)
+    expect(eIng?.message, 'un ingrédient du catalogue a changé de recette')
+      .toMatch(/ne change pas de recette/)
+
+    const { data: restees } = await admin().from('recipe_step')
+      .select('id').eq('recipe_id', duCatalogue).in('ordinal', [50, 51])
+    expect(restees ?? [], 'le catalogue a été dépouillé de ses étapes').toHaveLength(2)
   })
 
   it('ne se posent pas depuis l’étape d’un autre', async () => {
