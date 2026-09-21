@@ -124,3 +124,52 @@ describe('un produit congelé', () => {
     expect(error, 'un produit du placard a été « congelé »').not.toBeNull()
   })
 })
+
+/**
+ * Les deux mensonges qu'un ajout manuel pouvait écrire.
+ *
+ * Ils se ressemblent : dans les deux cas une valeur inventée entre dans un
+ * suivi qui, lui, est calculé. Et dans les deux cas rien ne le signale.
+ */
+describe('ce qu’on refuse d’écrire', () => {
+  it('donne quatre jours à un plat mis au FRIGO, pas trois mois', async () => {
+    // L'écran n'affiche la péremption qu'au congélateur, mais il l'envoyait
+    // quand même — et depuis 0047 la base la respecte. Un plat au frigo héritait
+    // des trois mois du congélateur, et Stock affichait « encore 91 jours ».
+    const { data } = await moi.client.from('portion').insert({
+      household_id: moi.householdId, label: 'Reste de lasagnes', grams: 300, kcal: 450,
+      protein_g: 20, carb_g: 40, fat_g: 18, fiber_g: 3,
+      source: 'manuel', location: 'frigo',
+    }).select().single()
+    const jours = (new Date(data!.expires_at!).getTime()
+      - new Date(data!.prepared_at!).getTime()) / 864e5
+    expect(jours, 'un plat au frigo a reçu autre chose que D29').toBeCloseTo(4, 1)
+  })
+
+  it('range un surgelé acheté avec sa date de mise au froid', async () => {
+    /*
+     * Le chemin PRINCIPAL du garde-manger, ce sont les courses : cocher un
+     * article le range tout seul (D49). Le formulaire manuel avait ses dates,
+     * ce chemin-là non — un surgelé entrait sans qu'on sache quand, donc sans
+     * qu'on puisse jamais dire quand il en sort.
+     */
+    const { data: cycle } = await admin().from('cycle')
+      .insert({ household_id: moi.householdId, week_of: '2030-05-06' }).select().single()
+    const { data: article } = await admin().from('shopping_item').insert({
+      cycle_id: cycle!.id, household_id: moi.householdId,
+      label: 'Petits pois surgelés', aisle: 'Surgelés',
+    }).select().single()
+
+    await moi.client.from('shopping_item')
+      .update({ checked_at: new Date().toISOString() }).eq('id', article!.id)
+
+    const { data: range } = await admin().from('stock_item')
+      .select('location, frozen_at, expires_at').eq('shopping_item_id', article!.id).single()
+    expect(range!.location, 'le rayon des surgelés ne mène pas au congélateur')
+      .toBe('congelateur')
+    expect(range!.frozen_at, 'rangé au froid sans date de mise au froid').not.toBeNull()
+    const jours = (new Date(range!.expires_at!).getTime()
+      - new Date(range!.frozen_at!).getTime()) / 864e5
+    expect(jours, 'trois mois à partir du rangement').toBeCloseTo(90, 1)
+  })
+})

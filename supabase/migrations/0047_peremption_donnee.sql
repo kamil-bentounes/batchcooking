@@ -35,8 +35,12 @@ declare
 begin
   if new.location = 'congelateur' then
     new.frozen_at := coalesce(new.frozen_at, now());
-    -- Sortir puis remettre au congélateur ne rallonge pas la vie de la part :
-    -- on repart de la date de congélation, pas de maintenant.
+    -- ⚠️ Ce commentaire disait « on repart de la date de congélation » : c'est
+    --    FAUX depuis toujours. Décongeler met `frozen_at` à null — la
+    --    contrainte l'impose hors du congélateur — donc recongeler repart bien
+    --    de maintenant, pour quatre-vingt-dix jours pleins. L'information est
+    --    détruite au passage au frigo ; la corriger demanderait de garder la
+    --    première date, ce que personne n'a demandé. On dit ce qui se passe.
     if not donnee and (deplacement or new.expires_at is null) then
       new.expires_at := new.frozen_at + make_interval(days => jours_congele);
     end if;

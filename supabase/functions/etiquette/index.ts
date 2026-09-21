@@ -95,6 +95,8 @@ const SCHEMA = {
     },
     confiance: {
       type: 'number',
+      minimum: 0,
+      maximum: 1,
       description: 'De 0 à 1. Ce qui compte est la lisibilité du TABLEAU : une belle '
         + 'photo de face avant avec un tableau flou mérite une confiance basse.',
     },
@@ -104,7 +106,15 @@ const SCHEMA = {
         + 'd’utile : « le tableau est coupé », « le poids net n’apparaît pas ».',
     },
   },
-  required: ['nom', 'poids_g', 'kcal_100g', 'lisible', 'confiance'],
+  // ⚠️ TOUTES les propriétés, comme dans `frigo` : le mode strict d'OpenAI
+  //    l'exige, et Gemini n'est permissif que par chance. Un champ absent de
+  //    `required` est un champ que le modèle peut taire — or ici « taire » et
+  //    « rendre null » ne veulent pas dire la même chose.
+  required: [
+    'nom', 'marque', 'poids_g', 'parts', 'kcal_100g', 'proteines_100g',
+    'glucides_100g', 'lipides_100g', 'fibres_100g', 'kcal_portion', 'dlc',
+    'lisible', 'confiance', 'commentaire',
+  ],
   additionalProperties: false,
 }
 

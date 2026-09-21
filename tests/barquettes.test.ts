@@ -75,13 +75,34 @@ describe('la péremption (D29)', () => {
     expect(heures, 'une part décongelée a récupéré quatre jours').toBeLessThan(26)
   })
 
-  it('remettre au congélateur ne rallonge pas la vie depuis la décongélation', async () => {
-    const p = await pose(alice, { location: 'congelateur' })
+  it('recongeler repart de zéro, et ce test le dit enfin', async () => {
+    /*
+     * ⚠️ Ce test s'appelait « remettre au congélateur ne rallonge pas la vie »
+     *    et n'assertait que `expires_at ≈ frozen_at + 90 j` — vrai par
+     *    CONSTRUCTION, puisque le trigger pose les deux au même instant. Il
+     *    serait resté vert quelle que soit la règle.
+     *
+     *    Ce qui se passe vraiment : décongeler met `frozen_at` à null, la
+     *    contrainte l'impose hors du congélateur. La date d'origine est donc
+     *    détruite, et recongeler repart pour quatre-vingt-dix jours pleins.
+     *    Ce n'est pas idéal — recongeler n'est pas conseillé — mais c'est ce
+     *    que le code fait, et un test doit dire le code, pas le souhait.
+     */
+    const ilYA80Jours = new Date(Date.now() - 80 * 864e5).toISOString()
+    const p = await pose(alice, { location: 'congelateur', frozen_at: ilYA80Jours })
+    expect(joursApres(p.expires_at, p.frozen_at!)).toBeCloseTo(90, 1)
+
     await admin().from('portion').update({ location: 'frigo' }).eq('id', p.id)
+    const { data: degelee } = await admin().from('portion')
+      .select('frozen_at, state').eq('id', p.id).single()
+    expect(degelee!.frozen_at, 'la date d’origine survit à la décongélation').toBeNull()
+    expect(degelee!.state).toBe('decongelee')
+
     const { data } = await admin().from('portion')
       .update({ location: 'congelateur' }).eq('id', p.id).select().single()
     expect(data!.state).toBe('au_frais')
-    expect(joursApres(data!.expires_at, data!.frozen_at!)).toBeCloseTo(90, 1)
+    // Quatre-vingt-dix jours À PARTIR DE MAINTENANT, pas des dix qui restaient.
+    expect(joursApres(data!.expires_at, new Date().toISOString())).toBeCloseTo(90, 1)
   })
 
   it('refuse une part congelée sans date de congélation', async () => {

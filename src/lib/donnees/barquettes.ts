@@ -8,7 +8,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
-import type { Ligne } from '../supabase.ts'
+import type { Insertion, Ligne } from '../supabase.ts'
 // Le calendrier et la répartition sont du calcul pur : ils vivent dans
 // `lib/semaine.ts`, où ils s'éprouvent sans base.
 import { jour } from '../semaine.ts'
@@ -18,6 +18,21 @@ export { NOM_REPAS, REPAS, bilanDuJour, jour, repartitionAuto } from '../semaine
 export type { Repas } from '../semaine.ts'
 
 export type Barquette = Ligne<'portion'>
+
+/**
+ * Une barquette à insérer, dont la PÉREMPTION est laissée à la base.
+ *
+ * `portion.expires_at` est `not null` et sans valeur par défaut : c'est le
+ * trigger `portion_peremption` qui la pose, et lui seul connaît D29 — quatre
+ * jours au frigo, trois mois au congélateur, vingt-quatre heures une fois
+ * décongelée. Le typage généré, lui, ne voit que « not null sans défaut » et
+ * exige donc la colonne. La recopier ici dupliquerait la règle à deux endroits,
+ * ce qui est précisément ce qu'on veut éviter : on l'omet, et on le dit.
+ *
+ * Une date EXPLICITE reste possible — celle imprimée sur un emballage — et la
+ * base la respecte alors plutôt que d'appliquer la règle (migration 0047).
+ */
+type PartAInserer = Omit<Insertion<'portion'>, 'expires_at'> & { expires_at?: string | null }
 export type Case = Ligne<'meal_slot'> & { portion: Barquette | null; extras: Ligne<'meal_extra'>[] }
 
 export const CLE = {
@@ -132,7 +147,8 @@ export function useDresse() {
         location: l.location,
       })))
       if (lignes.length === 0) throw new Error('Rien à dresser.')
-      return ou(await supabase.from('portion').insert(lignes).select())
+      return ou(await supabase.from('portion')
+        .insert(lignes as Insertion<'portion'>[]).select())
     },
     onSuccess: () => qc.invalidateQueries(),
   })
@@ -400,12 +416,16 @@ export function useAjouteBarquette() {
       achete?: boolean
       lieu: 'frigo' | 'congelateur'
       congeleLe?: string | null
-      perimeLe: string
+      /** `null` = la base applique D29 : quatre jours au frigo, trois mois au
+          froid. Une date n'a de sens que lorsqu'on en SAIT une — celle d'un
+          emballage. */
+      perimeLe?: string | null
     }) => {
       const foyer = ou(await supabase.rpc('current_household'))
       if (!foyer) throw new Error('Aucun foyer.')
 
-      const lignes = Array.from({ length: Math.max(1, Math.round(b.parts)) }, () => ({
+      const lignes: PartAInserer[] = Array.from(
+        { length: Math.max(1, Math.round(b.parts)) }, () => ({
         household_id: foyer,
         recipe_id: b.recetteId ?? null,
         label: b.label.trim(),
@@ -421,9 +441,10 @@ export function useAjouteBarquette() {
         // date existe, au frigo elle n'existe pas. On ne la contourne pas.
         frozen_at: b.lieu === 'congelateur'
           ? (b.congeleLe ?? new Date().toISOString()) : null,
-        expires_at: b.perimeLe,
+        expires_at: b.perimeLe ?? undefined,
       }))
-      return ou(await supabase.from('portion').insert(lignes).select())
+      return ou(await supabase.from('portion')
+        .insert(lignes as Insertion<'portion'>[]).select())
     },
     onSuccess: () => qc.invalidateQueries(),
   })

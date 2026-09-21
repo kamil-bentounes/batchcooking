@@ -108,7 +108,17 @@ export function useBilan(depuis: Date, jusqu: Date) {
         : lignes.filter(l => l.receipt_id === t.id)
             .reduce((s3, l) => s3 + Number(l.price_eur), 0)), 0)
 
-      const p = ou(portions)
+      /*
+       * ⚠️ Le bilan de la CUISINE ne compte que ce que la cuisine a produit.
+       *
+       *    `portion.source` distingue depuis 0046 ce qu'on a cuisiné de ce
+       *    qu'on a acheté tout prêt. Sans ce filtre, quatre parts de PrepMyMeal
+       *    entraient dans le dénominateur du coût par part et le faisaient
+       *    BAISSER : le batch cooking paraissait moins cher parce qu'on avait
+       *    acheté des plats à côté. Elles apparaissaient aussi dans la liste
+       *    des recettes du cycle, qu'elles n'ont jamais été.
+       */
+      const p = ou(portions).filter(x => x.source === 'session')
       const c = ou(cases) as unknown as (Ligne<'meal_slot'> & {
         portion: { kcal: number; protein_g: number } | null
       })[]

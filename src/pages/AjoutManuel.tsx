@@ -29,7 +29,20 @@ type Lieu = 'frigo' | 'congelateur' | 'placard'
 /** D29 : trois mois au congélateur. La date imprimée sur un emballage prime. */
 const MOIS_AU_FROID = 3
 
-const jour = (d: Date) => d.toISOString().slice(0, 10)
+/**
+ * Le jour tel qu'on le vit, pas tel que Greenwich le voit.
+ *
+ * `toISOString()` bascule à minuit UTC : entre 00 h et 02 h à Paris, « congelé
+ * le » proposait la veille, et le `max` d'aujourd'hui interdisait aujourd'hui.
+ */
+const jour = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/** Une date que `<input type="date">` sait rendre, et `Date` interpréter. */
+const estUnJour = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(`${v}T12:00:00`))
+
+/** Au-delà, ce n'est plus un aliment : 900 kcal/100 g, c'est de l'huile pure. */
+const KCAL_MAX_100G = 900
 
 function dansTroisMois(depuis: string): string {
   const d = new Date(`${depuis}T12:00:00`)
@@ -157,6 +170,10 @@ function Plat({ lieu, surFini }: { lieu: 'frigo' | 'congelateur'; surFini: () =>
 
   const [photos, setPhotos] = useState<string[]>([])
   const [lecture, setLecture] = useState<Lecture | null>(null)
+  /** Ce que l'étiquette a donné, gardé tel quel : c'est lui qu'on redivise
+      quand le nombre de parts change. Sans ça, passer de 2 à 4 parts gardait
+      200 g et 300 kcal PAR PART, soit 800 g sortis d'une boîte de 400. */
+  const [lu, setLu] = useState<{ poids: number | null; parts: number | null } | null>(null)
   const [lit, setLit] = useState(false)
   const [erreur, setErreur] = useState<string | null>(null)
 
@@ -189,22 +206,13 @@ function Plat({ lieu, surFini }: { lieu: 'frigo' | 'congelateur'; surFini: () =>
 
       if (r.nom && !nom) setNom(r.nom)
       if (r.parts && r.parts > 0) setParts(String(r.parts))
-      const partsLues = r.parts && r.parts > 0 ? r.parts : Number(parts) || 1
-      const poidsPart = r.poids_g ? Math.round(r.poids_g / partsLues) : null
-      if (poidsPart) setGrammes(String(poidsPart))
-
-      // `kcal_portion` d'abord : c'est le fabricant qui a pesé, pas nous.
-      const parPart = r.kcal_portion
-        ?? (r.kcal_100g && poidsPart ? Math.round(r.kcal_100g * poidsPart / 100) : null)
-      if (parPart) setKcal(String(parPart))
-
-      const pour = (v: number | null) =>
-        v !== null && poidsPart ? String(Math.round(v * poidsPart / 10) / 10) : ''
-      if (r.proteines_100g !== null) setProt(pour(r.proteines_100g))
-      if (r.glucides_100g !== null) setGluc(pour(r.glucides_100g))
-      if (r.lipides_100g !== null) setLip(pour(r.lipides_100g))
-      if (r.fibres_100g !== null) setFib(pour(r.fibres_100g))
-      if (r.dlc) setPerime(r.dlc)
+      setLu({ poids: r.poids_g, parts: r.parts })
+      remplit(r, r.parts && r.parts > 0 ? r.parts : Number(parts) || 1)
+      // ⚠️ La date imprimée n'est reprise que si elle a la FORME d'une date.
+      //    Le modèle rend parfois « 14/02/2027 » ; `<input type="date">`
+      //    l'ignore mais l'état la gardait, et le submit levait un RangeError
+      //    hors de tout `try`.
+      if (r.dlc && estUnJour(r.dlc)) setPerime(r.dlc)
     } catch (e) {
       // `callFunction` lève le CORPS brut quand la réponse n'est pas 200 : c'est
       // là que passent le quota atteint et la panne du modèle. Le texte est du
@@ -219,7 +227,62 @@ function Plat({ lieu, surFini }: { lieu: 'frigo' | 'congelateur'; surFini: () =>
     }
   }
 
-  const pret = nom.trim() !== '' && Number(grammes) > 0 && kcal !== ''
+  /**
+   * Ramener une étiquette à UNE part.
+   *
+   * Deux pièges, et les deux valent un facteur deux :
+   *
+   *  · `kcal_portion` est la colonne « par portion » du fabricant. Elle ne vaut
+   *    que si l'emballage annonce AUSSI combien de portions il contient —
+   *    sinon « une portion » n'est pas « une de nos parts », et on crédite
+   *    300 kcal à une barquette de 400 g qui en fait 600 ;
+   *  · un tableau lu en kJ passe pour des kcal. 900 kcal/100 g est le plafond
+   *    physique d'un aliment : au-delà, on ne remplit rien et on le dit.
+   */
+  function remplit(r: Lecture, nbParts: number) {
+    const poidsPart = r.poids_g && nbParts > 0 ? Math.round(r.poids_g / nbParts) : null
+    if (poidsPart) setGrammes(String(poidsPart))
+
+    const par100 = r.kcal_100g !== null && r.kcal_100g > 0 && r.kcal_100g <= KCAL_MAX_100G
+      ? r.kcal_100g : null
+    const calcule = par100 && poidsPart ? Math.round(par100 * poidsPart / 100) : null
+    // On ne préfère la colonne du fabricant que si l'emballage a dit combien de
+    // portions il contient — et si elle ne contredit pas le calcul.
+    const annoncee = r.kcal_portion !== null && r.parts && r.parts > 0 && r.parts === nbParts
+      ? r.kcal_portion : null
+    const coherente = annoncee !== null && calcule !== null
+      ? Math.abs(annoncee - calcule) <= calcule * 0.25
+      : annoncee !== null
+    const parPart = coherente ? annoncee : calcule
+    if (parPart) setKcal(String(parPart))
+
+    const pour = (v: number | null) =>
+      v !== null && poidsPart ? String(Math.round(v * poidsPart / 10) / 10) : ''
+    setProt(pour(r.proteines_100g))
+    setGluc(pour(r.glucides_100g))
+    setLip(pour(r.lipides_100g))
+    setFib(pour(r.fibres_100g))
+  }
+
+  /** Changer le nombre de parts redécoupe la boîte lue, il ne la duplique pas. */
+  function changeParts(v: string) {
+    setParts(v)
+    const n = Number(v)
+    if (lecture && lu && n > 0) remplit(lecture, n)
+  }
+
+  /*
+   * ⚠️ Les protéines sont exigées comme les calories, et pour la même raison.
+   *
+   *    `bilanDuJour` somme `portion.protein_g` dès qu'une case est mangée : un
+   *    zéro n'est pas « inconnu », c'est « ce repas ne t'a rien apporté ». Or
+   *    les protéines sont un PLANCHER — le suivi dirait qu'on en manque alors
+   *    qu'on vient d'en manger trente grammes. Toutes les étiquettes les
+   *    portent ; il n'y a pas de raison de deviner.
+   */
+  const pret = nom.trim() !== '' && Number(grammes) > 0
+    && Number(kcal) > 0 && prot !== '' && estUnJour(perime)
+    && (!auFroid || (estUnJour(congele) && perime >= congele))
 
   return (
     <form className="space-y-3" onSubmit={e => {
@@ -234,10 +297,16 @@ function Plat({ lieu, surFini }: { lieu: 'frigo' | 'congelateur'; surFini: () =>
         glucides: gluc === '' ? null : Number(gluc),
         lipides: lip === '' ? null : Number(lip),
         fibres: fib === '' ? null : Number(fib),
-        achete: photos.length > 0,
+        // La provenance dit d'où viennent les CHIFFRES, pas si l'on a pris une
+        // photo : une étiquette illisible ne fait pas d'un plat un plat acheté.
+        achete: lecture?.lisible === true,
         lieu,
         congeleLe: auFroid ? new Date(`${congele}T12:00:00`).toISOString() : null,
-        perimeLe: new Date(`${perime}T12:00:00`).toISOString(),
+        // ⚠️ null au frigo, et ce n'est pas un détail : le champ n'y est même
+        //    pas affiché, mais la valeur partait quand même — et depuis 0047
+        //    la base la RESPECTE. Un plat mis au frigo héritait donc des trois
+        //    mois du congélateur au lieu des quatre jours de D29.
+        perimeLe: auFroid ? new Date(`${perime}T12:00:00`).toISOString() : null,
       }, { onSuccess: surFini })
     }}>
       {/* La lecture d'étiquette, en premier : elle remplit le reste. */}
@@ -289,7 +358,7 @@ function Plat({ lieu, surFini }: { lieu: 'frigo' | 'congelateur'; surFini: () =>
                         outline-none focus:border-herbe" />
 
       <div className="flex gap-2">
-        <Champ label="Parts" value={parts} onChange={setParts} min={1} />
+        <Champ label="Parts" value={parts} onChange={changeParts} min={1} max={20} />
         <Champ label="g / part" value={grammes} onChange={setGrammes} />
         <Champ label="kcal / part" value={kcal} onChange={setKcal} />
       </div>
@@ -317,8 +386,9 @@ function Plat({ lieu, surFini }: { lieu: 'frigo' | 'congelateur'; surFini: () =>
       </button>
       {!pret && (
         <p className="text-[13px] text-doux">
-          Il manque le nom, le poids d’une part et ses calories — sans elles, le
-          jour où tu le mangeras compterait pour zéro.
+          Il manque le nom, le poids d’une part, ses calories et ses protéines —
+          sans elles, le jour où tu le mangeras compterait pour zéro, et tu te
+          croirais en manque de protéines après en avoir mangé.
         </p>
       )}
       <Erreur de={ajoute.error} />
@@ -326,12 +396,14 @@ function Plat({ lieu, surFini }: { lieu: 'frigo' | 'congelateur'; surFini: () =>
   )
 }
 
-function Champ({ label, value, onChange, min = 0 }:
-  { label: string; value: string; onChange: (v: string) => void; min?: number }) {
+function Champ({ label, value, onChange, min = 0, max }:
+  { label: string; value: string; onChange: (v: string) => void
+    min?: number; max?: number }) {
   return (
     <label className="grow min-w-0">
       <span className="block text-[13px] text-doux mb-1">{label}</span>
-      <input type="number" min={min} value={value} onChange={e => onChange(e.target.value)}
+      <input type="number" min={min} max={max} value={value}
+             onChange={e => onChange(e.target.value)}
              className="w-full rounded-xl border border-brume bg-fond px-3 py-2.5
                         text-right outline-none focus:border-herbe" />
     </label>
@@ -360,7 +432,10 @@ function Dates({ congele, perime, surCongele, surPerime }: {
       </label>
       <label className="grow">
         <span className="block text-[13px] text-doux mb-1">À manger avant</span>
-        <input type="date" value={perime} onChange={e => surPerime(e.target.value)}
+        {/* Jamais avant la mise au froid : une péremption antérieure à la
+            congélation est une saisie, pas une information. */}
+        <input type="date" value={perime} min={congele}
+               onChange={e => surPerime(e.target.value)}
                className="w-full rounded-xl border border-brume bg-fond px-3 py-2.5
                           outline-none focus:border-herbe" />
       </label>

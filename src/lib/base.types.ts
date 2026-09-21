@@ -1028,7 +1028,7 @@ export type Database = {
           cost_eur?: number | null
           created_at?: string
           cycle_id?: string | null
-          expires_at?: string
+          expires_at: string
           fat_g: number
           fiber_g: number
           for_user_id?: string | null
