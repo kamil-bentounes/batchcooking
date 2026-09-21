@@ -364,6 +364,83 @@ describe('la mesure ne se dicte pas', () => {
 })
 
 /**
+ * L'amitié n'est pas transitive, et la session ne la rend pas transitive.
+ *
+ * Le convive lit les recettes de la session : c'est ce qu'il cuisine. Mais une
+ * session contient aussi ce qu'un TROISIÈME foyer a prêté à l'hôte — et
+ * celui-là n'a rien promis au convive. Sans distinction, cuisiner une fois chez
+ * quelqu'un donnait accès à tout ce que ses autres amis lui avaient montré.
+ */
+async function sessionPartagee(nom: string, semaine: string) {
+  const h = await makeActor(`${nom}-h`)
+  const c = await makeActor(`${nom}-c`)
+  await amis(h, c)
+  const { data: cy } = await admin().from('cycle')
+    .insert({ household_id: h.householdId, week_of: semaine, state: 'en_cuisine' })
+    .select().single()
+  await h.client.from('session_convive')
+    .insert({ cycle_id: cy!.id, hote_id: h.householdId, invite_id: c.householdId })
+  await c.client.from('session_convive')
+    .update({ rejoint_le: new Date().toISOString() }).eq('cycle_id', cy!.id)
+  return { hote: h, convive: c, cycle: cy!.id }
+}
+
+describe('ce que la session ne donne PAS à voir', () => {
+  it('ne montre pas au convive ce qu’un autre ami a prêté à l’hôte', async () => {
+    const hote = await makeActor('trans-hote')
+    const convive = await makeActor('trans-convive')
+    const tiers = await makeActor('trans-tiers')
+    await amis(hote, convive)
+    await amis(hote, tiers)   // ⚠️ le tiers n'est PAS ami du convive
+
+    const { data: pretee } = await tiers.client.from('recipe').insert({
+      title: 'La tarte du tiers', origin: 'manuelle', visibility: 'partagee',
+      owner_household_id: tiers.householdId, yield_servings: 4, plannable: true,
+    }).select().single()
+    const { data: aMoi } = await hote.client.from('recipe').insert({
+      title: 'Le plat de l’hôte', origin: 'manuelle', visibility: 'privee',
+      owner_household_id: hote.householdId, yield_servings: 4, plannable: true,
+    }).select().single()
+
+    const { data: cy } = await admin().from('cycle')
+      .insert({ household_id: hote.householdId, week_of: '2029-11-05', state: 'en_cuisine' })
+      .select().single()
+    for (const r of [pretee!.id, aMoi!.id]) {
+      await admin().from('cycle_recipe').insert({
+        cycle_id: cy!.id, household_id: hote.householdId, recipe_id: r, servings: 2,
+      })
+    }
+    await hote.client.from('session_convive')
+      .insert({ cycle_id: cy!.id, hote_id: hote.householdId, invite_id: convive.householdId })
+    await convive.client.from('session_convive')
+      .update({ rejoint_le: new Date().toISOString() }).eq('cycle_id', cy!.id)
+
+    // Ce que l'hôte cuisine et qui est à lui : oui, c'est l'objet de la session.
+    const { data: sien } = await convive.client.from('recipe').select('id').eq('id', aMoi!.id)
+    expect(sien ?? [], 'le convive ne voit pas ce qu’il cuisine').toHaveLength(1)
+
+    // Ce qu'un tiers a prêté à l'hôte : non. Il n'a rien promis au convive.
+    const { data: fuite } = await convive.client.from('recipe')
+      .select('id').eq('id', pretee!.id)
+    expect(fuite ?? [], 'la session rend l’amitié transitive').toHaveLength(0)
+  })
+
+  it('ne laisse pas le convive ajouter une recette à la session de son hôte', async () => {
+    // Sinon il désignerait n'importe quel identifiant et se le ferait ouvrir.
+    const s = await sessionPartagee('ajout', '2029-12-03')
+    const { data: sienne } = await s.convive.client.from('recipe').insert({
+      title: 'La mienne', origin: 'manuelle', owner_household_id: s.convive.householdId,
+      yield_servings: 2,
+    }).select().single()
+    const { error } = await s.convive.client.from('cycle_recipe').insert({
+      cycle_id: s.cycle, household_id: s.convive.householdId,
+      recipe_id: sienne!.id, servings: 1,
+    })
+    expect(error, 'le convive a garni la session de son hôte').not.toBeNull()
+  })
+})
+
+/**
  * Une invitation vaut pour UNE session, et tant qu'on est amis.
  *
  * `session_convive` n'a ni expiration ni lien avec l'état du cycle : la seule

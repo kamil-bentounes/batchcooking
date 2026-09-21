@@ -139,6 +139,12 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
             verront l’invitation en ouvrant l’application — il n’y a pas de
             notification.
           </p>
+          {/* Dit ici plutôt que découvert après coup : ce qu'un autre foyer
+              t'a prêté ne se repartage pas par la bande. */}
+          <p className="mt-1.5 text-[14px] text-doux">
+            Ils verront le nom de tes recettes, pas celui de ce qu’un autre
+            foyer t’a prêté.
+          </p>
           <ul className="mt-3.5 space-y-2.5">
             {foyersAmis.map(f => (
               <li key={f.id}>
