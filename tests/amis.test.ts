@@ -173,3 +173,89 @@ describe('le prénom de qui a ajouté', () => {
     expect(data ?? [], 'le profil complet d’un ami est lisible').toHaveLength(0)
   })
 })
+
+/**
+ * Partager n'est pas céder.
+ *
+ * La visibilité est devenue une colonne de DROITS le jour où les amis sont
+ * arrivés — or la policy d'écriture des recettes, elle, datait d'avant et
+ * disait `using (true)`. Celui à qui l'on partage pouvait donc publier pour
+ * toute la terre ce qu'on lui avait montré à lui, et rompre l'amitié n'y
+ * changeait plus rien.
+ */
+describe('qui a le droit de réécrire une recette', () => {
+  let partagee: string
+
+  beforeAll(async () => {
+    partagee = await recette(alice, 'Le dahl d’Alice', 'partagee')
+  })
+
+  it('l’ami la lit, et ne la publie pas', async () => {
+    const { data: lue } = await bob.client.from('recipe').select('id').eq('id', partagee)
+    expect(lue ?? [], 'l’ami ne voit plus la recette partagée').toHaveLength(1)
+
+    const { data, error } = await bob.client.from('recipe')
+      .update({ visibility: 'publique' }).eq('id', partagee).select()
+    expect(data ?? [], 'un ami a publié la recette d’un autre').toHaveLength(0)
+    if (error) expect(error.message).toMatch(/visib|propriétaire|row-level/i)
+
+    const { data: chezCarol } = await carol.client.from('recipe').select('id').eq('id', partagee)
+    expect(chezCarol ?? [], 'un inconnu voit la recette').toHaveLength(0)
+  })
+
+  it('l’ami ne la renomme pas non plus, ni ne s’en déclare l’auteur', async () => {
+    const { data: t } = await bob.client.from('recipe')
+      .update({ title: 'Le dahl de Bob' }).eq('id', partagee).select()
+    expect(t ?? [], 'un ami a renommé la recette d’un autre').toHaveLength(0)
+
+    const { data: a } = await bob.client.from('recipe')
+      .update({ created_by: bob.userId }).eq('id', partagee).select()
+    expect(a ?? [], 'un ami s’est déclaré auteur').toHaveLength(0)
+
+    const { data: apres } = await admin().from('recipe')
+      .select('title, visibility, created_by').eq('id', partagee).single()
+    expect(apres!.title).toBe('Le dahl d’Alice')
+    expect(apres!.visibility).toBe('partagee')
+  })
+
+  it('le foyer propriétaire, lui, décide de tout', async () => {
+    const { error } = await alice.client.from('recipe')
+      .update({ visibility: 'publique', title: 'Dahl corail' }).eq('id', partagee)
+    expect(error, `le propriétaire s’est vu refuser : ${error?.message}`).toBeNull()
+    const { data } = await carol.client.from('recipe').select('title').eq('id', partagee)
+    expect(data ?? [], 'publique, mais invisible').toHaveLength(1)
+    // Et on remet comme avant, pour ne pas laisser traîner une publique.
+    await alice.client.from('recipe').update({ visibility: 'partagee' }).eq('id', partagee)
+  })
+
+  it('corrige le catalogue mutualisé sans se l’attribuer', async () => {
+    // La classe B reste corrigeable par tous, c'est tout son objet (D16). Mais
+    // la visibilité et l'auteur ne sont pas des corrections.
+    const { data: r } = await admin().from('recipe')
+      .insert({ source_url: `https://x/${Date.now()}-${Math.random()}` })
+      .select().single()
+
+    const { error: correction } = await carol.client.from('recipe')
+      .update({ title: 'Titre corrigé' }).eq('id', r!.id)
+    expect(correction, `la correction a été refusée : ${correction?.message}`).toBeNull()
+
+    for (const champ of [{ visibility: 'publique' }, { created_by: carol.userId }]) {
+      const { error } = await carol.client.from('recipe').update(champ).eq('id', r!.id)
+      expect(error, `le catalogue a accepté ${Object.keys(champ)[0]}`).not.toBeNull()
+    }
+  })
+})
+
+describe('le jeton d’invitation ne se dicte pas', () => {
+  it('ignore le jeton et l’expiration venus du client', async () => {
+    const devine = '00000000-0000-4000-8000-000000000042'
+    const dans100ans = new Date(Date.now() + 100 * 365 * 864e5).toISOString()
+    const { data, error } = await carol.client.from('foyer_ami')
+      .insert({ invite_par: carol.householdId, jeton: devine, expire_le: dans100ans })
+      .select().single()
+    expect(error, `refusé : ${error?.message}`).toBeNull()
+    expect(data!.jeton, 'le client a choisi le jeton').not.toBe(devine)
+    expect(new Date(data!.expire_le).getTime(),
+      'le client a choisi l’expiration').toBeLessThan(Date.now() + 8 * 864e5)
+  })
+})

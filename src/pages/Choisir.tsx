@@ -134,12 +134,29 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
         <section className="mt-8" aria-label="Recettes choisies">
           <h2 className="text-[13px] text-doux uppercase tracking-[0.04em]">Retenues</h2>
           <ul className="mt-3.5 space-y-3">
-            {choisies.map(c => (
+            {choisies.map(c => (c.recipe === null ? (
+              /*
+               * La recette d'un ami, retenue puis devenue illisible — amitié
+               * rompue, ou partage retiré. La ligne du cycle survit ; sans ce
+               * cas, elle s'affichait « Recette » et la liste de courses
+               * perdait ses ingrédients en silence.
+               */
               <li key={c.id} className="flex items-center gap-3">
-                <span className="grow text-[15px]">{c.recipe?.title ?? 'Recette'}</span>
+                <span className="grow text-[15px] text-doux">
+                  Recette devenue inaccessible
+                  <span className="block text-[13px]">
+                    Son foyer ne la partage plus. Elle n’apporte plus rien aux courses.
+                  </span>
+                </span>
+                <button onClick={() => retire.mutate(c.id)} aria-label="Retirer"
+                        className="text-groseille text-[14px] px-2 py-1">Retirer</button>
+              </li>
+            ) : (
+              <li key={c.id} className="flex items-center gap-3">
+                <span className="grow text-[15px]">{c.recipe.title}</span>
                 <label className="flex items-center gap-1.5">
                   <input type="number" min={1} max={20} value={c.servings}
-                         aria-label={`Parts de ${c.recipe?.title ?? 'la recette'}`}
+                         aria-label={`Parts de ${c.recipe.title}`}
                          onChange={e => choisit.mutate({
                            cycleId: cycle.id, recipeId: c.recipe_id,
                            parts: Math.max(1, Number(e.target.value) || 1),
@@ -151,7 +168,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
                 <button onClick={() => retire.mutate(c.id)} aria-label="Retirer"
                         className="text-groseille text-[14px] px-2 py-1">Retirer</button>
               </li>
-            ))}
+            )))}
           </ul>
         </section>
       )}

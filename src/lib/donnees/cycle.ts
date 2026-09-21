@@ -94,8 +94,18 @@ export function useMajCycle() {
   })
 }
 
+/**
+ * ⚠️ `recipe` est NULLABLE, et ce n'est pas une précaution de typage.
+ *
+ *    Une recette d'ami retenue dans le cycle cesse d'être lisible le jour où
+ *    l'amitié est rompue ou le partage retiré — la jointure rend alors `null`
+ *    pendant que la ligne du cycle, elle, survit. Sans ce `| null`, l'écran
+ *    affichait « Recette » et la liste de courses perdait ses ingrédients sans
+ *    un mot. On le dit.
+ */
 export type RecetteChoisie = Ligne<'cycle_recipe'> & {
-  recipe: Pick<Ligne<'recipe'>, 'id' | 'title' | 'yield_servings' | 'total_time_min' | 'source_name'>
+  recipe: Pick<Ligne<'recipe'>,
+    'id' | 'title' | 'yield_servings' | 'total_time_min' | 'source_name'> | null
 }
 
 export function useRecettesDuCycle(cycleId: string | undefined) {
