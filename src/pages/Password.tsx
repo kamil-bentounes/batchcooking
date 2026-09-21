@@ -11,8 +11,7 @@ import { Page, Bouton, Champ, Message } from '../ui/kit'
  * `password_set` déjà vrai, donc sans aucun moyen d'en poser un nouveau.
  * Condamné au lien par mail à vie.
  */
-export function Password({ userId, onDone, change = false }:
-  { userId: string; onDone: () => void; change?: boolean }) {
+export function Password({ userId, onDone }: { userId: string; onDone: () => void }) {
   const [mdp, setMdp] = useState('')
   const [msg, setMsg] = useState('')
 
@@ -28,12 +27,16 @@ export function Password({ userId, onDone, change = false }:
   }
 
   return (
-    <Page centre nav={change}
-          titre={change ? 'Changer ton mot de passe' : 'Choisis ton mot de passe'}
-          chapeau={change
-            ? 'Celui d’avant cesse de fonctionner tout de suite. Tu ne peux pas '
-              + 'sauter cette étape : c’est la raison du lien que tu viens d’ouvrir.'
-            : 'C’est la dernière fois qu’on te demande un e-mail pour entrer.'}>
+    /*
+     * ⚠️ JAMAIS de navigation ici.
+     *
+     *    `Nav` est faite de liens `<a href>`, donc de rechargements pleins. Les
+     *    afficher revenait à offrir trois moyens de sauter l'étape, juste
+     *    au-dessus de la phrase qui dit qu'on ne peut pas la sauter.
+     */
+    <Page centre titre="Ton mot de passe"
+          chapeau="Tant qu’il n’est pas posé, on n’entre pas — c’est ce qui évite
+                   de repartir sur un lien par e-mail à chaque fois.">
       <div className="space-y-5">
         <Champ label="Mot de passe" type="password" value={mdp} autoComplete="new-password"
                placeholder="8 caractères au moins"

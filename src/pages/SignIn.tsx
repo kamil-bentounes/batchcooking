@@ -44,6 +44,32 @@ export function SignIn({ redirectTo }: { redirectTo?: string }) {
   const dire = (t: string, e = false) => { setErr(e); setMsg(t) }
   const cible = redirectTo ?? window.location.href
 
+  /**
+   * Le même message, que l'adresse ait un compte ou non.
+   *
+   * ⚠️ Le message uniforme ne suffisait pas : il n'était rendu que dans le cas
+   *    SANS erreur, et le cas avec erreur affichait le texte brut de Supabase,
+   *    qui, lui, distingue. Deux clics de suite sur « réinitialiser » donnaient
+   *    « you can only request this after 60 seconds » sur une adresse connue,
+   *    et le message uniforme sur une inconnue : le formulaire devenait un
+   *    moyen de tester quelles adresses sont inscrites.
+   *
+   *    Ce qui mérite d'être dit à quelqu'un — « attends une minute » — l'est,
+   *    en français, et sans rien révéler de plus.
+   */
+  function sansFuite(erreur: { message: string } | null, succes: string): string {
+    if (!erreur) return succes
+    if (/only request this after|rate limit|too many/i.test(erreur.message)) {
+      return 'Doucement : attends une minute avant de redemander un lien.'
+    }
+    if (/invalid|email/i.test(erreur.message) && /format|valid/i.test(erreur.message)) {
+      return 'Cette adresse n’a pas l’air valide.'
+    }
+    // Tout le reste est un incident de notre côté, pas une information sur
+    // l'adresse : on ne le détaille pas.
+    return succes
+  }
+
   async function agir() {
     setEnvoi(true)
     try {
@@ -56,9 +82,9 @@ export function SignIn({ redirectTo }: { redirectTo?: string }) {
         const { error } = await supabase.auth.signInWithOtp({
           email, options: { emailRedirectTo: cible },
         })
-        dire(error ? error.message
-          : `Lien envoyé à ${email}. Ouvre-le depuis cet appareil : tu choisiras `
-            + `ton mot de passe juste après.`, !!error)
+        dire(sansFuite(error,
+          `Lien envoyé à ${email}. Ouvre-le depuis cet appareil : tu choisiras `
+          + `ton mot de passe juste après.`), false)
         return
       }
       /*
@@ -70,14 +96,9 @@ export function SignIn({ redirectTo }: { redirectTo?: string }) {
        *    était reconnecté sans qu'on lui demande rien — le défaut d'origine.
        */
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: cible })
-      /*
-       * On ne dit JAMAIS si l'adresse a un compte. Répondre « ce compte
-       * n'existe pas » ferait de ce formulaire un moyen de tester quelles
-       * adresses sont inscrites. Le message est donc le même dans les deux cas.
-       */
-      dire(error ? error.message
-        : `Si un compte existe pour ${email}, le lien vient de partir. `
-          + `Il est valable une heure.`, !!error)
+      dire(sansFuite(error,
+        `Si un compte existe pour ${email}, le lien vient de partir. `
+        + `Il est valable une heure.`), false)
     } finally {
       setEnvoi(false)
     }

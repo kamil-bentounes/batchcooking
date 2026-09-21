@@ -13,7 +13,9 @@
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { MOT_DE_PASSE, amorce, efface } from './amorce.ts'
+import {
+  MOT_DE_PASSE, amorce, efface, lienDeReinitialisation, remetLeMotDePasse,
+} from './amorce.ts'
 import type { Foyer } from './amorce.ts'
 
 let foyer: Foyer
@@ -233,6 +235,45 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
     // Un jeton qui ne correspond à rien doit le DIRE, pas échouer en silence.
     await page.getByRole('button', { name: /^accepter$/i }).click()
     await expect(page.getByText(/ne correspond à rien/i)).toBeVisible({ timeout: 10_000 })
+  })
+
+  test('un lien de réinitialisation EXIGE un nouveau mot de passe', async ({ page }) => {
+    /*
+     * Le test qui existait vérifiait que trois boutons existent et que les
+     * chapeaux diffèrent — il serait resté vert avec le défaut d'origine.
+     * Celui-ci ouvre un VRAI lien de réinitialisation, et vérifie les trois
+     * choses qui comptent :
+     *
+     *  · on atterrit sur l'écran du mot de passe ;
+     *  · il n'offre aucun moyen de le sauter ;
+     *  · et il y survit à un RECHARGEMENT — l'intention était gardée en
+     *    mémoire React, donc perdue au premier rechargement, et l'ancien mot
+     *    de passe redevenait valable.
+     */
+    const erreurs = surveille(page)
+    await page.goto(await lienDeReinitialisation(foyer.email))
+    await expect(page.getByRole('heading', { name: /ton mot de passe/i }))
+      .toBeVisible({ timeout: 15_000 })
+
+    // Aucune porte de sortie : la barre de navigation est faite de liens
+    // pleine page, et elle offrait trois moyens de contourner l'étape.
+    await expect(page.getByRole('link')).toHaveCount(0)
+
+    // Et ça tient au rechargement, parce que l'intention est en base.
+    await page.reload()
+    await expect(page.getByRole('heading', { name: /ton mot de passe/i }))
+      .toBeVisible({ timeout: 15_000 })
+
+    // On pose enfin le nouveau, et on entre.
+    await page.getByLabel(/mot de passe/i).fill('nouveau-mot-de-passe-9')
+    await page.getByRole('button', { name: /enregistrer/i }).click()
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('heading', { name: /ton mot de passe/i })).toHaveCount(0)
+    expect(erreurs.filter(e => !/ServiceWorker|MIME/.test(e))).toEqual([])
+
+    // On remet celui de l'amorce : tous les tests suivants s'y connectent, et
+    // sans cela l'échec apparaissait sur un test sans aucun rapport.
+    await remetLeMotDePasse(foyer)
   })
 
   test('la marque est dans l’onglet ET sur l’accueil', async ({ page }) => {

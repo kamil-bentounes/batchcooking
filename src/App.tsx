@@ -28,15 +28,6 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [foyer, setFoyer] = useState<string | null>(null)
   const [mdpPose, setMdpPose] = useState(true)
-  /**
-   * On revient d'un lien de RÉINITIALISATION.
-   *
-   * C'est ce qui manquait : l'écran du mot de passe ne s'affichait que si
-   * `password_set` valait faux, si bien que quelqu'un qui en avait déjà un
-   * était simplement reconnecté par son lien « mot de passe oublié » — et
-   * n'avait jamais l'occasion d'en poser un nouveau.
-   */
-  const [reinitialise, setReinitialise] = useState(false)
   const [pret, setPret] = useState(false)
   const { ici, va, retour } = useRoute()
 
@@ -57,11 +48,25 @@ export default function App() {
 
   useEffect(() => {
     relire()
-    const { data: sub } = supabase.auth.onAuthStateChange(evenement => {
-      // Supabase émet cet événement quand la session vient d'un lien de
-      // réinitialisation. C'est le seul signal fiable : l'URL est nettoyée
-      // avant qu'on puisse la lire.
-      if (evenement === 'PASSWORD_RECOVERY') setReinitialise(true)
+    const { data: sub } = supabase.auth.onAuthStateChange(async (evenement, s) => {
+      /*
+       * ⚠️ L'intention ne se garde PAS en mémoire React.
+       *
+       *    `PASSWORD_RECOVERY` n'est émis qu'UNE fois, au chargement où le
+       *    fragment d'URL porte `type=recovery` — ensuite Supabase nettoie
+       *    l'URL. Un état React mourait donc au premier rechargement, et
+       *    l'ancien mot de passe redevenait valable : exactement le défaut
+       *    qu'on croyait avoir corrigé. Et la barre de navigation de l'écran
+       *    étant faite de liens `<a href>`, un simple clic rechargeait la page.
+       *
+       *    On l'écrit donc en BASE. La garde redevient `!mdpPose` seule : elle
+       *    survit au rechargement et aux liens par construction, et il n'y a
+       *    plus qu'une seule règle à tenir.
+       */
+      if (evenement === 'PASSWORD_RECOVERY' && s?.user) {
+        await supabase.from('user_profile')
+          .update({ password_set: false }).eq('id', s.user.id)
+      }
       relire()
     })
     return () => sub.subscription.unsubscribe()
@@ -77,16 +82,10 @@ export default function App() {
   if (!session) return <SignIn redirectTo={window.location.href} />
   if (invitation) return <AcceptInvite token={invitation[1]} />
   if (!foyer) return <Onboarding onDone={relire} />
-  // Tant qu'aucun mot de passe n'est posé, on n'entre pas — sinon on repart
-  // sur un lien par mail à chaque connexion. Et au retour d'une
-  // réinitialisation, on le redemande QUOI QU'IL ARRIVE : c'est la raison même
-  // du lien qu'on vient d'ouvrir.
-  if (!mdpPose || reinitialise) {
-    return (
-      <Password userId={session.user.id} change={reinitialise}
-                onDone={() => { setReinitialise(false); relire() }} />
-    )
-  }
+  // Tant qu'aucun mot de passe n'est posé, on n'entre pas — sinon on repart sur
+  // un lien par mail à chaque connexion. Un retour de réinitialisation remet
+  // `password_set` à faux, ce qui range les deux cas sous la même règle.
+  if (!mdpPose) return <Password userId={session.user.id} onDone={relire} />
 
   const moi = session.user.id
   // Retour à l'accueil plutôt qu'à l'historique du navigateur : un passage
@@ -122,7 +121,7 @@ export default function App() {
     // Changer son mot de passe : l'écran existait, sans aucun chemin pour y
     // aller une fois le premier posé.
     case '/motdepasse':
-      return <Password userId={moi} change onDone={() => va('/reglages')} />
+      return <Password userId={moi} onDone={() => va('/reglages')} />
 
     default: return <Accueil userId={moi} va={va} />
   }

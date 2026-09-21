@@ -85,3 +85,28 @@ pour être **regardées**, ce qu'aucune assertion ne remplace.
 > `vite build` prend le mode « production », donc `.env.production`, donc la
 > **base de production** — et le test se connecterait à une base où son foyer
 > n'existe pas.
+
+## L'instance est FERMÉE
+
+`instance_setting.allow_household_creation` vaut `{"enabled": false}` en
+production depuis le 21 septembre 2026. Quelqu'un qui créerait un compte n'irait
+donc nulle part : `create_household()` lui répondra « création de foyer fermée ».
+
+C'était une étape manuelle décrite ici et jamais faite — l'instance a été
+ouverte pendant tout le développement, et n'importe qui pouvait s'y créer un
+foyer, avec le budget LLM qui va avec.
+
+**Rejoindre un foyer ne passe pas par là** : `accept-invite` écrit `user_profile`
+directement, avec l'identifiant du foyer porté par l'invitation. Le verrou
+n'empêche donc personne d'accepter une invitation.
+
+Pour rouvrir, le temps d'ajouter un foyer :
+
+```sql
+update instance_setting set value = '{"enabled": true}'::jsonb
+where key = 'allow_household_creation';
+```
+
+> ⚠️ `signInWithOtp` continue de créer une ligne dans `auth.users` pour
+> n'importe quelle adresse — c'est ce dont l'invitation a besoin. Le verrou
+> arrête la suite, pas la création du compte.

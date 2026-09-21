@@ -187,7 +187,11 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+# Huit, pas six : l'écran en demande huit, et la clé anon étant publique, un
+# contrôle qui ne vit que dans le navigateur ne contrôle rien. Les deux doivent
+# dire la même chose. ⚠️ Ce fichier ne se pousse pas (voir docs/mails.md) — le
+# même réglage est à poser dans le tableau de bord.
+minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""

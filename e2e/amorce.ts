@@ -142,6 +142,41 @@ export async function amorce(): Promise<Foyer> {
   return { email, userId: u.user.id, householdId: foyer.id, cycleId: cycle.id }
 }
 
+/**
+ * Un vrai lien de RÉINITIALISATION, tel que Supabase l'envoie par e-mail.
+ *
+ * C'est la seule façon d'éprouver ce parcours de bout en bout : vérifier que
+ * trois boutons existent ne dit rien de ce qui se passe au retour du lien, et
+ * c'est précisément là que le défaut vivait.
+ */
+export async function lienDeReinitialisation(email: string): Promise<string> {
+  const { data, error } = await db.auth.admin.generateLink({
+    type: 'recovery', email,
+    // ⚠️ Sans cela, le lien redirige vers le `site_url` du projet — la machine
+    //    de développement — et pas vers le serveur de test.
+    options: { redirectTo: 'http://127.0.0.1:4173/' },
+  })
+  if (error) throw error
+  const brut = data.properties.action_link
+  // Le lien passe par `/auth/v1/verify`, qui redirige vers l'application avec
+  // le fragment `#access_token=…&type=recovery`. On garde l'URL telle quelle :
+  // c'est ce que quelqu'un ouvre depuis sa boîte mail.
+  return brut
+}
+
+/**
+ * Remet le mot de passe d'origine.
+ *
+ * Le test de réinitialisation en pose forcément un nouveau — c'est son objet —
+ * et tous les tests suivants se connectent avec celui de l'amorce. Sans cette
+ * remise en état, il les faisait tous échouer derrière lui, et l'échec
+ * apparaissait sur un test sans rapport.
+ */
+export async function remetLeMotDePasse(f: Foyer) {
+  const { error } = await db.auth.admin.updateUserById(f.userId, { password: MOT_DE_PASSE })
+  if (error) throw error
+}
+
 export async function efface(f: Foyer) {
   await db.auth.admin.deleteUser(f.userId)
   await db.from('household').delete().eq('id', f.householdId)
