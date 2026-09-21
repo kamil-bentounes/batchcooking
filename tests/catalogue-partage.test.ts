@@ -167,3 +167,63 @@ describe('les arcs de dépendance', () => {
     expect(error, 'un arc a été écrit sous la recette d’un autre').not.toBeNull()
   })
 })
+
+/**
+ * Les arcs d'une recette PRIVÉE.
+ *
+ * La classe B compte quatre tables, pas trois. `recipe_step_dependency` est
+ * restée en `using (true)` deux migrations de trop : un compte qui ne voyait
+ * pas une étape privée pouvait tout de même repointer l'arc qui la précède, et
+ * le graphe qui ordonne la session s'en allait chez quelqu'un d'autre.
+ */
+describe('les arcs d’une recette qu’on ne voit pas', () => {
+  let arc: { before_id: string; after_id: string }
+  let etrangere: string
+
+  beforeAll(async () => {
+    const { data: r } = await alice.client.from('recipe').insert({
+      title: 'Ordre secret', origin: 'manuelle', visibility: 'privee',
+      owner_household_id: alice.householdId, yield_servings: 2,
+    }).select().single()
+    const { data: e } = await alice.client.from('recipe_step').insert([
+      { recipe_id: r!.id, ordinal: 1, text: 'un' },
+      { recipe_id: r!.id, ordinal: 2, text: 'deux' },
+    ]).select()
+    await alice.client.from('recipe_step_dependency')
+      .insert({ before_id: e![0].id, after_id: e![1].id })
+    arc = { before_id: e![0].id, after_id: e![1].id }
+
+    const { data: c } = await admin().from('recipe_step')
+      .insert({ recipe_id: duCatalogue, ordinal: 9, text: 'ailleurs' }).select().single()
+    etrangere = c!.id
+  })
+
+  it('ne se lisent pas', async () => {
+    const { data } = await bob.client.from('recipe_step_dependency')
+      .select('before_id').eq('after_id', arc.after_id)
+    expect(data ?? [], 'l’ordre d’une recette privée est lisible').toHaveLength(0)
+  })
+
+  it('ne se repointent pas vers une autre recette', async () => {
+    const { data } = await bob.client.from('recipe_step_dependency')
+      .update({ before_id: etrangere }).eq('after_id', arc.after_id).select()
+    expect(data ?? [], 'un arc a été repointé').toHaveLength(0)
+
+    const { data: apres } = await admin().from('recipe_step_dependency')
+      .select('before_id').eq('after_id', arc.after_id).single()
+    expect(apres!.before_id).toBe(arc.before_id)
+  })
+
+  it('mais le catalogue mutualisé reste corrigeable', async () => {
+    // C'est tout l'objet de la classe B (D16) : resserrer ne doit pas fermer.
+    const { data: e } = await admin().from('recipe_step').insert([
+      { recipe_id: duCatalogue, ordinal: 20, text: 'x' },
+      { recipe_id: duCatalogue, ordinal: 21, text: 'y' },
+    ]).select()
+    await admin().from('recipe_step_dependency')
+      .insert({ before_id: e![0].id, after_id: e![1].id })
+    const { error } = await bob.client.from('recipe_step_dependency')
+      .update({ origin: 'confirme' }).eq('after_id', e![1].id)
+    expect(error, `la correction du catalogue a été refusée : ${error?.message}`).toBeNull()
+  })
+})

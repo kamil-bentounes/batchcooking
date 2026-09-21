@@ -5,7 +5,11 @@
 | Classe | Règle | Tables |
 |---|---|---|
 | **A — référentiel** | Lecture : tout authentifié. Écriture : rôle de service. | `food`, `food_yield_factor`, `unit_weight`, `unit_conversion`, `density`, `default_temperature`, `default_duration`, `typical_quantity`, `appliance_catalog`, `ingestion_job`, `instance_setting`, `non_action_pattern`, `suggested_item`, `cycle_transition` |
-| **B — catalogue partagé** | Lecture : tous. `UPDATE` tracé, refusé si `confidence >= 0.8`, et **seulement sur ce que personne ne possède** (`owner_household_id is null`) ou sur ce qui est à soi — 0036/0038. Ni `INSERT` ni `DELETE`. | `recipe`, `recipe_ingredient`, `recipe_step`, `recipe_nutrition`, `recipe_step_dependency` |
+| **B — catalogue partagé** | Lecture : tous. `UPDATE` tracé, refusé si `confidence >= 0.8`, et **seulement sur ce que personne ne possède** (`owner_household_id is null`) ou sur ce qui est à soi — 0036/0038. Ni `INSERT` ni `DELETE`. | `recipe`, `recipe_ingredient`, `recipe_step`, `recipe_step_dependency`, `recipe_nutrition` |
+
+`recipe_nutrition` fait exception à la traçabilité : elle n'a ni
+`edited_by_household_id` ni garde de classe B, donc une correction des macros du
+catalogue mutualisé y reste anonyme (0039).
 
 Une recette peut désormais APPARTENIR à un foyer (`owner_household_id`, 0034) :
 collée, inventée ou importée. Elle n'est alors plus de la classe B mais de la C,

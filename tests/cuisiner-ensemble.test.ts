@@ -184,6 +184,12 @@ describe('ce que le convive ne peut PAS faire', () => {
      *    Envoyer son propre foyer suffisait donc à passer pour l'hôte, puis la
      *    colonne était remise en place et rien n'y paraissait.
      */
+    // ⚠️ `household_id` SEUL : envoyé avec le reste, le test resterait vert
+    //    même si c'était le libellé qui déclenchait le refus.
+    const { error: seul } = await ami.client.from('session_task')
+      .update({ household_id: ami.householdId }).eq('id', geste)
+    expect(seul, 'le foyer envoyé dans la charge a suffi').not.toBeNull()
+
     const { error } = await ami.client.from('session_task').update({
       household_id: ami.householdId, label: 'PIRATE', duration_min: 999,
       planned_start_min: 480, position: 99,
@@ -236,6 +242,98 @@ describe('ce que le convive ne peut PAS faire', () => {
     const { error } = await ami.client.from('session_task')
       .update({ assignee_id: ami.userId }).eq('id', autre!.id)
     expect(error, 'le convive a pris le geste de son hôte').not.toBeNull()
+  })
+})
+
+/**
+ * Ce que la mesure vaut, et à qui appartient un geste.
+ *
+ * Les horodatages ne sont pas des champs de formulaire : ils sont la MESURE
+ * (D48), et elle nourrit les durées par défaut du foyer où l'on a cuisiné. Un
+ * convive qui antidate son geste de cinq heures empoisonne le journal de son
+ * hôte, qui ne peut même pas l'effacer.
+ */
+describe('la mesure ne se dicte pas', () => {
+  let session: { hote: Actor; convive: Actor; cycle: string; geste: string }
+
+  beforeAll(async () => {
+    const h = await makeActor('mes-h')
+    const c = await makeActor('mes-c')
+    await amis(h, c)
+    const { data: cy } = await admin().from('cycle')
+      .insert({ household_id: h.householdId, week_of: '2029-09-03', state: 'en_cuisine' })
+      .select().single()
+    const { data: t } = await admin().from('session_task').insert({
+      cycle_id: cy!.id, household_id: h.householdId, label: 'Éplucher les pommes de terre',
+      verb: 'eplucher', quantity_g: 800, duration_min: 8, planned_start_min: 0,
+    }).select().single()
+    await h.client.from('session_convive')
+      .insert({ cycle_id: cy!.id, hote_id: h.householdId, invite_id: c.householdId })
+    await c.client.from('session_convive')
+      .update({ rejoint_le: new Date().toISOString() }).eq('cycle_id', cy!.id)
+    session = { hote: h, convive: c, cycle: cy!.id, geste: t!.id }
+  })
+
+  it('repose l’heure de début, quoi qu’en dise le client', async () => {
+    const ilYA5h = new Date(Date.now() - 5 * 3600_000).toISOString()
+    const { error } = await session.convive.client.from('session_task')
+      .update({ assignee_id: session.convive.userId, started_at: ilYA5h })
+      .eq('id', session.geste)
+    expect(error, `refusé : ${error?.message}`).toBeNull()
+
+    const { data } = await admin().from('session_task')
+      .select('started_at').eq('id', session.geste).single()
+    const ecart = Math.abs(Date.now() - new Date(data!.started_at!).getTime())
+    expect(ecart, 'le client a antidaté son geste').toBeLessThan(60_000)
+  })
+
+  it('n’empoisonne donc pas le journal de durées de l’hôte', async () => {
+    await session.convive.client.from('session_task')
+      .update({ done_at: new Date().toISOString() }).eq('id', session.geste)
+    const { data } = await admin().from('duration_observation')
+      .select('actual_min').eq('household_id', session.hote.householdId)
+    expect(data ?? [], 'rien n’a été observé').toHaveLength(1)
+    expect(Number(data![0].actual_min), 'cinq heures pour éplucher des pommes de terre')
+      .toBeLessThan(5)
+  })
+
+  it('ne change pas l’identifiant d’un geste', async () => {
+    const { error } = await session.convive.client.from('session_task')
+      .update({ id: crypto.randomUUID() }).eq('id', session.geste)
+    expect(error, 'un geste a changé d’identifiant sous son hôte').not.toBeNull()
+  })
+
+  it('rend le geste qu’on a pris, et seulement celui-là', async () => {
+    const { data: t } = await admin().from('session_task').insert({
+      cycle_id: session.cycle, household_id: session.hote.householdId,
+      label: 'Laver la salade', duration_min: 2, planned_start_min: 5,
+    }).select().single()
+
+    await session.convive.client.from('session_task')
+      .update({ assignee_id: session.convive.userId, started_at: new Date().toISOString() })
+      .eq('id', t!.id)
+    const { error } = await session.convive.client.from('session_task')
+      .update({ assignee_id: null, started_at: null }).eq('id', t!.id)
+    expect(error, `on ne peut pas rendre son propre geste : ${error?.message}`).toBeNull()
+  })
+
+  it('laisse passer le rôle de service', async () => {
+    // ⚠️ `security definer` fait de `current_user` le propriétaire de la
+    //    fonction : `current_user = 'service_role'` était devenu du code mort,
+    //    et le premier script de réparation s'y serait cassé les dents.
+    const { error } = await admin().from('session_task')
+      .update({ label: 'Corrigé par le service', planned_start_min: 42 })
+      .eq('id', session.geste)
+    expect(error, `le rôle de service a été refusé : ${error?.message}`).toBeNull()
+
+    const { data: c } = await admin().from('cycle')
+      .insert({ household_id: session.convive.householdId, week_of: '2029-10-01' })
+      .select().single()
+    const { error: inv } = await admin().from('session_convive').insert({
+      cycle_id: c!.id, hote_id: session.convive.householdId,
+      invite_id: session.hote.householdId,
+    })
+    expect(inv, `le service ne peut pas créer d’invitation : ${inv?.message}`).toBeNull()
   })
 })
 

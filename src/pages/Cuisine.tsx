@@ -76,6 +76,17 @@ export function Cuisine({ userId, va, cycleId }:
               texte={invite
                 ? 'Ton hôte l’a terminée, ou ne t’y attend plus.'
                 : undefined} />
+        {/* Sans ce bouton, la ligne d'invitation survivait à la session et
+            l'écran n'offrait aucune sortie : il fallait attendre que l'hôte y
+            pense. */}
+        {invite && (
+          <button onClick={async () => { await quitte.mutateAsync(cycleId!); va('/') }}
+                  disabled={quitte.isPending}
+                  className="mt-8 w-full h-[52px] rounded-[16px] bg-safran text-encre
+                             text-[16px] font-medium">
+            Quitter cette session
+          </button>
+        )}
       </Sombre>
     )
   }
