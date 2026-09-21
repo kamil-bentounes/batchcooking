@@ -21,7 +21,9 @@ import { useEffect, useState } from 'react'
 import { Attente, Erreur, Vide, duree } from '../ui/coque.tsx'
 import { useChangeEtat, useCycle, useCycleParId } from '../lib/donnees/cycle.ts'
 import { useFoyer } from '../lib/donnees/foyer.ts'
-import { useConvives, usePrenoms } from '../lib/donnees/convives.ts'
+import {
+  useConvives, usePrenoms, useQuitteSession, useRetireConvive,
+} from '../lib/donnees/convives.ts'
 import { useTempsReel } from '../lib/temps-reel.ts'
 import {
   avancement, useCommenceAction, usePlanEnregistre, useTermineAction,
@@ -45,6 +47,8 @@ export function Cuisine({ userId, va, cycleId }:
   const prend = useCommenceAction()
   const termine = useTermineAction()
   const change = useChangeEtat()
+  const retire = useRetireConvive()
+  const quitte = useQuitteSession()
 
   // L'horloge de la session (D47) : une seconde suffit, et on l'arrête en
   // sortant pour ne pas faire tourner un intervalle dans le vide.
@@ -54,8 +58,29 @@ export function Cuisine({ userId, va, cycleId }:
     return () => clearInterval(t)
   }, [])
 
+  /*
+   * ⚠️ L'ordre des gardes compte, et il était faux.
+   *
+   *    `usePlanEnregistre(undefined)` est désactivé, donc `isPending` reste
+   *    vrai POUR TOUJOURS quand il n'y a pas de cycle. Un convive dont
+   *    l'invitation vient d'être retirée — ou qui suit un lien périmé —
+   *    tombait sur « Un instant… » éternel au lieu d'un écran qui explique.
+   */
+  if (cycleId ? chezUnAmi.isPending : chezMoi.isPending) {
+    return <Sombre><Attente /></Sombre>
+  }
+  if (!cycle) {
+    return (
+      <Sombre>
+        <Vide titre={invite ? 'Cette session n’est plus ouverte' : 'Aucune session en cours'}
+              texte={invite
+                ? 'Ton hôte l’a terminée, ou ne t’y attend plus.'
+                : undefined} />
+      </Sombre>
+    )
+  }
   if (isPending) return <Sombre><Attente /></Sombre>
-  if (!cycle || plan.length === 0) {
+  if (plan.length === 0) {
     return <Sombre><Vide titre="Aucune session en cours" /></Sombre>
   }
 
@@ -87,13 +112,26 @@ export function Cuisine({ userId, va, cycleId }:
         </span>
       </header>
 
-      {/* Qui d'autre est là. On ne l'affiche que s'il y a quelqu'un. */}
+      {/*
+        * Qui d'autre est là — et le moyen de le faire partir.
+        *
+        * Sans ce bouton, convier était irréversible depuis l'application : la
+        * seule façon de refermer une session partagée aurait été de rompre
+        * l'amitié.
+        */}
       {convives.length > 0 && (
-        <p className="mt-2.5 text-[13px] opacity-55">
-          {convives.filter(c => c.rejoint).length > 0
-            ? `Avec ${convives.filter(c => c.rejoint).map(c => c.nom).join(', ')}.`
-            : `${convives.map(c => c.nom).join(', ')} — invité${convives.length > 1 ? 's' : ''}, pas encore là.`}
-        </p>
+        <ul className="mt-2.5 space-y-1" aria-label="Convives">
+          {convives.map(c => (
+            <li key={c.id} className="flex items-center gap-2 text-[13px] opacity-55">
+              <span className="grow">
+                {c.nom}{c.rejoint ? '' : ' — invité, pas encore là'}
+              </span>
+              <button onClick={() => retire.mutate({ id: c.id, cycleId: cycle.id })}
+                      disabled={retire.isPending}
+                      className="px-2 py-1 text-safran">Retirer</button>
+            </li>
+          ))}
+        </ul>
       )}
       {invite && (
         <p className="mt-2.5 text-[13px] opacity-55">
@@ -204,7 +242,9 @@ export function Cuisine({ userId, va, cycleId }:
       )}
 
       <button onClick={async () => {
-        if (invite) { va('/'); return }
+        // Quitter, c'est partir pour de bon : sinon la ligne survit, l'accueil
+        // reproposerait la session et la lecture resterait ouverte.
+        if (invite) { await quitte.mutateAsync(cycle.id); va('/'); return }
         await change.mutateAsync({ id: cycle.id, vers: 'interrompue' })
         va('/')
       }}

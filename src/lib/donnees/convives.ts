@@ -128,24 +128,40 @@ export type Invitation = {
   rejoint: boolean
 }
 
-/** Les sessions où l'on m'attend. C'est ce que l'accueil montre en haut. */
+/**
+ * Les sessions où l'on m'attend. C'est ce que l'accueil montre en haut.
+ *
+ * ⚠️ Par une fonction en base, et pas par une lecture de `session_convive`.
+ *
+ *    Tant qu'on n'a pas rejoint, on ne peut pas lire le cycle — c'est voulu —
+ *    donc on ne peut pas savoir si la session est encore vivante. L'accueil
+ *    affichait « Alice t'invite à cuisiner » indéfiniment, sur une session
+ *    close depuis des semaines. La fonction, elle, voit les deux côtés.
+ */
 export function useInvitations() {
   return useQuery({
     queryKey: CLE.invitations,
     queryFn: async (): Promise<Invitation[]> => {
-      const mien = ou(await supabase.rpc('current_household'))
-      if (!mien) return []
-      const lignes = ou(await supabase.from('session_convive')
-        .select('id, cycle_id, hote_id, rejoint_le').eq('invite_id', mien))
+      const lignes = ou(await supabase.rpc('invitations_de_session'))
       const noms = await foyersNommes()
       return lignes.map(l => ({
         id: l.id,
         cycle_id: l.cycle_id,
         nom: noms.get(l.hote_id) ?? 'Un foyer',
-        rejoint: l.rejoint_le !== null,
+        rejoint: l.rejoint,
       }))
     },
     staleTime: 15_000,
+  })
+}
+
+/** S'en aller d'une session où l'on était convié. */
+export function useQuitteSession() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (cycleId: string) =>
+      ou(await supabase.from('session_convive').delete().eq('cycle_id', cycleId).select()),
+    onSuccess: () => qc.invalidateQueries(),
   })
 }
 

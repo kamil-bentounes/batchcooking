@@ -1,17 +1,37 @@
 # Schéma
 
-41 tables, trois classes d'isolation. Toute policy RLS découle de la classe.
+44 tables, trois classes d'isolation. Toute policy RLS découle de la classe.
 
 | Classe | Règle | Tables |
 |---|---|---|
 | **A — référentiel** | Lecture : tout authentifié. Écriture : rôle de service. | `food`, `food_yield_factor`, `unit_weight`, `unit_conversion`, `density`, `default_temperature`, `default_duration`, `typical_quantity`, `appliance_catalog`, `ingestion_job`, `instance_setting`, `non_action_pattern`, `suggested_item`, `cycle_transition` |
-| **B — catalogue partagé** | Lecture : tous. `UPDATE` tracé, refusé si `confidence >= 0.8`. Ni `INSERT` ni `DELETE`. | `recipe`, `recipe_ingredient`, `recipe_step`, `recipe_step_dependency` |
+| **B — catalogue partagé** | Lecture : tous. `UPDATE` tracé, refusé si `confidence >= 0.8`, et **seulement sur ce que personne ne possède** (`owner_household_id is null`) ou sur ce qui est à soi — 0036/0038. Ni `INSERT` ni `DELETE`. | `recipe`, `recipe_ingredient`, `recipe_step`, `recipe_nutrition`, `recipe_step_dependency` |
+
+Une recette peut désormais APPARTENIR à un foyer (`owner_household_id`, 0034) :
+collée, inventée ou importée. Elle n'est alors plus de la classe B mais de la C,
+et sa colonne `visibility` (`privee` / `partagee` / `publique`, 0035) décide qui
+la lit. C'est une colonne de DROITS : seul le foyer propriétaire y touche, et
+`created_by` non plus ne se réécrit pas.
 
 `recipe_step` porte `verb` et `quantity_g` (migration 0019) : la fusion des
 gestes entre recettes (D35) compare des verbes, pas des phrases, et la mesure
 des durées (D48) s'agrège par verbe — une étape n'est jamais refaite, un verbe
 l'est toutes les semaines. Remplis par l'ingestion, voir [`ingestion.md`](ingestion.md).
-| **C — foyer** | RLS stricte, trois formes de prédicat. | `household`, `user_profile`, `nutrition_target`, `invitation`, `llm_usage` + les 18 tables du lot 1 et les 6 des lots 0c et 5 (ci-dessous) |
+| **C — foyer** | RLS stricte, trois formes de prédicat. | `household`, `user_profile`, `nutrition_target`, `invitation`, `llm_usage`, `foyer_ami`, `session_convive` + les 18 tables du lot 1 et les 6 des lots 0c et 5 (ci-dessous) |
+
+Deux tables ouvrent une brèche *nommée* dans la classe C, et une seule à la fois :
+
+- `foyer_ami` (0035) — l'amitié entre deux foyers, symétrique et explicite. Elle
+  ouvre la LECTURE des recettes `partagee` de l'autre, et rien d'autre.
+- `session_convive` (0037, resserrée par 0038) — un foyer ami convié à une
+  session de cuisine. Il lit le plan et prend des gestes tant que trois choses
+  tiennent ENSEMBLE : il a accepté, le cycle est vivant (`pret`, `en_cuisine`,
+  `dressage`) et l'amitié tient encore. Un trigger gèle tout le reste : il
+  cuisine, il ne réécrit pas.
+
+`session_task` est publiée en temps réel (`supabase_realtime`, 0037). La RLS
+s'applique au flux — sauf aux événements DELETE, que Supabase ne filtre pas ;
+leur charge ne porte que l'identifiant.
 
 ## Les tables du lot 1
 

@@ -218,6 +218,23 @@ describe('qui a le droit de réécrire une recette', () => {
     expect(apres!.visibility).toBe('partagee')
   })
 
+  it('ne réécrit pas non plus ses étapes ni ses ingrédients', async () => {
+    // Cadrer `recipe` sans cadrer ses tables filles ne protège rien : ce qui
+    // les tenait n'était que l'impossibilité de lire, et partager la lève.
+    const { data: e } = await admin().from('recipe_step')
+      .insert({ recipe_id: partagee, ordinal: 1, text: 'Faire revenir l’oignon.' })
+      .select().single()
+    const { data: ecrit } = await bob.client.from('recipe_step')
+      .update({ text: 'AMI RÉÉCRIT' }).eq('id', e!.id).select()
+    expect(ecrit ?? [], 'un ami a réécrit une étape').toHaveLength(0)
+
+    const { data: i } = await admin().from('recipe_ingredient')
+      .insert({ recipe_id: partagee, ordinal: 1, raw_text: '1 oignon' }).select().single()
+    const { data: ing } = await bob.client.from('recipe_ingredient')
+      .update({ raw_text: 'AMI RÉÉCRIT', qty: 9999 }).eq('id', i!.id).select()
+    expect(ing ?? [], 'un ami a réécrit un ingrédient').toHaveLength(0)
+  })
+
   it('le foyer propriétaire, lui, décide de tout', async () => {
     const { error } = await alice.client.from('recipe')
       .update({ visibility: 'publique', title: 'Dahl corail' }).eq('id', partagee)

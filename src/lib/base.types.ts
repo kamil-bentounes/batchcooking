@@ -2412,6 +2412,15 @@ export type Database = {
       export_my_data: { Args: never; Returns: Json }
       export_my_data_base: { Args: never; Returns: Json }
       foyers_amis: { Args: never; Returns: string[] }
+      invitations_de_session: {
+        Args: never
+        Returns: {
+          cycle_id: string
+          hote_id: string
+          id: string
+          rejoint: boolean
+        }[]
+      }
       is_service_role: { Args: never; Returns: boolean }
       lieu_du_rayon: { Args: { rayon: string }; Returns: string }
       llm_budget_remaining: { Args: never; Returns: number }

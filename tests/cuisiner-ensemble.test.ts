@@ -36,7 +36,8 @@ beforeAll(async () => {
   await amis(hote, ami)
 
   const { data: c } = await admin().from('cycle')
-    .insert({ household_id: hote.householdId, week_of: '2029-03-05' }).select().single()
+    .insert({ household_id: hote.householdId, week_of: '2029-03-05', state: 'en_cuisine' })
+    .select().single()
   cycle = c!.id
 
   // Une recette PRIVÉE : le convive doit pouvoir en lire le titre pendant la
@@ -167,6 +168,139 @@ describe('une fois entré', () => {
   })
 })
 
+/**
+ * Les quatre façons de passer sous la frontière.
+ *
+ * Chacune a marché une fois. Ce qui les réunit : la frontière était annoncée
+ * par un commentaire et tenue par un seul verrou, toujours placé un cran trop
+ * loin — la ligne plutôt que la colonne, la recette plutôt que ses lignes,
+ * l'instant de l'invitation plutôt que celui de la lecture.
+ */
+describe('ce que le convive ne peut PAS faire', () => {
+  it('ne se fait pas passer pour l’hôte en envoyant son propre foyer', async () => {
+    /*
+     * ⚠️ `household_id` est envoyé par le CLIENT, et `tg_derive_household` ne
+     *    le repose qu'APRÈS le contrôle (ordre alphabétique des triggers).
+     *    Envoyer son propre foyer suffisait donc à passer pour l'hôte, puis la
+     *    colonne était remise en place et rien n'y paraissait.
+     */
+    const { error } = await ami.client.from('session_task').update({
+      household_id: ami.householdId, label: 'PIRATE', duration_min: 999,
+      planned_start_min: 480, position: 99,
+    }).eq('id', geste)
+    expect(error, 'le foyer envoyé dans la charge a suffi').not.toBeNull()
+
+    const { data } = await admin().from('session_task')
+      .select('label, household_id').eq('id', geste).single()
+    expect(data!.label).toBe('Émincer 500 g d’oignons')
+    expect(data!.household_id).toBe(hote.householdId)
+  })
+
+  it('ne réécrit ni les étapes ni les ingrédients de la recette de son hôte', async () => {
+    // 0036 avait cadré `recipe` et laissé ses tables filles en `using (true)` :
+    // seule l'impossibilité de LIRE les protégeait, et la session l'a levée.
+    const { data: e } = await admin().from('recipe_step')
+      .insert({ recipe_id: recette, ordinal: 1, text: 'Émincer les oignons.' })
+      .select().single()
+    const { data: i } = await admin().from('recipe_ingredient')
+      .insert({ recipe_id: recette, ordinal: 1, raw_text: '2 oignons' }).select().single()
+
+    const { data: etapes } = await ami.client.from('recipe_step')
+      .update({ text: 'RÉÉCRIT' }).eq('id', e!.id).select()
+    expect(etapes ?? [], 'le convive a réécrit une étape').toHaveLength(0)
+    const { data: ing } = await ami.client.from('recipe_ingredient')
+      .update({ raw_text: 'RÉÉCRIT' }).eq('id', i!.id).select()
+    expect(ing ?? [], 'le convive a réécrit un ingrédient').toHaveLength(0)
+
+    const { data: apres } = await admin().from('recipe_step')
+      .select('text').eq('id', e!.id).single()
+    expect(apres!.text).toBe('Émincer les oignons.')
+  })
+
+  it('ne défait pas un geste, ne dicte pas la durée, ne prend pas celui d’un autre', async () => {
+    // Le geste a été pris et terminé par le convive lui-même plus haut.
+    for (const champ of [{ done_at: null }, { actual_min: 999 }, { started_at: null },
+                         { created_at: new Date().toISOString() }]) {
+      const { error } = await ami.client.from('session_task').update(champ).eq('id', geste)
+      expect(error, `le convive a écrit ${Object.keys(champ)[0]}`).not.toBeNull()
+    }
+
+    // Et un geste déjà pris par l'hôte ne se reprend pas.
+    const { data: autre } = await admin().from('session_task').insert({
+      cycle_id: cycle, household_id: hote.householdId, label: 'Râper le gingembre',
+      duration_min: 3, planned_start_min: 10,
+    }).select().single()
+    await hote.client.from('session_task')
+      .update({ assignee_id: hote.userId, started_at: new Date().toISOString() })
+      .eq('id', autre!.id)
+    const { error } = await ami.client.from('session_task')
+      .update({ assignee_id: ami.userId }).eq('id', autre!.id)
+    expect(error, 'le convive a pris le geste de son hôte').not.toBeNull()
+  })
+})
+
+/**
+ * Une invitation vaut pour UNE session, et tant qu'on est amis.
+ *
+ * `session_convive` n'a ni expiration ni lien avec l'état du cycle : la seule
+ * façon honnête de refermer est de le demander à chaque lecture.
+ */
+describe('ce qui referme la session', () => {
+  async function sessionAvecUnConvive(nom: string, semaine: string) {
+    const h = await makeActor(`${nom}-h`)
+    const c = await makeActor(`${nom}-c`)
+    await amis(h, c)
+    const { data: cy } = await admin().from('cycle')
+      .insert({ household_id: h.householdId, week_of: semaine, state: 'en_cuisine' })
+      .select().single()
+    await admin().from('session_task').insert({
+      cycle_id: cy!.id, household_id: h.householdId, label: 'Mélanger',
+      duration_min: 2, planned_start_min: 0,
+    })
+    await h.client.from('session_convive')
+      .insert({ cycle_id: cy!.id, hote_id: h.householdId, invite_id: c.householdId })
+    await c.client.from('session_convive')
+      .update({ rejoint_le: new Date().toISOString() }).eq('cycle_id', cy!.id)
+    const { data: vu } = await c.client.from('session_task').select('id')
+    expect(vu ?? [], 'l’amorce a échoué : le convive ne voyait déjà rien').toHaveLength(1)
+    return { hote: h, convive: c, cycle: cy!.id }
+  }
+
+  it('la fin de la session', async () => {
+    const s = await sessionAvecUnConvive('fin', '2029-05-07')
+    await s.hote.client.from('cycle').update({ state: 'interrompue' }).eq('id', s.cycle)
+    const { data } = await s.convive.client.from('session_task').select('id')
+    expect(data ?? [], 'la session close reste ouverte au convive').toHaveLength(0)
+  })
+
+  it('la rupture de l’amitié', async () => {
+    const s = await sessionAvecUnConvive('rupture', '2029-06-04')
+    const { data: liens } = await s.hote.client.from('foyer_ami').select('id')
+    await s.hote.client.from('foyer_ami').delete().eq('id', liens![0].id)
+    const { data } = await s.convive.client.from('session_task').select('id')
+    expect(data ?? [], 'un ami d’un dimanche cuisine pour toujours').toHaveLength(0)
+  })
+
+  it('le retrait par l’hôte, et le départ du convive', async () => {
+    const s = await sessionAvecUnConvive('retrait', '2029-07-02')
+    const { data: parti } = await s.convive.client.from('session_convive')
+      .delete().eq('cycle_id', s.cycle).select()
+    expect(parti ?? [], 'le convive ne peut pas s’en aller').toHaveLength(1)
+    const { data } = await s.convive.client.from('session_task').select('id')
+    expect(data ?? [], 'la session suit celui qui l’a quittée').toHaveLength(0)
+  })
+
+  it('l’accueil ne propose que des sessions vivantes', async () => {
+    const s = await sessionAvecUnConvive('accueil', '2029-08-06')
+    const { data: avant } = await s.convive.client.rpc('invitations_de_session')
+    expect(avant ?? [], 'la session vivante ne s’affiche pas').toHaveLength(1)
+
+    await s.hote.client.from('cycle').update({ state: 'interrompue' }).eq('id', s.cycle)
+    const { data: apres } = await s.convive.client.rpc('invitations_de_session')
+    expect(apres ?? [], 'une session close reste affichée à l’accueil').toHaveLength(0)
+  })
+})
+
 describe('quand l’invitation est retirée', () => {
   beforeAll(async () => {
     const { error } = await hote.client.from('session_convive').delete().eq('cycle_id', cycle)
@@ -203,7 +337,8 @@ describe('être prévenu', () => {
     await amis(hoteBis, convive)
 
     const { data: c, error } = await admin().from('cycle')
-      .insert({ household_id: hoteBis.householdId, week_of: '2029-04-02' }).select().single()
+      .insert({ household_id: hoteBis.householdId, week_of: '2029-04-02', state: 'en_cuisine' })
+      .select().single()
     expect(error, `l'amorce a échoué : ${error?.message}`).toBeNull()
     cycleBis = c!.id
     const { data: t } = await admin().from('session_task').insert({
