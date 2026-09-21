@@ -87,14 +87,28 @@ describe('l’ordre des rayons', () => {
     expect(refus?.message, 'un article a désigné le magasin d’un autre foyer')
       .toMatch(/pas au foyer/)
 
-    // On la pose quand même par le rôle de service, pour éprouver la SECONDE
-    // barrière : le jour où la première céderait, celle-ci doit tenir seule.
+    /*
+     * ⚠️ On la pose ET on la coche par le rôle de service.
+     *
+     *    C'est tout l'objet du test : éprouver la SECONDE barrière, celle qui
+     *    doit tenir seule le jour où la première céderait. Cocher depuis le
+     *    client se ferait maintenant refuser par la première — le trigger
+     *    d'apprentissage ne tournerait jamais, et l'assertion finale
+     *    deviendrait vraie sans rien prouver. Un test vert qui n'exécute plus
+     *    le code qu'il surveille est pire que pas de test.
+     */
     const { data: a } = await admin().from('shopping_item').insert({
       cycle_id: cycleA, household_id: alice.householdId, store_id: magasinB,
       label: 'sonde', aisle: 'Frais',
     }).select().single()
-    await alice.client.from('shopping_item')
+    const { error: coche } = await admin().from('shopping_item')
       .update({ checked_at: new Date().toISOString() }).eq('id', a!.id)
+    expect(coche, `le cochage d'amorce a échoué : ${coche?.message}`).toBeNull()
+
+    // Et l'apprentissage a bien tourné — sinon la suite ne prouverait rien.
+    const { data: stock } = await admin().from('stock_item')
+      .select('id').eq('shopping_item_id', a!.id)
+    expect(stock ?? [], 'le trigger d’apprentissage n’a pas tourné').toHaveLength(1)
 
     const { data } = await admin().from('aisle_order')
       .select('position').eq('store_id', magasinB).eq('aisle', 'Frais').single()

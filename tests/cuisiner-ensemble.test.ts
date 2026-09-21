@@ -482,6 +482,16 @@ describe('ce que la session ne donne PAS à voir', () => {
     expect(error?.message, 'un geste a été poussé chez l’hôte')
       .toMatch(/ne change pas de session/)
 
+    // Et pas davantage en INSÉRANT directement : le `with check` de l'INSERT
+    // ne porte pas le disjoint de session, à la différence de celui de
+    // l'UPDATE. C'est la RLS qui refuse ici, pas le trigger — donc on le
+    // vérifie plutôt que de le supposer.
+    const { error: pose } = await s.convive.client.from('session_task').insert({
+      cycle_id: s.cycle, household_id: s.convive.householdId,
+      label: 'INSÉRÉ PAR LE CONVIVE', duration_min: 5, planned_start_min: 0,
+    })
+    expect(pose, 'le convive a inséré un geste chez son hôte').not.toBeNull()
+
     const { data: chezLHote } = await admin().from('session_task')
       .select('id').eq('cycle_id', s.cycle)
     expect(chezLHote ?? [], 'la session de l’hôte a gagné un geste').toHaveLength(0)
