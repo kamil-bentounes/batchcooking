@@ -293,7 +293,15 @@ describe('la mesure ne se dicte pas', () => {
      * c'est voulu : il a cuisiné dans cette cuisine-là. Ce qu'il ne peut pas,
      * c'est en choisir la valeur. Ici il a pris le geste il y a un instant :
      * la mesure vaut une fraction de minute, pas les cinq heures annoncées.
+     *
+     * ⚠️ On reprend le geste ici plutôt que de compter sur le test précédent :
+     *    un test qui ne se rejoue pas seul ne prouve rien le jour où on le
+     *    lance seul, c'est-à-dire le jour où il échoue.
      */
+    await session.convive.client.from('session_task')
+      .update({ assignee_id: session.convive.userId,
+                started_at: new Date(Date.now() - 5 * 3600_000).toISOString() })
+      .eq('id', session.geste)
     await session.convive.client.from('session_task')
       .update({ done_at: new Date().toISOString() }).eq('id', session.geste)
     const { data } = await admin().from('duration_observation')

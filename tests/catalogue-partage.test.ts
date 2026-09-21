@@ -256,13 +256,65 @@ describe('les arcs d’une recette qu’on ne voit pas', () => {
     const { data: ailleurs } = await admin().from('recipe_step')
       .insert({ recipe_id: autre!.id, ordinal: 1, text: 'ailleurs' }).select().single()
 
-    const { data: melange } = await bob.client.from('recipe_step_dependency')
+    // Un seul bout : la paire intermédiaire enjambe deux recettes.
+    const { data: unBout } = await bob.client.from('recipe_step_dependency')
       .update({ before_id: ailleurs!.id }).eq('after_id', e![1].id).select()
-    expect(melange ?? [], 'un arc relie deux recettes différentes').toHaveLength(0)
+    expect(unBout ?? [], 'un arc relie deux recettes différentes').toHaveLength(0)
+
+    /*
+     * ⚠️ LES DEUX BOUTS D'UN COUP, et c'est là que tout se joue.
+     *
+     *    Une policy juge l'ANCIENNE paire dans son `using` et la NOUVELLE dans
+     *    son `with check` — chacune cohérente de son côté, jamais comparée à
+     *    l'autre. La RLS ne sait pas dire « la même recette qu'avant » : il
+     *    faut un trigger. Trois migrations de suite ont échoué ici.
+     */
+    const { data: autreEtape } = await admin().from('recipe_step')
+      .insert({ recipe_id: autre!.id, ordinal: 2, text: 'et sa suite' }).select().single()
+    const { data: lesDeux, error } = await bob.client.from('recipe_step_dependency')
+      .update({ before_id: ailleurs!.id, after_id: autreEtape!.id })
+      .eq('after_id', e![1].id).select()
+    expect(error, 'un arc a changé de recette en déplaçant ses deux bouts').not.toBeNull()
+    expect(lesDeux ?? [], 'un arc a changé de recette').toHaveLength(0)
 
     const { data: apres } = await admin().from('recipe_step_dependency')
       .select('before_id').eq('after_id', e![1].id).single()
     expect(apres!.before_id).toBe(e![0].id)
+  })
+
+  it('ne se posent pas dans le catalogue par la bande', async () => {
+    /*
+     * Le geste le plus retors : l'INSERT direct dans le catalogue est refusé,
+     * alors on pose l'arc chez soi — ce qui est permis — et on le déménage.
+     * Sans l'interdiction de CHANGER de recette, on insérait dans le catalogue
+     * sans jamais en avoir eu le droit, et dans le sens qu'on voulait.
+     */
+    const { data: mienne } = await bob.client.from('recipe').insert({
+      title: 'Le cheval de Troie', origin: 'manuelle',
+      owner_household_id: bob.householdId, yield_servings: 2,
+    }).select().single()
+    const { data: siennes } = await bob.client.from('recipe_step').insert([
+      { recipe_id: mienne!.id, ordinal: 1, text: 'un' },
+      { recipe_id: mienne!.id, ordinal: 2, text: 'deux' },
+    ]).select()
+    const { error: pose } = await bob.client.from('recipe_step_dependency')
+      .insert({ before_id: siennes![0].id, after_id: siennes![1].id })
+    expect(pose, `poser chez soi a été refusé : ${pose?.message}`).toBeNull()
+
+    // Deux étapes du catalogue, dans l'ordre inverse : de quoi fabriquer une
+    // boucle chez tous les foyers qui planifient cette recette.
+    const { data: cat } = await admin().from('recipe_step').insert([
+      { recipe_id: duCatalogue, ordinal: 40, text: 'd’abord' },
+      { recipe_id: duCatalogue, ordinal: 41, text: 'ensuite' },
+    ]).select()
+    const { error } = await bob.client.from('recipe_step_dependency')
+      .update({ before_id: cat![1].id, after_id: cat![0].id })
+      .eq('after_id', siennes![1].id)
+    expect(error, 'un arc a été poussé dans le catalogue').not.toBeNull()
+
+    const { data: dansLeCatalogue } = await admin().from('recipe_step_dependency')
+      .select('before_id').eq('after_id', cat![0].id)
+    expect(dansLeCatalogue ?? [], 'le catalogue a gagné un arc').toHaveLength(0)
   })
 
   it('ne se posent pas depuis l’étape d’un autre', async () => {
