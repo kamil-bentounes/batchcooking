@@ -12,6 +12,15 @@ import { admin, makeActor, type Actor } from './helpers/db'
 let alice: Actor
 let bob: Actor
 let duCatalogue: string
+/**
+ * Un titre UNIQUE par exécution.
+ *
+ * La base locale n'est pas remise à zéro entre deux `npm test`, et le dernier
+ * cas de ce fichier passe la recette en « partagée » : au second passage,
+ * celle du premier était donc légitimement visible, et le test échouait sur
+ * son propre résidu.
+ */
+const SECRET = `SECRET DU FOYER A ${Date.now()}`
 
 beforeAll(async () => {
   alice = await makeActor('cat-alice')
@@ -73,7 +82,7 @@ describe('une recette privée reste privée', () => {
 
   it('ne se lit pas depuis un autre foyer', async () => {
     const { data } = await alice.client.from('recipe').insert({
-      title: 'SECRET DU FOYER A', origin: 'manuelle',
+      title: SECRET, origin: 'manuelle',
       owner_household_id: alice.householdId, visibility: 'privee',
       yield_servings: 4, plannable: true,
     }).select().single()
@@ -91,7 +100,7 @@ describe('une recette privée reste privée', () => {
     const { data } = await bob.client.from('recipe')
       .select('id, title').eq('plannable', true).limit(200)
     expect((data ?? []).map(r => r.title), 'la recette privée est au catalogue')
-      .not.toContain('SECRET DU FOYER A')
+      .not.toContain(SECRET)
   })
 
   it('cache aussi ses ingrédients, ses étapes et ses macros', async () => {

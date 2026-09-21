@@ -33,7 +33,9 @@ async function connecte(page: Page) {
   await page.goto('/')
   await page.getByLabel(/e-?mail/i).fill(foyer.email)
   await page.getByLabel(/mot de passe/i).fill(MOT_DE_PASSE)
-  await page.getByRole('button', { name: /connexion|se connecter|entrer/i }).click()
+  // ⚠️ `exact`, parce que « Première connexion » matche aussi /connexion/ :
+  //    un sélecteur large rendait deux boutons et faisait échouer les 25 tests.
+  await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
   // L'accueil porte le prénom : c'est le signe que la session ET le foyer sont là.
   await expect(page.getByRole('button', { name: /réglages|kamil/i }).first())
     .toBeVisible({ timeout: 15_000 })
