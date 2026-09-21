@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase, callFunction } from '../lib/supabase'
 import { lienDeploye } from '../lib/route.ts'
-import { useCreeMagasin, useMagasins, useSupprimeMagasin } from '../lib/donnees/foyer.ts'
+import { useCreeMagasin, useFoyer, useMagasins, useSupprimeMagasin } from '../lib/donnees/foyer.ts'
+import { useAmis, useInviteAmi, useRompAmitie } from '../lib/donnees/amis.ts'
+import { Attente, Erreur } from '../ui/coque.tsx'
 import { Page, Groupe, Bouton, Champ, Message } from '../ui/kit'
 
 export function Settings({ va }: { va: (v: string) => void }) {
@@ -138,6 +140,16 @@ export function Settings({ va }: { va: (v: string) => void }) {
       </section>
 
       <section className="mt-12">
+        <h2 className="titre text-xl text-herbe">Vos amis</h2>
+        <p className="mt-1 text-doux text-[15px]">
+          D’autres foyers, avec qui échanger des recettes. Seules celles que
+          vous marquez « partagée » circulent — vos courses, vos barquettes et
+          vos objectifs ne sortent jamais d’ici.
+        </p>
+        <Amis />
+      </section>
+
+      <section className="mt-12">
         <h2 className="titre text-xl text-herbe">Tes magasins</h2>
         <p className="mt-1 text-doux text-[15px]">
           Chaque article porte son enseigne, et la liste se scinde par magasin.
@@ -219,6 +231,89 @@ function Magasins() {
                           outline-none focus:border-herbe" />
         <button className="px-5 rounded-xl bg-herbe text-fond text-[15px]">Ajouter</button>
       </form>
+    </div>
+  )
+}
+
+/**
+ * Les foyers amis.
+ *
+ * Une invitation rend un LIEN, comme celle qui fait entrer dans un foyer : sans
+ * envoi d'e-mail à configurer, et transmissible par n'importe quel moyen. Il
+ * vaut sept jours et ne sert qu'une fois.
+ */
+function Amis() {
+  const { data: foyer } = useFoyer()
+  const { data: liens = [], isPending } = useAmis(foyer?.id)
+  const invite = useInviteAmi()
+  const romp = useRompAmitie()
+  const [copie, setCopie] = useState<string | null>(null)
+
+  const amis = liens.filter(l => !l.enAttente)
+  const attente = liens.filter(l => l.enAttente && !l.expire)
+
+  return (
+    <div className="mt-4">
+      {isPending ? <Attente /> : (
+        <>
+          {amis.length > 0 && (
+            <ul className="divide-y divide-brume/70">
+              {amis.map(l => (
+                <li key={l.id} className="flex items-center gap-3 py-2.5">
+                  <span className="grow text-[15px]">{l.nom}</span>
+                  <button onClick={() => {
+                            if (confirm(`Ne plus partager avec ${l.nom} ? `
+                                      + `Vos recettes partagées cessent d’être visibles `
+                                      + `des deux côtés.`)) romp.mutate(l.id)
+                          }}
+                          className="h-11 px-3 text-[14px] underline underline-offset-2">
+                    rompre
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {attente.length > 0 && (
+            <div className="mt-3 space-y-3">
+              {attente.map(l => (
+                <div key={l.id} className="rounded-xl border border-brume bg-surface p-4">
+                  <p className="text-doux text-[14px]">
+                    Invitation en attente, valable jusqu’au{' '}
+                    {new Date(l.expire_le).toLocaleDateString('fr-FR')}
+                  </p>
+                  <p className="mt-2 break-all text-[14px] text-encre">{l.lien}</p>
+                  <div className="mt-3 flex gap-4">
+                    <button onClick={() => {
+                              navigator.clipboard.writeText(l.lien)
+                              setCopie(l.id)
+                            }}
+                            className="text-herbe underline underline-offset-4 text-[14px]">
+                      {copie === l.id ? 'Lien copié' : 'Copier le lien'}
+                    </button>
+                    <button onClick={() => romp.mutate(l.id)}
+                            className="text-doux underline underline-offset-4 text-[14px]">
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {amis.length === 0 && attente.length === 0 && (
+            <p className="text-doux text-[15px]">Aucun ami pour l’instant.</p>
+          )}
+
+          <div className="mt-4">
+            <Bouton variante="discret" onClick={() => invite.mutate()}
+                    disabled={invite.isPending}>
+              {invite.isPending ? 'Un instant…' : 'Inviter un foyer'}
+            </Bouton>
+            <Erreur de={invite.error ?? romp.error} />
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -23,6 +23,8 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
   const [texte, setTexte] = useState('')
   const [precisions, setPrecisions] = useState('')
   const [lue, setLue] = useState<RecetteLue | null>(null)
+  /** Le défaut est le foyer seul. Partager est un geste, pas un réglage oublié. */
+  const [visibility, setVisibility] = useState<'privee' | 'partagee' | 'publique'>('privee')
 
   const [titre, setTitre] = useState('')
   const [parts, setParts] = useState(4)
@@ -49,7 +51,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
 
   async function garde() {
     const { recette } = await enregistre.mutateAsync({
-      titre, parts, ingredients, etapes, note: precisions,
+      titre, parts, ingredients, etapes, note: precisions, visibility,
     })
     va(`/choisir?ajoute=${recette.id}`)
   }
@@ -160,6 +162,29 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
           )}
         </Surface>
       )}
+
+      {/* Qui la voit. Posé ici, au moment où l'on décide de la garder — pas
+          dans un réglage qu'on découvrirait trop tard. */}
+      <section className="mt-7" aria-label="Qui peut la voir">
+        <h2 className="text-[13px] text-doux uppercase tracking-[0.04em]">
+          Qui peut la voir
+        </h2>
+        <div className="mt-2.5 flex flex-col gap-2">
+          {([
+            ['privee', 'Nous deux', 'Elle ne sort pas du foyer.'],
+            ['partagee', 'Nos amis', 'Les foyers avec qui on partage la voient, avec ton prénom.'],
+            ['publique', 'Tout le monde', 'Elle rejoint le catalogue commun.'],
+          ] as const).map(([v, titre, quoi]) => (
+            <button key={v} onClick={() => setVisibility(v)}
+                    aria-pressed={visibility === v}
+                    className={`text-left p-3.5 rounded-[15px] transition-colors
+                      ${visibility === v ? 'bg-herbe/10 ring-1 ring-herbe' : 'bg-brume/40'}`}>
+              <span className="block text-[15px]">{titre}</span>
+              <span className="block text-[13px] text-doux mt-0.5">{quoi}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="mt-8" aria-label="Ingrédients">
         <h2 className="text-[13px] text-doux uppercase tracking-[0.04em]">

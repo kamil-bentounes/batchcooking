@@ -22,6 +22,9 @@ function recette(p: Partial<Candidate> = {}): Candidate {
     step_count: 5,
     source_name: 'exemple.fr',
     origin: 'importee',
+    owner_household_id: null,
+    ajoutePar: null,
+    dUnAmi: false,
     nutrition: {
       kcal: 520, protein_g: 31, kcal_margin: 40, protein_g_margin: 3,
       fiber_g: 12, coverage: 0.92,

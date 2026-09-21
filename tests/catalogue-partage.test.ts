@@ -124,10 +124,18 @@ describe('une recette privée reste privée', () => {
     expect(data ?? [], 'Alice ne voit plus sa propre recette').toHaveLength(1)
   })
 
-  it('devient visible si on la PARTAGE', async () => {
+  it('reste cachée d’un foyer qui n’est PAS ami, même partagée', async () => {
+    // « Partagée » veut dire « à nos amis », pas « à tout le monde » : c'est la
+    // sémantique posée par la migration 0035. Bob n'est pas ami d'Alice ici.
     await alice.client.from('recipe').update({ visibility: 'partagee' }).eq('id', secrete)
     const { data } = await bob.client.from('recipe').select('title').eq('id', secrete)
-    expect(data ?? [], 'le partage explicite ne marche pas').toHaveLength(1)
+    expect(data ?? [], 'un foyer non ami voit ce qui est réservé aux amis').toHaveLength(0)
+  })
+
+  it('devient visible de tous si on la rend PUBLIQUE', async () => {
+    await alice.client.from('recipe').update({ visibility: 'publique' }).eq('id', secrete)
+    const { data } = await bob.client.from('recipe').select('title').eq('id', secrete)
+    expect(data ?? [], 'le partage public ne marche pas').toHaveLength(1)
   })
 })
 

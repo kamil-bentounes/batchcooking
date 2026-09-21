@@ -386,6 +386,54 @@ export type Database = {
           },
         ]
       }
+      foyer_ami: {
+        Row: {
+          accepte_le: string | null
+          accepte_par: string | null
+          created_at: string
+          cree_par: string | null
+          expire_le: string
+          id: string
+          invite_par: string
+          jeton: string
+        }
+        Insert: {
+          accepte_le?: string | null
+          accepte_par?: string | null
+          created_at?: string
+          cree_par?: string | null
+          expire_le?: string
+          id?: string
+          invite_par: string
+          jeton?: string
+        }
+        Update: {
+          accepte_le?: string | null
+          accepte_par?: string | null
+          created_at?: string
+          cree_par?: string | null
+          expire_le?: string
+          id?: string
+          invite_par?: string
+          jeton?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "foyer_ami_accepte_par_fkey"
+            columns: ["accepte_par"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "foyer_ami_invite_par_fkey"
+            columns: ["invite_par"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       frequent_food: {
         Row: {
           carb_g: number
@@ -1232,6 +1280,7 @@ export type Database = {
           appliances: string[]
           cook_time_min: number | null
           created_at: string
+          created_by: string | null
           edited_at: string | null
           edited_by_household_id: string | null
           freezable: boolean | null
@@ -1255,6 +1304,7 @@ export type Database = {
           appliances?: string[]
           cook_time_min?: number | null
           created_at?: string
+          created_by?: string | null
           edited_at?: string | null
           edited_by_household_id?: string | null
           freezable?: boolean | null
@@ -1278,6 +1328,7 @@ export type Database = {
           appliances?: string[]
           cook_time_min?: number | null
           created_at?: string
+          created_by?: string | null
           edited_at?: string | null
           edited_by_household_id?: string | null
           freezable?: boolean | null
@@ -1296,7 +1347,15 @@ export type Database = {
           visibility?: string
           yield_servings?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "recipe_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       recipe_ingredient: {
         Row: {
@@ -2293,12 +2352,14 @@ export type Database = {
       }
     }
     Functions: {
+      accepter_amitie: { Args: { p_jeton: string }; Returns: string }
       create_household: { Args: { p_name: string }; Returns: string }
       current_cycle: { Args: never; Returns: string }
       current_household: { Args: never; Returns: string }
       delete_my_account: { Args: never; Returns: undefined }
       export_my_data: { Args: never; Returns: Json }
       export_my_data_base: { Args: never; Returns: Json }
+      foyers_amis: { Args: never; Returns: string[] }
       is_service_role: { Args: never; Returns: boolean }
       lieu_du_rayon: { Args: { rayon: string }; Returns: string }
       llm_budget_remaining: { Args: never; Returns: number }
@@ -2314,6 +2375,14 @@ export type Database = {
       poids_unitaire: {
         Args: { p_food_id: string; p_unit?: string }
         Returns: number
+      }
+      prenoms_visibles: {
+        Args: never
+        Returns: {
+          display_name: string
+          household_id: string
+          id: string
+        }[]
       }
       tables_de_foyer: {
         Args: never

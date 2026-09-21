@@ -202,6 +202,39 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
     await expect(page.getByText(/ensuite tu choisis ton mot de passe/i)).toBeVisible()
   })
 
+  test('le partage se décide à l’import, et par défaut rien ne sort', async ({ page }) => {
+    await connecte(page)
+    await page.goto('/importer')
+    await page.getByRole('textbox').first().fill(
+      'Tarte aux poireaux pour 6\\n3 poireaux\\n200 g de crème\\nÉmincer les poireaux.\\n'
+      + 'Faire revenir 10 minutes.\\nEnfourner 35 minutes.')
+    // Le choix vit sur l'écran de relecture, au moment où l'on décide de garder.
+    // Ici on vérifie au moins que l'écran d'entrée ne promet rien d'autre.
+    await expect(page.getByRole('button', { name: /ranger la recette/i })).toBeEnabled()
+  })
+
+  test('les amis s’invitent depuis les réglages', async ({ page }) => {
+    await connecte(page)
+    await page.goto('/reglages')
+    await expect(page.getByRole('heading', { name: /vos amis/i })).toBeVisible()
+    // Ce que l'invitation engage doit se lire AVANT de cliquer.
+    await expect(page.getByText(/vos courses.*ne sortent jamais/i)).toBeVisible()
+    await expect(page.getByRole('button', { name: /inviter un foyer/i })).toBeVisible()
+  })
+
+  test('accepter une amitié dit ce que ça change, dans les deux sens', async ({ page }) => {
+    await connecte(page)
+    await page.goto('/ami/00000000-0000-0000-0000-000000000000')
+    await expect(page.getByRole('heading', { name: /devenir amis/i }))
+      .toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/ce qui est.*privé.*le reste/i)).toBeVisible()
+    await expect(page.getByText(/chacun peut rompre/i)).toBeVisible()
+
+    // Un jeton qui ne correspond à rien doit le DIRE, pas échouer en silence.
+    await page.getByRole('button', { name: /^accepter$/i }).click()
+    await expect(page.getByText(/ne correspond à rien/i)).toBeVisible({ timeout: 10_000 })
+  })
+
   test('la marque est dans l’onglet ET sur l’accueil', async ({ page }) => {
     // Le favicon était encore celui du gabarit : un logo violet, sans rapport
     // avec une application verte et crème. Et rien ne le liait dans la page.

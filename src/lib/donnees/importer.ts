@@ -100,9 +100,12 @@ export function useEnregistreImport() {
       ingredients: IngredientLu[]
       etapes: EtapeLue[]
       note: string | null
+      /** Qui la voit. Le défaut est le foyer seul : partager est un geste. */
+      visibility: 'privee' | 'partagee' | 'publique'
     }) => {
       const foyer = ou(await supabase.rpc('current_household'))
       if (!foyer) throw new Error('Aucun foyer.')
+      const { data: moi } = await supabase.auth.getUser()
       if (!r.titre.trim()) throw new Error('Il lui faut un titre.')
       if (r.etapes.length === 0) throw new Error('Une recette sans étape ne se planifie pas.')
 
@@ -117,7 +120,10 @@ export function useEnregistreImport() {
         title: r.titre.trim(),
         origin: 'manuelle',
         owner_household_id: foyer,
-        visibility: 'privee',
+        visibility: r.visibility,
+        // Qui l'a ajoutée : sans ça, une recette venue d'un foyer ami arrive
+        // sans provenance, et « d'où sort celle-là ? » n'a pas de réponse.
+        created_by: moi.user?.id ?? null,
         yield_servings: Math.max(1, r.parts),
         total_time_min: r.etapes.reduce((s, e) => s + (e.duration_min ?? 0), 0) || null,
         plannable: datees === r.etapes.length && r.etapes.length > 0,

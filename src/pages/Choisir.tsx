@@ -347,6 +347,15 @@ function Ligne({ recette: r, prise, surAjoute }: {
           {r.freezable === true && ' · se congèle'}
         </span>
 
+        {/* D'où elle vient. Sans ça, une recette arrivée d'un foyer ami n'a pas
+            de provenance, et « d'où sort celle-là ? » reste sans réponse. */}
+        {r.ajoutePar && (
+          <span className="block text-[13px] mt-0.5"
+                style={{ color: r.dUnAmi ? '#8F5A0D' : undefined }}>
+            {r.dUnAmi ? `Partagée par ${r.ajoutePar}` : `Ajoutée par ${r.ajoutePar}`}
+          </span>
+        )}
+
         {b && (
           <span className="block text-[13px] text-doux mt-0.5">
             {b.proteinesMin === b.proteinesMax

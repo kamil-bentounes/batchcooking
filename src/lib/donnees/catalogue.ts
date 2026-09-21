@@ -62,6 +62,12 @@ export type Candidate = {
   step_count: number
   source_name: string | null
   origin: string
+  /** Le foyer propriétaire. `null` = le catalogue mutualisé. */
+  owner_household_id: string | null
+  /** Le prénom de qui l'a ajoutée, quand elle vient d'un foyer. */
+  ajoutePar: string | null
+  /** `true` quand elle vient d'un foyer AMI, pas du nôtre. */
+  dUnAmi: boolean
   nutrition: {
     kcal: number
     protein_g: number
@@ -118,7 +124,8 @@ export function nombreDeFiltres(f: Filtres): number {
     + (f.jamaisFaites ? 1 : 0)
 }
 
-type LigneBrute = Omit<Candidate, 'nutrition' | 'manques'> & {
+type LigneBrute = Omit<Candidate, 'nutrition' | 'manques' | 'ajoutePar' | 'dUnAmi'> & {
+  created_by: string | null
   recipe_nutrition: Candidate['nutrition'] | Candidate['nutrition'][] | null
 }
 
@@ -155,6 +162,7 @@ export function useCatalogue(f: Filtres) {
       let q = supabase.from('recipe')
         .select(`id, title, yield_servings, total_time_min, active_time_min,
                  appliances, freezable, step_count, source_name, origin,
+                 owner_household_id, created_by,
                  recipe_nutrition${surMacros ? '!inner' : ''}(kcal, protein_g,
                                   kcal_margin, protein_g_margin, fiber_g, coverage)`)
         .not('title', 'is', null)
@@ -180,6 +188,24 @@ export function useCatalogue(f: Filtres) {
       const lignes = ou(await q.order('active_time_min', { ascending: true, nullsFirst: false })
         .limit(LIMITE * 3)) as unknown as LigneBrute[]
 
+      /*
+       * La provenance, quand la recette vient d'un foyer.
+       *
+       * `user_profile` est cadrée sur le foyer — on n'a pas à lire la liste des
+       * membres d'un ami. Mais si l'on voit sa recette, on doit pouvoir en voir
+       * l'origine : `prenoms_visibles` ne rend que le prénom, et seulement pour
+       * les foyers qu'on a le droit de connaître.
+       */
+      const deFoyers = lignes.some(l => l.owner_household_id !== null)
+      const prenoms = new Map<string, string>()
+      let monFoyer: string | null = null
+      if (deFoyers) {
+        monFoyer = ou(await supabase.rpc('current_household'))
+        for (const p of ou(await supabase.rpc('prenoms_visibles'))) {
+          if (p.id && p.display_name) prenoms.set(p.id, p.display_name)
+        }
+      }
+
       // ── Ce que PostgREST ne sait pas filtrer ──────────────────────────────
       const resultats: Candidate[] = []
       for (const l of lignes) {
@@ -187,7 +213,13 @@ export function useCatalogue(f: Filtres) {
         const n = Array.isArray(l.recipe_nutrition)
           ? l.recipe_nutrition[0] ?? null
           : l.recipe_nutrition
-        const c: Candidate = { ...l, nutrition: n ?? null, manques: [] }
+        const c: Candidate = {
+          ...l,
+          nutrition: n ?? null,
+          manques: [],
+          ajoutePar: l.created_by ? prenoms.get(l.created_by) ?? null : null,
+          dUnAmi: l.owner_household_id !== null && l.owner_household_id !== monFoyer,
+        }
 
         if (!retient(c, f, dejaFaites)) continue
         resultats.push(c)

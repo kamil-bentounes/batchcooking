@@ -22,6 +22,7 @@ import { Photo } from './pages/Photo.tsx'
 import { Ticket } from './pages/Ticket.tsx'
 import { Peser } from './pages/Peser.tsx'
 import { Importer } from './pages/Importer.tsx'
+import { AccepteAmi } from './pages/AccepteAmi.tsx'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -69,6 +70,7 @@ export default function App() {
   if (!pret) return <main className="min-h-dvh grid place-items-center text-doux">Un instant…</main>
 
   const invitation = ici.match(/^\/invite\/(.+)$/)
+  const amitie = ici.match(/^\/ami\/(.+)$/)
 
   // L'ordre compte. Une invitation prime sur tout : sans cela, l'invité se voit
   // proposer de créer SON foyer au lieu de rejoindre celui qui l'attend.
@@ -90,6 +92,11 @@ export default function App() {
   // Retour à l'accueil plutôt qu'à l'historique du navigateur : un passage
   // ouvert depuis une notification n'a pas de page précédente.
   const sortie = () => (window.history.length > 1 ? retour() : va('/'))
+
+  // ⚠️ APRÈS le mot de passe et le foyer, à la différence d'une invitation de
+  //    foyer : rejoindre des amis suppose qu'on a déjà un foyer à soi, et on
+  //    n'entre jamais sans avoir posé son mot de passe.
+  if (amitie) return <AccepteAmi jeton={amitie[1]} va={va} />
 
   switch (ici) {
     // Les quatre destinations permanentes.
