@@ -1020,6 +1020,7 @@ export type Database = {
           protein_g: number
           protein_g_margin: number | null
           recipe_id: string | null
+          source: string
           state: string
         }
         Insert: {
@@ -1043,6 +1044,7 @@ export type Database = {
           protein_g: number
           protein_g_margin?: number | null
           recipe_id?: string | null
+          source?: string
           state?: string
         }
         Update: {
@@ -1066,6 +1068,7 @@ export type Database = {
           protein_g?: number
           protein_g_margin?: number | null
           recipe_id?: string | null
+          source?: string
           state?: string
         }
         Relationships: [
@@ -2033,6 +2036,7 @@ export type Database = {
           created_at: string
           expires_at: string | null
           food_id: string | null
+          frozen_at: string | null
           household_id: string
           id: string
           label: string
@@ -2047,6 +2051,7 @@ export type Database = {
           created_at?: string
           expires_at?: string | null
           food_id?: string | null
+          frozen_at?: string | null
           household_id: string
           id?: string
           label: string
@@ -2061,6 +2066,7 @@ export type Database = {
           created_at?: string
           expires_at?: string | null
           food_id?: string | null
+          frozen_at?: string | null
           household_id?: string
           id?: string
           label?: string
@@ -2405,6 +2411,11 @@ export type Database = {
     }
     Functions: {
       accepter_amitie: { Args: { p_jeton: string }; Returns: string }
+      arc_corrigible: {
+        Args: { apres: string; avant: string }
+        Returns: boolean
+      }
+      arc_sien: { Args: { apres: string; avant: string }; Returns: boolean }
       create_household: { Args: { p_name: string }; Returns: string }
       current_cycle: { Args: never; Returns: string }
       current_household: { Args: never; Returns: string }

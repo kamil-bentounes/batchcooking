@@ -9,11 +9,12 @@
  *     barquette mangée en douce ne doit pas rester une semaine à l'écran.
  */
 import { useState } from 'react'
-import { Attente, Ecran, Surface, Vide } from '../ui/coque.tsx'
+import { Attente, Ecran, Vide } from '../ui/coque.tsx'
 import {
-  useAjouteStock, useBarquettes, useDeplaceBarquette, useJette,
+  useBarquettes, useDeplaceBarquette, useJette,
   useStock, useSupprimeBarquette, useSupprimeStock,
 } from '../lib/donnees/barquettes.ts'
+import { FormulaireAjout } from './AjoutManuel.tsx'
 import type { Barquette } from '../lib/donnees/barquettes.ts'
 import type { Ligne as LigneTable } from '../lib/supabase.ts'
 import { parUrgence, urgence } from '../lib/peremption.ts'
@@ -99,13 +100,16 @@ export function Stock({ va }: { va: (v: string) => void }) {
                            hover:bg-brume transition-colors">
           + À la main
         </button>
+        {/* Le libellé suit l'onglet : « Photo du frigo » sur l'onglet du
+            congélateur est le genre de détail qui fait douter qu'on ait été
+            compris. */}
         <button onClick={() => va('/photo')}
                 className="flex-1 h-[46px] rounded-[16px] bg-brume/50 text-[15px]
                            hover:bg-brume transition-colors">
-          Photo du frigo
+          Photo du {NOM[onglet].toLowerCase()}
         </button>
       </div>
-      {ajout && <FormulaireStock lieu={onglet} surFini={() => setAjout(false)} />}
+      {ajout && <FormulaireAjout lieu={onglet} surFini={() => setAjout(false)} />}
 
       {/* La pesée (lot 0c) : c'est elle qui rend les macros vraies. Sa place
           est ici, à côté de la photo — le même geste d'entretien, fait une
@@ -215,43 +219,5 @@ function LigneStock({ item, surSupprime }:
         </svg>
       </button>
     </li>
-  )
-}
-
-function FormulaireStock({ lieu, surFini }: { lieu: Onglet; surFini: () => void }) {
-  const ajoute = useAjouteStock()
-  const [label, setLabel] = useState('')
-  const [quantite, setQuantite] = useState('')
-  const [unite, setUnite] = useState('g')
-
-  return (
-    <Surface className="mt-4">
-      <form className="flex gap-2" onSubmit={e => {
-        e.preventDefault()
-        if (!label.trim()) return
-        ajoute.mutate({
-          label, lieu,
-          quantite: quantite === '' ? null : Number(quantite),
-          unite: quantite === '' ? null : unite,
-        }, { onSuccess: () => { setLabel(''); setQuantite(''); surFini() } })
-      }}>
-        <input value={label} onChange={e => setLabel(e.target.value)} autoFocus
-               placeholder="Ce qu’il y a" aria-label="Aliment"
-               className="grow min-w-0 rounded-xl border border-brume bg-fond px-4 py-2.5
-                          outline-none focus:border-herbe" />
-        <input value={quantite} onChange={e => setQuantite(e.target.value)} type="number"
-               min="0" placeholder="0" aria-label="Quantité"
-               className="w-20 rounded-xl border border-brume bg-fond px-3 py-2.5
-                          text-right outline-none focus:border-herbe" />
-        <select value={unite} onChange={e => setUnite(e.target.value)} aria-label="Unité"
-                className="rounded-xl border border-brume bg-fond px-2 py-2.5
-                           outline-none focus:border-herbe">
-          <option value="g">g</option>
-          <option value="ml">ml</option>
-          <option value="u">u</option>
-        </select>
-        <button className="px-4 rounded-xl bg-herbe text-fond text-[15px]">+</button>
-      </form>
-    </Surface>
   )
 }

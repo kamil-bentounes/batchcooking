@@ -7,6 +7,18 @@
 | **A — référentiel** | Lecture : tout authentifié. Écriture : rôle de service. | `food`, `food_yield_factor`, `unit_weight`, `unit_conversion`, `density`, `default_temperature`, `default_duration`, `typical_quantity`, `appliance_catalog`, `ingestion_job`, `instance_setting`, `non_action_pattern`, `suggested_item`, `cycle_transition` |
 | **B — catalogue partagé** | Lecture : tous. `UPDATE` tracé, refusé si `confidence >= 0.8`, et **seulement sur ce que personne ne possède** (`owner_household_id is null`) ou sur ce qui est à soi — 0036/0038. Ni `INSERT` ni `DELETE`. | `recipe`, `recipe_ingredient`, `recipe_step`, `recipe_step_dependency`, `recipe_nutrition` |
 
+`portion` porte `source` (`session` · `manuel` · `achete`, migration 0046) : une
+barquette peut naître sans session de cuisine — un plat tout prêt acheté dehors
+est un REPAS, il se mange depuis la semaine et pèse dans les calories du jour.
+Sa provenance est gelée par `tg_portion_source`, sans quoi le bilan mélangerait
+ce qu'on a cuisiné et ce qu'on a acheté. `stock_item` porte désormais
+`frozen_at` comme `portion`.
+
+La péremption (D29) reste de quatre jours au frigo et trois mois au
+congélateur, mais elle ne s'applique plus que faute de mieux : une date donnée à
+l'insertion — celle imprimée sur un emballage — est respectée (0047). Elle était
+écrasée en silence.
+
 `recipe_nutrition` fait exception à la traçabilité : elle n'a ni
 `edited_by_household_id` ni garde de classe B, donc une correction des macros du
 catalogue mutualisé y reste anonyme (0039).

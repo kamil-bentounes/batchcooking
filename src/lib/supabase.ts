@@ -42,7 +42,7 @@ export const fn = (name: string) =>
   `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`
 
 /** Appelle une Edge Function avec le jeton de la session courante. */
-export async function callFunction(name: string, body: unknown) {
+export async function callFunction<T = unknown>(name: string, body: unknown): Promise<T> {
   const { data } = await supabase.auth.getSession()
   if (!data.session) throw new Error('Connecte-toi d’abord.')
   const res = await fetch(fn(name), {

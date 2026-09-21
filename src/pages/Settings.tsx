@@ -50,7 +50,7 @@ export function Settings({ va }: { va: (v: string) => void }) {
 
   async function inviter() {
     try {
-      const r = await callFunction('invite', { email: invite })
+      const r = await callFunction<{ token: string }>('invite', { email: invite })
       // Le lien est le vrai livrable : sans clé Resend aucun e-mail ne part, et
       // même avec, le destinataire peut l'avoir classé en indésirable.
       // ⚠️ `origin` seul perd le préfixe de déploiement : sur GitHub Pages le

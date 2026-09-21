@@ -168,14 +168,18 @@ export function Secondaire({ children, ...rest }: React.ComponentProps<'button'>
  * déclenche exactement le même geste — y compris `capture`, qui ouvre
  * l'appareil photo sur téléphone.
  */
-export function BoutonPhoto({ texte, onFichier, disabled = false }: {
+export function BoutonPhoto({ texte, onFichier, disabled = false, className }: {
   texte: string
   onFichier: (f: File) => void
   disabled?: boolean
+  /** Pour l'habiller autrement — une vignette dans une rangée, par exemple.
+      L'astuce du label reste ici, à un seul endroit : c'est elle qui compte. */
+  className?: string
 }) {
   return (
-    <label className={`mt-7 w-full h-[58px] rounded-[18px] bg-herbe text-fond text-[17px]
-                       font-medium grid place-items-center cursor-pointer transition-colors
+    <label className={`${className ?? `mt-7 w-full h-[58px] rounded-[18px] bg-herbe text-fond
+                       text-[17px] font-medium`} grid place-items-center cursor-pointer
+                       transition-colors
                        ${disabled ? 'bg-brume text-doux cursor-default' : ''}`}>
       {texte}
       <input type="file" accept="image/*" capture="environment" className="sr-only"

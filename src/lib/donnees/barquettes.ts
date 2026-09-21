@@ -349,15 +349,83 @@ export function useAjouteStock() {
     mutationFn: async (s: {
       label: string; quantite?: number | null; unite?: string | null
       lieu?: 'frigo' | 'congelateur' | 'placard'; foodId?: string | null
+      congeleLe?: string | null; perimeLe?: string | null
     }) => {
       const foyer = ou(await supabase.rpc('current_household'))
       if (!foyer) throw new Error('Aucun foyer.')
+      const lieu = s.lieu ?? 'frigo'
       return ou(await supabase.from('stock_item').insert({
         household_id: foyer, label: s.label.trim(), food_id: s.foodId ?? null,
-        quantity: s.quantite ?? null, unit: s.unite ?? null, location: s.lieu ?? 'frigo',
+        quantity: s.quantite ?? null, unit: s.unite ?? null, location: lieu,
+        // La date de mise au froid ne vaut qu'au congélateur — la contrainte
+        // `stock_item_congele_date` le dit aussi, et c'est elle qui fait courir
+        // les trois mois.
+        frozen_at: lieu === 'congelateur' ? (s.congeleLe ?? new Date().toISOString()) : null,
+        expires_at: s.perimeLe ?? null,
       }).select().single())
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: CLE.stock }),
+  })
+}
+
+/**
+ * Poser une barquette qu'on n'a pas cuisinée.
+ *
+ * Un plat tout prêt acheté dehors est un REPAS : il se mange depuis la semaine
+ * et pèse dans les calories du jour. Le ranger à l'inventaire l'aurait fait
+ * disparaître du plan et compter pour zéro — ce que D33 interdit précisément.
+ *
+ * Trois choses posées ici et pas ailleurs :
+ *
+ *  · les macros arrivent déjà calculées. Cet écran ne devine pas : il reçoit
+ *    ce qu'on a LU sur l'emballage, ou ce que la recette a calculé ;
+ *  · la date de mise au froid est celle qu'on donne, pas `now()`. Un plat
+ *    congelé le mois dernier n'a pas trois mois devant lui ;
+ *  · une part = une ligne. C'est ce que le reste de l'app manipule — on ne
+ *    mange pas « 0,4 barquette ».
+ */
+export function useAjouteBarquette() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (b: {
+      label: string
+      parts: number
+      grammes: number
+      kcal: number
+      proteines?: number | null
+      glucides?: number | null
+      lipides?: number | null
+      fibres?: number | null
+      recetteId?: string | null
+      achete?: boolean
+      lieu: 'frigo' | 'congelateur'
+      congeleLe?: string | null
+      perimeLe: string
+    }) => {
+      const foyer = ou(await supabase.rpc('current_household'))
+      if (!foyer) throw new Error('Aucun foyer.')
+
+      const lignes = Array.from({ length: Math.max(1, Math.round(b.parts)) }, () => ({
+        household_id: foyer,
+        recipe_id: b.recetteId ?? null,
+        label: b.label.trim(),
+        grams: b.grammes,
+        kcal: b.kcal,
+        protein_g: b.proteines ?? 0,
+        carb_g: b.glucides ?? 0,
+        fat_g: b.lipides ?? 0,
+        fiber_g: b.fibres ?? 0,
+        source: b.achete ? 'achete' : 'manuel',
+        location: b.lieu,
+        // La contrainte `portion_congele_date` lie les deux : au congélateur la
+        // date existe, au frigo elle n'existe pas. On ne la contourne pas.
+        frozen_at: b.lieu === 'congelateur'
+          ? (b.congeleLe ?? new Date().toISOString()) : null,
+        expires_at: b.perimeLe,
+      }))
+      return ou(await supabase.from('portion').insert(lignes).select())
+    },
+    onSuccess: () => qc.invalidateQueries(),
   })
 }
 
