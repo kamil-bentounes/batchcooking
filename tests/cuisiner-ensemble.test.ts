@@ -385,44 +385,106 @@ async function sessionPartagee(nom: string, semaine: string) {
   return { hote: h, convive: c, cycle: cy!.id }
 }
 
+/** Une session d'hôte qui contient AUSSI le plat d'un tiers, ami de lui seul. */
+async function sessionAvecTiers(nom: string, semaine: string) {
+  const hote = await makeActor(`${nom}-hote`)
+  const convive = await makeActor(`${nom}-convive`)
+  const tiers = await makeActor(`${nom}-tiers`)
+  await amis(hote, convive)
+  await amis(hote, tiers)   // ⚠️ le tiers n'est PAS ami du convive
+
+  const { data: pretee } = await tiers.client.from('recipe').insert({
+    title: 'La tarte du tiers', origin: 'manuelle', visibility: 'partagee',
+    owner_household_id: tiers.householdId, yield_servings: 4, plannable: true,
+  }).select().single()
+  const { data: aMoi } = await hote.client.from('recipe').insert({
+    title: 'Le plat de l’hôte', origin: 'manuelle', visibility: 'privee',
+    owner_household_id: hote.householdId, yield_servings: 4, plannable: true,
+  }).select().single()
+
+  const { data: cy } = await admin().from('cycle')
+    .insert({ household_id: hote.householdId, week_of: semaine, state: 'en_cuisine' })
+    .select().single()
+  for (const r of [pretee!.id, aMoi!.id]) {
+    await admin().from('cycle_recipe').insert({
+      cycle_id: cy!.id, household_id: hote.householdId, recipe_id: r, servings: 2,
+    })
+    const { data: t } = await admin().from('session_task').insert({
+      cycle_id: cy!.id, household_id: hote.householdId, label: 'Un geste',
+      duration_min: 3, planned_start_min: 0,
+    }).select().single()
+    await admin().from('session_task_recipe')
+      .insert({ task_id: t!.id, recipe_id: r, household_id: hote.householdId })
+  }
+  await hote.client.from('session_convive')
+    .insert({ cycle_id: cy!.id, hote_id: hote.householdId, invite_id: convive.householdId })
+  await convive.client.from('session_convive')
+    .update({ rejoint_le: new Date().toISOString() }).eq('cycle_id', cy!.id)
+
+  return { hote, convive, tiers, cycle: cy!.id,
+           recetteDeLHote: aMoi!.id as string, recetteDuTiers: pretee!.id as string }
+}
+
 describe('ce que la session ne donne PAS à voir', () => {
   it('ne montre pas au convive ce qu’un autre ami a prêté à l’hôte', async () => {
-    const hote = await makeActor('trans-hote')
-    const convive = await makeActor('trans-convive')
-    const tiers = await makeActor('trans-tiers')
-    await amis(hote, convive)
-    await amis(hote, tiers)   // ⚠️ le tiers n'est PAS ami du convive
-
-    const { data: pretee } = await tiers.client.from('recipe').insert({
-      title: 'La tarte du tiers', origin: 'manuelle', visibility: 'partagee',
-      owner_household_id: tiers.householdId, yield_servings: 4, plannable: true,
-    }).select().single()
-    const { data: aMoi } = await hote.client.from('recipe').insert({
-      title: 'Le plat de l’hôte', origin: 'manuelle', visibility: 'privee',
-      owner_household_id: hote.householdId, yield_servings: 4, plannable: true,
-    }).select().single()
-
-    const { data: cy } = await admin().from('cycle')
-      .insert({ household_id: hote.householdId, week_of: '2029-11-05', state: 'en_cuisine' })
-      .select().single()
-    for (const r of [pretee!.id, aMoi!.id]) {
-      await admin().from('cycle_recipe').insert({
-        cycle_id: cy!.id, household_id: hote.householdId, recipe_id: r, servings: 2,
-      })
-    }
-    await hote.client.from('session_convive')
-      .insert({ cycle_id: cy!.id, hote_id: hote.householdId, invite_id: convive.householdId })
-    await convive.client.from('session_convive')
-      .update({ rejoint_le: new Date().toISOString() }).eq('cycle_id', cy!.id)
+    const s = await sessionAvecTiers('trans', '2029-11-05')
 
     // Ce que l'hôte cuisine et qui est à lui : oui, c'est l'objet de la session.
-    const { data: sien } = await convive.client.from('recipe').select('id').eq('id', aMoi!.id)
+    const { data: sien } = await s.convive.client.from('recipe')
+      .select('id').eq('id', s.recetteDeLHote)
     expect(sien ?? [], 'le convive ne voit pas ce qu’il cuisine').toHaveLength(1)
 
     // Ce qu'un tiers a prêté à l'hôte : non. Il n'a rien promis au convive.
-    const { data: fuite } = await convive.client.from('recipe')
-      .select('id').eq('id', pretee!.id)
+    const { data: fuite } = await s.convive.client.from('recipe')
+      .select('id').eq('id', s.recetteDuTiers)
     expect(fuite ?? [], 'la session rend l’amitié transitive').toHaveLength(0)
+  })
+
+  it('ne montre pas non plus QUEL geste sert QUEL plat du tiers', async () => {
+    /*
+     * La moitié qu'on oublie : fermer la recette et laisser le LIEN. Le contenu
+     * restait clos, mais l'identifiant de la recette du tiers et le
+     * regroupement des gestes par plat, non — et c'est déjà dire de qui l'hôte
+     * est l'ami, et ce qu'il lui a emprunté.
+     */
+    const s = await sessionAvecTiers('lien', '2030-01-07')
+    const { data: liens } = await s.convive.client.from('session_task_recipe')
+      .select('recipe_id')
+    const vus = new Set((liens ?? []).map(l => l.recipe_id))
+    expect(vus.has(s.recetteDeLHote), 'le convive ne voit pas ce qu’il cuisine').toBe(true)
+    expect(vus.has(s.recetteDuTiers), 'le lien vers le plat du tiers est visible').toBe(false)
+  })
+
+  it('ne laisse pas le convive pousser un geste à lui dans la session de son hôte', async () => {
+    /*
+     * ⚠️ Le sens SORTANT, celui qu'on ne regarde pas.
+     *
+     *    `tg_session_task_convive` s'ancrait sur `old.cycle_id` : si la ligne
+     *    partait de mon cycle, il rendait la main sans rien vérifier.
+     *    `tg_derive_household` reposait ensuite le foyer sur celui de l'hôte, et
+     *    le `with check` passait par son disjoint de session. L'hôte héritait
+     *    d'un geste au libellé arbitraire, dont il devenait propriétaire — et
+     *    dont la complétion écrivait une observation fabriquée dans son journal
+     *    de durées, qu'il ne peut pas effacer.
+     */
+    const s = await sessionPartagee('poussee', '2030-02-04')
+    const { data: sien } = await admin().from('cycle')
+      .insert({ household_id: s.convive.householdId, week_of: '2030-02-11' })
+      .select().single()
+    const { data: geste } = await admin().from('session_task').insert({
+      cycle_id: sien!.id, household_id: s.convive.householdId,
+      label: 'INJECTÉ PAR LE CONVIVE', verb: 'flamber', quantity_g: 9000,
+      duration_min: 300, planned_start_min: 0,
+    }).select().single()
+
+    const { error } = await s.convive.client.from('session_task')
+      .update({ cycle_id: s.cycle }).eq('id', geste!.id)
+    expect(error?.message, 'un geste a été poussé chez l’hôte')
+      .toMatch(/ne change pas de session/)
+
+    const { data: chezLHote } = await admin().from('session_task')
+      .select('id').eq('cycle_id', s.cycle)
+    expect(chezLHote ?? [], 'la session de l’hôte a gagné un geste').toHaveLength(0)
   })
 
   it('ne laisse pas le convive ajouter une recette à la session de son hôte', async () => {

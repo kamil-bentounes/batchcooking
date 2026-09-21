@@ -78,7 +78,18 @@ describe('l’ordre des rayons', () => {
       household_id: bob.householdId, store_id: magasinB, aisle: 'Frais', position: 5,
     })
 
-    const { data: a } = await alice.client.from('shopping_item').insert({
+    // Depuis 0044, la ligne croisée ne se fabrique même plus depuis le client :
+    // c'est la première barrière, et c'est la bonne.
+    const { error: refus } = await alice.client.from('shopping_item').insert({
+      cycle_id: cycleA, household_id: alice.householdId, store_id: magasinB,
+      label: 'sonde', aisle: 'Frais',
+    })
+    expect(refus?.message, 'un article a désigné le magasin d’un autre foyer')
+      .toMatch(/pas au foyer/)
+
+    // On la pose quand même par le rôle de service, pour éprouver la SECONDE
+    // barrière : le jour où la première céderait, celle-ci doit tenir seule.
+    const { data: a } = await admin().from('shopping_item').insert({
       cycle_id: cycleA, household_id: alice.householdId, store_id: magasinB,
       label: 'sonde', aisle: 'Frais',
     }).select().single()
@@ -126,5 +137,63 @@ describe('un article créé DÉJÀ COCHÉ', () => {
     const { data: stock } = await admin().from('stock_item')
       .select('label').eq('shopping_item_id', data!.id)
     expect(stock ?? [], 'l’article n’est pas entré à l’inventaire').toHaveLength(1)
+  })
+})
+
+/**
+ * Ce qu'une ligne DÉSIGNE est au même foyer qu'elle.
+ *
+ * Quinze colonnes de rattachement se repointaient librement vers le foyer d'à
+ * côté. Aucune escalade n'en découlait, parce que chaque consommateur
+ * revérifiait le foyer à l'arrivée — mais c'était une protection au point
+ * d'usage, pas à la source : le premier consommateur écrit sans la clause
+ * rouvrait tout le lot d'un coup.
+ */
+describe('désigner chez le voisin', () => {
+  it('refuse de préempter l’article de courses d’un autre foyer', async () => {
+    /*
+     * `stock_item.shopping_item_id` porte un index unique GLOBAL, et
+     * `tg_shopping_check_apres` insère en `on conflict do nothing`. Poser sa
+     * propre ligne sur l'article d'autrui faisait donc taire le remplissage du
+     * garde-manger de l'autre : il payait son pain et ne le voyait jamais
+     * entrer, sans le moindre message.
+     */
+    const { data: sien } = await admin().from('shopping_item').insert({
+      cycle_id: cycleA, household_id: alice.householdId, label: 'pain',
+    }).select().single()
+
+    const { error } = await bob.client.from('stock_item').insert({
+      household_id: bob.householdId, shopping_item_id: sien!.id, label: 'SQUAT',
+    })
+    expect(error?.message, 'un foyer a préempté l’article d’un autre')
+      .toMatch(/pas au foyer/)
+  })
+
+  it('refuse une arête de dépendance vers le geste d’un autre foyer', async () => {
+    const gestes = await Promise.all([
+      admin().from('session_task').insert({
+        cycle_id: cycleA, household_id: alice.householdId, label: 'chez Alice',
+        duration_min: 2, planned_start_min: 0,
+      }).select().single(),
+      admin().from('session_task').insert({
+        cycle_id: cycleB, household_id: bob.householdId, label: 'chez Bob',
+        duration_min: 2, planned_start_min: 0,
+      }).select().single(),
+    ])
+
+    const { error } = await bob.client.from('session_task_dependency')
+      .insert({ task_id: gestes[1].data!.id, depends_on_id: gestes[0].data!.id })
+    expect(error?.message, 'une arête a traversé deux foyers').toMatch(/pas au foyer/)
+  })
+
+  it('laisse évidemment passer ce qui est à soi', async () => {
+    // Le correctif ne doit pas casser ce qu'il protège.
+    const { data: sien } = await admin().from('shopping_item').insert({
+      cycle_id: cycleA, household_id: alice.householdId, label: 'lait',
+    }).select().single()
+    const { error } = await alice.client.from('stock_item').insert({
+      household_id: alice.householdId, shopping_item_id: sien!.id, label: 'lait',
+    })
+    expect(error, `refusé à tort : ${error?.message}`).toBeNull()
   })
 })
