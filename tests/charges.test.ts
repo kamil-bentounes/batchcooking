@@ -315,7 +315,14 @@ describe('la clé propre à une charge', () => {
     expect(mienne.part_cents, 'la renormalisation ne se fait pas sur les participants')
       .toBe(6_066)
     expect(sienne.part_cents, 'sa part n’est pas celle de leur duo').toBe(3_934)
-    expect(mienne.part_bps, 'le bps figé n’explique pas la part en centimes').toBe(6_065)
+    /* 6066, et non plus 6065 : les points de base sont eux aussi répartis aux
+       plus forts restes, donc ils somment à 10 000 exactement. La version
+       tronquée en perdait un et la trace d'audit ne recomposait pas le tout. */
+    expect(mienne.part_bps, 'le bps figé n’explique pas la part en centimes').toBe(6_066)
+    const { data: tousBps } = await admin().from('depense_part')
+      .select('part_bps').eq('depense_id', d!.id)
+    expect(tousBps!.reduce((s, p) => s + p.part_bps, 0),
+      'les points de base ne recomposent pas 100 %').toBe(10_000)
 
     await admin().from('revenu').delete().eq('user_profile_id', tiers)
     await admin().from('user_profile').delete().eq('id', tiers)
@@ -1035,5 +1042,92 @@ describe('l’arrivée du second membre, éprouvée', () => {
 
     await admin().from('revenu').delete()
       .eq('user_profile_id', moi.userId).eq('valid_from', '2027-11-01')
+  })
+})
+
+describe('l’arrondi ne penche d’aucun côté', () => {
+  it('le centime alterne au lieu de tomber toujours sur le même', async () => {
+    /* Un audit a simulé douze mois avec les vrais revenus du foyer : le
+       reliquat allait « au plus gros contributeur » à chaque ligne, donc
+       104,52 centimes par an contre la même personne, sur 157 lignes, sans une
+       seule exception. Aux plus forts restes, il va à celui dont la part exacte
+       a la plus grande partie fractionnaire — et cela dépend du montant, donc
+       change d'une ligne à l'autre. */
+    const montants = [1_025, 999, 3_701, 15_999, 4_444, 7_777, 1_111, 6_665]
+    const recu: Record<string, number> = { [moi.userId]: 0, [elle]: 0 }
+
+    for (const [i, cents] of montants.entries()) {
+      const id = await poseCharge({ libelle: `Arrondi ${i}`, cents,
+                                    periodicite: 'mensuel',
+                                    participants: [moi.userId, elle] })
+      await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-04-01' })
+      const { data: d } = await admin().from('depense').select('id, montant_cents')
+        .eq('charge_id', id).eq('mois', '2027-04-01').single()
+      const { data: parts } = await admin().from('depense_part')
+        .select('user_profile_id, part_cents, part_bps').eq('depense_id', d!.id)
+
+      // L'invariant d'abord : rien ne se perd ni ne se crée.
+      expect(parts!.reduce((s, p) => s + p.part_cents, 0),
+        `les parts de ${cents} ne recomposent pas le montant`).toBe(cents)
+
+      /* Puis qui a reçu le centime. On le lit sur la ligne elle-même — sa part
+         dépasse-t-elle sa base tronquée ? — plutôt que de recalculer la clé
+         ici : refaire le calcul dans le test reviendrait à tester ma propre
+         arithmétique contre elle-même. */
+      for (const p of parts!) {
+        const base = Math.floor(cents * p.part_bps / 10_000)
+        if (p.part_cents > base) recu[p.user_profile_id]++
+      }
+    }
+
+    /* Le point n'est pas que ce soit exactement moitié-moitié — la méthode est
+       déterministe, pas aléatoire — mais que les DEUX en reçoivent. L'ancienne
+       version donnait 0 à l'un et 8 à l'autre. */
+    expect(recu[moi.userId], 'le centime ne tombe jamais sur lui').toBeGreaterThan(0)
+    expect(recu[elle], 'le centime ne tombe jamais sur elle').toBeGreaterThan(0)
+  })
+
+  it('un remboursement se répartit comme une facture, pas à l’envers', async () => {
+    // La division entière tronque vers zéro : sur un montant négatif, c'était
+    // le plus gros contributeur qui en profitait.
+    const id = await poseCharge({ libelle: 'À rendre', cents: 120_000,
+                                  periodicite: 'annuel',
+                                  participants: [moi.userId, elle] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-05-01' })
+    const { data: ligne } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2027, reel_cents: 9_237,
+    })
+    const { data: parts } = await admin().from('depense_part')
+      .select('part_cents').eq('depense_id', ligne!)
+    const { data: d } = await admin().from('depense')
+      .select('montant_cents').eq('id', ligne!).single()
+
+    expect(d!.montant_cents, 'le remboursement n’est pas négatif').toBeLessThan(0)
+    expect(parts!.reduce((s, p) => s + p.part_cents, 0),
+      'les parts d’un remboursement ne le recomposent pas').toBe(d!.montant_cents)
+  })
+
+  it('l’excédent ne déborde pas, et ne perd aucun centime', async () => {
+    /* `sum(ecart * part_cents / …)` multipliait deux entiers : un loyer de
+       1 250 € confirmé à 1 550 € dépassait la capacité d'un `integer` et tout
+       l'écran du mois mourait. Le seuil était de 283 € d'écart. */
+    const id = await poseCharge({ libelle: 'Gros loyer', cents: 125_000,
+                                  periodicite: 'mensuel', variable: true,
+                                  participants: [moi.userId, elle] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-06-01' })
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('charge_id', id).eq('mois', '2027-06-01').single()
+
+    const { error } = await moi.client.rpc('confirme_la_depense',
+      { la_depense: d!.id, reel_cents: 155_000 })
+    expect(error, `confirmation refusée : ${error?.message}`).toBeNull()
+
+    const { data: exc, error: eExc } = await moi.client.rpc('excedent_du_mois',
+      { le_mois: '2027-06-01' })
+    expect(eExc, `l’excédent déborde : ${eExc?.message}`).toBeNull()
+
+    const somme = (exc ?? []).reduce(
+      (s: number, l: { excedent_cents: number }) => s + Number(l.excedent_cents), 0)
+    expect(somme, 'l’excédent ne recompose pas l’écart du foyer').toBe(125_000 - 155_000)
   })
 })
