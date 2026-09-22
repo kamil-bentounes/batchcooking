@@ -107,8 +107,8 @@ export function Photo({ retour, va }: { retour: () => void; va: (v: string) => v
           <div className="mt-7 flex gap-1.5 p-1.5 rounded-[15px] bg-brume/60" role="radiogroup">
             {(['frigo', 'congelateur', 'placard'] as Lieu[]).map(l => (
               <button key={l} role="radio" aria-checked={lieu === l} onClick={() => setLieu(l)}
-                      className={`flex-1 py-2.5 rounded-[11px] text-[14px] transition-colors
-                        ${lieu === l ? 'bg-surface font-medium' : 'text-doux'}`}>
+                      className={`flex-1 min-h-11 rounded-[11px] text-[14px] transition-colors
+                        ${lieu === l ? 'bg-surface font-medium' : 'text-encre'}`}>
                 {NOM_LIEU[l]}
               </button>
             ))}

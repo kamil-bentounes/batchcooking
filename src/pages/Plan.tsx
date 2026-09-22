@@ -281,7 +281,7 @@ function Equipement({ catalogue, capacites, surValide }: {
               return n
             })}
                     role="checkbox" aria-checked={!!choix[a.code]}
-                    className="flex items-center gap-3 grow text-left py-1.5">
+                    className="flex items-center gap-3 grow text-left min-h-11">
               <span className={`w-[22px] h-[22px] rounded-[7px] border-2 shrink-0
                                 ${choix[a.code] ? 'bg-herbe border-herbe' : 'border-brume'}`} />
               <span className="text-[15px]">{a.label}</span>

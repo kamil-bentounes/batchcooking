@@ -99,7 +99,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
           <button onClick={versLesCourses}
                   disabled={choisies.length === 0 || genere.isPending || change.isPending}
                   className="h-[52px] px-5 rounded-[16px] bg-herbe text-fond text-[16px]
-                             font-medium shrink-0 disabled:bg-brume disabled:text-doux
+                             font-medium shrink-0 disabled:bg-brume disabled:text-encre
                              transition-colors">
             {genere.isPending ? 'Je prépare…' : 'Faire la liste'}
           </button>
@@ -183,7 +183,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
 
         <div className="mt-3 flex items-center gap-3">
           <button onClick={() => setAffine(a => !a)}
-                  className="text-[14px] text-herbe">
+                  className="text-[14px] text-herbe inline-flex items-center min-h-11 -my-3">
             {affine ? 'Masquer les filtres' : 'Affiner'}
             {actifs > 0 && !affine && ` · ${actifs}`}
           </button>
@@ -408,7 +408,7 @@ function Ligne({ recette: r, prise, surAjoute }: {
         <span className="text-[14px] text-herbe shrink-0 pt-1">Retenue</span>
       ) : (
         <button onClick={surAjoute}
-                className="shrink-0 rounded-full border border-brume px-3.5 py-1.5 text-[14px]
+                className="shrink-0 inline-flex items-center rounded-full border border-brume px-3.5 min-h-11 text-[14px]
                            hover:bg-brume/40 transition-colors">
           Ajouter
         </button>
@@ -421,7 +421,7 @@ function Puce({ actif, surClic, children }:
   { actif: boolean; surClic: () => void; children: React.ReactNode }) {
   return (
     <button onClick={surClic} aria-pressed={actif}
-            className={`px-3.5 py-1.5 rounded-full text-[13px] transition-colors
+            className={`px-3.5 min-h-11 inline-flex items-center rounded-full text-[13px] transition-colors
               ${actif ? 'bg-encre text-fond' : 'bg-brume/50 hover:bg-brume'}`}>
       {children}
     </button>

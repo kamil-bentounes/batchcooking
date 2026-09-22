@@ -68,7 +68,10 @@ type BoutonProps = Omit<
 export function Bouton({ variante = 'plein', children, ...rest }: BoutonProps) {
   const base = 'w-full rounded-xl px-5 py-3.5 font-medium transition-colors ' +
     'disabled:opacity-100 disabled:cursor-not-allowed ' +
-    'disabled:bg-transparent disabled:text-doux/70 disabled:border disabled:border-brume'
+    /* `text-doux/70` faisait 2,79:1 : un bouton désactivé doit se lire, sinon
+       on ne sait pas ce qu'on ne peut pas faire. Le plein `doux` fait 4,90:1,
+       et la bordure suffit déjà à dire « inactif ». */
+    'disabled:bg-transparent disabled:text-doux disabled:border disabled:border-brume'
   const styles = {
     plein: 'bg-herbe text-fond hover:bg-encre',
     discret: 'border border-brume text-encre hover:bg-brume/40',
@@ -89,7 +92,7 @@ export function Champ({ label, ...p }:
       <input
         {...p}
         className="mt-1.5 w-full rounded-xl border border-brume bg-surface px-4 py-3
-                   text-encre placeholder:text-doux/60 focus:border-herbe outline-none"
+                   text-encre placeholder:text-doux focus:border-herbe outline-none"
       />
     </label>
   )

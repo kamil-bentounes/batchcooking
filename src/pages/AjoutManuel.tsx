@@ -384,7 +384,7 @@ function Plat({ lieu, surFini }: { lieu: 'frigo' | 'congelateur'; surFini: () =>
           mensonge que D33 interdit. Mieux vaut refuser d'ajouter. */}
       <button disabled={!pret || ajoute.isPending}
               className="w-full h-[46px] rounded-[16px] bg-herbe text-fond text-[15px]
-                         font-medium disabled:bg-brume disabled:text-doux">
+                         font-medium disabled:bg-brume disabled:text-encre">
         {ajoute.isPending ? 'J’ajoute…'
           : `Ajouter ${Number(parts) > 1 ? `${parts} parts` : 'la barquette'}`}
       </button>

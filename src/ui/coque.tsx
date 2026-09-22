@@ -122,8 +122,12 @@ export function Passage({ retour, retourTexte = 'Accueil', barre, children }:
   return (
     <main className={`min-h-dvh px-6 pt-14 ${barre ? 'pb-40' : 'pb-16'}`}>
       <div className="mx-auto w-full max-w-lg">
+        {/* `min-h-11` et la marge négative : la sortie de chaque passage du
+            cycle faisait 23 px de haut, sur huit écrans à la fois. Le texte ne
+            bouge pas, la cible passe à 44. */}
         <button onClick={retour}
-                className="inline-flex items-center gap-2 text-[15px] text-doux hover:text-encre">
+                className="inline-flex items-center gap-2 min-h-11 -mt-3 text-[15px]
+                           text-doux hover:text-encre">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor"
                strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M10 3.5 5.5 8 10 12.5" />
@@ -148,7 +152,7 @@ export function Principal({ children, ...rest }:
   return (
     <motion.button whileTap={{ scale: 0.985 }} {...rest as object}
       className="w-full h-[58px] rounded-[18px] bg-herbe text-fond text-[17px] font-medium
-                 disabled:bg-brume disabled:text-doux transition-colors">
+                 disabled:bg-brume disabled:text-encre transition-colors">
       {children}
     </motion.button>
   )
@@ -158,7 +162,7 @@ export function Secondaire({ children, ...rest }: React.ComponentProps<'button'>
   return (
     <button {...rest}
       className="w-full h-[50px] rounded-[18px] text-herbe text-[15px] hover:bg-brume/40
-                 disabled:text-doux/60 transition-colors">
+                 disabled:text-doux transition-colors">
       {children}
     </button>
   )

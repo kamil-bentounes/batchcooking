@@ -133,7 +133,7 @@ export function Inventer({ userId, retour, va }: {
       <div className="mt-3 flex gap-2 flex-wrap">
         {ENVIES.map(e => (
           <button key={e} onClick={() => setEnvie(v => v ? `${v}, ${e.toLowerCase()}` : e)}
-                  className="px-3.5 py-2 rounded-full bg-brume/60 text-[13px] hover:bg-brume">
+                  className="px-3.5 min-h-11 inline-flex items-center rounded-full bg-brume/60 text-[13px] hover:bg-brume">
             {e}
           </button>
         ))}
@@ -146,8 +146,8 @@ export function Inventer({ userId, retour, va }: {
           .map(([v, texte]) => (
             <button key={v} role="radio" aria-checked={perimetre === v}
                     onClick={() => setPerimetre(v)}
-                    className={`flex-1 py-2.5 rounded-[11px] text-[14px] transition-colors
-                      ${perimetre === v ? 'bg-surface font-medium' : 'text-doux'}`}>
+                    className={`flex-1 min-h-11 rounded-[11px] text-[14px] transition-colors
+                      ${perimetre === v ? 'bg-surface font-medium' : 'text-encre'}`}>
               {texte}
             </button>
           ))}
@@ -176,7 +176,7 @@ export function Inventer({ userId, retour, va }: {
                   onClick={() => setAppareils(l =>
                     l.includes(a.code) ? l.filter(x => x !== a.code) : [...l, a.code])}
                   aria-pressed={appareils.includes(a.code)}
-                  className={`px-3.5 py-2 rounded-full text-[13px] transition-colors
+                  className={`px-3.5 min-h-11 inline-flex items-center rounded-full text-[13px] transition-colors
                     ${appareils.includes(a.code) ? 'bg-herbe text-fond' : 'bg-brume/60'}`}>
             {a.label}
           </button>

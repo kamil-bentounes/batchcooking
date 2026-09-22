@@ -374,7 +374,7 @@ function EnPlus({ cas, frequents, deployeParDefaut = false, surAjoute }:
                       setLibre({ label: '', kcal: '', prot: '' })
                     }}
                     className="h-[44px] px-4 rounded-[13px] bg-herbe text-fond text-[15px]
-                               disabled:bg-brume disabled:text-doux">
+                               disabled:bg-brume disabled:text-encre">
               Ajouter
             </button>
           </div>

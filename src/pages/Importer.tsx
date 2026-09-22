@@ -68,7 +68,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
           <button onClick={() => lit.mutate()}
                   disabled={texte.trim().length < 40 || lit.isPending}
                   className="w-full h-[58px] rounded-[18px] bg-herbe text-fond text-[17px]
-                             font-medium disabled:bg-brume disabled:text-doux
+                             font-medium disabled:bg-brume disabled:text-encre
                              transition-colors">
             {lit.isPending ? 'Je range…' : 'Ranger la recette'}
           </button>
@@ -94,7 +94,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
         {/* Le commentaire libre : il complète le texte, il ne le remplace pas. */}
         <label className="mt-5 block">
           <span className="text-[13px] text-doux">
-            Une précision à ajouter ? <span className="opacity-70">(facultatif)</span>
+            Une précision à ajouter ? (facultatif)
           </span>
           <input value={precisions} onChange={e => setPrecisions(e.target.value)}
                  placeholder="C’est pour 4, pas 6 · j’utilise de la crème allégée"
@@ -122,7 +122,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
         <button onClick={garde}
                 disabled={!titre.trim() || etapes.length === 0 || enregistre.isPending}
                 className="w-full h-[58px] rounded-[18px] bg-herbe text-fond text-[17px]
-                           font-medium disabled:bg-brume disabled:text-doux transition-colors">
+                           font-medium disabled:bg-brume disabled:text-encre transition-colors">
           {enregistre.isPending ? 'J’enregistre…' : 'Garder cette recette'}
         </button>
         <Erreur de={enregistre.error} />
