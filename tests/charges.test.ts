@@ -15,6 +15,7 @@ import { admin, makeActor, type Actor } from './helpers/db'
 
 let moi: Actor
 let elle: string
+let voisin: Actor
 let compteCommun: string
 
 /** Le total des parts d'une dépense, en centimes. */
@@ -43,6 +44,7 @@ async function poseCharge(o: {
 
 beforeAll(async () => {
   moi = await makeActor('charges')
+  voisin = await makeActor('charges-voisin')
   const { data } = await admin().auth.admin.createUser({
     email: `elle-ch-${Date.now()}@fumee.test`, password: 'x'.repeat(12), email_confirm: true,
   })
@@ -423,5 +425,92 @@ describe('ce que la relecture finale a trouvé', () => {
       household_id: moi.householdId, nom: 'Livret', genre: 'epargne',
     })
     expect(error, 'un compte archivé confisque son nom pour toujours').toBeNull()
+  })
+})
+
+describe('la régularisation annuelle (D62)', () => {
+  it('répartit l’écart selon ce que chacun a PORTÉ sur l’année', async () => {
+    /* Le cas réel : la taxe foncière provisionnée au douzième toute l'année, le
+       relevé qui arrive en septembre. L'écart ne s'impute pas au mois courant
+       avec la clé du jour — il se répartit selon ce que chacun a effectivement
+       porté, mois par mois. Quelqu'un arrivé en cours d'année ne porte donc que
+       ses mois, sans qu'aucune règle de date soit écrite. */
+    const id = await poseCharge({ libelle: 'Foncier 2028', cents: 120_000,
+                                  periodicite: 'annuel', participants: [moi.userId, elle] })
+    for (const m of ['2028-01-01', '2028-02-01', '2028-03-01']) {
+      await moi.client.rpc('ouvre_le_mois', { le_mois: m })
+    }
+
+    const { data: prov } = await admin().from('depense')
+      .select('montant_cents').eq('charge_id', id).eq('source', 'modele')
+    const provisionne = prov!.reduce((s, d) => s + d.montant_cents, 0)
+    expect(provisionne, 'trois mois au douzième').toBe(3 * 10_000)
+
+    // Le vrai montant : 340 € pour ces trois mois au lieu de 300.
+    const { data: ligne, error } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2028, reel_cents: 34_000,
+    })
+    expect(error, `régularisation refusée : ${error?.message}`).toBeNull()
+    expect(ligne, 'aucune ligne d’ajustement créée').not.toBeNull()
+
+    const { data: parts } = await admin().from('depense_part')
+      .select('user_profile_id, part_cents').eq('depense_id', ligne!)
+    const total = parts!.reduce((s, p) => s + p.part_cents, 0)
+    expect(total, 'l’écart ne se recompose pas').toBe(4_000)
+
+    // Et la répartition suit les parts de l'année, pas une clé fraîche.
+    const mienne = parts!.find(p => p.user_profile_id === moi.userId)!
+    expect(mienne.part_cents, 'le plus gros contributeur porte le plus gros écart')
+      .toBeGreaterThan(parts!.find(p => p.user_profile_id === elle)!.part_cents)
+
+    // Les provisions cessent d'être des estimations.
+    const { data: apres } = await admin().from('depense')
+      .select('nature').eq('charge_id', id).eq('source', 'modele')
+    expect(apres!.every(d => d.nature === 'connue'),
+      'les provisions restent des estimations après le relevé').toBe(true)
+  })
+
+  it('sait rendre de l’argent quand on a trop provisionné', async () => {
+    /* Une dépense NÉGATIVE est un remboursement, pas une anomalie : une année
+       douce, l'énergie provisionnée dépasse l'énergie payée. L'interdire
+       obligeait à écraser la ligne du mois, donc à perdre la trace de ce qui
+       avait été prévu. */
+    const id = await poseCharge({ libelle: 'Énergie 2028', cents: 60_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2028-04-01' })
+
+    const { data: ligne } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2028, reel_cents: 3_000,
+    })
+    const { data: d } = await admin().from('depense')
+      .select('montant_cents').eq('id', ligne!).single()
+    expect(d!.montant_cents, 'un trop-perçu ne se rend pas').toBe(-2_000)
+
+    const { data: parts } = await admin().from('depense_part')
+      .select('part_cents').eq('depense_id', ligne!)
+    expect(parts!.reduce((s, p) => s + p.part_cents, 0),
+      'les parts d’un remboursement ne le recomposent pas').toBe(-2_000)
+  })
+
+  it('ne pose rien quand le relevé tombe juste', async () => {
+    const id = await poseCharge({ libelle: 'Juste 2028', cents: 120_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2028-05-01' })
+    const { data: ligne } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2028, reel_cents: 10_000,
+    })
+    expect(ligne, 'une ligne d’ajustement à zéro a été créée').toBeNull()
+  })
+
+  it('le voisin ne régularise pas une charge qui n’est pas la sienne', async () => {
+    const { data: sienne } = await admin().from('charge').insert({
+      household_id: voisin.householdId, libelle: 'Chez le voisin',
+      montant_cents: 1_000, periodicite: 'annuel', debut: '2028-01-01',
+    }).select().single()
+
+    const { error } = await moi.client.rpc('regularise_annuel', {
+      la_charge: sienne!.id, annee: 2028, reel_cents: 99_999,
+    })
+    expect(error, 'on régularise la charge du foyer d’à côté').not.toBeNull()
   })
 })

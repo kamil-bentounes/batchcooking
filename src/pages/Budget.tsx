@@ -18,8 +18,61 @@ import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
   useMois, useEnveloppes, useComptes, useCharges, virements, moisDe, euros,
-  enCentimes, useRegularise, type Depense,
+  enCentimes, useRegularise, useRegulariseAnnuel, useProvisionsDe, type Depense,
 } from '../lib/donnees/budget.ts'
+
+/**
+ * Le relevé annuel.
+ *
+ * La taxe foncière a été provisionnée au douzième toute l'année ; en septembre
+ * le vrai montant arrive. On ne l'impute pas au mois courant — ce serait
+ * facturer 1450 € en octobre — mais on pose l'ÉCART, réparti selon ce que
+ * chacun a porté sur l'année.
+ */
+function ReleveAnnuel({ charge, annee }: {
+  charge: { id: string; libelle: string }; annee: number
+}) {
+  const [reel, setReel] = useState('')
+  const provisions = useProvisionsDe(charge.id, annee)
+  const regularise = useRegulariseAnnuel()
+  const cents = enCentimes(reel)
+  const provisionne = provisions.data?.total ?? 0
+  const ecart = cents === null ? null : cents - provisionne
+
+  return (
+    <div className="py-4 border-b border-brume last:border-0">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[16px]">{charge.libelle}</span>
+        <span className="text-[15px] text-doux">
+          provisionné {euros(provisionne)}
+        </span>
+      </div>
+      <div className="mt-2.5 flex gap-2 items-end">
+        <div className="grow">
+          <Champ label={`Le relevé ${annee} (€)`} type="text" inputMode="decimal"
+                 value={reel} onChange={e => setReel(e.target.value)} />
+        </div>
+        <button disabled={cents === null || ecart === 0 || regularise.isPending}
+                onClick={() => regularise.mutate(
+                  { chargeId: charge.id, annee, reelCents: cents! },
+                  { onSuccess: () => setReel('') })}
+                className="min-h-11 px-4 rounded-[14px] bg-herbe text-fond text-[15px]
+                           font-medium disabled:bg-brume disabled:text-encre shrink-0">
+          Régulariser
+        </button>
+      </div>
+      {ecart !== null && ecart !== 0 && (
+        <p className="mt-2 text-[15px]"
+           style={{ color: ecart > 0 ? 'var(--color-ocre)' : undefined }}>
+          {ecart > 0
+            ? `Il manque ${euros(ecart)} — répartis selon ce que chacun a porté.`
+            : `${euros(-ecart)} de trop-perçu, à rendre dans les mêmes proportions.`}
+        </p>
+      )}
+      <Erreur de={regularise.error} />
+    </div>
+  )
+}
 
 /**
  * Ce qu'on a VRAIMENT payé.
@@ -110,6 +163,12 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
       .map(c => c.id))
   const aConfirmer = (depenses.data ?? []).filter(
     d => d.nature === 'estimee' && d.charge_id && mensuellesVariables.has(d.charge_id))
+
+  /* Les charges non mensuelles, dont le relevé arrive une fois l'an. On ne les
+     propose que si elles ont effectivement produit une provision ce mois-ci. */
+  const vues = new Set((depenses.data ?? []).map(d => d.charge_id))
+  const annuelles = (charges.data ?? [])
+    .filter(c => c.periodicite !== 'mensuel' && !c.archive_le && vues.has(c.id))
   const total = aFaire.reduce((s, v) => s + v.cents, 0)
 
   /* Le dernier jour à 14 h, `fin` valait minuit et tout le bloc disparaissait —
@@ -233,6 +292,23 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
             <Surface className="mt-3">
               {aConfirmer.map(d => (
                 <AConfirmer key={d.id} depense={d} foyerId={foyer?.id ?? ''} />
+              ))}
+            </Surface>
+          </>
+        )}
+
+        {annuelles.length > 0 && (
+          <>
+            <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+              Le relevé est arrivé ?
+            </h2>
+            <p className="mt-2 text-[15px] text-doux">
+              Ces charges sont provisionnées. Quand tu reçois le vrai montant, saisis-le :
+              l’écart se répartit sur l’année, sans toucher aux mois déjà partagés.
+            </p>
+            <Surface className="mt-3">
+              {annuelles.map(c => (
+                <ReleveAnnuel key={c.id} charge={c} annee={Number(mois.slice(0, 4))} />
               ))}
             </Surface>
           </>

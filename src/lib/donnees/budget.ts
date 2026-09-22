@@ -545,3 +545,38 @@ export function usePoseRegle() {
     },
   })
 }
+
+/**
+ * Le relevé annuel est arrivé.
+ *
+ * On ne touche PAS aux mois déjà partagés : on pose une ligne d'ajustement dans
+ * le mois courant, répartie selon ce que chacun a porté sur l'année. Quelqu'un
+ * arrivé en octobre ne porte donc que ses trois mois, sans qu'aucune règle de
+ * date soit écrite — elle est déjà dans les parts figées.
+ */
+export function useRegulariseAnnuel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (r: { chargeId: string; annee: number; reelCents: number }) =>
+      ou(await supabase.rpc('regularise_annuel', {
+        la_charge: r.chargeId, annee: r.annee, reel_cents: r.reelCents,
+      })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['budget-mois'] }),
+  })
+}
+
+/** Ce qui a été provisionné sur une charge pour une année, et par qui. */
+export function useProvisionsDe(chargeId: string | undefined, annee: number) {
+  return useQuery({
+    queryKey: ['provisions', chargeId, annee],
+    enabled: !!chargeId,
+    queryFn: async () => {
+      const l = ou(await supabase.rpc('provisions_de',
+        { la_charge: chargeId!, annee }))
+      return {
+        total: Number(l[0]?.total_cents ?? 0),
+        parPersonne: l.map(x => ({ userId: x.user_profile_id, cents: Number(x.porte_cents) })),
+      }
+    },
+  })
+}

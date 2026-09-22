@@ -3054,7 +3054,19 @@ export type Database = {
         Args: { montant_cents: number; periodicite: string }
         Returns: number
       }
+      provisions_de: {
+        Args: { annee: number; la_charge: string }
+        Returns: {
+          porte_cents: number
+          total_cents: number
+          user_profile_id: string
+        }[]
+      }
       recettes_partagees: { Args: never; Returns: string[] }
+      regularise_annuel: {
+        Args: { annee: number; la_charge: string; reel_cents: number }
+        Returns: string
+      }
       reste_enveloppe: {
         Args: { le_mois: string }
         Returns: {

@@ -1,6 +1,6 @@
 # Schéma
 
-60 tables, trois classes d'isolation. Toute policy RLS découle de la classe.
+64 tables, trois classes d'isolation. Toute policy RLS découle de la classe.
 
 | Classe | Règle | Tables |
 |---|---|---|
@@ -187,7 +187,7 @@ et documentés, mais **aucun écran ne les lit** :
 > Les deux premières lignes sont des fonctionnalités promises par la conception.
 > La troisième est une duplication à résorber le jour où la règle bougera.
 
-## Le budget (migrations 0049 à 0053)
+## Le budget (migrations 0049 à 0057)
 
 | Table | Classe | Ce qu'elle porte |
 |---|---|---|
@@ -227,6 +227,24 @@ Deux `constraint trigger` différés garantissent que la somme des parts
 recompose le montant — au moment de valider, donc supprimer puis reposer des
 parts dans une transaction reste possible, mais une somme fausse ne l'est
 jamais.
+
+### Les enveloppes, l'épargne et la régularisation
+
+`enveloppe` est un plafond mensuel : aucun argent n'y bouge, et il repart à zéro
+chaque mois. `poche_epargne` et `versement_epargne` tiennent l'argent qui
+persiste et **le cumul par personne** — sans lui, un livret joint est présumé
+moitié-moitié alors que les versements ne l'étaient pas (D64). Le
+`user_profile_id` d'un versement n'a pas de clé étrangère, comme
+`depense_part` : c'est un fait comptable, pas un pointeur.
+
+`regularise_annuel(charge, annee, reel)` pose la ligne d'ajustement de D62. Elle
+ne touche à aucun mois déjà partagé : l'écart se répartit selon ce que chacun a
+**porté** sur l'année, donc selon la clé en vigueur chaque mois, sans avoir à la
+relire. Quelqu'un arrivé en octobre ne porte que ses trois mois.
+
+**`depense.montant_cents` est signé.** Un relevé inférieur à la provision est un
+remboursement, pas une anomalie. Le contrôle qui compte reste le même : la somme
+des parts recompose le montant, signe compris.
 
 **Ce qui protège le passé n'est pas l'historique des revenus** — il part en
 cascade avec le profil, pour que la suppression de compte aboutisse — mais la
