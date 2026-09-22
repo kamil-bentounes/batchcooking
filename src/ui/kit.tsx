@@ -1,20 +1,27 @@
 import { motion } from 'motion/react'
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes } from 'react'
+import { useRoute } from '../lib/route'
 
-/* Navigation des écrans HORS cycle : objectifs et réglages, plus la sortie vers
-   l'accueil. Les écrans du cycle ont leur propre coque (`ui/coque.tsx`). */
+/*
+ * Navigation des écrans HORS cycle : objectifs et réglages, plus la sortie vers
+ * l'accueil. Les écrans du cycle ont leur propre coque (`ui/coque.tsx`).
+ *
+ * ⚠️ Des BOUTONS, pas des `<a href>`.
+ *
+ *    Ces liens rechargeaient la page. C'est ce rechargement qui a cassé le
+ *    correctif de `PASSWORD_RECOVERY` — l'histoire est écrite en toutes lettres
+ *    dans `src/App.tsx`. Le reste de l'app navigue en client depuis toujours ;
+ *    cette barre était la seule exception, et elle a coûté un bug de sécurité.
+ */
 function Nav() {
-  const b = import.meta.env.BASE_URL
-  const ici = '/' + window.location.pathname.slice(b.length).replace(/^\/+/, '')
-  const lien = (href: string, texte: string) => {
-    const actif = ici === href
-    return (
-      <a href={(b + href.slice(1)).replace(/\/\//g, '/')}
-         className={`py-2 transition-colors ${actif ? 'text-encre' : 'text-doux hover:text-encre'}`}>
-        {texte}
-      </a>
-    )
-  }
+  const { ici, va } = useRoute()
+  const lien = (vers: string, texte: string) => (
+    <button type="button" onClick={() => va(vers)}
+            className={`py-2 min-h-11 transition-colors
+                        ${ici === vers ? 'text-encre' : 'text-doux hover:text-encre'}`}>
+      {texte}
+    </button>
+  )
   return (
     <nav className="mx-auto w-full max-w-lg flex gap-6 text-[15px] mb-8">
       {lien('/', '← Accueil')}

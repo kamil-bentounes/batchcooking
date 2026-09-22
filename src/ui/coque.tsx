@@ -32,8 +32,15 @@ const DESTINATIONS: { cle: Destination; vers: string; texte: string; dessin: Rea
 
 export function Barre({ actif, va }: { actif: Destination; va: (v: string) => void }) {
   return (
+    /* `env(safe-area-inset-bottom)` et le filet : les deux manquaient ici alors
+       que `BarreAction` les a quarante lignes plus bas. Sans la zone sûre, et
+       `viewport-fit=cover` étant actif, les quatre libellés tombaient sous la
+       barre d'accueil de l'iPhone ; sans le filet, `bg-surface/95` sur `fond`
+       fait 1,08:1 et la barre flottait sans bord. */
     <nav aria-label="Navigation principale"
-         className="fixed inset-x-0 bottom-0 z-20 h-[78px] pt-3
+         className="fixed inset-x-0 bottom-0 z-20 pt-3
+                    pb-[max(0.5rem,env(safe-area-inset-bottom))]
+                    border-t border-brume/70
                     bg-surface/95 backdrop-blur-md flex">
       {DESTINATIONS.map(d => (
         <button key={d.cle} onClick={() => va(d.vers)}
@@ -211,17 +218,25 @@ export function Chiffre({ valeur, unite, taille = 30, couleur }:
   )
 }
 
+/*
+ * Vide et Attente HÉRITENT leur couleur du conteneur.
+ *
+ * Elles codaient `text-encre` et `text-doux` en dur. Sur les écrans sombres —
+ * `bg-encre text-fond`, la cuisine et le dressage — ça donnait du noir sur du
+ * noir : « Cette session n'est plus ouverte » ne s'affichait nulle part. Une
+ * opacité marche sur les deux fonds, une couleur fixe sur un seul.
+ */
 export function Vide({ titre, texte }: { titre: string; texte?: string }) {
   return (
     <div className="py-14 text-center">
-      <p className="titre text-[26px] text-encre">{titre}</p>
-      {texte && <p className="mt-3 text-[15px] text-doux max-w-[34ch] mx-auto">{texte}</p>}
+      <p className="titre text-[26px]">{titre}</p>
+      {texte && <p className="mt-3 text-[15px] opacity-70 max-w-[34ch] mx-auto">{texte}</p>}
     </div>
   )
 }
 
 export function Attente() {
-  return <p className="py-14 text-center text-doux text-[15px]">Un instant…</p>
+  return <p className="py-14 text-center opacity-70 text-[15px]">Un instant…</p>
 }
 
 export function Erreur({ de }: { de: unknown }) {

@@ -53,7 +53,7 @@ export function Stock({ va }: { va: (v: string) => void }) {
       <div className="mt-6 flex gap-2" role="tablist">
         {(['frigo', 'congelateur', 'placard'] as Onglet[]).map(o => (
           <button key={o} role="tab" aria-selected={onglet === o} onClick={() => setOnglet(o)}
-                  className={`px-4 py-2 rounded-full text-[14px] transition-colors
+                  className={`px-4 min-h-11 rounded-full text-[14px] transition-colors
                     ${onglet === o ? 'bg-encre text-fond' : 'bg-brume/50 hover:bg-brume'}`}>
             {NOM[o]} <span className="tabular-nums opacity-70">{compte(o)}</span>
           </button>
@@ -212,7 +212,7 @@ function LigneStock({ item, surSupprime }:
         </span>
       )}
       <button onClick={surSupprime} aria-label={`Supprimer ${item.label}`}
-              className="text-doux hover:text-groseille px-2 py-1">
+              className="text-doux hover:text-groseille w-11 h-11 grid place-items-center">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
              strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
           <path d="M4 4l8 8M12 4l-8 8" />

@@ -110,7 +110,8 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
             À toi de voir si tes plats y tiennent.
           </p>
           <button onClick={() => setReglages(true)}
-                  className="mt-3 text-[14px] text-herbe">Modifier l’équipement</button>
+                  className="mt-3 text-[14px] text-herbe inline-flex items-center
+                             min-h-11">Modifier l’équipement</button>
         </Surface>
       )}
 
@@ -241,7 +242,7 @@ function Geste({ tache, critique }: { tache: TachePlanifiee; critique: boolean }
   return (
     <div className="absolute left-0 right-0" style={{ top: tache.debutMin * ECHELLE - 2 }}>
       <p className={`text-[14px] leading-snug ${critique ? 'text-encre' : 'text-encre/85'}`}>
-        {critique && <span aria-hidden="true" className="text-safran mr-1">•</span>}
+        {critique && <span aria-hidden="true" className="text-ocre mr-1">•</span>}
         {tache.label}
       </p>
       <p className="text-[12px] text-doux mt-0.5">

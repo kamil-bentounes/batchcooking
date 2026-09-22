@@ -133,19 +133,19 @@ export function Cuisine({ userId, va, cycleId }:
       {convives.length > 0 && (
         <ul className="mt-2.5 space-y-1" aria-label="Convives">
           {convives.map(c => (
-            <li key={c.id} className="flex items-center gap-2 text-[13px] opacity-55">
+            <li key={c.id} className="flex items-center gap-2 text-[13px] opacity-70">
               <span className="grow">
                 {c.nom}{c.rejoint ? '' : ' — invité, pas encore là'}
               </span>
               <button onClick={() => retire.mutate({ id: c.id, cycleId: cycle.id })}
                       disabled={retire.isPending}
-                      className="px-2 py-1 text-safran">Retirer</button>
+                      className="px-3 min-h-11 text-safran">Retirer</button>
             </li>
           ))}
         </ul>
       )}
       {invite && (
-        <p className="mt-2.5 text-[13px] opacity-55">
+        <p className="mt-2.5 text-[13px] opacity-70">
           Tu cuisines chez quelqu’un d’autre : tu prends des gestes, tu ne
           touches pas au plan.
         </p>
@@ -226,7 +226,7 @@ export function Cuisine({ userId, va, cycleId }:
 
       {passives.length > 0 && (
         <section className="mt-11 pt-5 border-t border-fond/15" aria-label="Pendant ce temps">
-          <p className="text-[13px] opacity-50 mb-3.5">Pendant ce temps</p>
+          <p className="text-[13px] opacity-70 mb-3.5">Pendant ce temps</p>
           {passives.map(a => (
             <div key={a.id} className="flex items-center gap-3 mb-3">
               <span aria-hidden="true" className="w-2.5 h-2.5 rounded-[3px] bg-herbe shrink-0" />
@@ -241,12 +241,12 @@ export function Cuisine({ userId, va, cycleId }:
 
       {etat.suivantes.length > 1 && (
         <section className="mt-9 pt-5 border-t border-fond/15" aria-label="Ensuite">
-          <p className="text-[13px] opacity-50 mb-3.5">Ensuite, si quelqu’un est libre</p>
+          <p className="text-[13px] opacity-70 mb-3.5">Ensuite, si quelqu’un est libre</p>
           {etat.suivantes.slice(1).map(a => (
             <button key={a.id} onClick={() => prend.mutate({ id: a.id, parQui: userId })}
                     className="w-full flex items-center gap-3 mb-3 text-left">
               <span className="grow text-[15px] opacity-80">{a.label}</span>
-              <span className="text-[14px] opacity-55">{duree(Number(a.duration_min))}</span>
+              <span className="text-[14px] opacity-70">{duree(Number(a.duration_min))}</span>
             </button>
           ))}
         </section>

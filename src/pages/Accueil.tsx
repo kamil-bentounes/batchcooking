@@ -114,7 +114,11 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
             </Principal>
           )}
 
-        {etat === 'semaine' && (
+        {/* `prochain` et pas seulement l'état : sans repas prévu, le bouton
+            principal EST déjà « Voir la semaine » et mène au même endroit. On
+            affichait donc deux boutons de poids différents, aux libellés
+            presque identiques, pour une seule destination. */}
+        {etat === 'semaine' && prochain && (
           <Secondaire onClick={() => va('/semaine')}>Voir toute la semaine</Secondaire>
         )}
       </div>
@@ -184,7 +188,7 @@ function CeSoir({ cas }: { cas: Case }) {
       <p className="text-[15px] text-doux">{NOM_REPAS[cas.meal as keyof typeof NOM_REPAS]}</p>
       <h1 className="titre text-[46px] mt-2.5">{p.label}</h1>
       <p className="mt-4">
-        <Chiffre valeur={Math.round(Number(p.protein_g))} taille={30} couleur="#E8A33D" />
+        <Chiffre valeur={Math.round(Number(p.protein_g))} taille={30} couleur="var(--color-ocre)" />
         <span className="text-[14px] text-doux ml-1.5">
           g de protéines · {Math.round(Number(p.grams))} g pour toi
         </span>

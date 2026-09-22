@@ -7,7 +7,13 @@
   --color-encre:     #1C2B23;  /* basilic très sombre, jamais du noir teinté */
   --color-doux:      #5D6E62;
   --color-herbe:     #2F5D45;  /* la couleur de structure */
-  --color-safran:    #E8A33D;  /* l'unique accent */
+  --color-safran:    #E8A33D;  /* l'accent, EN APLAT SEULEMENT : 1,95:1 sur le
+                                  fond, donc illisible en texte sur clair. Il
+                                  ne va bien qu'en pastille, en bouton, ou
+                                  posé sur l'encre (6,86:1). */
+  --color-ocre:      #8F5A0D;  /* le safran quand il doit porter du TEXTE sur
+                                  fond clair : 5,21:1. Il était écrit en dur
+                                  seize fois avant d'exister ici. */
   --color-brume:     #DCE2D6;  /* filets et séparateurs */
   --color-groseille: #B3402F;  /* erreurs seulement */
 

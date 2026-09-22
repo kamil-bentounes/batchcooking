@@ -14,12 +14,12 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Batch cooking',
-        short_name: 'Batch',
+        name: 'Popote',
+        short_name: 'Popote',
         lang: 'fr',
         start_url: base,
         display: 'standalone',
-        description: 'Cuisiner une fois, manger toute la semaine.',
+        description: 'Ce qu’on mange et ce que ça coûte, à deux.',
         background_color: '#F2F4EF',
         theme_color: '#2F5D45',
         icons: [

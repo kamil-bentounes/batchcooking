@@ -69,7 +69,7 @@ export function Bilan({ va }: { va: (v: string) => void }) {
         {(['semaine', 'mois', 'trimestre'] as Periode[]).map(p => (
           <button key={p} onClick={() => setPeriode(p)}
                   role="radio" aria-checked={periode === p}
-                  className={`h-[38px] px-4 rounded-[13px] text-[14px] transition-colors
+                  className={`h-11 px-4 rounded-[13px] text-[14px] transition-colors
                     ${periode === p ? 'bg-herbe text-fond' : 'bg-brume/50'}`}>
             {NOM[p]}
           </button>

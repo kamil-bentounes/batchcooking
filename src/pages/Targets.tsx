@@ -30,7 +30,7 @@ function Mesure({ m, valeur, onChange }:
   return (
     <div className="px-5 py-4">
       <div className="flex items-baseline gap-2.5">
-        <span className={`chiffre text-[2.75rem] leading-none ${m.accent ? 'text-safran' : 'text-encre'}`}>
+        <span className={`chiffre text-[2.75rem] leading-none ${m.accent ? 'text-ocre' : 'text-encre'}`}>
           {affiche.toLocaleString('fr-FR')}
         </span>
         <span className="text-doux text-[15px]">{m.unite}</span>

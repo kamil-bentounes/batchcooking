@@ -6,7 +6,10 @@ export function AcceptInvite({ token }: { token: string }) {
   const [msg, setMsg] = useState('')
 
   async function rejoindre() {
-    try { await callFunction('accept-invite', { token }); window.location.href = '/' }
+    /* `'/'` sortait de l'application : le site est servi sous un sous-chemin,
+       et on atterrissait à la racine du domaine. Le rechargement, lui, est
+       voulu — le foyer vient de changer, tout l'état doit être relu. */
+    try { await callFunction('accept-invite', { token }); window.location.href = import.meta.env.BASE_URL }
     catch (e) { setMsg(String((e as Error).message)) }
   }
 
