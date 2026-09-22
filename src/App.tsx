@@ -13,6 +13,7 @@ import { Budget } from './pages/Budget.tsx'
 import { Charges } from './pages/Charges.tsx'
 import { BudgetReglages } from './pages/BudgetReglages.tsx'
 import { Epargne } from './pages/Epargne.tsx'
+import { Profil } from './pages/Profil.tsx'
 import { Accueil } from './pages/Accueil.tsx'
 import { Choisir } from './pages/Choisir.tsx'
 import { Magasin } from './pages/Magasin.tsx'
@@ -114,6 +115,7 @@ export default function App() {
     case '/charges': return <Charges userId={moi} retour={() => va('/budget')} />
     case '/budget-reglages': return <BudgetReglages userId={moi} retour={() => va('/budget')} />
     case '/epargne': return <Epargne userId={moi} retour={() => va('/budget')} />
+    case '/profil': return <Profil userId={moi} onFini={() => va('/')} />
     case '/cuisine-accueil': return <Accueil userId={moi} va={va} />
 
     // Les quatre destinations permanentes.

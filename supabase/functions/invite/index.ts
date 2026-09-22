@@ -58,24 +58,40 @@ Deno.serve(async (req) => {
     inv = creee
   }
 
-  const link = `${Deno.env.get('APP_BASE_URL')}/invite/${inv.token}`
-  const key = Deno.env.get('RESEND_API_KEY')
+  const base = Deno.env.get('APP_BASE_URL') ?? ''
+  const link = `${base}/invite/${inv.token}`
 
-  if (key) {
-    const r = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: 'invitation@batchcooking.local',
-        to: [email],
-        subject: 'Invitation à rejoindre le foyer',
-        html: `<p>Vous êtes invité·e.</p><p><a href="${link}">Rejoindre le foyer</a></p>
-               <p>Ce lien expire dans 7 jours.</p>`,
-      }),
-    })
-    // L'invitation reste valide si l'e-mail échoue : le lien est renvoyable.
-    if (!r.ok) console.error('Resend a échoué :', await r.text())
-  }
+  /*
+   * L'invitation part par le SMTP de l'application, pas par un service tiers.
+   *
+   * `inviteUserByEmail` envoie le gabarit « Invite user » du tableau de bord —
+   * celui qu'on a écrit, avec la cocotte et le nom — et surtout : la personne
+   * ARRIVE AUTHENTIFIÉE. Il n'y a donc plus d'inscription séparée, donc plus de
+   * jeton à faire survivre à un aller-retour par mail, qui était exactement le
+   * trou : `AcceptInvite` exigeait une session que l'invitée n'avait pas encore,
+   * et le jeton se perdait dès qu'elle partait créer son compte.
+   *
+   * `data.invite_par` alimente `{{ .Data.invite_par }}` dans le gabarit, et
+   * `redirectTo` ramène sur le lien qui porte le jeton du foyer.
+   *
+   * ⚠️ `redirectTo` est IGNORÉ EN SILENCE tant que l'URL n'est pas dans la
+   *    liste d'autorisation du projet. Si l'invitée atterrit sur l'accueil sans
+   *    rejoindre le foyer, c'est là qu'il faut regarder.
+   */
+  const { data: prenom } = await admin
+    .from('user_profile').select('display_name').eq('id', userRes.user.id).maybeSingle()
 
-  return reply({ token: inv.token, link })
+  const { error: envoi } = await admin.auth.admin.inviteUserByEmail(email, {
+    redirectTo: link,
+    data: { invite_par: prenom?.display_name ?? 'Quelqu’un' },
+  })
+
+  /* Une adresse qui a déjà un compte fait échouer l'appel, et c'est le seul cas
+     où l'on retombe sur le lien à transmettre soi-même. Ce n'est PAS de
+     l'énumération de comptes : on n'apprend rien qu'on ne sache déjà, puisque
+     c'est nous qui avons saisi l'adresse et décidé de l'inviter. */
+  const compteExistant = !!envoi
+
+  return reply({ token: inv.token, link, envoye: !compteExistant,
+                 dejaUnCompte: compteExistant })
 })

@@ -16,11 +16,11 @@
  *  · Le reste de l'écran reste VIDE. On le remplirait volontiers ; ce serait
  *    une faute.
  */
-import { Marque, Surface } from '../ui/coque.tsx'
+import { Marque } from '../ui/coque.tsx'
 import { useCycle, GESTE } from '../lib/donnees/cycle.ts'
 import { useBarquettes } from '../lib/donnees/barquettes.ts'
 import { useFoyer } from '../lib/donnees/foyer.ts'
-import { useMois, useEnveloppes, useComptes, virements, moisDe, eurosRonds, euros }
+import { useMois, useEnveloppes, useComptes, useRevenus, virements, moisDe, eurosRonds, euros }
   from '../lib/donnees/budget.ts'
 
 function Carte({ titre, onClick, children }:
@@ -46,6 +46,8 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
   const { data: depenses = [] } = useMois(mois)
   const { data: enveloppes = [] } = useEnveloppes(mois)
   const { data: comptes = [] } = useComptes()
+  const { data: revenus = [] } = useRevenus()
+  const revenuPose = revenus.some(r => r.user_profile_id === userId)
 
   const moi = foyer?.membres.find(m => m.id === userId)
   const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, m.display_name]))
@@ -119,12 +121,18 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
           </Carte>
         </div>
 
-        {!moi?.display_name && (
-          <Surface className="mt-4">
-            <p className="text-[15px] text-doux">
-              Complète ton profil pour que le partage se calcule.
+        {/* Le bandeau n'est pas un reproche : il MÈNE quelque part. Tant que le
+            revenu manque, `parts_du_foyer` partage à parts égales — autant le
+            dire, et offrir le chemin dans la même phrase. */}
+        {(!moi?.display_name || !revenuPose) && (
+          <button onClick={() => va('/profil')}
+                  className="mt-4 w-full text-left bg-surface border border-dashed
+                             border-brume rounded-[18px] p-4">
+            <p className="text-[15px] leading-[23px] text-doux">
+              <strong className="text-encre font-semibold">Complète ton profil.</strong>{' '}
+              Sans ton revenu, le partage se fait à parts égales.
             </p>
-          </Surface>
+          </button>
         )}
       </div>
     </main>

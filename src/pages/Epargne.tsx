@@ -84,8 +84,11 @@ function Poche_({ poche, userId, foyerId, prenoms }: {
                                  motif: 'retrait' },
                                { onSuccess: () => setMontant('') })
                 }}
+                /* `opacity-60` sur du `doux` tombait à 2,42:1 : un bouton
+                   désactivé doit se lire, sinon on ne sait pas ce qu'on ne peut
+                   pas faire. Il reste distinct par sa couleur, pas par un voile. */
                 className="min-h-11 px-4 rounded-[14px] border border-brume text-[15px]
-                           text-doux disabled:opacity-60">
+                           text-encre disabled:text-doux">
           Je retire
         </button>
       </div>

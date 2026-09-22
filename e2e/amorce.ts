@@ -139,7 +139,61 @@ export async function amorce(): Promise<Foyer> {
     { household_id: foyer.id, label: 'beurre', quantity: 1, unit: 'u', location: 'frigo' },
   ]).select())
 
+  /*
+   * Le budget, semé lui aussi.
+   *
+   * Sans ces lignes, les deux audits de `parcours.spec.ts` — cibles tactiles et
+   * contrastes — tournaient sur des écrans de budget VIDES : ils ne mesuraient
+   * ni l'ocre d'une enveloppe dépassée, ni le gris d'une ligne de charge, ni la
+   * cible de « Retirer ». Un audit qui ne voit rien ne trouve rien, et c'est
+   * exactement le « test vide » que ce dépôt s'est déjà reproché.
+   */
+  ou(await db.from('revenu').insert({
+    household_id: foyer.id, user_profile_id: u.user.id,
+    net_mensuel_cents: 370_000, valid_from: moisCourant(),
+  }).select())
+
+  const compte = ou(await db.from('compte').insert({
+    household_id: foyer.id, nom: 'Compte commun', genre: 'commun', matelas_cents: 100_000,
+  }).select().single())
+
+  const enveloppe = ou(await db.from('enveloppe').insert({
+    household_id: foyer.id, libelle: 'Restaurant', plafond_cents: 20_000,
+  }).select().single())
+
+  /* Une charge DÉPASSE son enveloppe à dessein : c'est le seul moyen que
+     l'audit mesure la teinte ocre du dépassement, qui n'existe nulle part
+     ailleurs dans l'application. */
+  for (const c of [
+    { libelle: 'Internet', cents: 3_700, env: null as string | null, variable: false },
+    { libelle: 'Électricité', cents: 5_000, env: null, variable: true },
+    { libelle: 'Restaurant', cents: 26_000, env: enveloppe.id, variable: false },
+  ]) {
+    const charge = ou(await db.from('charge').insert({
+      household_id: foyer.id, libelle: c.libelle, montant_cents: c.cents,
+      periodicite: 'mensuel', debut: moisCourant(), compte_id: compte.id,
+      enveloppe_id: c.env, variable: c.variable,
+    }).select().single())
+    ou(await db.from('charge_participant').insert({
+      charge_id: charge.id, user_profile_id: u.user.id, household_id: foyer.id,
+    }).select())
+  }
+
+  const poche = ou(await db.from('poche_epargne').insert({
+    household_id: foyer.id, libelle: 'Urgence', genre: 'urgence', objectif_cents: 450_000,
+  }).select().single())
+  ou(await db.from('versement_epargne').insert({
+    household_id: foyer.id, poche_id: poche.id, user_profile_id: u.user.id,
+    montant_cents: 31_000,
+  }).select())
+
   return { email, userId: u.user.id, householdId: foyer.id, cycleId: cycle.id }
+}
+
+/** Le premier du mois courant, en heure LOCALE. */
+function moisCourant(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 
 /**

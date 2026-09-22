@@ -27,7 +27,7 @@ test.afterAll(async () => { if (foyer) await efface(foyer) })
 
 /** Tous les écrans de l'application, tels que `App.tsx` les aiguille. */
 const ECRANS = [
-  ['/', 'hub'], ['/cuisine-accueil', 'accueil'], ['/budget', 'budget'], ['/charges', 'charges'], ['/budget-reglages', 'budget-reglages'], ['/epargne', 'epargne'],
+  ['/', 'hub'], ['/cuisine-accueil', 'accueil'], ['/budget', 'budget'], ['/charges', 'charges'], ['/budget-reglages', 'budget-reglages'], ['/epargne', 'epargne'], ['/profil', 'profil'],
   ['/semaine', 'semaine'], ['/stock', 'stock'], ['/bilan', 'bilan'],
   ['/choisir', 'choisir'], ['/magasin', 'magasin'], ['/plan', 'plan'],
   ['/cuisine', 'cuisine'], ['/dressage', 'dressage'], ['/inventer', 'inventer'],
@@ -380,6 +380,55 @@ test.describe('les deux univers', () => {
     // Et l'en-tête de la cuisine ramène au hub : c'est le seul chemin de retour.
     await page.getByRole('button', { name: /retour à l’accueil de popote/i }).click()
     await expect(page.getByRole('heading', { name: 'Popote' })).toBeVisible({ timeout: 10_000 })
+
+    expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])
+  })
+})
+
+test.describe('le budget, du vide jusqu’au virement', () => {
+  test('on pose un revenu, un compte, une charge — et le chiffre apparaît', async ({ page }) => {
+    /*
+     * Le parcours entier, celui qui manquait. Une relecture avait trouvé que
+     * les écrans du budget LISAIENT des comptes, des revenus et des enveloppes
+     * qu'aucun écran ne permettait d'écrire : les audits tournaient donc sur
+     * des écrans vides, et ne mesuraient rien. Ce test remplit, puis vérifie
+     * qu'un chiffre sort à l'autre bout.
+     */
+    const erreurs = surveille(page)
+    await connecte(page)
+
+    await page.goto('/budget-reglages')
+    await expect(page.getByRole('heading', { name: /réglages du budget/i }))
+      .toBeVisible({ timeout: 15_000 })
+
+    await page.getByLabel(/mon net mensuel/i).fill('2400')
+    await page.getByRole('button', { name: /mon revenu/i }).click()
+    await expect(page.getByText(/2\s?400,00/)).toBeVisible({ timeout: 10_000 })
+    await capture(page, 'clic-17-revenu')
+
+    await page.getByLabel(/nom du compte/i).fill('Commun')
+    await page.getByRole('button', { name: /ajouter ce compte/i }).click()
+    await expect(page.getByText('Commun').first()).toBeVisible({ timeout: 10_000 })
+
+    await page.getByLabel(/nom de l’enveloppe/i).fill('Restaurant')
+    await page.getByLabel(/plafond mensuel/i).fill('400')
+    await page.getByRole('button', { name: /ajouter cette enveloppe/i }).click()
+    await expect(page.getByText(/400,00/).first()).toBeVisible({ timeout: 10_000 })
+    await capture(page, 'clic-18-reglages-remplis')
+
+    // Une charge, depuis le catalogue.
+    await page.goto('/charges')
+    await page.getByRole('button', { name: 'Internet', exact: true }).click()
+    await page.getByLabel(/combien/i).fill('37')
+    await page.getByRole('button', { name: /ajouter cette charge/i }).click()
+    await expect(page.getByText(/37,00/).first()).toBeVisible({ timeout: 15_000 })
+    await capture(page, 'clic-19-charge-posee')
+
+    // Et le mois doit maintenant annoncer un virement, pas « Rien à verser ».
+    await page.goto('/budget')
+    await expect(page.getByText(/à verser/i).first()).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('heading', { name: /rien à verser/i })).toHaveCount(0)
+    await capture(page, 'clic-20-budget-rempli')
 
     expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])
   })
