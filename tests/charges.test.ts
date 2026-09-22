@@ -731,3 +731,88 @@ describe('la régularisation ne se déclenche qu’une fois', () => {
     expect(error, 'une enveloppe archivée confisque son nom').toBeNull()
   })
 })
+
+describe('la clé se fige quand le mois est VÉCU, pas quand il est engendré', () => {
+  it('un revenu saisi après coup rattrape un mois qui n’a rien coûté', async () => {
+    /* Le piège qu'on supprime : quelqu'un arrive, on ouvre le budget avant
+       qu'il ait saisi son revenu, `parts_du_foyer` partage à parts égales faute
+       de mieux — et le mois restait à 50/50 pour toujours. Il aurait fallu se
+       souvenir de saisir les revenus AVANT de regarder l'écran : une règle
+       qu'on n'apprend qu'en la ratant. */
+    const { data: u } = await admin().auth.admin.createUser({
+      email: `sansrevenu-${Date.now()}@fumee.test`, password: 'x'.repeat(12),
+      email_confirm: true,
+    })
+    const nouveau = u.user!.id
+    await admin().from('user_profile').insert({
+      id: nouveau, household_id: moi.householdId, display_name: 'Nouveau',
+      entre_le: '2028-01-01',
+    })
+
+    const id = await poseCharge({ libelle: 'Avant revenu', cents: 10_000,
+                                  periodicite: 'mensuel',
+                                  participants: [moi.userId, nouveau] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2028-06-01' })
+
+    const partsDe = async () => {
+      const { data: d } = await admin().from('depense').select('id')
+        .eq('charge_id', id).eq('mois', '2028-06-01').single()
+      const { data: p } = await admin().from('depense_part')
+        .select('user_profile_id, part_cents').eq('depense_id', d!.id)
+      return Object.fromEntries(p!.map(x => [x.user_profile_id, x.part_cents]))
+    }
+
+    /* Sans son revenu, tout le monde pèse pareil — à un centime près : le
+       reliquat de la division va au plus gros contributeur, et à poids égaux
+       c'est l'identifiant qui départage. */
+    const avant = await partsDe()
+    expect(Math.abs(avant[nouveau] - 5_000),
+      'le partage n’est pas à parts égales').toBeLessThanOrEqual(2)
+
+    // Il saisit son revenu : le mois n'a encore rien coûté, il se recalcule.
+    await admin().from('revenu').insert({
+      household_id: moi.householdId, user_profile_id: nouveau,
+      net_mensuel_cents: 100_000, valid_from: '2028-01-01',
+    })
+
+    const apres = await partsDe()
+    expect(apres[nouveau], 'le mois est resté figé à parts égales')
+      .toBeLessThan(4_500)
+    expect(Object.values(apres).reduce((s, n) => s + n, 0),
+      'les parts ne recomposent plus le montant').toBe(10_000)
+
+    await admin().from('revenu').delete().eq('user_profile_id', nouveau)
+    await admin().from('user_profile').delete().eq('id', nouveau)
+  })
+
+  it('mais un mois DÉJÀ VÉCU ne bouge plus', async () => {
+    const id = await poseCharge({ libelle: 'Déjà vécu', cents: 10_000,
+                                  periodicite: 'mensuel',
+                                  participants: [moi.userId, elle] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2028-07-01' })
+
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('charge_id', id).eq('mois', '2028-07-01').single()
+    /* Ce qui clôt un mois n'est PAS `nature = 'connue'` — une charge fixe naît
+       déjà connue, son montant ne fait aucun doute. C'est qu'on l'ait vécu :
+       une ligne réglée. Quelqu'un a payé selon un partage qu'on ne peut plus
+       lui changer. */
+    await admin().from('depense')
+      .update({ regle_le: '2028-07-15', paye_par: moi.userId }).eq('id', d!.id)
+
+    const { data: avant } = await admin().from('depense_part')
+      .select('user_profile_id, part_cents').eq('depense_id', d!.id)
+
+    await admin().from('revenu').insert({
+      household_id: moi.householdId, user_profile_id: elle,
+      net_mensuel_cents: 900_000, valid_from: '2028-06-01',
+    })
+
+    const { data: apres } = await admin().from('depense_part')
+      .select('user_profile_id, part_cents').eq('depense_id', d!.id)
+    expect(apres, 'un mois déjà vécu a été repartagé').toEqual(avant)
+
+    await admin().from('revenu').delete()
+      .eq('user_profile_id', elle).eq('valid_from', '2028-06-01')
+  })
+})
