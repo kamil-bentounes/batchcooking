@@ -115,7 +115,8 @@ export default function App() {
     case '/charges': return <Charges userId={moi} retour={() => va('/budget')} />
     case '/budget-reglages': return <BudgetReglages userId={moi} retour={() => va('/budget')} />
     case '/epargne': return <Epargne userId={moi} retour={() => va('/budget')} />
-    case '/profil': return <Profil userId={moi} onFini={() => va('/')} />
+    case '/profil':
+      return <Profil userId={moi} onFini={() => va('/')} retour={() => va('/')} />
     case '/cuisine-accueil': return <Accueil userId={moi} va={va} />
 
     // Les quatre destinations permanentes.

@@ -20,7 +20,7 @@
  *   npm run deploy
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 const lance = (cmd, args, env = {}) =>
@@ -32,7 +32,23 @@ rmSync('dist', { recursive: true, force: true })
 console.log('2. Build (base /batchcooking/)…')
 lance('npm', ['run', 'build'], { PAGES: '1' })
 
-console.log('3. Vérification de ce qui va partir…')
+/*
+ * Le repli des sous-chemins.
+ *
+ * GitHub Pages sert des FICHIERS. L'application, elle, route côté client : il
+ * n'existe aucun fichier à `/invite/<jeton>`, `/reglages` ou `/budget`, et
+ * Pages y répondait donc 404 — le lien d'invitation compris, ce qui rendait
+ * impossible d'entrer dans un foyer par le chemin prévu pour ça.
+ *
+ * `404.html` est la porte de sortie : Pages le sert pour tout chemin inconnu,
+ * l'application démarre, lit `location.pathname` et affiche le bon écran. Une
+ * copie d'`index.html` suffit — il n'y a rien d'autre à faire, et rien de plus
+ * à maintenir puisque la copie se refait à chaque déploiement.
+ */
+console.log('3. Repli des sous-chemins (404.html)…')
+copyFileSync(join('dist', 'index.html'), join('dist', '404.html'))
+
+console.log('4. Vérification de ce qui va partir…')
 const index = join('dist', 'index.html')
 if (!existsSync(index)) {
   console.error('   ✗ dist/index.html absent : le build n’a rien écrit.')
@@ -51,10 +67,14 @@ for (const r of refs) {
     process.exit(1)
   }
 }
+if (!existsSync(join('dist', '404.html'))) {
+  console.error('   ✗ 404.html absent : tous les sous-chemins répondront 404 en ligne.')
+  process.exit(1)
+}
 const bundle = refs.find(r => r.endsWith('.js')) ?? refs[0]
-console.log(`   ✓ ${refs.length} fichiers, bundle ${bundle}`)
+console.log(`   ✓ ${refs.length} fichiers + le repli 404.html, bundle ${bundle}`)
 
-console.log('4. Publication sur gh-pages…')
+console.log('5. Publication sur gh-pages…')
 lance('npx', ['gh-pages', '-d', 'dist', '-b', 'gh-pages', '-m', 'deploy'])
 
 console.log(`\nPublié. Vérifie dans une minute que le site sert bien ${bundle} :`)

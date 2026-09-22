@@ -440,3 +440,47 @@ test.describe('le budget, du vide jusqu’au virement', () => {
     expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])
   })
 })
+
+test.describe('ce qui se voit à la souris', () => {
+  test('tout ce qui répond au clic porte une main', async ({ page }) => {
+    /*
+     * Tailwind v4 a retiré le `cursor: pointer` que le navigateur mettait
+     * d'office sur les boutons, et cette app a été dessinée au doigt : à la
+     * souris, plus rien n'indiquait ce qui était cliquable. Trouvé à l'usage,
+     * pas par un test — celui-ci existe pour que ça ne revienne pas.
+     */
+    await connecte(page)
+    const manquants: string[] = []
+
+    for (const [chemin, nom] of ECRANS) {
+      await page.goto(chemin)
+      await page.waitForTimeout(250)
+      const sans = await page.evaluate(() => {
+        const out: string[] = []
+        for (const e of document.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), a[href], [role="tab"], [role="radio"]')) {
+          const r = e.getBoundingClientRect()
+          if (r.width === 0 || r.height === 0) continue
+          if (getComputedStyle(e).cursor !== 'pointer') {
+            out.push((e.getAttribute('aria-label') || e.textContent || '?').trim().slice(0, 30))
+          }
+        }
+        return out
+      })
+      for (const s of sans) manquants.push(`${nom} · « ${s} »`)
+    }
+
+    expect([...new Set(manquants)], 'des éléments cliquables n’ont pas de main').toEqual([])
+  })
+
+  test('on sort de l’écran du profil', async ({ page }) => {
+    // Il n'avait ni barre du bas ni retour : on y arrivait par le bandeau du hub
+    // et on y restait.
+    await connecte(page)
+    await page.goto('/profil')
+    await expect(page.getByRole('heading', { name: /deux choses/i }))
+      .toBeVisible({ timeout: 15_000 })
+    await page.getByRole('button', { name: /popote/i }).click()
+    await expect(page.getByRole('heading', { name: 'Popote' })).toBeVisible({ timeout: 10_000 })
+  })
+})

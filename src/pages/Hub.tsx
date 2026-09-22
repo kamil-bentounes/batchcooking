@@ -127,7 +127,8 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
         {(!moi?.display_name || !revenuPose) && (
           <button onClick={() => va('/profil')}
                   className="mt-4 w-full text-left bg-surface border border-dashed
-                             border-brume rounded-[18px] p-4">
+                             border-brume rounded-[18px] p-4 transition-colors
+                             hover:bg-brume/20 hover:border-doux/40">
             <p className="text-[15px] leading-[23px] text-doux">
               <strong className="text-encre font-semibold">Complète ton profil.</strong>{' '}
               Sans ton revenu, le partage se fait à parts égales.

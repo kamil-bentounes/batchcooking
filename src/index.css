@@ -23,6 +23,25 @@
 
 html { -webkit-tap-highlight-color: transparent; }
 
+/*
+ * Ce qui est cliquable se voit À LA SOURIS.
+ *
+ * Tailwind v4 a retiré le `cursor: pointer` que le navigateur mettait d'office
+ * sur les boutons, et cette application a été dessinée au doigt : sur un
+ * téléphone la question ne se pose pas, sur un écran d'ordinateur plus rien
+ * n'indiquait ce qui répondait au clic.
+ *
+ * Et `not-allowed` sur ce qui est désactivé, parce qu'un bouton qui ne fait
+ * rien sans le dire est pire qu'un bouton absent.
+ */
+button, [role="button"], [role="tab"], [role="radio"], [role="checkbox"],
+label:has(> input[type="checkbox"]), summary {
+  cursor: pointer;
+}
+button:disabled, [role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 body {
   background: var(--color-fond);
   color: var(--color-encre);

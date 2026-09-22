@@ -3076,6 +3076,11 @@ export type Database = {
         }[]
       }
       recettes_partagees: { Args: never; Returns: string[] }
+      refige_le_mois: { Args: { le_mois: string }; Returns: number }
+      refige_pour: {
+        Args: { foyer: string; le_mois: string }
+        Returns: undefined
+      }
       regularise_annuel: {
         Args: { annee: number; la_charge: string; reel_cents: number }
         Returns: string

@@ -12,7 +12,7 @@
  * qu'on partage.
  */
 import { useState } from 'react'
-import { Page, Champ, Bouton, Message } from '../ui/kit.tsx'
+import { Champ, Bouton, Message } from '../ui/kit.tsx'
 import { supabase, ou } from '../lib/supabase.ts'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import { usePoseRevenu, enCentimes, euros, moisDe } from '../lib/donnees/budget.ts'
@@ -24,7 +24,9 @@ function aujourdhui(): string {
     String(d.getDate()).padStart(2, '0')}`
 }
 
-export function Profil({ userId, onFini }: { userId: string; onFini: () => void }) {
+export function Profil({ userId, onFini, retour }: {
+  userId: string; onFini: () => void; retour: () => void
+}) {
   const { data: foyer } = useFoyer()
   const poseRevenu = usePoseRevenu()
   const moi = foyer?.membres.find(m => m.id === userId)
@@ -51,9 +53,21 @@ export function Profil({ userId, onFini }: { userId: string; onFini: () => void 
   }
 
   return (
-    <Page titre="Deux choses, et c’est fini."
-          chapeau="Le reste s’ajoute quand tu veux.">
-      <div className="space-y-5">
+    /* On n'en sortait PAS : cet écran n'a ni barre du bas ni bouton de retour, et
+       `Page` n'en fournit aucun. On y arrivait par le bandeau du hub et on y
+       restait — un cul-de-sac de plus, trouvé à l'usage et pas par un test. */
+    <main className="min-h-dvh px-6 pt-14 pb-16">
+      <div className="mx-auto w-full max-w-lg">
+        <button onClick={retour}
+                className="inline-flex items-center gap-2 min-h-11 -mt-3 text-[15px] text-doux
+                           hover:text-encre transition-colors">
+          <span aria-hidden="true">‹</span> Popote
+        </button>
+
+        <h1 className="titre text-[34px] mt-6">Deux choses, et c’est fini.</h1>
+        <p className="mt-2 text-[15px] text-doux">Le reste s’ajoute quand tu veux.</p>
+
+        <div className="mt-6 space-y-5">
         <Champ label="Ton prénom" value={prenom} onChange={e => setPrenom(e.target.value)} />
 
         <div>
@@ -90,9 +104,10 @@ export function Profil({ userId, onFini }: { userId: string; onFini: () => void 
 
         <Message texte={msg} erreur />
         <Bouton onClick={enregistre} disabled={!pret || envoi}>
-          {envoi ? 'J’enregistre…' : 'Entrer dans le foyer'}
+          {envoi ? 'J’enregistre…' : 'Enregistrer'}
         </Bouton>
+        </div>
       </div>
-    </Page>
+    </main>
   )
 }
