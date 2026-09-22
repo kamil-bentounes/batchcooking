@@ -132,6 +132,7 @@ export type Database = {
           archive_le: string | null
           catalogue_id: string | null
           cle: string | null
+          commun: boolean
           compte_id: string | null
           created_at: string
           debut: string
@@ -148,6 +149,7 @@ export type Database = {
           archive_le?: string | null
           catalogue_id?: string | null
           cle?: string | null
+          commun?: boolean
           compte_id?: string | null
           created_at?: string
           debut: string
@@ -164,6 +166,7 @@ export type Database = {
           archive_le?: string | null
           catalogue_id?: string | null
           cle?: string | null
+          commun?: boolean
           compte_id?: string | null
           created_at?: string
           debut?: string
@@ -481,6 +484,7 @@ export type Database = {
         Row: {
           charge_id: string | null
           compte_id: string | null
+          confirme_le: string | null
           created_at: string
           enveloppe_id: string | null
           household_id: string
@@ -499,6 +503,7 @@ export type Database = {
         Insert: {
           charge_id?: string | null
           compte_id?: string | null
+          confirme_le?: string | null
           created_at?: string
           enveloppe_id?: string | null
           household_id: string
@@ -517,6 +522,7 @@ export type Database = {
         Update: {
           charge_id?: string | null
           compte_id?: string | null
+          confirme_le?: string | null
           created_at?: string
           enveloppe_id?: string | null
           household_id?: string
@@ -3005,6 +3011,10 @@ export type Database = {
         Returns: boolean
       }
       arc_sien: { Args: { apres: string; avant: string }; Returns: boolean }
+      confirme_la_depense: {
+        Args: { la_depense: string; reel_cents: number }
+        Returns: undefined
+      }
       create_household: { Args: { p_name: string }; Returns: string }
       current_cycle: { Args: never; Returns: string }
       current_household: { Args: never; Returns: string }

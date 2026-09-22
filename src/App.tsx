@@ -99,7 +99,10 @@ export default function App() {
   const moi = session.user.id
   // Retour à l'accueil plutôt qu'à l'historique du navigateur : un passage
   // ouvert depuis une notification n'a pas de page précédente.
-  const sortie = () => (window.history.length > 1 ? retour() : va('/'))
+  /* `/cuisine-accueil`, PAS `/` : depuis que `/` est le hub, un passage ouvert
+     sans historique — par une notification, par un lien — déposait sur l'écran
+     du choix entre univers au lieu de l'accueil de la cuisine. */
+  const sortie = () => (window.history.length > 1 ? retour() : va('/cuisine-accueil'))
 
   // ⚠️ APRÈS le mot de passe et le foyer, à la différence d'une invitation de
   //    foyer : rejoindre des amis suppose qu'on a déjà un foyer à soi, et on

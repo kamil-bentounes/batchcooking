@@ -816,3 +816,118 @@ describe('la clé se fige quand le mois est VÉCU, pas quand il est engendré', 
       .eq('user_profile_id', elle).eq('valid_from', '2028-06-01')
   })
 })
+
+describe('ce qu’une revue globale a trouvé', () => {
+  it('une charge commune accueille le membre qui arrive après', async () => {
+    /* Le défaut sournois : une charge posée pendant qu'on est SEUL dans le
+       foyer n'a qu'un participant, et rien ne gardait l'intention. Le second
+       membre arrivait, le mois se refigeait… et ne changeait rien, puisque
+       `charge_participant` ne contenait toujours qu'une personne. Il fallait
+       rouvrir les quinze charges une à une. */
+    const { data: c } = await admin().from('charge').insert({
+      household_id: moi.householdId, libelle: 'Commune d’avance',
+      montant_cents: 10_000, periodicite: 'mensuel', debut: '2026-01-01',
+      commun: true,
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: c!.id, user_profile_id: moi.userId, household_id: moi.householdId,
+    })
+
+    const { data: u } = await admin().auth.admin.createUser({
+      email: `arrive-${Date.now()}@fumee.test`, password: 'x'.repeat(12), email_confirm: true,
+    })
+    const arrivant = u.user!.id
+    await admin().from('user_profile').insert({
+      id: arrivant, household_id: moi.householdId, display_name: 'Arrivant',
+    })
+
+    const { data: qui } = await admin().from('charge_participant')
+      .select('user_profile_id').eq('charge_id', c!.id)
+    expect(qui!.map(x => x.user_profile_id),
+      'le membre qui arrive n’entre pas dans les charges communes').toContain(arrivant)
+
+    await admin().from('user_profile').delete().eq('id', arrivant)
+  })
+
+  it('une charge PERSO n’accueille personne', async () => {
+    const { data: c } = await admin().from('charge').insert({
+      household_id: moi.householdId, libelle: 'Bien à moi',
+      montant_cents: 58_000, periodicite: 'mensuel', debut: '2026-01-01',
+      commun: false,
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: c!.id, user_profile_id: moi.userId, household_id: moi.householdId,
+    })
+
+    const { data: u } = await admin().auth.admin.createUser({
+      email: `intrus-${Date.now()}@fumee.test`, password: 'x'.repeat(12), email_confirm: true,
+    })
+    const autre = u.user!.id
+    await admin().from('user_profile').insert({
+      id: autre, household_id: moi.householdId, display_name: 'Autre',
+    })
+
+    const { data: qui } = await admin().from('charge_participant')
+      .select('user_profile_id').eq('charge_id', c!.id)
+    expect(qui!.map(x => x.user_profile_id),
+      'un arrivant s’est invité dans une charge perso').not.toContain(autre)
+
+    await admin().from('user_profile').delete().eq('id', autre)
+  })
+
+  it('un relevé ÉGAL à la provision clôt quand même le mois', async () => {
+    /* 0060 devinait qu'un mois avait été vécu en comparant le montant au prévu.
+       Confirmer une ligne au montant exactement prévu — le cas le plus
+       fréquent — ne cochait rien : un changement de revenu repartageait alors
+       une ligne déjà réglée. D60 défait dans un cas parfaitement atteignable. */
+    const id = await poseCharge({ libelle: 'Égal au prévu', cents: 3_700,
+                                  periodicite: 'mensuel',
+                                  participants: [moi.userId, elle] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2029-05-01' })
+
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('charge_id', id).eq('mois', '2029-05-01').single()
+
+    // On confirme le MÊME montant que celui prévu.
+    const { error } = await moi.client.rpc('confirme_la_depense',
+      { la_depense: d!.id, reel_cents: 3_700 })
+    expect(error, `confirmation refusée : ${error?.message}`).toBeNull()
+
+    const { data: apres } = await admin().from('depense')
+      .select('confirme_le, nature').eq('id', d!.id).single()
+    expect(apres!.confirme_le, 'la confirmation ne laisse aucune trace').not.toBeNull()
+
+    const avant = await admin().from('depense_part')
+      .select('user_profile_id, part_cents').eq('depense_id', d!.id)
+
+    // Un revenu qui change ne doit PLUS toucher à ce mois.
+    await admin().from('revenu').insert({
+      household_id: moi.householdId, user_profile_id: elle,
+      net_mensuel_cents: 800_000, valid_from: '2029-05-01',
+    })
+
+    const apresParts = await admin().from('depense_part')
+      .select('user_profile_id, part_cents').eq('depense_id', d!.id)
+    expect(apresParts.data, 'un mois confirmé a été repartagé').toEqual(avant.data)
+
+    await admin().from('revenu').delete()
+      .eq('user_profile_id', elle).eq('valid_from', '2029-05-01')
+  })
+
+  it('la confirmation ne laisse jamais une dépense sans part', async () => {
+    const id = await poseCharge({ libelle: 'Sans trou', cents: 5_000,
+                                  periodicite: 'mensuel', variable: true,
+                                  participants: [moi.userId, elle] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2029-06-01' })
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('charge_id', id).eq('mois', '2029-06-01').single()
+
+    await moi.client.rpc('confirme_la_depense', { la_depense: d!.id, reel_cents: 7_350 })
+
+    const { data: parts } = await admin().from('depense_part')
+      .select('part_cents').eq('depense_id', d!.id)
+    expect(parts ?? [], 'la dépense a perdu ses parts').not.toHaveLength(0)
+    expect(parts!.reduce((s, p) => s + p.part_cents, 0),
+      'les parts ne recomposent pas le réel').toBe(7_350)
+  })
+})

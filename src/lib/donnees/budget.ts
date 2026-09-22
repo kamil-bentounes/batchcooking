@@ -185,7 +185,7 @@ export function useEnveloppes(mois: string) {
 }
 
 export type Charge = {
-  id: string; libelle: string; montant_cents: number
+  id: string; libelle: string; montant_cents: number; commun: boolean; debut: string
   periodicite: 'mensuel' | 'trimestriel' | 'annuel'
   variable: boolean; cle: 'prorata' | 'moitie' | null
   compte_id: string | null; enveloppe_id: string | null
@@ -198,7 +198,7 @@ export function useCharges() {
     queryKey: CLE.charges,
     queryFn: async (): Promise<Charge[]> => {
       const l = ou(await supabase.from('charge')
-        .select('id, libelle, montant_cents, periodicite, variable, cle, compte_id, enveloppe_id, archive_le, charge_participant(user_profile_id)')
+        .select('id, libelle, montant_cents, periodicite, variable, cle, compte_id, enveloppe_id, archive_le, commun, debut, charge_participant(user_profile_id)')
         .order('libelle'))
       return l.map(c => ({
         ...c,
@@ -262,13 +262,23 @@ export function useAjouteCharge() {
       libelle: string; montantCents: number; periodicite: string
       participants: string[]; cle?: string | null; catalogueId?: string | null
       variable?: boolean; compteId?: string | null; enveloppeId?: string | null
+      commun?: boolean; debut?: string
       foyerId: string
     }) => {
       const ligne = ou(await supabase.from('charge').insert({
         household_id: c.foyerId, libelle: c.libelle, montant_cents: c.montantCents,
         periodicite: c.periodicite, cle: c.cle ?? null, catalogue_id: c.catalogueId ?? null,
         variable: c.variable ?? false, compte_id: c.compteId ?? null,
-        enveloppe_id: c.enveloppeId ?? null, debut: moisDe(),
+        enveloppe_id: c.enveloppeId ?? null,
+        /* L'INTENTION, pas l'état : une charge commune posée pendant qu'on est
+           seul dans le foyer doit accueillir le second membre à son arrivée.
+           Sans cette colonne, il fallait rouvrir les quinze charges une à une. */
+        commun: c.commun ?? false,
+        /* Et sa date de début se choisit. `moisDe()` en dur voulait dire qu'une
+           taxe foncière posée en septembre ne provisionnait que septembre — et
+           que sa régularisation facturait l'année entière d'un coup, exactement
+           ce que D61 existe pour empêcher. */
+        debut: c.debut ?? moisDe(),
       }).select().single())
       /* Une charge sans participant n'engendre rien : le générateur l'ignore.
          Les deux écritures vont donc ensemble, toujours. */
@@ -485,33 +495,26 @@ export function useRegularise() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (r: { foyerId: string; depense: Depense; reelCents: number }) => {
-      const anciennes = r.depense.parts
-      const total = anciennes.reduce((s, p) => s + p.part_cents, 0)
-
-      ou(await supabase.from('depense_part').delete().eq('depense_id', r.depense.id).select())
-      ou(await supabase.from('depense')
-        .update({ montant_cents: r.reelCents, nature: 'connue' })
-        .eq('id', r.depense.id).select())
-
-      if (anciennes.length === 0) return
-      const brut = anciennes.map(p => ({
-        user_profile_id: p.user_profile_id,
-        poids: total === 0 ? 1 : p.part_cents,
-        cents: 0,
-      }))
-      const poidsTotal = brut.reduce((s, b) => s + b.poids, 0) || 1
-      for (const b of brut) b.cents = Math.floor(r.reelCents * b.poids / poidsTotal)
-      const reste = r.reelCents - brut.reduce((s, b) => s + b.cents, 0)
-      const ainee = [...brut].sort((a, b) => b.poids - a.poids)[0]
-      if (ainee) ainee.cents += reste
-
-      ou(await supabase.from('depense_part').insert(brut.map(b => ({
-        depense_id: r.depense.id, user_profile_id: b.user_profile_id,
-        household_id: r.foyerId, part_cents: b.cents,
-        part_bps: Math.round(b.poids * 10_000 / poidsTotal),
-      }))).select())
+      /* UNE seule requête, donc une seule transaction.
+       *
+       * La version d'avant en faisait trois — retirer les parts, changer le
+       * montant, les reposer — et une coupure réseau au milieu, sur un
+       * téléphone, vers le 27, laissait la dépense sans aucune part et sans
+       * reprise possible.
+       *
+       * Elle pose aussi le marqueur de confirmation, sans lequel un relevé égal
+       * à la provision — le cas le plus fréquent — ne clôturait pas le mois et
+       * le laissait repartageable par un simple changement de revenu. */
+      const { error } = await supabase.rpc('confirme_la_depense', {
+        la_depense: r.depense.id, reel_cents: r.reelCents,
+      })
+      if (error) throw new Error(error.message)
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['budget-mois'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['budget-mois'] })
+      qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
+      qc.invalidateQueries({ queryKey: ['excedent'] })
+    },
   })
 }
 

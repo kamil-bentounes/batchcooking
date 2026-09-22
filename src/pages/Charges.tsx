@@ -53,6 +53,12 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
      si bien qu'un livret ou le compte de l'autre pouvait être proposé. */
   const [compteId, setCompteId] = useState<string>(
     comptes.find(c => c.genre === 'commun')?.id ?? comptes[0]?.id ?? '')
+  /* Depuis quand elle court. Le premier du mois en cours par défaut, mais une
+     charge annuelle posée en septembre doit pouvoir commencer en janvier :
+     sinon elle ne provisionne que les mois restants, et sa régularisation
+     facture l'année entière d'un coup. */
+  const [debut, setDebut] = useState<string>(`${new Date().getFullYear()}-${
+    String(new Date().getMonth() + 1).padStart(2, '0')}-01`)
   const [enveloppeId, setEnveloppeId] = useState<string>('')
   /* Le catalogue PRÉ-COCHE : les deux pour l'électricité, une seule personne
      pour un forfait mobile. Ce n'est qu'une suggestion — la case reste ouverte. */
@@ -139,6 +145,23 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
           </div>
         )}
 
+        <div>
+          <label className="block text-[15px] font-semibold" htmlFor="debut-charge">
+            Elle court depuis
+          </label>
+          <input id="debut-charge" type="month" value={debut.slice(0, 7)}
+                 onChange={e => setDebut(`${e.target.value}-01`)}
+                 className="mt-2 w-full min-h-11 rounded-[14px] border border-brume
+                            bg-surface px-4 text-[16px]" />
+          {periode !== 'mensuel' && debut.slice(0, 4) === String(new Date().getFullYear())
+            && Number(debut.slice(5, 7)) > 1 && (
+            <p className="mt-2 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
+              Elle ne provisionnera que depuis ce mois-là. Si tu la paies depuis
+              janvier, remonte la date — sinon le relevé annuel tombera d’un coup.
+            </p>
+          )}
+        </div>
+
         {comptes.length > 0 && (
           <div>
             <span className="block text-[15px] font-semibold">Payée depuis</span>
@@ -206,6 +229,12 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
                      participants: qui, cle: cle === 'defaut' ? null : cle,
                      catalogueId: depart?.catalogueId ?? null, variable, foyerId,
                      compteId: compteId || null, enveloppeId: enveloppeId || null,
+                     /* Commune dès que plus d'une personne y participe — ou que
+                        le catalogue le suggérait alors qu'on est encore seul
+                        dans le foyer. C'est cette intention qui fera entrer le
+                        second membre à son arrivée. */
+                     commun: qui.length > 1 || depart?.portee === 'commun',
+                     debut,
                    }, { onSuccess: surFini })}>
           {ajoute.isPending ? 'J’ajoute…' : 'Ajouter cette charge'}
         </Principal>
@@ -256,6 +285,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
             montantCents: l.montant_cents!,
             periodicite: l.periodicite,
             participants: l.portee === 'commun' ? membres.map(m => m.id) : [userId],
+            commun: l.portee === 'commun',
             variable: l.variable,
             compteId: compteParDefaut,
             /* Si une enveloppe porte déjà ce nom — « Restaurant », « Culture » —
@@ -363,6 +393,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                     {c.cle === 'prorata' && ' · au prorata'}
                     {c.variable && ' · variable'}
                     {!c.compte_id && ' · sans compte'}
+                    {c.commun && c.participants.length === 1 && ' · en attente du foyer'}
                   </span>
                 </span>
                 {/* Une charge sans histoire est réellement SUPPRIMÉE, une autre

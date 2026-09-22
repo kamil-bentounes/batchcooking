@@ -25,7 +25,9 @@ function Nav() {
   )
   return (
     <nav className="mx-auto w-full max-w-lg flex gap-6 text-[15px] mb-8">
-      {lien('/', '← Accueil')}
+      {/* L'accueil de la CUISINE : on arrive ici depuis elle, pas depuis le
+          choix entre univers. Le hub se rejoint par sa marque. */}
+      {lien('/cuisine-accueil', '← Accueil')}
       {lien('/objectifs', 'Objectifs')}
       {lien('/reglages', 'Réglages')}
     </nav>
