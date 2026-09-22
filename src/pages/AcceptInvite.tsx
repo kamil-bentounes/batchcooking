@@ -14,7 +14,8 @@ export function AcceptInvite({ token }: { token: string }) {
   }
 
   return (
-    <Page centre titre="On t’attend" chapeau="Un clic et tu partages le foyer, les courses et les sessions.">
+    <Page centre marque titre="On t’attend"
+          chapeau="Un clic et tu partages le foyer : les courses, le budget, et les sessions de cuisine.">
       <Bouton onClick={rejoindre}>Rejoindre le foyer</Bouton>
       <Message texte={msg} erreur />
     </Page>

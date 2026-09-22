@@ -34,7 +34,7 @@ export function Password({ userId, onDone }: { userId: string; onDone: () => voi
      *    afficher revenait à offrir trois moyens de sauter l'étape, juste
      *    au-dessus de la phrase qui dit qu'on ne peut pas la sauter.
      */
-    <Page centre titre="Ton mot de passe"
+    <Page centre marque titre="Ton mot de passe"
           chapeau="Tant qu’il n’est pas posé, on n’entre pas — c’est ce qui évite
                    de repartir sur un lien par e-mail à chaque fois.">
       <div className="space-y-5">

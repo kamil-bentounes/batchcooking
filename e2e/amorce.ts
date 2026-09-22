@@ -14,7 +14,9 @@ import { config } from 'dotenv'
 config()
 
 const URL = process.env.VITE_SUPABASE_URL!
-const db = createClient(URL, process.env.SUPABASE_SERVICE_ROLE_KEY!,
+/** Le client de service. Exporté pour les parcours qui doivent poser ou
+ *  vérifier des faits que l'interface ne montre pas. */
+export const db = createClient(URL, process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false } })
 
 export const MOT_DE_PASSE = 'fumee-e2e-12345'

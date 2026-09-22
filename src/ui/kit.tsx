@@ -1,6 +1,7 @@
 import { motion } from 'motion/react'
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes } from 'react'
 import { useRoute } from '../lib/route'
+import { Marque } from './coque.tsx'
 
 /*
  * Navigation des écrans HORS cycle : objectifs et réglages, plus la sortie vers
@@ -34,14 +35,24 @@ function Nav() {
   )
 }
 
-export function Page({ titre, chapeau, centre, nav, children }:
-  { titre: string; chapeau?: string; centre?: boolean; nav?: boolean; children: ReactNode }) {
+export function Page({ titre, chapeau, centre, nav, marque, children }:
+  { titre: string; chapeau?: string; centre?: boolean; nav?: boolean
+    marque?: boolean; children: ReactNode }) {
   return (
     <main className={`min-h-dvh px-5 ${centre
       ? 'grid place-items-center py-10'
       : 'py-8 sm:py-14'}`}>
       {nav && <Nav />}
       <div className="mx-auto w-full max-w-lg">
+        {/* La marque, sur les écrans d'ENTRÉE. On y arrive depuis un mail qui
+            parle de Popote, et on atterrissait sur une page anonyme : rien ne
+            disait où l'on venait de tomber. */}
+        {marque && (
+          <span className="flex items-center gap-2.5 mb-8">
+            <Marque taille={24} />
+            <span className="titre text-[24px] text-herbe">Popote</span>
+          </span>
+        )}
         <h1 className="titre text-4xl sm:text-5xl text-herbe">{titre}</h1>
         {chapeau && <p className="mt-3 text-doux text-[17px] max-w-[46ch]">{chapeau}</p>}
         <div className="mt-10">{children}</div>
