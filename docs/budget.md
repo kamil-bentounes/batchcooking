@@ -272,8 +272,11 @@ d'autre, qui décide de l'application de D61.
 
 ## 5 · Ce qui reste à écrire
 
-Le schéma (tables, RLS, triggers) n'est pas encore posé. Ce qui est tranché
-ci-dessus le contraint déjà sur quatre points :
+Le socle est posé (migrations 0049 à 0051) : `compte`, `revenu`,
+`regle_partage`, `catalogue_charge`, `user_profile.entre_le` et
+`parts_du_foyer`. Voir `docs/schema.md`. Restent les charges, les dépenses
+engendrées, les enveloppes, l'épargne et les projets — que ce qui est tranché
+ci-dessus contraint déjà sur quatre points :
 
 - les pourcentages sont **copiés** sur la dépense (D60) ;
 - une charge récurrente est un **modèle** qui engendre des lignes mensuelles,

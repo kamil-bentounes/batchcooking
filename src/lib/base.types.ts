@@ -2600,7 +2600,7 @@ export type Database = {
         Returns: string
       }
       parts_du_foyer: {
-        Args: { le_mois: string }
+        Args: { le_foyer?: string; le_mois: string }
         Returns: {
           part_bps: number
           user_profile_id: string

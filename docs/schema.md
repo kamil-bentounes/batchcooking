@@ -1,6 +1,6 @@
 # Schéma
 
-44 tables, trois classes d'isolation. Toute policy RLS découle de la classe.
+56 tables, trois classes d'isolation. Toute policy RLS découle de la classe.
 
 | Classe | Règle | Tables |
 |---|---|---|
@@ -186,3 +186,28 @@ et documentés, mais **aucun écran ne les lit** :
 
 > Les deux premières lignes sont des fonctionnalités promises par la conception.
 > La troisième est une duplication à résorber le jour où la règle bougera.
+
+## Le budget (migrations 0049 à 0051)
+
+| Table | Classe | Ce qu'elle porte |
+|---|---|---|
+| `compte` | C | Un par vrai compte bancaire. `matelas_cents` : ce qu'on laisse sur le commun, au-dessus de quoi se pose la question de fin de mois. Un compte `perso` a un titulaire, un compte `commun` n'en a pas — la contrainte le dit. |
+| `revenu` | C en lecture, **PERSONNE en écriture** | Le net mensuel après impôt, en centimes, daté par `valid_from`. Visible par le foyer (D63), écrit par son seul titulaire — comme `nutrition_target`, et pour la même raison. |
+| `regle_partage` | C | `prorata` ou `moitie`, datée. Il n'y a pas de troisième clé globale : « telle chose à 50/50 » se dit sur la charge, « 100 % pour quelqu'un » en ne mettant qu'une personne dans les participants. |
+| `catalogue_charge` | A | 52 lignes en 7 sections, proposées à la saisie. `portee` n'est qu'une case pré-cochée, jamais une décision. |
+
+`user_profile.entre_le` décide des mois qu'une personne partage. C'est une
+colonne de DROITS, bornée par contrainte : la porter à 2099 faisait disparaître
+quelqu'un de tous les mois, sans erreur et sans trace.
+
+`parts_du_foyer(le_mois, le_foyer default null)` rend la part de chacun en
+points de base pour un mois donné ; la somme fait exactement 10000, le reliquat
+allant au plus gros contributeur. `le_foyer` n'est honoré que pour le rôle de
+service — sans quoi un authentifié lirait la clé du voisin. Elle partage à parts
+égales tant qu'un présent n'a pas saisi son revenu : ne pas avoir répondu n'est
+pas gagner zéro.
+
+**Ce qui protège le passé n'est pas l'historique des revenus** — il part en
+cascade avec le profil, pour que la suppression de compte aboutisse — mais la
+part figée en centimes sur chaque dépense (D60). Quand `depense` arrivera, elle
+portera `part_a_cents`, jamais une référence vers `revenu`.

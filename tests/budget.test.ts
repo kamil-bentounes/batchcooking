@@ -156,9 +156,17 @@ describe('ce qui ne change pas', () => {
       net_mensuel_cents: 100_000, valid_from: '2027-01-01',
     }).select().single()
 
+    /* ⚠️ Une date LIBRE comme cible. La première version visait 2026-01-01, où
+       cette personne a déjà un revenu : l'update échouait sur la contrainte
+       d'unicité, pas sur le trigger, et le test serait resté vert même le
+       trigger supprimé. Une relecture l'a montré en le retirant. */
     const { error } = await moi.client.from('revenu')
-      .update({ valid_from: '2026-01-01' }).eq('id', ligne!.id)
+      .update({ valid_from: '2028-03-01' }).eq('id', ligne!.id)
     expect(error, 'on a déplacé un fait daté, donc réécrit le passé').not.toBeNull()
+
+    const { data: apres } = await admin().from('revenu')
+      .select('valid_from').eq('id', ligne!.id).single()
+    expect(apres!.valid_from, 'la date a bougé quand même').toBe('2027-01-01')
 
     // Mais corriger le MONTANT reste permis : c'est une faute de frappe, pas
     // une réécriture de l'histoire.
@@ -169,13 +177,49 @@ describe('ce qui ne change pas', () => {
 
   it('un revenu ne change pas de personne', async () => {
     const { data: ligne } = await admin().from('revenu').insert({
-      household_id: moi.householdId, user_profile_id: elle,
+      household_id: moi.householdId, user_profile_id: moi.userId,
       net_mensuel_cents: 90_000, valid_from: '2027-06-01',
     }).select().single()
 
-    const { error } = await moi.client.from('revenu')
-      .update({ user_profile_id: moi.userId }).eq('id', ligne!.id)
-    expect(error, 'un revenu a été réattribué à quelqu’un d’autre').not.toBeNull()
+    await moi.client.from('revenu')
+      .update({ user_profile_id: elle }).eq('id', ligne!.id)
+
+    /* On asserte l'ÉTAT, pas l'erreur. Une écriture entièrement refusée par
+       RLS rend `error: null` et zéro ligne ; n'attendre qu'une erreur laisserait
+       passer aussi bien une protection absente qu'une protection muette. */
+    const { data: apres } = await admin().from('revenu')
+      .select('user_profile_id').eq('id', ligne!.id).single()
+    expect(apres!.user_profile_id, 'un revenu a été réattribué').toBe(moi.userId)
+  })
+
+  it('personne ne touche au revenu de l’autre, même dans son foyer', async () => {
+    // D63 dit que le salaire est VISIBLE dans le foyer. Pas qu'il est écrivable
+    // par l'autre — `nutrition_target` tranche déjà dans ce sens depuis 0005.
+    const { data: sien } = await admin().from('revenu').insert({
+      household_id: moi.householdId, user_profile_id: elle,
+      net_mensuel_cents: 250_000, valid_from: '2029-01-01',
+    }).select().single()
+
+    await moi.client.from('revenu')
+      .update({ net_mensuel_cents: 1 }).eq('id', sien!.id)
+    await moi.client.from('revenu').delete().eq('id', sien!.id)
+
+    const { data: apres } = await admin().from('revenu')
+      .select('net_mensuel_cents').eq('id', sien!.id).maybeSingle()
+    expect(apres, 'le revenu de l’autre a été supprimé').not.toBeNull()
+    expect(apres!.net_mensuel_cents, 'le revenu de l’autre a été modifié').toBe(250_000)
+
+    // Mais on voit toujours le sien : la lecture reste au foyer.
+    const { data: vu } = await moi.client.from('revenu').select('id').eq('id', sien!.id)
+    expect(vu ?? [], 'on ne voit plus le revenu de l’autre').toHaveLength(1)
+  })
+
+  it('un membre ne se fait pas disparaître des mois passés', async () => {
+    // `entre_le` décide de ce qu'on paie : la porter à 2099 effaçait quelqu'un
+    // de tous les mois, sans erreur et sans trace.
+    const { error } = await moi.client.from('user_profile')
+      .update({ entre_le: '2099-01-01' }).eq('id', moi.userId)
+    expect(error, 'on peut encore se rendre absent de tous les mois').not.toBeNull()
   })
 })
 
