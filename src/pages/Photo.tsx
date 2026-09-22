@@ -192,7 +192,7 @@ export function Photo({ retour, va }: { retour: () => void; va: (v: string) => v
                       {a.remarque && ` · ${a.remarque}`}
                       {/* L'incertitude s'affiche, elle ne se cache pas. */}
                       {!sur && (
-                        <span style={{ color: '#8F5A0D' }}>
+                        <span style={{ color: 'var(--color-ocre)' }}>
                           {' · '}deviné, à vérifier
                         </span>
                       )}

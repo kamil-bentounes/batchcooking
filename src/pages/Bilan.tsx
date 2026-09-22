@@ -28,7 +28,7 @@ import type { Jour } from '../lib/suivi.ts'
 const BARRE = '#1E6B41'
 const BARRE_CLAIRE = '#9CB5A6'
 /** L'ocre des avertissements, le seul autre pigment de l'application. */
-const ALERTE = '#8F5A0D'
+const ALERTE = 'var(--color-ocre)'
 
 type Periode = 'semaine' | 'mois' | 'trimestre'
 

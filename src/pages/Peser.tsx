@@ -140,7 +140,7 @@ function Aliment({ a, cycleId, ouvert, surOuvre }: {
           </div>
 
           {aberrante && (
-            <p className="mt-3 text-[13px]" style={{ color: '#8F5A0D' }}>
+            <p className="mt-3 text-[13px]" style={{ color: 'var(--color-ocre)' }}>
               {Math.round(g / q)} g l’unité, contre {a.reference} g attendus.
               C’est peut-être juste — mais si c’est une faute de frappe, corrige
               maintenant : cette pesée ne sera pas retenue.

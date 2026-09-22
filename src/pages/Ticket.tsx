@@ -174,7 +174,7 @@ export function Ticket({ retour, va }: { retour: () => void; va: (v: string) => 
               {/* L'écart est LA mesure de qualité de la lecture : une ligne
                   manquée se voit ici avant de se voir en relisant le papier. */}
               {lu.ecart !== null && Math.abs(lu.ecart) >= 0.01 && (
-                <span style={{ color: '#8F5A0D' }}>
+                <span style={{ color: 'var(--color-ocre)' }}>
                   {' · '}écart de {euros(Math.abs(lu.ecart))} avec le total imprimé
                 </span>
               )}
@@ -276,7 +276,7 @@ function LigneTicketVue({ r, retenu, ouvert, candidats, surRetient, surOuvre, su
               ? <>→ {r.article.label}</>
               : <span className="italic">pas sur la liste — le prix s’apprend quand même</span>}
             {devine && (
-              <span style={{ color: '#8F5A0D' }}>{' · '}deviné, à vérifier</span>
+              <span style={{ color: 'var(--color-ocre)' }}>{' · '}deviné, à vérifier</span>
             )}
           </span>
         </button>
@@ -287,13 +287,13 @@ function LigneTicketVue({ r, retenu, ouvert, candidats, surRetient, surOuvre, su
           <p className="text-[13px] text-doux">Rattacher à :</p>
           <div className="mt-2 flex flex-wrap gap-2">
             <button onClick={() => surAttribue(null)}
-                    className={`h-[38px] px-3 rounded-[12px] text-[14px]
+                    className={`h-11 px-3 rounded-[12px] text-[14px]
                       ${r.article === null ? 'bg-herbe text-fond' : 'bg-brume/50'}`}>
               rien
             </button>
             {candidats.map(a => (
               <button key={a.id} onClick={() => surAttribue(a.id)}
-                      className={`h-[38px] px-3 rounded-[12px] text-[14px]
+                      className={`h-11 px-3 rounded-[12px] text-[14px]
                         ${r.article?.id === a.id ? 'bg-herbe text-fond' : 'bg-brume/50'}`}>
                 {a.label}
               </button>

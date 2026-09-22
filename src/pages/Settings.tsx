@@ -74,7 +74,9 @@ export function Settings({ va }: { va: (v: string) => void }) {
     if (!confirm('Supprimer ton compte et tes données ? C’est définitif.')) return
     const { error } = await supabase.rpc('delete_my_account')
     if (error) return dire(error.message, true)
-    await supabase.auth.signOut(); window.location.href = '/'
+    /* `BASE_URL` et pas `'/'` : sous un sous-chemin, la racine du domaine est
+       une 404. Même défaut que celui corrigé dans `AcceptInvite`. */
+    await supabase.auth.signOut(); window.location.href = import.meta.env.BASE_URL
   }
 
   return (

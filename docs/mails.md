@@ -37,7 +37,7 @@ Il ne se génère pas depuis un script : il demande le compte Google.
 | Champ | Valeur |
 |---|---|
 | Sender email | l'adresse Gmail elle-même |
-| Sender name | `Batch cooking` |
+| Sender name | `Popote` |
 | Host | `smtp.gmail.com` |
 | Port | `465` |
 | Username | l'adresse Gmail |

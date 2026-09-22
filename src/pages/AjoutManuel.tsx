@@ -80,7 +80,7 @@ export function FormulaireAjout({ lieu, surFini }: { lieu: Lieu; surFini: () => 
         <div className="flex gap-2 mb-4" role="radiogroup" aria-label="Ce que j’ajoute">
           {([['produit', 'Un produit'], ['plat', 'Un plat']] as const).map(([v, nom]) => (
             <button key={v} role="radio" aria-checked={quoi === v} onClick={() => setQuoi(v)}
-                    className={`px-4 min-h-11 rounded-full text-[14px] transition-colors
+                    className={`px-4 min-h-11 inline-flex items-center rounded-full text-[14px] transition-colors
                       ${quoi === v ? 'bg-encre text-fond' : 'bg-brume/50 hover:bg-brume'}`}>
               {nom}
             </button>
@@ -327,7 +327,7 @@ function Plat({ lieu, surFini }: { lieu: 'frigo' | 'congelateur'; surFini: () =>
                   voit petit. Le bouton nu à 20 px se ratait une fois sur trois. */}
               <button type="button" aria-label={`Retirer la photo ${i + 1}`}
                       onClick={() => setPhotos(l => l.filter((_, j) => j !== i))}
-                      className="absolute -top-4 -right-4 w-11 h-11 grid place-items-center">
+                      className="absolute -top-2 -right-2 p-3 -m-1 grid place-items-center">
                 <span className="w-5 h-5 rounded-full bg-encre text-fond text-[12px]
                                  leading-none grid place-items-center">×</span>
               </button>

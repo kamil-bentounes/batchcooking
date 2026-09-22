@@ -252,7 +252,7 @@ function Puce({ actif, surClic, children }:
   { actif: boolean; surClic: () => void; children: React.ReactNode }) {
   return (
     <button onClick={surClic} aria-pressed={actif}
-            className={`px-3.5 py-1.5 rounded-full text-[13px] transition-colors
+            className={`px-3.5 min-h-11 inline-flex items-center rounded-full text-[13px] transition-colors
               ${actif ? 'bg-encre text-fond' : 'bg-brume/50 hover:bg-brume'}`}>
       {children}
     </button>
@@ -296,7 +296,7 @@ function EnPlus({ cas, frequents, deployeParDefaut = false, surAjoute }:
               </span>
               <button onClick={() => supprime.mutate(e.id)}
                       aria-label={`Retirer ${e.label}`}
-                      className="h-9 px-2 underline underline-offset-2">retirer</button>
+                      className="min-h-11 px-2 underline underline-offset-2">retirer</button>
             </li>
           ))}
         </ul>
@@ -417,7 +417,7 @@ function HorsBarquette({ jour: j, userId, frequents, dejaLa }: {
           <span className="text-[13px] text-doux">Mangé sans barquette ?</span>
           {libres.map(r => (
             <button key={r} onClick={() => setMoment(r)}
-                    className="px-3 py-1.5 rounded-full bg-brume/50 text-[13px]
+                    className="px-3 min-h-11 inline-flex items-center rounded-full bg-brume/50 text-[13px]
                                hover:bg-brume transition-colors">
               {NOM_REPAS[r]}
             </button>

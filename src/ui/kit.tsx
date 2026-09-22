@@ -17,6 +17,7 @@ function Nav() {
   const { ici, va } = useRoute()
   const lien = (vers: string, texte: string) => (
     <button type="button" onClick={() => va(vers)}
+            aria-current={ici === vers ? 'page' : undefined}
             className={`py-2 min-h-11 transition-colors
                         ${ici === vers ? 'text-encre' : 'text-doux hover:text-encre'}`}>
       {texte}

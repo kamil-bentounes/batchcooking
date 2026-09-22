@@ -1,4 +1,4 @@
-# Batch cooking
+# Popote
 
 Application de batch cooking, diététique et budget pour un foyer.
 Une session de cuisine le dimanche, planifiée pour exploiter le four, l'air fryer et les feux

@@ -40,7 +40,7 @@ export function Barre({ actif, va }: { actif: Destination; va: (v: string) => vo
     <nav aria-label="Navigation principale"
          className="fixed inset-x-0 bottom-0 z-20 pt-3
                     pb-[max(0.5rem,env(safe-area-inset-bottom))]
-                    border-t border-brume/70
+                    border-t border-doux/30
                     bg-surface/95 backdrop-blur-md flex">
       {DESTINATIONS.map(d => (
         <button key={d.cle} onClick={() => va(d.vers)}
@@ -213,7 +213,8 @@ export function Chiffre({ valeur, unite, taille = 30, couleur }:
   return (
     <span className="inline-flex items-baseline gap-2">
       <span className="chiffre" style={{ fontSize: taille, color: couleur }}>{valeur}</span>
-      {unite && <span className="text-[14px] text-doux">{unite}</span>}
+      {unite && <span className="text-[14px] text-doux in-[.bg-encre]:text-current
+                                 in-[.bg-encre]:opacity-70">{unite}</span>}
     </span>
   )
 }
@@ -239,11 +240,18 @@ export function Attente() {
   return <p className="py-14 text-center opacity-70 text-[15px]">Un instant…</p>
 }
 
+/*
+ * Comme `Vide` et `Attente` : `text-groseille` ne fait que 2,60:1 sur l'encre,
+ * et c'est précisément sur les écrans sombres — la cuisine, le dressage — que
+ * lire le message d'erreur compte le plus. Le rouge reste sur fond clair, où
+ * il dit « erreur » ; sur fond sombre on hérite, quitte à perdre la couleur.
+ */
 export function Erreur({ de }: { de: unknown }) {
   if (!de) return null
   const texte = de instanceof Error ? de.message : String(de)
   return (
-    <p role="alert" className="mt-4 text-[15px] text-groseille">{texte}</p>
+    <p role="alert"
+       className="mt-4 text-[15px] text-groseille in-[.bg-encre]:text-current">{texte}</p>
   )
 }
 

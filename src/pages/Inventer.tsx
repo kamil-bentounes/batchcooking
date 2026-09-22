@@ -226,11 +226,11 @@ function Resultat({ r, restantes, retour, garde, surGardee }: {
       {/* Toujours dire qu'elle est inventée : personne ne l'a jamais cuisinée. */}
       <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full"
             style={{ background: '#F6E9D2' }}>
-        <svg width="13" height="13" viewBox="0 0 19 19" fill="none" stroke="#8F5A0D"
+        <svg width="13" height="13" viewBox="0 0 19 19" fill="none" stroke="var(--color-ocre)"
              strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M9.5 2.2 11 6.6l4.4 1.5-4.4 1.5-1.5 4.4-1.5-4.4L3.6 8.1 8 6.6z" />
         </svg>
-        <span className="text-[12px] font-medium" style={{ color: '#8F5A0D' }}>
+        <span className="text-[12px] font-medium" style={{ color: 'var(--color-ocre)' }}>
           Inventée · jamais testée
         </span>
       </span>

@@ -147,7 +147,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
 
       {(sansDuree > 0 || sansAliment > 0 || lue.aCompleter.length > 0) && (
         <Surface className="mt-6">
-          <p className="text-[13px] uppercase tracking-[0.04em]" style={{ color: '#8F5A0D' }}>
+          <p className="text-[13px] uppercase tracking-[0.04em]" style={{ color: 'var(--color-ocre)' }}>
             À compléter
           </p>
           <ul className="mt-2 space-y-1 text-[14px] text-doux">
@@ -205,7 +205,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
                 {i.food_nom
                   ? <>→ {i.food_nom.split(',')[0]}
                       {i.grams_reference !== null && ` · ${Math.round(i.grams_reference)} g`}</>
-                  : <span style={{ color: '#8F5A0D' }}>
+                  : <span style={{ color: 'var(--color-ocre)' }}>
                       pas reconnu — il ne comptera pas dans les macros
                     </span>}
               </span>
@@ -238,7 +238,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
                              : Math.max(0, Number(ev.target.value)),
                              duration_source: 'confirmee' as never }
                          : x))}
-                       className="w-[72px] h-[38px] rounded-[11px] bg-brume/40 px-2
+                       className="w-[72px] h-11 rounded-[11px] bg-brume/40 px-2
                                   text-center text-[14px] outline-none focus:bg-brume/60" />
                 <span className="text-[13px] text-doux">
                   {e.duration_min !== null ? duree(e.duration_min) : 'durée manquante'}

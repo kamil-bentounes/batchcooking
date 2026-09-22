@@ -53,7 +53,7 @@ export function Stock({ va }: { va: (v: string) => void }) {
       <div className="mt-6 flex gap-2" role="tablist">
         {(['frigo', 'congelateur', 'placard'] as Onglet[]).map(o => (
           <button key={o} role="tab" aria-selected={onglet === o} onClick={() => setOnglet(o)}
-                  className={`px-4 min-h-11 rounded-full text-[14px] transition-colors
+                  className={`px-4 min-h-11 inline-flex items-center rounded-full text-[14px] transition-colors
                     ${onglet === o ? 'bg-encre text-fond' : 'bg-brume/50 hover:bg-brume'}`}>
             {NOM[o]} <span className="tabular-nums opacity-70">{compte(o)}</span>
           </button>
@@ -181,7 +181,7 @@ function LigneBarquette({ barquette, ouverte, surOuvre, surDeplace, surJette, su
               Jetée
             </button>
             <button onClick={surSupprime}
-                    className="ml-auto text-groseille text-[14px] px-3 py-2">
+                    className="ml-auto text-groseille text-[14px] px-3 min-h-11">
               Supprimer
             </button>
           </div>

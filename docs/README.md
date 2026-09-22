@@ -1,4 +1,4 @@
-# Batch cooking — documentation
+# Popote — documentation
 
 | Doc | Contenu |
 |---|---|

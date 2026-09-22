@@ -205,7 +205,7 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surSuppr
           </span>
           {quantite && <span className="text-[13px] text-doux ml-2">{quantite}</span>}
           {note && (
-            <span className="block text-[13px] mt-0.5" style={{ color: '#8F5A0D' }}>
+            <span className="block text-[13px] mt-0.5" style={{ color: 'var(--color-ocre)' }}>
               {note}
             </span>
           )}
@@ -223,7 +223,7 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surSuppr
           <div className="flex gap-2 flex-wrap">
             {magasins.map(m => (
               <button key={m.id} onClick={() => surMaj({ store_id: m.id })}
-                      className={`px-3 py-1.5 rounded-full text-[13px] transition-colors
+                      className={`px-3 min-h-11 inline-flex items-center rounded-full text-[13px] transition-colors
                         ${article.store_id === m.id
                           ? 'bg-herbe text-fond' : 'bg-brume/50 hover:bg-brume'}`}>
                 {m.name}
@@ -241,7 +241,7 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surSuppr
                               text-right outline-none focus:border-herbe" />
             <span className="text-[13px] text-doux">€</span>
             <button onClick={surSupprime}
-                    className="ml-auto text-groseille text-[14px] px-2 py-1.5">
+                    className="ml-auto text-groseille text-[14px] px-2 min-h-11">
               Supprimer
             </button>
           </div>
@@ -312,7 +312,7 @@ function FormulaireAjout({ magasins, surAjoute }: {
           <div className="flex gap-2 flex-wrap">
             {magasins.map(m => (
               <button type="button" key={m.id} onClick={() => setStoreId(m.id)}
-                      className={`px-3 py-1.5 rounded-full text-[13px] transition-colors
+                      className={`px-3 min-h-11 inline-flex items-center rounded-full text-[13px] transition-colors
                         ${storeId === m.id ? 'bg-herbe text-fond' : 'bg-brume/50'}`}>
                 {m.name}
               </button>
@@ -348,7 +348,7 @@ function Completer({ dejaLa, surAjoute }: {
       <div className="mt-3 flex gap-2 flex-wrap">
         {categories.map(c => (
           <button key={c} onClick={() => setCategorie(c)}
-                  className={`px-3.5 py-1.5 rounded-full text-[13px] transition-colors
+                  className={`px-3.5 min-h-11 inline-flex items-center rounded-full text-[13px] transition-colors
                     ${(categorie ?? categories[0]) === c
                       ? 'bg-encre text-fond' : 'bg-brume/50 hover:bg-brume'}`}>
             {c}

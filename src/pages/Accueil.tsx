@@ -61,10 +61,14 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
             {dateLongue(aujourdhui)}
           </span>
         </span>
+        {/* 44 px touchables, 34 visibles : c'est la SEULE porte vers les
+            réglages — la barre du bas n'y mène pas. */}
         <button onClick={() => va('/reglages')} aria-label="Réglages"
-                className="w-[34px] h-[34px] rounded-full bg-herbe text-fond text-[13px]
+                className="w-11 h-11 -mr-2 grid place-items-center">
+          <span className="w-[34px] h-[34px] rounded-full bg-herbe text-fond text-[13px]
                            grid place-items-center">
-          {(moi?.display_name ?? '?').slice(0, 1).toUpperCase()}
+            {(moi?.display_name ?? '?').slice(0, 1).toUpperCase()}
+          </span>
         </button>
       </div>
 
@@ -159,7 +163,7 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
       <button onClick={() => va('/inventer')}
               className="mt-10 w-full flex items-center gap-3.5 p-4 rounded-[19px]
                          bg-brume/45 text-left hover:bg-brume/70 transition-colors">
-        <svg width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="#8F5A0D"
+        <svg width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="var(--color-ocre)"
              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
              className="shrink-0" aria-hidden="true">
           <path d="M9.5 2.2 11 6.6l4.4 1.5-4.4 1.5-1.5 4.4-1.5-4.4L3.6 8.1 8 6.6z" />

@@ -149,7 +149,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
                   </span>
                 </span>
                 <button onClick={() => retire.mutate(c.id)} aria-label="Retirer"
-                        className="text-groseille text-[14px] px-2 py-1">Retirer</button>
+                        className="text-groseille text-[14px] px-2 min-h-11">Retirer</button>
               </li>
             ) : (
               <li key={c.id} className="flex items-center gap-3">
@@ -166,7 +166,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
                   <span className="text-[13px] text-doux">parts</span>
                 </label>
                 <button onClick={() => retire.mutate(c.id)} aria-label="Retirer"
-                        className="text-groseille text-[14px] px-2 py-1">Retirer</button>
+                        className="text-groseille text-[14px] px-2 min-h-11">Retirer</button>
               </li>
             )))}
           </ul>
@@ -368,7 +368,7 @@ function Ligne({ recette: r, prise, surAjoute }: {
             de provenance, et « d'où sort celle-là ? » reste sans réponse. */}
         {r.ajoutePar && (
           <span className="block text-[13px] mt-0.5"
-                style={{ color: r.dUnAmi ? '#8F5A0D' : undefined }}>
+                style={{ color: r.dUnAmi ? 'var(--color-ocre)' : undefined }}>
             {r.dUnAmi ? `Partagée par ${r.ajoutePar}` : `Ajoutée par ${r.ajoutePar}`}
           </span>
         )}
@@ -382,7 +382,7 @@ function Ligne({ recette: r, prise, surAjoute }: {
               ? `${b.kcalMin}`
               : `${b.kcalMin}–${b.kcalMax}`} kcal la part
             {b.sur < 0.9 && (
-              <span style={{ color: '#8F5A0D' }}>
+              <span style={{ color: 'var(--color-ocre)' }}>
                 {' · '}{Math.round(b.sur * 100)} % des ingrédients connus
               </span>
             )}
@@ -390,7 +390,7 @@ function Ligne({ recette: r, prise, surAjoute }: {
         )}
 
         {r.manques.length > 0 && (
-          <span className="block text-[13px] mt-0.5" style={{ color: '#8F5A0D' }}>
+          <span className="block text-[13px] mt-0.5" style={{ color: 'var(--color-ocre)' }}>
             il manque {r.manques.length === 1
               ? r.manques[0]
               : `${r.manques.length} ingrédients`}

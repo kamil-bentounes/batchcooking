@@ -255,9 +255,14 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
     await expect(page.getByRole('heading', { name: /ton mot de passe/i }))
       .toBeVisible({ timeout: 15_000 })
 
-    // Aucune porte de sortie : la barre de navigation est faite de liens
-    // pleine page, et elle offrait trois moyens de contourner l'étape.
-    await expect(page.getByRole('link')).toHaveCount(0)
+    /* Aucune porte de sortie. L'assertion portait sur `getByRole('link')` au
+       temps où la barre était faite de `<a href>` ; ces liens ont disparu, et
+       l'assertion était devenue increvable — donc muette. On nomme maintenant
+       les trois portes, quelle que soit la balise qui les porte. */
+    for (const porte of [/accueil/i, /objectifs/i, /réglages/i]) {
+      await expect(page.getByRole('button', { name: porte })).toHaveCount(0)
+      await expect(page.getByRole('link', { name: porte })).toHaveCount(0)
+    }
 
     // Et ça tient au rechargement, parce que l'intention est en base.
     await page.reload()
@@ -283,6 +288,16 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
     const icone = page.locator('link[rel="icon"][type="image/svg+xml"]')
     await expect(icone).toHaveAttribute('href', /logo\.svg$/)
 
+    /* Et surtout : le chemin doit être RELATIF À LA BASE. Il a longtemps valu
+       `/logo.svg`, ce qui est juste ici — la suite sert la base `/` — et faux
+       en production, où le site vit sous un sous-chemin : le favicon y était en
+       404 depuis le premier jour sans qu'aucun test puisse le voir. Comparer à
+       `document.baseURI` rend le défaut visible sous les deux bases. */
+    const resolu = await icone.evaluate(l => (l as HTMLLinkElement).href)
+    const base = await page.evaluate(() => document.baseURI)
+    expect(resolu.startsWith(base),
+      `le favicon (${resolu}) sort de la base (${base})`).toBe(true)
+
     // Le fichier doit exister : un href juste vers un fichier absent donne la
     // même page qu'un href absent, en silence.
     const r = await page.request.get(await icone.getAttribute('href') ?? '')
@@ -293,6 +308,45 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
     await page.goto('/')
     await expect(page.locator('header svg, h1 ~ svg, svg').first())
       .toBeVisible({ timeout: 10_000 })
+  })
+
+  test('la barre du bas change VRAIMENT d’écran', async ({ page }) => {
+    /*
+     * Ce test n'existait pas, et c'est ce qui a laissé passer une régression
+     * entière : la barre hors cycle avait été passée des liens aux boutons, et
+     * le hook de routage portant un état LOCAL, chaque appelant avait sa copie.
+     * L'URL changeait, le titre de l'onglet actif aussi, et l'écran restait le
+     * même. Trente tests verts n'y voyaient rien, aucun ne cliquant la barre.
+     */
+    await connecte(page)
+    await page.goto('/reglages')
+    await expect(page.getByRole('heading', { name: /réglages/i })).toBeVisible({ timeout: 15_000 })
+
+    await page.getByRole('button', { name: /objectifs/i }).click()
+    await expect(page.getByRole('heading', { name: /objectifs/i })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('heading', { name: /réglages/i })).toHaveCount(0)
+
+    await page.getByRole('button', { name: /accueil/i }).click()
+    await expect(page.getByRole('heading', { name: /objectifs/i })).toHaveCount(0)
+  })
+
+  test('la barre du bas ne passe pas sous la barre d’accueil du téléphone', async ({ page }) => {
+    /*
+     * `viewport-fit=cover` est actif : sans `env(safe-area-inset-bottom)`, les
+     * quatre libellés tombent sous la barre d'accueil de l'iPhone. La valeur
+     * vaut zéro sur un navigateur de test — on vérifie donc que la RÈGLE est
+     * posée, pas son résultat, et on y ajoute le filet, sans lequel la barre
+     * flotte sans bord sur le fond.
+     */
+    await connecte(page)
+    const barre = page.locator('nav[aria-label="Navigation principale"]')
+    await expect(barre).toBeVisible({ timeout: 15_000 })
+    const style = await barre.evaluate(n => {
+      const s = getComputedStyle(n)
+      return { bas: s.paddingBottom, bord: s.borderTopWidth }
+    })
+    expect(style.bas, 'aucune zone sûre en bas de la barre').not.toBe('0px')
+    expect(style.bord, 'la barre n’a pas de filet').not.toBe('0px')
   })
 
   test('aucun bouton natif en anglais sur les écrans de photo', async ({ page }) => {
