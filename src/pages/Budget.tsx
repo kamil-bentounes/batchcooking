@@ -14,10 +14,52 @@
  */
 import { useState } from 'react'
 import { Marque, Surface, Vide, Attente, Erreur } from '../ui/coque.tsx'
+import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
-  useMois, useEnveloppes, useComptes, virements, moisDe, euros,
+  useMois, useEnveloppes, useComptes, virements, moisDe, euros, enCentimes,
+  useRegularise, type Depense,
 } from '../lib/donnees/budget.ts'
+
+/**
+ * Ce qu'on a VRAIMENT payé.
+ *
+ * Une provision n'est qu'une estimation : l'énergie à la consommation, une
+ * charge annuelle ramenée au douzième. En fin de mois on saisit le relevé, et
+ * la ligne cesse d'être une supposition.
+ *
+ * Les parts se reposent avec les POINTS DE BASE de la provision, jamais avec la
+ * clé d'aujourd'hui : corriger un montant n'est pas l'occasion de repartager.
+ */
+function AConfirmer({ depense, foyerId }: { depense: Depense; foyerId: string }) {
+  const [reel, setReel] = useState('')
+  const regularise = useRegularise()
+  const cents = enCentimes(reel)
+
+  return (
+    <div className="py-4 border-b border-brume last:border-0">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[16px]">{depense.libelle}</span>
+        <span className="text-[15px] text-doux">prévu {euros(depense.montant_cents)}</span>
+      </div>
+      <div className="mt-2.5 flex gap-2 items-end">
+        <div className="grow">
+          <Champ label="Vraiment payé (€)" type="text" inputMode="decimal" value={reel}
+                 onChange={e => setReel(e.target.value)} />
+        </div>
+        <button disabled={cents === null || regularise.isPending}
+                onClick={() => regularise.mutate(
+                  { foyerId, depense, reelCents: cents! },
+                  { onSuccess: () => setReel('') })}
+                className="min-h-11 px-4 rounded-[14px] bg-herbe text-fond text-[15px]
+                           font-medium disabled:bg-brume disabled:text-encre shrink-0">
+          C’est ça
+        </button>
+      </div>
+      <Erreur de={regularise.error} />
+    </div>
+  )
+}
 
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
               'août', 'septembre', 'octobre', 'novembre', 'décembre']
@@ -53,6 +95,9 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
 
   const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, m.display_name]))
   const aFaire = virements(depenses.data ?? [], userId, comptes, prenoms)
+  /* Seulement les mois révolus ou en cours : demander le relevé d'un mois qui
+     n'a pas commencé n'a pas de sens. */
+  const aConfirmer = (depenses.data ?? []).filter(d => d.nature === 'estimee')
   const total = aFaire.reduce((s, v) => s + v.cents, 0)
 
   /* Le dernier jour à 14 h, `fin` valait minuit et tout le bloc disparaissait —
@@ -147,7 +192,12 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
           <button onClick={() => va('/budget-reglages')}
                   className="flex-1 min-h-11 rounded-[14px] border border-brume
                              text-[15px] text-doux">
-            Revenus, comptes, enveloppes
+            Revenus et comptes
+          </button>
+          <button onClick={() => va('/epargne')}
+                  className="flex-1 min-h-11 rounded-[14px] border border-brume
+                             text-[15px] text-doux">
+            L’épargne
           </button>
         </div>
 
@@ -157,6 +207,23 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
                              text-[15px] text-doux">
             Voir et modifier les charges
           </button>
+        )}
+
+        {aConfirmer.length > 0 && (
+          <>
+            <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+              À confirmer
+            </h2>
+            <p className="mt-2 text-[15px] text-doux">
+              Ces montants sont des estimations. Saisis le relevé et le virement du
+              mois suivant s’ajustera tout seul.
+            </p>
+            <Surface className="mt-3">
+              {aConfirmer.map(d => (
+                <AConfirmer key={d.id} depense={d} foyerId={foyer?.id ?? ''} />
+              ))}
+            </Surface>
+          </>
         )}
 
         {enveloppes.length > 0 && (

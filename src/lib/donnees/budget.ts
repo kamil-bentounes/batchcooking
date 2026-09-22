@@ -414,3 +414,101 @@ export function useRattacheCharge() {
     },
   })
 }
+
+/* ── L'épargne : verser, et savoir à qui c'est ────────────────────────────── */
+
+export function usePosePoche() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (p: {
+      foyerId: string; libelle: string; genre: 'urgence' | 'projet'
+      objectifCents: number | null; echeance: string | null; cle: 'prorata' | 'moitie' | null
+    }) => ou(await supabase.from('poche_epargne').insert({
+      household_id: p.foyerId, libelle: p.libelle, genre: p.genre,
+      objectif_cents: p.objectifCents, echeance: p.echeance, cle: p.cle,
+    }).select().single()),
+    onSuccess: () => qc.invalidateQueries({ queryKey: CLE.poches }),
+  })
+}
+
+/**
+ * Verser — ou retirer, le montant étant signé.
+ *
+ * Une seule colonne signée plutôt qu'un booléen de sens : on n'a pas à se
+ * rappeler dans quelle direction lire un drapeau, et la somme se fait toute
+ * seule.
+ */
+export function useVerse() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (v: {
+      foyerId: string; pocheId: string; userId: string; cents: number
+      motif?: 'mensuel' | 'balayage' | 'retrait' | 'correction'
+    }) => ou(await supabase.from('versement_epargne').insert({
+      household_id: v.foyerId, poche_id: v.pocheId, user_profile_id: v.userId,
+      montant_cents: v.cents, motif: v.motif ?? (v.cents < 0 ? 'retrait' : 'mensuel'),
+    }).select().single()),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: CLE.soldes(v.pocheId) })
+      qc.invalidateQueries({ queryKey: CLE.poches })
+    },
+  })
+}
+
+/* ── La régularisation : ce qu'on a VRAIMENT payé ─────────────────────────── */
+
+/**
+ * Remplacer une provision par le montant réel.
+ *
+ * ⚠️ On ne pose PAS une ligne d'ajustement ici, et c'est réfléchi : un réel
+ *    INFÉRIEUR à la provision — l'énergie d'un mois doux — demanderait une
+ *    dépense négative, que la contrainte `montant_cents >= 0` interdit à bon
+ *    droit. On corrige donc la ligne du mois et on repose ses parts.
+ *
+ *    La ligne d'ajustement de D62 reste nécessaire pour la régularisation
+ *    ANNUELLE, où l'écart se répartit sur douze mois déjà partagés ; elle
+ *    viendra avec elle, et l'unicité partielle du générateur est déjà posée
+ *    pour la rendre possible.
+ *
+ * Les nouvelles parts gardent les POINTS DE BASE de la provision, pas la clé
+ * d'aujourd'hui : corriger un montant n'est pas l'occasion de repartager. Le
+ * centime résiduel va au plus gros contributeur, sans quoi la somme ne
+ * recomposerait pas le montant et le trigger différé refuserait l'écriture.
+ *
+ * Trois requêtes, dans cet ordre imposé : PostgREST valide chacune dans sa
+ * propre transaction, et le contrôle de somme n'admet que zéro part ou un total
+ * exact. Retirer les parts d'abord est donc le seul chemin.
+ */
+export function useRegularise() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (r: { foyerId: string; depense: Depense; reelCents: number }) => {
+      const anciennes = r.depense.parts
+      const total = anciennes.reduce((s, p) => s + p.part_cents, 0)
+
+      ou(await supabase.from('depense_part').delete().eq('depense_id', r.depense.id).select())
+      ou(await supabase.from('depense')
+        .update({ montant_cents: r.reelCents, nature: 'connue' })
+        .eq('id', r.depense.id).select())
+
+      if (anciennes.length === 0) return
+      const brut = anciennes.map(p => ({
+        user_profile_id: p.user_profile_id,
+        poids: total === 0 ? 1 : p.part_cents,
+        cents: 0,
+      }))
+      const poidsTotal = brut.reduce((s, b) => s + b.poids, 0) || 1
+      for (const b of brut) b.cents = Math.floor(r.reelCents * b.poids / poidsTotal)
+      const reste = r.reelCents - brut.reduce((s, b) => s + b.cents, 0)
+      const ainee = [...brut].sort((a, b) => b.poids - a.poids)[0]
+      if (ainee) ainee.cents += reste
+
+      ou(await supabase.from('depense_part').insert(brut.map(b => ({
+        depense_id: r.depense.id, user_profile_id: b.user_profile_id,
+        household_id: r.foyerId, part_cents: b.cents,
+        part_bps: Math.round(b.poids * 10_000 / poidsTotal),
+      }))).select())
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['budget-mois'] }),
+  })
+}
