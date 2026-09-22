@@ -1,0 +1,142 @@
+<!--
+  Le mail d'invitation au foyer. Il se colle dans le tableau de bord :
+  Authentication → Emails → « Invite user ». Il est versionné ici parce qu'un
+  gabarit qui ne vit que dans une interface web se perd à la première migration.
+
+  Trois contraintes ont décidé de la forme :
+
+  — Les clients mail ne connaissent ni flexbox ni grid ni les feuilles de style
+    externes. Tout est en TABLE et en style INLINE. Ça a l'air d'un retour en
+    2005 : c'est le seul HTML que Gmail, Outlook et Mail rendent pareil.
+  — Les images sont bloquées par défaut chez beaucoup de monde. Le logo est
+    donc un ornement, jamais un porteur de sens : images coupées, le mail reste
+    entier et beau. C'est pour ça que « Popote » est du TEXTE à côté, et pas
+    dans l'image.
+  — La largeur tient en 600 px, et tout descend en une colonne sur téléphone.
+    Le mail sera lu sur un téléphone, pas ailleurs.
+
+  Variables Supabase : {{ .ConfirmationURL }} porte le lien qui crée le compte
+  ET ouvre la session. {{ .Data.invite_par }} vient du `data` passé à
+  inviteUserByEmail() — sans lui, on retombe sur « quelqu'un ».
+-->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invitation à rejoindre un foyer sur Popote</title>
+</head>
+<body style="margin:0; padding:0; background-color:#F2F4EF; -webkit-font-smoothing:antialiased;">
+
+<!-- La ligne d'aperçu dans la boîte de réception. Invisible dans le mail ouvert. -->
+<div style="display:none; font-size:1px; color:#F2F4EF; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden;">
+  Les courses, le budget et les sessions de cuisine, à deux. Ton compte se crée en un clic.
+</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F2F4EF;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:600px;">
+
+        <!-- Marque -->
+        <tr>
+          <td align="center" style="padding:0 0 24px 0;">
+            <img src="{{ .SiteURL }}icone-192.png" width="52" height="52" alt=""
+                 style="display:block; border:0; outline:none; text-decoration:none; border-radius:12px;">
+            <div style="font-family:Georgia,'Times New Roman',serif; font-size:26px; line-height:32px; letter-spacing:0.5px; color:#2F5D45; padding-top:10px; font-weight:normal;">
+              Popote
+            </div>
+          </td>
+        </tr>
+
+        <!-- La carte -->
+        <tr>
+          <td style="background-color:#FFFFFF; border-radius:16px; border:1px solid #E2E6DC;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+
+              <!-- Filet safran -->
+              <tr><td style="background-color:#E8A33D; height:4px; line-height:4px; font-size:4px; border-radius:16px 16px 0 0;">&nbsp;</td></tr>
+
+              <tr>
+                <td style="padding:36px 36px 8px 36px;">
+                  <h1 style="margin:0; font-family:Georgia,'Times New Roman',serif; font-size:24px; line-height:32px; font-weight:normal; color:#1F2A24;">
+                    {{ .Data.invite_par }} t’invite à rejoindre votre foyer.
+                  </h1>
+                </td>
+              </tr>
+
+              <tr>
+                <td style="padding:16px 36px 0 36px; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; color:#434E47;">
+                  Popote, c’est l’application de votre foyer. Tout ce qui se partage à deux y est au même endroit&nbsp;:
+                </td>
+              </tr>
+
+              <!-- Les trois choses. Puces dessinées en table : les <ul> sont
+                   rendus n'importe comment d'un client à l'autre. -->
+              <tr>
+                <td style="padding:20px 36px 4px 36px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                    <tr>
+                      <td width="10" valign="top" style="padding:0 12px 14px 0; font-size:16px; line-height:26px; color:#E8A33D;">•</td>
+                      <td valign="top" style="padding:0 0 14px 0; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; color:#434E47;">
+                        <strong style="color:#1F2A24; font-weight:600;">Les courses</strong> — la liste se construit toute seule à partir de ce que vous cuisinez.
+                      </td>
+                    </tr>
+                    <tr>
+                      <td width="10" valign="top" style="padding:0 12px 14px 0; font-size:16px; line-height:26px; color:#E8A33D;">•</td>
+                      <td valign="top" style="padding:0 0 14px 0; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; color:#434E47;">
+                        <strong style="color:#1F2A24; font-weight:600;">Le budget</strong> — les charges du foyer, partagées comme vous l’avez décidé.
+                      </td>
+                    </tr>
+                    <tr>
+                      <td width="10" valign="top" style="padding:0 12px 0 0; font-size:16px; line-height:26px; color:#E8A33D;">•</td>
+                      <td valign="top" style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; color:#434E47;">
+                        <strong style="color:#1F2A24; font-weight:600;">Les sessions de cuisine</strong> — à deux téléphones, chacun sa tâche, en direct.
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Le bouton. En table : un <a> stylé seul est écrasé par Outlook. -->
+              <tr>
+                <td align="center" style="padding:32px 36px 8px 36px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" bgcolor="#2F5D45" style="border-radius:10px;">
+                        <a href="{{ .ConfirmationURL }}"
+                           style="display:inline-block; padding:15px 34px; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:16px; font-weight:600; line-height:20px; color:#FFFFFF; text-decoration:none; border-radius:10px;">
+                          Rejoindre le foyer
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <tr>
+                <td align="center" style="padding:16px 36px 36px 36px; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:22px; color:#5F6B62;">
+                  Ce lien crée ton compte et t’installe dans le foyer. Il expire dans 24&nbsp;heures.
+                </td>
+              </tr>
+
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td align="center" style="padding:24px 24px 0 24px; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; line-height:21px; color:#6B756D;">
+            Tu reçois ce message parce que {{ .Data.invite_par }} a saisi cette adresse.<br>
+            Si tu n’attendais rien, ignore-le : sans ton clic, il ne se passe rien.
+          </td>
+        </tr>
+
+      </table>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
