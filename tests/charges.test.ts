@@ -931,3 +931,109 @@ describe('ce qu’une revue globale a trouvé', () => {
       'les parts ne recomposent pas le réel').toBe(7_350)
   })
 })
+
+describe('l’arrivée du second membre, éprouvée', () => {
+  it('ne rend PAS communes les charges perso d’un foyer solo', async () => {
+    /* Le rétro-remplissage de 0061 disait « commune si plus d'un participant OU
+       si le foyer ne compte qu'une personne ». Or le foyer solo est précisément
+       le cas de départ : les charges perso — mensualité de prêt, forfait mobile
+       — devenaient communes, et le second membre y serait entré. */
+    const { data: perso } = await admin().from('charge').insert({
+      household_id: moi.householdId, libelle: 'Bien à moi seul',
+      montant_cents: 58_000, periodicite: 'mensuel', debut: '2026-01-01',
+      commun: false,
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: perso!.id, user_profile_id: moi.userId, household_id: moi.householdId,
+    })
+    const { data: relu } = await admin().from('charge')
+      .select('commun').eq('id', perso!.id).single()
+    expect(relu!.commun, 'une charge perso a été rendue commune').toBe(false)
+  })
+
+  it('corriger sa date d’entrée la sort des mois qu’elle n’habitait pas', async () => {
+    /* D71 promet que cette date « se confirme, elle ne se devine pas ». Elle se
+       devinait — `entre_le` vaut le jour de l'inscription — et la corriger ne
+       refigeait rien : il n'existait de trigger qu'à l'insertion. */
+    const { data: u } = await admin().auth.admin.createUser({
+      email: `tardive-${Date.now()}@fumee.test`, password: 'x'.repeat(12), email_confirm: true,
+    })
+    const tardive = u.user!.id
+    // Elle s'inscrit « aujourd'hui » : elle entre donc dans le mois en cours.
+    await admin().from('user_profile').insert({
+      id: tardive, household_id: moi.householdId, display_name: 'Tardive',
+      entre_le: '2027-07-01',
+    })
+
+    const id = await poseCharge({ libelle: 'Loyer de juillet', cents: 60_000,
+                                  periodicite: 'mensuel',
+                                  participants: [moi.userId, tardive] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-07-01' })
+
+    const partsDe = async () => {
+      const { data: d } = await admin().from('depense').select('id')
+        .eq('charge_id', id).eq('mois', '2027-07-01').single()
+      const { data: p } = await admin().from('depense_part')
+        .select('user_profile_id, part_cents').eq('depense_id', d!.id)
+      return Object.fromEntries(p!.map(x => [x.user_profile_id, x.part_cents]))
+    }
+    expect((await partsDe())[tardive], 'elle ne porte rien alors qu’elle est là')
+      .toBeGreaterThan(0)
+
+    // Elle corrige : elle n'emménage qu'en août.
+    await admin().from('user_profile').update({ entre_le: '2027-08-01' }).eq('id', tardive)
+
+    const apres = await partsDe()
+    expect(apres[tardive], 'elle paie encore un mois qu’elle n’habitait pas').toBeUndefined()
+    expect(apres[moi.userId], 'il ne porte pas tout seul ce mois-là').toBe(60_000)
+
+    await admin().from('user_profile').delete().eq('id', tardive)
+  })
+
+  it('refuse de confirmer une dépense que personne ne doit', async () => {
+    /* Le marqueur était posé quand même, et `refige_pour` refusait alors le mois
+       entier pour toujours : une ligne que personne ne doit, gelée. */
+    const { data: d } = await admin().from('depense').insert({
+      household_id: moi.householdId, mois: '2027-09-01', libelle: 'Sans personne',
+      montant_cents: 5_000, source: 'manuel', nature: 'estimee',
+    }).select().single()
+
+    const { error } = await moi.client.rpc('confirme_la_depense',
+      { la_depense: d!.id, reel_cents: 4_000 })
+    expect(error, 'une dépense sans part a été confirmée').not.toBeNull()
+
+    const { data: apres } = await admin().from('depense')
+      .select('confirme_le').eq('id', d!.id).single()
+    expect(apres!.confirme_le, 'le marqueur a été posé quand même').toBeNull()
+  })
+
+  it('refige_pour ne touche qu’aux lignes qu’elle saura repeupler', async () => {
+    /* ⚠️ Ce test manquait, et son absence se voyait : ramener `refige_pour` à sa
+       version d'avant — qui supprimait les parts de TOUTES les lignes engendrées
+       mais n'en reposait que pour celles ayant encore une charge — laissait les
+       quarante tests verts. Une dépense dénouée perdait ses parts à jamais. */
+    const id = await poseCharge({ libelle: 'Bientôt dénouée', cents: 8_000,
+                                  periodicite: 'mensuel', participants: [moi.userId] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-11-01' })
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('charge_id', id).eq('mois', '2027-11-01').single()
+
+    // On dénoue le lien, comme le fait une régularisation manuelle.
+    await admin().from('depense').update({ charge_id: null }).eq('id', d!.id)
+
+    // Puis un revenu change, ce qui déclenche le refige du mois.
+    await admin().from('revenu').insert({
+      household_id: moi.householdId, user_profile_id: moi.userId,
+      net_mensuel_cents: 410_000, valid_from: '2027-11-01',
+    })
+
+    const { data: parts } = await admin().from('depense_part')
+      .select('part_cents').eq('depense_id', d!.id)
+    expect(parts ?? [], 'la dépense dénouée a perdu ses parts').not.toHaveLength(0)
+    expect(parts!.reduce((s, p) => s + p.part_cents, 0),
+      'ses parts ne recomposent plus le montant').toBe(8_000)
+
+    await admin().from('revenu').delete()
+      .eq('user_profile_id', moi.userId).eq('valid_from', '2027-11-01')
+  })
+})

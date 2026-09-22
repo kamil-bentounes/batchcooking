@@ -286,6 +286,21 @@ export function useAjouteCharge() {
         c.participants.map(u => ({
           charge_id: ligne.id, user_profile_id: u, household_id: c.foyerId,
         }))).select())
+
+      /* ⚠️ Et on OUVRE les mois écoulés depuis son début.
+       *
+       *    `ouvre_le_mois` n'engendre que le mois demandé. Une taxe foncière
+       *    qui court depuis janvier, posée en septembre, ne provisionnait donc
+       *    que septembre — et sa régularisation annuelle facturait 1 208 € d'un
+       *    coup, exactement ce que D61 existe pour empêcher. Le champ « depuis
+       *    quand » ne servait à rien sans ça. */
+      const depuis = (c.debut ?? moisDe()).slice(0, 7)
+      const jusqua = moisDe().slice(0, 7)
+      for (let [a, m] = depuis.split('-').map(Number);
+           `${a}-${String(m).padStart(2, '0')}` <= jusqua; m === 12 ? (a++, m = 1) : m++) {
+        await supabase.rpc('ouvre_le_mois',
+          { le_mois: `${a}-${String(m).padStart(2, '0')}-01` })
+      }
       return ligne
     },
     onSuccess: () => {

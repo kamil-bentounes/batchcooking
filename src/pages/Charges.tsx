@@ -59,6 +59,11 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
      facture l'année entière d'un coup. */
   const [debut, setDebut] = useState<string>(`${new Date().getFullYear()}-${
     String(new Date().getMonth() + 1).padStart(2, '0')}-01`)
+  /* L'intention, déclarée à la main quand on est encore seul dans le foyer.
+     Sans elle, `qui.length > 1` était impossible et aucune charge inventée ne
+     pouvait accueillir le second membre à son arrivée. Le catalogue la
+     pré-coche ; une ligne libre demande. */
+  const [commune, setCommune] = useState(depart?.portee === 'commun' || membres.length > 1)
   const [enveloppeId, setEnveloppeId] = useState<string>('')
   /* Le catalogue PRÉ-COCHE : les deux pour l'électricité, une seule personne
      pour un forfait mobile. Ce n'est qu'une suggestion — la case reste ouverte. */
@@ -122,10 +127,24 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
               )
             })}
           </div>
-          {qui.length === 1 && (
+          {qui.length === 1 && !commune && (
             <p className="mt-2 text-[14px] text-doux">
               Payée par une seule personne : elle n’entrera dans aucun partage.
             </p>
+          )}
+          {membres.length === 1 && (
+            <>
+              <button role="checkbox" aria-checked={commune} onClick={() => setCommune(c => !c)}
+                      className="mt-3 flex items-center gap-3 min-h-11 text-left">
+                <span className={`w-[22px] h-[22px] rounded-[7px] border-2 shrink-0
+                                  ${commune ? 'bg-herbe border-herbe' : 'border-brume'}`} />
+                <span className="text-[15px]">Elle se partagera avec le foyer</span>
+              </button>
+              <p className="mt-1 text-[14px] text-doux">
+                Tu es seul pour l’instant. Coche si la personne que tu invites devra
+                la partager : elle y entrera toute seule en arrivant.
+              </p>
+            </>
           )}
         </div>
 
@@ -233,7 +252,7 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
                         le catalogue le suggérait alors qu'on est encore seul
                         dans le foyer. C'est cette intention qui fera entrer le
                         second membre à son arrivée. */
-                     commun: qui.length > 1 || depart?.portee === 'commun',
+                     commun: qui.length > 1 || commune,
                      debut,
                    }, { onSuccess: surFini })}>
           {ajoute.isPending ? 'J’ajoute…' : 'Ajouter cette charge'}
