@@ -18,7 +18,7 @@
 import { useState } from 'react'
 import { Surface, Principal, Erreur, BarreAction } from '../ui/coque.tsx'
 import { callFunction } from '../lib/supabase.ts'
-import { euros } from '../lib/donnees/budget.ts'
+import { enCentimes } from '../lib/donnees/budget.ts'
 
 type Proposee = {
   libelle: string
@@ -82,6 +82,10 @@ export function Dictee({ retour, surRetenues }: {
   const [texte, setTexte] = useState('')
   const [reponse, setReponse] = useState<Reponse | null>(null)
   const [retenues, setRetenues] = useState<Set<number>>(new Set())
+  /* Les montants corrigés, par indice. L'écran promettait « corrige les
+     montants » sans offrir le moindre champ, et une ligne sans montant entrait
+     en base à zéro euro. */
+  const [corriges, setCorriges] = useState<Record<number, string>>({})
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState<unknown>(null)
 
@@ -103,6 +107,16 @@ export function Dictee({ retour, surRetenues }: {
     } catch (e) { setErreur(e) } finally { setEnvoi(false) }
   }
 
+  /* Le montant retenu est celui qu'on a corrigé, sinon celui du modèle. Une
+     ligne sans montant n'est pas ajoutable : elle reste cochée sans compter. */
+  const pretes = reponse
+    ? [...retenues].sort((a, b) => a - b).map(i => {
+        const saisi = corriges[i]
+        const cents = saisi !== undefined ? enCentimes(saisi) : reponse.charges[i].montant_cents
+        return { ...reponse.charges[i], montant_cents: cents }
+      }).filter(c => c.montant_cents !== null && c.montant_cents > 0)
+    : []
+
   if (reponse) {
     return (
       <main className="min-h-dvh px-6 pt-14 pb-40">
@@ -113,8 +127,9 @@ export function Dictee({ retour, surRetenues }: {
           </button>
           <h1 className="titre text-[32px] mt-6">Ce que j’ai compris</h1>
           <p className="mt-2 text-[15px] text-doux">
-            Décoche ce qui est faux, corrige les montants. Rien n’est enregistré tant
-            que tu n’as pas validé.
+            Décoche ce qui est faux, complète les montants manquants. Rien n’est
+            enregistré tant que tu n’as pas validé — et une ligne sans montant ne
+            part pas.
           </p>
 
           <Surface className="mt-5">
@@ -132,13 +147,22 @@ export function Dictee({ retour, surRetenues }: {
                 <span className="grow">
                   <span className="block text-[16px]">{c.libelle}</span>
                   <span className="block mt-0.5 text-[14px] text-doux">
-                    {c.montant_cents === null
-                      ? 'montant à compléter'
-                      : `${euros(c.montant_cents)} ${
-                          c.periodicite === 'mensuel' ? 'par mois'
-                          : c.periodicite === 'trimestriel' ? 'par trimestre' : 'par an'}`}
+                    {c.periodicite === 'mensuel' ? 'par mois'
+                      : c.periodicite === 'trimestriel' ? 'par trimestre' : 'par an'}
                     {c.portee === 'commun' ? ' · en commun' : ' · à toi'}
                     {c.variable && ' · variable'}
+                  </span>
+                  <span className="mt-2 flex items-center gap-2"
+                        onClick={e => e.preventDefault()}>
+                    <input type="text" inputMode="decimal"
+                           aria-label={`Montant de ${c.libelle}`}
+                           value={corriges[i] ?? (c.montant_cents === null
+                             ? '' : String(c.montant_cents / 100).replace('.', ','))}
+                           onChange={e => setCorriges(m => ({ ...m, [i]: e.target.value }))}
+                           placeholder="à compléter"
+                           className="w-28 min-h-11 rounded-[12px] border border-brume
+                                      bg-surface px-3 text-[16px] placeholder:text-doux" />
+                    <span className="text-[15px] text-doux">€</span>
                   </span>
                   {c.remarque && (
                     <span className="block mt-1.5 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
@@ -178,10 +202,9 @@ export function Dictee({ retour, surRetenues }: {
           )}
 
           <BarreAction>
-            <Principal disabled={retenues.size === 0}
-                       onClick={() => surRetenues(
-                         [...retenues].sort().map(i => reponse.charges[i]))}>
-              Ajouter {retenues.size} charge{retenues.size > 1 ? 's' : ''}
+            <Principal disabled={pretes.length === 0}
+                       onClick={() => surRetenues(pretes)}>
+              Ajouter {pretes.length} charge{pretes.length > 1 ? 's' : ''}
             </Principal>
           </BarreAction>
         </div>

@@ -17,8 +17,8 @@ import { Marque, Surface, Vide, Attente, Erreur } from '../ui/coque.tsx'
 import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
-  useMois, useEnveloppes, useComptes, virements, moisDe, euros, enCentimes,
-  useRegularise, type Depense,
+  useMois, useEnveloppes, useComptes, useCharges, virements, moisDe, euros,
+  enCentimes, useRegularise, type Depense,
 } from '../lib/donnees/budget.ts'
 
 /**
@@ -92,12 +92,24 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
   const depenses = useMois(mois)
   const { data: enveloppes = [] } = useEnveloppes(mois)
   const { data: comptes = [] } = useComptes()
+  const charges = useCharges()
 
   const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, m.display_name]))
   const aFaire = virements(depenses.data ?? [], userId, comptes, prenoms)
-  /* Seulement les mois révolus ou en cours : demander le relevé d'un mois qui
-     n'a pas commencé n'a pas de sens. */
-  const aConfirmer = (depenses.data ?? []).filter(d => d.nature === 'estimee')
+  /* ⚠️ Seulement les charges MENSUELLES variables.
+   *
+   *    La première version prenait toute dépense estimée, donc aussi la taxe
+   *    foncière ramenée au douzième : saisir le relevé de 1450 € en octobre
+   *    écrasait le mois d'octobre à 1450 € au lieu d'étaler l'écart sur les
+   *    douze mois déjà partagés. La régularisation ANNUELLE est un autre
+   *    mécanisme, qui n'est pas encore écrit — tant qu'il ne l'est pas, on
+   *    n'offre pas un bouton qui abîme le mois. */
+  const mensuellesVariables = new Set(
+    (charges.data ?? [])
+      .filter(c => c.variable && c.periodicite === 'mensuel')
+      .map(c => c.id))
+  const aConfirmer = (depenses.data ?? []).filter(
+    d => d.nature === 'estimee' && d.charge_id && mensuellesVariables.has(d.charge_id))
   const total = aFaire.reduce((s, v) => s + v.cents, 0)
 
   /* Le dernier jour à 14 h, `fin` valait minuit et tout le bloc disparaissait —

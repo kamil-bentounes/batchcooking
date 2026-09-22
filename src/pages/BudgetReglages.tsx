@@ -18,7 +18,7 @@ import { Surface, Erreur, Attente } from '../ui/coque.tsx'
 import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
-  useRevenus, usePoseRevenu, useComptes, usePoseCompte,
+  useRevenus, usePoseRevenu, useComptes, usePoseCompte, useRegle, usePoseRegle,
   useEnveloppesPosees, usePoseEnveloppe, euros, enCentimes,
 } from '../lib/donnees/budget.ts'
 
@@ -41,6 +41,8 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
   const poseRevenu = usePoseRevenu()
   const poseCompte = usePoseCompte()
   const poseEnveloppe = usePoseEnveloppe()
+  const regle = useRegle()
+  const poseRegle = usePoseRegle()
 
   const [monRevenu, setMonRevenu] = useState('')
   const [nomCompte, setNomCompte] = useState('')
@@ -112,6 +114,28 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
             )}
           </div>
           <Erreur de={revenus.error ?? poseRevenu.error} />
+        </Section>
+
+        <Section titre="Comment vous partagez"
+                 aide="La règle par défaut du foyer. Chaque charge peut imposer la sienne,
+                       et « pour une seule personne » se dit en ne mettant qu'elle dans les
+                       participants.">
+          <div role="radiogroup" aria-label="Règle de partage" className="mt-4 flex gap-2">
+            {([['prorata', 'Au prorata'], ['moitie', 'Moitié-moitié']] as const)
+              .map(([v, nom]) => (
+                <button key={v} role="radio" aria-checked={regle.data === v}
+                        disabled={poseRegle.isPending}
+                        onClick={() => poseRegle.mutate({ foyerId, cle: v })}
+                        className={`flex-1 min-h-11 rounded-[12px] text-[15px] transition-colors
+                          ${regle.data === v ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
+                  {nom}
+                </button>
+              ))}
+          </div>
+          <p className="mt-2 text-[14px] text-doux">
+            Le changement vaut à partir de ce mois : les mois déjà partagés ne bougent pas.
+          </p>
+          <Erreur de={regle.error ?? poseRegle.error} />
         </Section>
 
         <Section titre="Les comptes"

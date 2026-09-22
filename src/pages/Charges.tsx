@@ -18,8 +18,8 @@ import { Surface, Vide, Attente, Erreur, Principal, BarreAction } from '../ui/co
 import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
-  useCharges, useCatalogue, useAjouteCharge, useArchiveCharge, euros, enCentimes,
-  type Charge,
+  useCharges, useCatalogue, useAjouteCharge, useArchiveCharge, useComptes,
+  useEnveloppesPosees, euros, enCentimes, type Charge,
 } from '../lib/donnees/budget.ts'
 
 const PERIODE: Record<string, string> = {
@@ -29,12 +29,14 @@ const PERIODE: Record<string, string> = {
 type Filtre = 'tout' | 'commun' | 'moi'
 
 /** Le formulaire d'ajout, qu'il vienne du catalogue ou d'une ligne inventée. */
-function Ajout({ depart, membres, moi, foyerId, surFini }: {
+function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: {
   depart: { libelle: string; periode: string; portee: string; precision: string | null
             catalogueId: string | null } | null
   membres: { id: string; display_name: string }[]
   moi: string
   foyerId: string
+  comptes: { id: string; nom: string }[]
+  enveloppes: { id: string; libelle: string }[]
   surFini: () => void
 }) {
   const [libelle, setLibelle] = useState(depart?.libelle ?? '')
@@ -42,6 +44,11 @@ function Ajout({ depart, membres, moi, foyerId, surFini }: {
   const [periode, setPeriode] = useState(depart?.periode ?? 'mensuel')
   const [variable, setVariable] = useState(false)
   const [cle, setCle] = useState<'defaut' | 'prorata' | 'moitie'>('defaut')
+  /* Le compte débité et l'enveloppe. Sans eux, l'app ne peut annoncer qu'un
+     montant à répartir — jamais un virement, qui est la seule chose sur
+     laquelle on agit. Le premier compte commun est proposé d'office. */
+  const [compteId, setCompteId] = useState<string>(comptes[0]?.id ?? '')
+  const [enveloppeId, setEnveloppeId] = useState<string>('')
   /* Le catalogue PRÉ-COCHE : les deux pour l'électricité, une seule personne
      pour un forfait mobile. Ce n'est qu'une suggestion — la case reste ouverte. */
   const [qui, setQui] = useState<string[]>(
@@ -127,6 +134,54 @@ function Ajout({ depart, membres, moi, foyerId, surFini }: {
           </div>
         )}
 
+        {comptes.length > 0 && (
+          <div>
+            <span className="block text-[15px] font-semibold">Payée depuis</span>
+            <div role="radiogroup" aria-label="Compte débité" className="mt-2 flex gap-2 flex-wrap">
+              {comptes.map(c => (
+                <button key={c.id} role="radio" aria-checked={compteId === c.id}
+                        onClick={() => setCompteId(c.id)}
+                        className={`px-4 min-h-11 inline-flex items-center rounded-full
+                                    text-[14px] transition-colors
+                          ${compteId === c.id ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
+                  {c.nom}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {enveloppes.length > 0 && (
+          <div>
+            <span className="block text-[15px] font-semibold">Dans quelle enveloppe</span>
+            <div role="radiogroup" aria-label="Enveloppe" className="mt-2 flex gap-2 flex-wrap">
+              <button role="radio" aria-checked={enveloppeId === ''}
+                      onClick={() => setEnveloppeId('')}
+                      className={`px-4 min-h-11 inline-flex items-center rounded-full
+                                  text-[14px] transition-colors
+                        ${enveloppeId === '' ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
+                Aucune
+              </button>
+              {enveloppes.map(e => (
+                <button key={e.id} role="radio" aria-checked={enveloppeId === e.id}
+                        onClick={() => setEnveloppeId(e.id)}
+                        className={`px-4 min-h-11 inline-flex items-center rounded-full
+                                    text-[14px] transition-colors
+                          ${enveloppeId === e.id ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
+                  {e.libelle}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {comptes.length === 0 && (
+          <p className="text-[15px]" style={{ color: 'var(--color-ocre)' }}>
+            Aucun compte déclaré : cette charge apparaîtra sous « à répartir »
+            au lieu d’un virement. Pose-les dans les réglages du budget.
+          </p>
+        )}
+
         <button role="checkbox" aria-checked={variable} onClick={() => setVariable(v => !v)}
                 className="flex items-center gap-3 min-h-11 text-left">
           <span className={`w-[22px] h-[22px] rounded-[7px] border-2 shrink-0
@@ -145,6 +200,7 @@ function Ajout({ depart, membres, moi, foyerId, surFini }: {
                      libelle: libelle.trim(), montantCents: cents ?? 0, periodicite: periode,
                      participants: qui, cle: cle === 'defaut' ? null : cle,
                      catalogueId: depart?.catalogueId ?? null, variable, foyerId,
+                     compteId: compteId || null, enveloppeId: enveloppeId || null,
                    }, { onSuccess: surFini })}>
           {ajoute.isPending ? 'J’ajoute…' : 'Ajouter cette charge'}
         </Principal>
@@ -163,6 +219,12 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   const { data: catalogue = [] } = useCatalogue()
   const archive = useArchiveCharge()
   const ajouteUne = useAjouteCharge()
+  const comptes = useComptes()
+  const enveloppes = useEnveloppesPosees()
+  /* Le compte commun, pour la dictée : elle ne demande pas où débiter, et une
+     charge sans compte ne produit pas de virement. */
+  const compteParDefaut = (comptes.data ?? [])
+    .find(c => c.genre === 'commun')?.id ?? (comptes.data ?? [])[0]?.id ?? null
 
   const membres = (foyer?.membres ?? []).map(m => ({ id: m.id, display_name: m.display_name }))
   const prenoms = new Map(membres.map(m => [m.id, m.display_name]))
@@ -173,13 +235,18 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   if (dictee) {
     return (
       <Dictee retour={() => setDictee(false)} surRetenues={async lignes => {
-        for (const l of lignes) {
+        /* Une ligne sans montant n'entre PAS à zéro : le formulaire manuel
+           refuse zéro, et il n'y a aucune raison qu'une dictée l'accepte. Elles
+           sont écartées avant l'écriture, et l'écran de revue les montre
+           décochées. */
+        for (const l of lignes.filter(x => x.montant_cents && x.montant_cents > 0)) {
           await ajouteUne.mutateAsync({
             libelle: l.libelle,
-            montantCents: l.montant_cents ?? 0,
+            montantCents: l.montant_cents!,
             periodicite: l.periodicite,
             participants: l.portee === 'commun' ? membres.map(m => m.id) : [userId],
             variable: l.variable,
+            compteId: compteParDefaut,
             foyerId: foyer?.id ?? '',
           })
         }
@@ -200,7 +267,9 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
             {ajout?.libelle || 'Une charge de plus'}
           </h1>
           <Ajout depart={ajout} membres={membres} moi={userId}
-                 foyerId={foyer?.id ?? ''} surFini={() => setAjout(undefined)} />
+                 foyerId={foyer?.id ?? ''}
+                 comptes={comptes.data ?? []} enveloppes={enveloppes.data ?? []}
+                 surFini={() => setAjout(undefined)} />
         </div>
       </main>
     )

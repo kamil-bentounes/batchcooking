@@ -424,10 +424,17 @@ test.describe('le budget, du vide jusqu’au virement', () => {
     await expect(page.getByText(/37,00/).first()).toBeVisible({ timeout: 15_000 })
     await capture(page, 'clic-19-charge-posee')
 
-    // Et le mois doit maintenant annoncer un virement, pas « Rien à verser ».
+    /* Et le mois doit annoncer un VIREMENT NOMMÉ, pas « à répartir ».
+       La première version de ce test n'assertait que la présence du titre
+       « À verser » — elle n'a donc pas vu que les charges créées par l'écran
+       ne portaient aucun compte, et retombaient toutes dans le bac à sable. */
     await page.goto('/budget')
     await expect(page.getByText(/à verser/i).first()).toBeVisible({ timeout: 15_000 })
     await expect(page.getByRole('heading', { name: /rien à verser/i })).toHaveCount(0)
+    await expect(page.getByText('Commun', { exact: true }).first())
+      .toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/à répartir/i),
+      'une charge posée par l’écran ne porte pas de compte').toHaveCount(0)
     await capture(page, 'clic-20-budget-rempli')
 
     expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])

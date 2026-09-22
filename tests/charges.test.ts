@@ -356,3 +356,72 @@ describe('la régularisation de D62', () => {
     expect(ajout ?? [], 'aucune ligne de régularisation créée').toHaveLength(1)
   })
 })
+
+describe('ce que la relecture finale a trouvé', () => {
+  it('ramène une charge trimestrielle au tiers, pas au mois', async () => {
+    /* ⚠️ `provision_mensuelle('trimestriel')` n'était couvert par AUCUN test :
+       en remplaçant `round(montant/3.0)` par le montant entier, les 728 tests
+       restaient verts. La copro à 300 € le trimestre — le cas réel de ce
+       foyer — pouvait être facturée 300 € par mois sans que rien ne rougisse. */
+    await poseCharge({ libelle: 'Copropriété', cents: 30_000, periodicite: 'trimestriel',
+                       participants: [moi.userId] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-02-01' })
+
+    const { data: d } = await admin().from('depense').select('id, montant_cents')
+      .eq('household_id', moi.householdId).eq('mois', '2027-02-01')
+      .eq('libelle', 'Copropriété').single()
+    expect(d!.montant_cents, '300 € par trimestre font 100 € par mois').toBe(10_000)
+    expect(await sommeDesParts(d!.id)).toBe(10_000)
+  })
+
+  it('n’engendre rien pour quelqu’un qui n’est pas encore là', async () => {
+    /* Le générateur ne vérifiait que l'EXISTENCE d'un participant, pas sa
+       PRÉSENCE : une charge dont l'unique participant arrive le mois suivant
+       produisait une dépense SANS AUCUNE PART. Elle pesait dans l'enveloppe et
+       dans « à confirmer », et personne ne la devait. */
+    const { data: u } = await admin().auth.admin.createUser({
+      email: `futur-${Date.now()}@fumee.test`, password: 'x'.repeat(12), email_confirm: true,
+    })
+    const futur = u.user!.id
+    await admin().from('user_profile').insert({
+      id: futur, household_id: moi.householdId, display_name: 'Futur', entre_le: '2027-10-01',
+    })
+
+    await poseCharge({ libelle: 'Pas encore là', cents: 5_000, periodicite: 'mensuel',
+                       participants: [futur] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-03-01' })
+
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('household_id', moi.householdId).eq('mois', '2027-03-01')
+      .eq('libelle', 'Pas encore là').maybeSingle()
+    expect(d, 'une dépense est née sans personne pour la payer').toBeNull()
+
+    await admin().from('user_profile').delete().eq('id', futur)
+  })
+
+  it('un compte perso exige un titulaire, un compte commun n’en a pas', async () => {
+    const { error: e1 } = await admin().from('compte').insert({
+      household_id: moi.householdId, nom: 'Perso sans nom', genre: 'perso',
+    })
+    expect(e1, 'un compte perso sans titulaire est accepté').not.toBeNull()
+
+    const { error: e2 } = await admin().from('compte').insert({
+      household_id: moi.householdId, nom: 'Commun avec titulaire', genre: 'commun',
+      titulaire_id: moi.userId,
+    })
+    expect(e2, 'un compte commun avec titulaire est accepté').not.toBeNull()
+  })
+
+  it('un nom de compte se réutilise une fois le compte archivé', async () => {
+    const { data: c } = await admin().from('compte').insert({
+      household_id: moi.householdId, nom: 'Livret', genre: 'epargne',
+    }).select().single()
+    await admin().from('compte')
+      .update({ archive_le: new Date().toISOString() }).eq('id', c!.id)
+
+    const { error } = await admin().from('compte').insert({
+      household_id: moi.householdId, nom: 'Livret', genre: 'epargne',
+    })
+    expect(error, 'un compte archivé confisque son nom pour toujours').toBeNull()
+  })
+})

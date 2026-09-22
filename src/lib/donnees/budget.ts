@@ -61,6 +61,7 @@ export function eurosRonds(cents: number): string {
 
 export type Depense = {
   id: string
+  charge_id: string | null
   libelle: string
   montant_cents: number
   nature: 'estimee' | 'connue'
@@ -95,7 +96,7 @@ export function useMois(mois: string) {
         /* ⚠️ Une seule chaîne LITTÉRALE. PostgREST infère le type du résultat
            depuis le texte du `select` ; une concaténation n'est plus un
            littéral pour TypeScript, et tout retombe sur `GenericStringError`. */
-        .select('id, libelle, montant_cents, nature, source, enveloppe_id, compte_id, depense_part(user_profile_id, part_cents)')
+        .select('id, charge_id, libelle, montant_cents, nature, source, enveloppe_id, compte_id, depense_part(user_profile_id, part_cents)')
         .eq('mois', mois).order('libelle'))
       return lignes.map(l => ({
         ...l,
@@ -510,5 +511,37 @@ export function useRegularise() {
       }))).select())
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['budget-mois'] }),
+  })
+}
+
+/** La règle par défaut du foyer. Datée : elle ne réécrit pas les mois passés. */
+export function useRegle() {
+  return useQuery({
+    queryKey: ['regle-partage'],
+    queryFn: async () => {
+      const l = ou(await supabase.from('regle_partage')
+        .select('cle, valid_from').order('valid_from', { ascending: false }).limit(1))
+      return (l[0]?.cle ?? 'prorata') as 'prorata' | 'moitie'
+    },
+  })
+}
+
+export function usePoseRegle() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (r: { foyerId: string; cle: 'prorata' | 'moitie' }) => {
+      const depuis = moisDe()
+      // Comme un revenu : une nouvelle règle est un FAIT DATÉ, pas une
+      // correction. Deux changements le même mois sont la même intention.
+      await supabase.from('regle_partage')
+        .delete().eq('household_id', r.foyerId).eq('valid_from', depuis)
+      return ou(await supabase.from('regle_partage').insert({
+        household_id: r.foyerId, cle: r.cle, valid_from: depuis,
+      }).select().single())
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['regle-partage'] })
+      qc.invalidateQueries({ queryKey: ['budget-mois'] })
+    },
   })
 }
