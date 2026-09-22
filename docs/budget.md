@@ -33,8 +33,11 @@ Une dépense copie son pourcentage au moment où elle est créée, et ne le reli
 plus. Sinon une augmentation de salaire en juin réécrirait rétroactivement tous
 les partages de mars.
 
-**Conséquence :** `depense.part_a_pct` et `part_b_pct` sont des colonnes, pas un
-calcul. La règle du foyer ne sert qu'à les *remplir*.
+**Conséquence :** la part de chacun est une ligne de `depense_part`, en
+CENTIMES ENTIERS, posée au moment où la dépense naît. La règle du foyer et
+`parts_du_foyer` ne servent qu'à la *remplir* ; une fois posée, elle ne dépend
+plus de rien. Un pourcentage stocké aurait rendu 10,25 € en deux parts de 5,13
+qui font 10,26.
 
 ### D61 — une charge annuelle s'engendre mensuellement, on ne proratise jamais
 

@@ -129,6 +129,7 @@ export type Database = {
       }
       charge: {
         Row: {
+          archive_le: string | null
           catalogue_id: string | null
           cle: string | null
           compte_id: string | null
@@ -143,6 +144,7 @@ export type Database = {
           variable: boolean
         }
         Insert: {
+          archive_le?: string | null
           catalogue_id?: string | null
           cle?: string | null
           compte_id?: string | null
@@ -157,6 +159,7 @@ export type Database = {
           variable?: boolean
         }
         Update: {
+          archive_le?: string | null
           catalogue_id?: string | null
           cle?: string | null
           compte_id?: string | null
@@ -576,13 +579,6 @@ export type Database = {
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "household"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "depense_part_user_profile_id_fkey"
-            columns: ["user_profile_id"]
-            isOneToOne: false
-            referencedRelation: "user_profile"
             referencedColumns: ["id"]
           },
         ]
@@ -2834,7 +2830,7 @@ export type Database = {
         Returns: number
       }
       parts_du_foyer: {
-        Args: { le_foyer?: string; le_mois: string }
+        Args: { la_cle?: string; le_foyer?: string; le_mois: string }
         Returns: {
           part_bps: number
           user_profile_id: string

@@ -1,6 +1,6 @@
 # Schéma
 
-56 tables, trois classes d'isolation. Toute policy RLS découle de la classe.
+60 tables, trois classes d'isolation. Toute policy RLS découle de la classe.
 
 | Classe | Règle | Tables |
 |---|---|---|
@@ -187,7 +187,7 @@ et documentés, mais **aucun écran ne les lit** :
 > Les deux premières lignes sont des fonctionnalités promises par la conception.
 > La troisième est une duplication à résorber le jour où la règle bougera.
 
-## Le budget (migrations 0049 à 0051)
+## Le budget (migrations 0049 à 0053)
 
 | Table | Classe | Ce qu'elle porte |
 |---|---|---|
@@ -207,7 +207,27 @@ service — sans quoi un authentifié lirait la clé du voisin. Elle partage à 
 égales tant qu'un présent n'a pas saisi son revenu : ne pas avoir répondu n'est
 pas gagner zéro.
 
+### Les charges et les dépenses
+
+| Table | Ce qu'elle porte |
+|---|---|
+| `charge` | Le modèle récurrent : un montant POUR SA PÉRIODE, une périodicité, une clé facultative qui surcharge celle du foyer, un compte débité, un début et une fin. `archive_le` : une charge qui a produit des dépenses ne se supprime pas (`on delete restrict`), elle s'archive. |
+| `charge_participant` | Qui participe. Il n'y a qu'UNE liste de charges par foyer ; « perso » n'est que le cas où il n'y a qu'une personne ici. |
+| `depense` | La ligne d'un mois. `unique (charge_id, mois) where source = 'modele'` — partielle, sans quoi la ligne d'ajustement de D62 serait impossible. |
+| `depense_part` | La part de chacun, **figée en centimes**. Son `user_profile_id` n'a **pas** de clé étrangère, délibérément : une part figée est un fait comptable, pas un pointeur, et elle survit au départ de la personne. |
+
+`ouvre_le_mois(le_mois, le_foyer default null)` engendre les dépenses des
+charges actives et fige les parts. Idempotente — il n'y a pas de `pg_cron`,
+donc l'ouverture est paresseuse et le premier qui ouvre l'app le 1er la
+déclenche. Elle renormalise les parts sur les seuls participants : sans ça,
+celui qui paie seul son crédit auto ne s'en verrait attribuer que sa part de
+foyer.
+
+Deux `constraint trigger` différés garantissent que la somme des parts
+recompose le montant — au moment de valider, donc supprimer puis reposer des
+parts dans une transaction reste possible, mais une somme fausse ne l'est
+jamais.
+
 **Ce qui protège le passé n'est pas l'historique des revenus** — il part en
 cascade avec le profil, pour que la suppression de compte aboutisse — mais la
-part figée en centimes sur chaque dépense (D60). Quand `depense` arrivera, elle
-portera `part_a_cents`, jamais une référence vers `revenu`.
+part figée en centimes sur chaque dépense (D60).
