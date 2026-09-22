@@ -127,6 +127,113 @@ export type Database = {
         }
         Relationships: []
       }
+      charge: {
+        Row: {
+          catalogue_id: string | null
+          cle: string | null
+          compte_id: string | null
+          created_at: string
+          debut: string
+          fin: string | null
+          household_id: string
+          id: string
+          libelle: string
+          montant_cents: number
+          periodicite: string
+          variable: boolean
+        }
+        Insert: {
+          catalogue_id?: string | null
+          cle?: string | null
+          compte_id?: string | null
+          created_at?: string
+          debut: string
+          fin?: string | null
+          household_id: string
+          id?: string
+          libelle: string
+          montant_cents: number
+          periodicite: string
+          variable?: boolean
+        }
+        Update: {
+          catalogue_id?: string | null
+          cle?: string | null
+          compte_id?: string | null
+          created_at?: string
+          debut?: string
+          fin?: string | null
+          household_id?: string
+          id?: string
+          libelle?: string
+          montant_cents?: number
+          periodicite?: string
+          variable?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_catalogue_id_fkey"
+            columns: ["catalogue_id"]
+            isOneToOne: false
+            referencedRelation: "catalogue_charge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_compte_id_fkey"
+            columns: ["compte_id"]
+            isOneToOne: false
+            referencedRelation: "compte"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charge_participant: {
+        Row: {
+          charge_id: string
+          household_id: string
+          user_profile_id: string
+        }
+        Insert: {
+          charge_id: string
+          household_id: string
+          user_profile_id: string
+        }
+        Update: {
+          charge_id?: string
+          household_id?: string
+          user_profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_participant_charge_id_fkey"
+            columns: ["charge_id"]
+            isOneToOne: false
+            referencedRelation: "charge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_participant_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_participant_user_profile_id_fkey"
+            columns: ["user_profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       compte: {
         Row: {
           archive_le: string | null
@@ -353,6 +460,129 @@ export type Database = {
             columns: ["food_id"]
             isOneToOne: true
             referencedRelation: "food"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      depense: {
+        Row: {
+          charge_id: string | null
+          compte_id: string | null
+          created_at: string
+          household_id: string
+          id: string
+          libelle: string
+          mois: string
+          montant_cents: number
+          nature: string
+          paye_par: string | null
+          reference_externe: string | null
+          regle_le: string | null
+          source: string
+        }
+        Insert: {
+          charge_id?: string | null
+          compte_id?: string | null
+          created_at?: string
+          household_id: string
+          id?: string
+          libelle: string
+          mois: string
+          montant_cents: number
+          nature?: string
+          paye_par?: string | null
+          reference_externe?: string | null
+          regle_le?: string | null
+          source?: string
+        }
+        Update: {
+          charge_id?: string | null
+          compte_id?: string | null
+          created_at?: string
+          household_id?: string
+          id?: string
+          libelle?: string
+          mois?: string
+          montant_cents?: number
+          nature?: string
+          paye_par?: string | null
+          reference_externe?: string | null
+          regle_le?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "depense_charge_id_fkey"
+            columns: ["charge_id"]
+            isOneToOne: false
+            referencedRelation: "charge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "depense_compte_id_fkey"
+            columns: ["compte_id"]
+            isOneToOne: false
+            referencedRelation: "compte"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "depense_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "depense_paye_par_fkey"
+            columns: ["paye_par"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      depense_part: {
+        Row: {
+          depense_id: string
+          household_id: string
+          part_bps: number
+          part_cents: number
+          user_profile_id: string
+        }
+        Insert: {
+          depense_id: string
+          household_id: string
+          part_bps: number
+          part_cents: number
+          user_profile_id: string
+        }
+        Update: {
+          depense_id?: string
+          household_id?: string
+          part_bps?: number
+          part_cents?: number
+          user_profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "depense_part_depense_id_fkey"
+            columns: ["depense_id"]
+            isOneToOne: false
+            referencedRelation: "depense"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "depense_part_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "depense_part_user_profile_id_fkey"
+            columns: ["user_profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
             referencedColumns: ["id"]
           },
         ]
@@ -2599,6 +2829,10 @@ export type Database = {
         Args: { p_servings?: number; p_week_of: string }
         Returns: string
       }
+      ouvre_le_mois: {
+        Args: { le_foyer?: string; le_mois: string }
+        Returns: number
+      }
       parts_du_foyer: {
         Args: { le_foyer?: string; le_mois: string }
         Returns: {
@@ -2617,6 +2851,10 @@ export type Database = {
           household_id: string
           id: string
         }[]
+      }
+      provision_mensuelle: {
+        Args: { montant_cents: number; periodicite: string }
+        Returns: number
       }
       recettes_partagees: { Args: never; Returns: string[] }
       sessions_partagees: { Args: never; Returns: string[] }
