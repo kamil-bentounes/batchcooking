@@ -7,7 +7,7 @@
  * s'affiche. Une relecture a trouvé trois défauts dedans.
  */
 import { describe, expect, it } from 'vitest'
-import { virements, euros, eurosRonds, enCentimes, type Depense, type Compte }
+import { virements, euros, eurosRonds, enCentimes, effortMensuel, type Depense, type Compte }
   from '../src/lib/donnees/budget.ts'
 
 const MOI = 'moi', ELLE = 'elle'
@@ -125,5 +125,37 @@ describe('virements', () => {
     ], MOI, [], prenoms)
     expect(v, 'les dépenses sans compte se dispersent').toHaveLength(1)
     expect(v[0].cents).toBe(1_500)
+  })
+})
+
+describe('effortMensuel', () => {
+  it('dit combien verser par mois pour tenir une date', () => {
+    const dans = (mois: number) => {
+      const d = new Date()
+      d.setMonth(d.getMonth() + mois)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+    }
+    // 1 200 € dans 12 mois, 480 déjà versés : il reste 720 sur 12 mois = 60.
+    expect(effortMensuel(120_000, dans(12), 48_000)).toEqual({ parMois: 6_000, mois: 12 })
+  })
+
+  it('ne divise pas par zéro le mois de l’échéance', () => {
+    const ceMois = (() => {
+      const d = new Date()
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+    })()
+    // Zéro mois restant veut dire « c'est maintenant », pas l'infini.
+    expect(effortMensuel(120_000, ceMois, 48_000)).toEqual({ parMois: 72_000, mois: 0 })
+  })
+
+  it('ne réclame rien quand l’objectif est déjà atteint', () => {
+    const d = new Date(); d.setMonth(d.getMonth() + 6)
+    const dans6 = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+    expect(effortMensuel(120_000, dans6, 150_000)?.parMois).toBe(0)
+  })
+
+  it('ne dit rien sans objectif ou sans date : il n’y a rien à tenir', () => {
+    expect(effortMensuel(null, '2027-12-01', 0)).toBeNull()
+    expect(effortMensuel(120_000, null, 0)).toBeNull()
   })
 })

@@ -161,3 +161,47 @@ describe('les enveloppes', () => {
       'l’enveloppe du voisin est comptée').toHaveLength(1)
   })
 })
+
+describe('les projets (D72)', () => {
+  it('portent une échéance, des postes, et leur propre clé', async () => {
+    const { data: p } = await moi.client.from('poche_epargne').insert({
+      household_id: moi.householdId, libelle: 'Lisbonne', genre: 'projet',
+      objectif_cents: 120_000, echeance: '2027-12-01', cle: 'moitie',
+    }).select().single()
+    expect(p!.cle, 'un projet peut être à moitié-moitié même si le foyer est au prorata')
+      .toBe('moitie')
+
+    const { error } = await moi.client.from('poche_poste').insert([
+      { poche_id: p!.id, household_id: moi.householdId, libelle: 'Hôtel',
+        montant_cents: 50_000, ordre: 0 },
+      { poche_id: p!.id, household_id: moi.householdId, libelle: 'Transport',
+        montant_cents: 40_000, ordre: 1 },
+    ])
+    expect(error, `postes refusés : ${error?.message}`).toBeNull()
+
+    const { data: postes } = await moi.client.from('poche_poste')
+      .select('montant_cents').eq('poche_id', p!.id)
+    expect(postes!.reduce((s, x) => s + x.montant_cents, 0)).toBe(90_000)
+  })
+
+  it('un poste ne se rattache pas à la poche du voisin', async () => {
+    const voisin = await makeActor('projet-voisin')
+    const { data: sienne } = await admin().from('poche_epargne').insert({
+      household_id: voisin.householdId, libelle: 'Chez lui', genre: 'projet',
+    }).select().single()
+
+    const { error } = await moi.client.from('poche_poste').insert({
+      poche_id: sienne!.id, household_id: moi.householdId,
+      libelle: 'Intrus', montant_cents: 1_000, ordre: 0,
+    })
+    expect(error, 'un poste a été rattaché à la poche d’un autre foyer').not.toBeNull()
+  })
+
+  it('une échéance de fantaisie est refusée', async () => {
+    const { error } = await moi.client.from('poche_epargne').insert({
+      household_id: moi.householdId, libelle: 'An mille', genre: 'projet',
+      echeance: '1000-01-01',
+    })
+    expect(error, 'une échéance hors bornes est acceptée').not.toBeNull()
+  })
+})

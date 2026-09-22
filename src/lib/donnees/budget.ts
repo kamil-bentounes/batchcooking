@@ -580,3 +580,75 @@ export function useProvisionsDe(chargeId: string | undefined, annee: number) {
     },
   })
 }
+
+/* ── Les projets (D72) ────────────────────────────────────────────────────── */
+
+export type Poste = { id: string; libelle: string; montant_cents: number; ordre: number }
+
+export function usePostes(pocheId: string | undefined) {
+  return useQuery({
+    queryKey: ['poche-postes', pocheId],
+    enabled: !!pocheId,
+    queryFn: async (): Promise<Poste[]> => ou(await supabase.from('poche_poste')
+      .select('id, libelle, montant_cents, ordre')
+      .eq('poche_id', pocheId!).order('ordre')) as Poste[],
+  })
+}
+
+export function usePosePoste() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (p: {
+      foyerId: string; pocheId: string; libelle: string; cents: number; ordre: number
+    }) => ou(await supabase.from('poche_poste').insert({
+      household_id: p.foyerId, poche_id: p.pocheId,
+      libelle: p.libelle, montant_cents: p.cents, ordre: p.ordre,
+    }).select().single()),
+    onSuccess: (_d, p) => {
+      qc.invalidateQueries({ queryKey: ['poche-postes', p.pocheId] })
+      qc.invalidateQueries({ queryKey: CLE.poches })
+    },
+  })
+}
+
+export function useRetirePoste() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (p: { id: string; pocheId: string }) =>
+      ou(await supabase.from('poche_poste').delete().eq('id', p.id).select()),
+    onSuccess: (_d, p) => qc.invalidateQueries({ queryKey: ['poche-postes', p.pocheId] }),
+  })
+}
+
+export function useMajPoche() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (p: {
+      id: string; objectifCents?: number | null; echeance?: string | null
+      cle?: 'prorata' | 'moitie' | null
+    }) => ou(await supabase.from('poche_epargne').update({
+      ...(p.objectifCents !== undefined ? { objectif_cents: p.objectifCents } : {}),
+      ...(p.echeance !== undefined ? { echeance: p.echeance } : {}),
+      ...(p.cle !== undefined ? { cle: p.cle } : {}),
+    }).eq('id', p.id).select().single()),
+    onSuccess: () => qc.invalidateQueries({ queryKey: CLE.poches }),
+  })
+}
+
+/**
+ * L'effort mensuel qu'il reste à fournir pour tenir une échéance.
+ *
+ * `null` quand il n'y a ni objectif ni date : sans les deux, il n'y a rien à
+ * tenir. Zéro mois restant veut dire « c'est maintenant », pas « divise par
+ * zéro ».
+ */
+export function effortMensuel(
+  objectifCents: number | null, echeance: string | null, dejaCents: number,
+): { parMois: number; mois: number } | null {
+  if (!objectifCents || !echeance) return null
+  const [a, m] = echeance.split('-').map(Number)
+  const n = new Date()
+  const mois = Math.max(0, (a - n.getFullYear()) * 12 + (m - 1 - n.getMonth()))
+  const reste = Math.max(0, objectifCents - dejaCents)
+  return { parMois: mois === 0 ? reste : Math.ceil(reste / mois), mois }
+}
