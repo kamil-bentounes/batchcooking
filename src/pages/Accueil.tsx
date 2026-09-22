@@ -55,12 +55,18 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   return (
     <Ecran actif="accueil" va={va}>
       <div className="flex items-center justify-between">
-        <span className="flex items-center gap-2.5 text-herbe">
+        {/* Le bloc marque est le RETOUR AU HUB. La barre du bas reste dans
+            l'univers cuisine ; c'est l'en-tête qui fait passer d'un univers à
+            l'autre, sinon cinq onglets mélangeraient « Ce que j'ai » et
+            « Virements », et on aurait deux applications cousues ensemble. */}
+        <button onClick={() => va('/')} aria-label="Retour à l’accueil de Popote"
+                className="flex items-center gap-2.5 min-h-11 -my-2 text-herbe">
+          <span aria-hidden="true" className="text-[20px] text-doux -ml-1">‹</span>
           <Marque taille={26} />
           <span className="text-[14px] text-doux first-letter:uppercase">
             {dateLongue(aujourdhui)}
           </span>
-        </span>
+        </button>
         {/* 44 px touchables, 34 visibles : c'est la SEULE porte vers les
             réglages — la barre du bas n'y mène pas. */}
         <button onClick={() => va('/reglages')} aria-label="Réglages"

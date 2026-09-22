@@ -8,6 +8,8 @@ import { Onboarding } from './pages/Onboarding'
 import { Targets } from './pages/Targets'
 import { Settings } from './pages/Settings'
 import { AcceptInvite } from './pages/AcceptInvite'
+import { Hub } from './pages/Hub.tsx'
+import { Budget } from './pages/Budget.tsx'
 import { Accueil } from './pages/Accueil.tsx'
 import { Choisir } from './pages/Choisir.tsx'
 import { Magasin } from './pages/Magasin.tsx'
@@ -102,6 +104,12 @@ export default function App() {
   if (sessionAmie) return <Cuisine userId={moi} va={va} cycleId={sessionAmie[1]} />
 
   switch (ici) {
+    /* Les deux univers. `/` est le hub — il ne porte pas de barre du bas, c'est
+       l'écran qu'on quitte immédiatement — et `/cuisine-accueil` est l'accueil
+       de la cuisine, qui était `/` jusqu'ici. */
+    case '/budget': return <Budget userId={moi} va={va} />
+    case '/cuisine-accueil': return <Accueil userId={moi} va={va} />
+
     // Les quatre destinations permanentes.
     case '/semaine': return <Semaine userId={moi} va={va} />
     case '/stock': return <Stock va={va} />
@@ -127,6 +135,6 @@ export default function App() {
     case '/motdepasse':
       return <Password userId={moi} onDone={() => va('/reglages')} />
 
-    default: return <Accueil userId={moi} va={va} />
+    default: return <Hub userId={moi} va={va} />
   }
 }

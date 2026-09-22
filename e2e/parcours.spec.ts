@@ -27,7 +27,8 @@ test.afterAll(async () => { if (foyer) await efface(foyer) })
 
 /** Tous les écrans de l'application, tels que `App.tsx` les aiguille. */
 const ECRANS = [
-  ['/', 'accueil'], ['/semaine', 'semaine'], ['/stock', 'stock'], ['/bilan', 'bilan'],
+  ['/', 'hub'], ['/cuisine-accueil', 'accueil'], ['/budget', 'budget'],
+  ['/semaine', 'semaine'], ['/stock', 'stock'], ['/bilan', 'bilan'],
   ['/choisir', 'choisir'], ['/magasin', 'magasin'], ['/plan', 'plan'],
   ['/cuisine', 'cuisine'], ['/dressage', 'dressage'], ['/inventer', 'inventer'],
   ['/photo', 'photo'], ['/ticket', 'ticket'], ['/peser', 'peser'],
@@ -311,6 +312,9 @@ test.describe('on clique comme on clique vraiment', () => {
   test('le cycle : depuis l’accueil, on avance jusqu’au plan', async ({ page }) => {
     const erreurs = surveille(page)
     await connecte(page)
+    // `/` est le hub depuis que l'app a deux univers : l'accueil de la cuisine
+    // vit à `/cuisine-accueil`.
+    await page.goto('/cuisine-accueil')
     await capture(page, 'clic-09-accueil')
 
     /* Le geste du moment, quel qu'il soit — les neuf libellés possibles sont
@@ -342,6 +346,41 @@ test.describe('on clique comme on clique vraiment', () => {
       await page.waitForTimeout(600)
       expect(page.url(), `la sortie de ${chemin} ne mène nulle part`).not.toContain(chemin)
     }
+    expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])
+  })
+})
+
+test.describe('les deux univers', () => {
+  test('le hub mène à chacun, et chacun ramène au hub', async ({ page }) => {
+    /*
+     * La navigation à deux univers est la seule chose que le hub apporte, et
+     * c'est exactement le genre de chemin qu'aucun test unitaire ne voit. Un
+     * précédent l'a déjà prouvé : une barre qui changeait l'URL sans changer
+     * d'écran est passée sous trente tests verts, faute que l'un d'eux clique.
+     */
+    const erreurs = surveille(page)
+    await connecte(page)
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'Popote' })).toBeVisible({ timeout: 15_000 })
+    await capture(page, 'clic-14-hub')
+
+    await page.getByRole('button', { name: /budget/i }).first().click()
+    await expect(page.getByRole('heading', { name: /janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre/i }))
+      .toBeVisible({ timeout: 10_000 })
+    await capture(page, 'clic-15-budget')
+
+    await page.getByRole('button', { name: /retour à l’accueil/i }).click()
+    await expect(page.getByRole('heading', { name: 'Popote' })).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: /cuisine/i }).first().click()
+    await expect(page.locator('nav[aria-label="Navigation principale"]'))
+      .toBeVisible({ timeout: 10_000 })
+    await capture(page, 'clic-16-cuisine')
+
+    // Et l'en-tête de la cuisine ramène au hub : c'est le seul chemin de retour.
+    await page.getByRole('button', { name: /retour à l’accueil de popote/i }).click()
+    await expect(page.getByRole('heading', { name: 'Popote' })).toBeVisible({ timeout: 10_000 })
+
     expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])
   })
 })

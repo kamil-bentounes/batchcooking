@@ -13,7 +13,7 @@ export type Destination = 'accueil' | 'semaine' | 'stock' | 'bilan'
 
 const DESTINATIONS: { cle: Destination; vers: string; texte: string; dessin: ReactNode }[] = [
   {
-    cle: 'accueil', vers: '/', texte: 'Accueil',
+    cle: 'accueil', vers: '/cuisine-accueil', texte: 'Accueil',
     dessin: <path d="M3 8.5 10.5 2.5 18 8.5V17a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 3 17z" />,
   },
   {

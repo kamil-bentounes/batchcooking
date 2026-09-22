@@ -339,6 +339,9 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
      * flotte sans bord sur le fond.
      */
     await connecte(page)
+    /* Le hub ne porte PAS la barre du bas — c'est l'écran qu'on quitte — donc
+       on va la chercher là où elle vit, dans l'univers cuisine. */
+    await page.goto('/stock')
     const barre = page.locator('nav[aria-label="Navigation principale"]')
     await expect(barre).toBeVisible({ timeout: 15_000 })
     const style = await barre.evaluate(n => {
