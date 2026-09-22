@@ -35,10 +35,15 @@ async function poseCharge(o: {
     debut: '2026-01-01',
   }).select().single()
   expect(error, `charge refusée : ${error?.message}`).toBeNull()
-  await admin().from('charge_participant').insert(
+  /* L'erreur était AVALÉE : un seul participant en échec fait échouer l'insert
+     entier, la charge se retrouve sans personne, et le générateur l'ignore en
+     silence. Le test échouait alors dix lignes plus loin, sur un message qui
+     ne parlait que de provisions manquantes. */
+  const { error: eP } = await admin().from('charge_participant').insert(
     o.participants.map(u => ({
       charge_id: c!.id, user_profile_id: u, household_id: moi.householdId,
     })))
+  expect(eP, `participants refusés : ${eP?.message}`).toBeNull()
   return c!.id
 }
 
@@ -512,5 +517,217 @@ describe('la régularisation annuelle (D62)', () => {
       la_charge: sienne!.id, annee: 2028, reel_cents: 99_999,
     })
     expect(error, 'on régularise la charge du foyer d’à côté').not.toBeNull()
+  })
+})
+
+describe('le relevé du mois et l’excédent', () => {
+  it('garde ce qui avait été prévu quand on saisit le réel', async () => {
+    /* Sans mémoire du prévu, la comparaison disparaît au moment même où elle
+       devient possible : confirmer écrase `montant_cents`. */
+    const id = await poseCharge({ libelle: 'Énergie relevé', cents: 5_000,
+                                  periodicite: 'mensuel', participants: [moi.userId] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2029-01-01' })
+
+    const { data: d } = await admin().from('depense')
+      .select('id, montant_cents, montant_prevu_cents')
+      .eq('charge_id', id).eq('mois', '2029-01-01').single()
+    expect(d!.montant_prevu_cents, 'le prévu n’a pas été gelé').toBe(5_000)
+
+    // On confirme un réel plus bas : 38 € au lieu de 50.
+    await admin().from('depense_part').delete().eq('depense_id', d!.id)
+    await moi.client.from('depense')
+      .update({ montant_cents: 3_800, nature: 'connue' }).eq('id', d!.id)
+    await moi.client.from('depense_part').insert({
+      depense_id: d!.id, user_profile_id: moi.userId,
+      household_id: moi.householdId, part_cents: 3_800, part_bps: 10_000,
+    })
+
+    const { data: apres } = await admin().from('depense')
+      .select('montant_cents, montant_prevu_cents').eq('id', d!.id).single()
+    expect(apres!.montant_cents).toBe(3_800)
+    expect(apres!.montant_prevu_cents, 'le prévu a été réécrit').toBe(5_000)
+  })
+
+  it('calcule l’excédent sans aucun solde bancaire', async () => {
+    const { data, error } = await moi.client.rpc('excedent_du_mois', { le_mois: '2029-01-01' })
+    expect(error, `excédent refusé : ${error?.message}`).toBeNull()
+    const mien = (data ?? []).find(
+      (l: { user_profile_id: string }) => l.user_profile_id === moi.userId)
+    // 50 € provisionnés, 38 € payés : 12 € versés en trop.
+    expect(Number(mien.excedent_cents), 'l’excédent est faux').toBe(1_200)
+  })
+
+  it('ne compte que les lignes confirmées', async () => {
+    // Une provision non confirmée n'est pas un excédent : on ne sait pas encore.
+    await poseCharge({ libelle: 'Pas confirmée', cents: 9_000,
+                       periodicite: 'mensuel', variable: true, participants: [moi.userId] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2029-01-01' })
+
+    const { data } = await moi.client.rpc('excedent_du_mois', { le_mois: '2029-01-01' })
+    const mien = (data ?? []).find(
+      (l: { user_profile_id: string }) => l.user_profile_id === moi.userId)
+    expect(Number(mien.excedent_cents),
+      'une ligne non confirmée est comptée dans l’excédent').toBe(1_200)
+  })
+
+  it('le prévu ne se réécrit pas', async () => {
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('household_id', moi.householdId).eq('source', 'modele').limit(1).single()
+    const { error } = await moi.client.from('depense')
+      .update({ montant_prevu_cents: 1 }).eq('id', d!.id)
+    expect(error, 'ce qui avait été prévu a été réécrit').not.toBeNull()
+  })
+
+  it('une charge portée par une enveloppe est une prévision', async () => {
+    // Le restaurant à 400 € n'est pas un montant connu : c'est un plafond
+    // qu'on confirmera. Sans ça, il n'apparaîtrait jamais dans le relevé.
+    const { data: env } = await admin().from('enveloppe').insert({
+      household_id: moi.householdId, libelle: 'Sorties', plafond_cents: 10_000,
+    }).select().single()
+    const { data: ch } = await admin().from('charge').insert({
+      household_id: moi.householdId, libelle: 'Sorties', montant_cents: 10_000,
+      periodicite: 'mensuel', debut: '2029-01-01', enveloppe_id: env!.id,
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: ch!.id, user_profile_id: moi.userId, household_id: moi.householdId,
+    })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2029-02-01' })
+
+    const { data: d } = await admin().from('depense').select('nature')
+      .eq('charge_id', ch!.id).eq('mois', '2029-02-01').single()
+    expect(d!.nature, 'une charge d’enveloppe est donnée pour connue').toBe('estimee')
+  })
+})
+
+describe('la régularisation ne se déclenche qu’une fois', () => {
+  it('refuse la seconde, même sur un double-clic', async () => {
+    const id = await poseCharge({ libelle: 'Foncier unique', cents: 120_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2030-01-01' })
+
+    const { data: un } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2030, reel_cents: 15_000,
+    })
+    expect(un, 'la première régularisation a échoué').not.toBeNull()
+
+    const { error } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2030, reel_cents: 15_000,
+    })
+    expect(error, 'on peut régulariser deux fois la même année').not.toBeNull()
+
+    const { data: lignes } = await admin().from('depense')
+      .select('id').eq('charge_id', id).eq('source', 'manuel')
+    expect(lignes ?? [], 'plusieurs lignes d’ajustement coexistent').toHaveLength(1)
+  })
+
+  it('refuse une année sans aucune provision', async () => {
+    /* 0057 créait ici une dépense à ZÉRO PART — le défaut même que 0056 venait
+       de corriger dans le générateur, réintroduit dix lignes plus loin. */
+    const id = await poseCharge({ libelle: 'Jamais provisionnée', cents: 60_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    const { error } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2035, reel_cents: 60_000,
+    })
+    expect(error, 'une dépense que personne ne doit a été créée').not.toBeNull()
+
+    const { data: orphelines } = await admin().from('depense')
+      .select('id').eq('charge_id', id)
+    expect(orphelines ?? [], 'une ligne orpheline subsiste').toHaveLength(0)
+  })
+
+  it('refuse une provision à zéro plutôt que de rendre une erreur Postgres', async () => {
+    const id = await poseCharge({ libelle: 'Provision nulle', cents: 0,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2030-02-01' })
+    const { error } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2030, reel_cents: 5_000,
+    })
+    expect(error?.message, 'le message est celui de Postgres, pas le nôtre')
+      .toMatch(/provisions|zéro/i)
+  })
+
+  it('répartit selon les mois VRAIMENT portés, pas selon la clé du jour', async () => {
+    /* ⚠️ Le test d'origine était vide : ses deux membres entraient le même jour
+       avec des revenus constants, donc « porté » et « clé du jour »
+       coïncidaient. En remplaçant la répartition par `parts_du_foyer` du mois
+       courant, les 740 tests restaient verts. Ici quelqu'un arrive en cours
+       d'année : les deux répartitions divergent, et l'écart se voit.
+
+       L'année reste dans les deux ans que `user_profile_entre_le_borne`
+       autorise — une date de fantaisie ferait disparaître quelqu'un de tous
+       les mois, et la borne existe pour ça. */
+    const { data: u } = await admin().auth.admin.createUser({
+      email: `tard-${Date.now()}@fumee.test`, password: 'x'.repeat(12), email_confirm: true,
+    })
+    const tardif = u.user!.id
+    const { error: eProfil } = await admin().from('user_profile').insert({
+      id: tardif, household_id: moi.householdId, display_name: 'Tardif',
+      entre_le: '2027-03-01',
+    })
+    expect(eProfil, `profil refusé : ${eProfil?.message}`).toBeNull()
+    await admin().from('revenu').insert({
+      household_id: moi.householdId, user_profile_id: tardif,
+      net_mensuel_cents: 370_000, valid_from: '2027-01-01',
+    })
+
+    const id = await poseCharge({ libelle: 'Foncier tardif', cents: 120_000,
+                                  periodicite: 'annuel',
+                                  participants: [moi.userId, elle, tardif] })
+    // Janvier et février SANS lui, mars AVEC.
+    for (const m of ['2027-01-01', '2027-02-01', '2027-03-01']) {
+      const { error } = await moi.client.rpc('ouvre_le_mois', { le_mois: m })
+      expect(error, `ouverture de ${m} refusée : ${error?.message}`).toBeNull()
+    }
+
+    const { data: ligne, error: eReg } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2027, reel_cents: 60_000,
+    })
+    expect(eReg, `régularisation refusée : ${eReg?.message}`).toBeNull()
+    expect(ligne, 'aucune ligne posée').not.toBeNull()
+
+    const { data: parts } = await admin().from('depense_part')
+      .select('user_profile_id, part_cents').eq('depense_id', ligne!)
+    const sien = parts!.find(p => p.user_profile_id === tardif)!
+    const mien = parts!.find(p => p.user_profile_id === moi.userId)!
+
+    /* Il n'a porté qu'UN mois sur trois, et à trois au lieu de deux : sa part
+       du rattrapage doit être nettement inférieure à celle des présents depuis
+       janvier. Avec la clé du jour, elles seraient du même ordre. */
+    expect(sien.part_cents, 'il porte autant que ceux présents depuis janvier')
+      .toBeLessThan(mien.part_cents * 0.6)
+    expect(parts!.reduce((s, p) => s + p.part_cents, 0),
+      'la somme ne recompose pas l’écart').toBe(60_000 - 3 * 10_000)
+
+    await admin().from('revenu').delete().eq('user_profile_id', tardif)
+    await admin().from('user_profile').delete().eq('id', tardif)
+  })
+
+  it('le voisin ne lit pas les provisions d’un autre foyer', async () => {
+    // `provisions_de` est `security definer` et accordée à `authenticated` :
+    // sans le filtre de foyer, une fuite passerait la CI sans bruit.
+    const { data: sienne } = await admin().from('charge').insert({
+      household_id: moi.householdId, libelle: 'Privée', montant_cents: 1_000,
+      periodicite: 'annuel', debut: '2030-01-01',
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: sienne!.id, user_profile_id: moi.userId, household_id: moi.householdId,
+    })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2030-03-01' })
+
+    const { data } = await voisin.client.rpc('provisions_de',
+      { la_charge: sienne!.id, annee: 2030 })
+    expect(data ?? [], 'le voisin lit les provisions du foyer d’à côté').toHaveLength(0)
+  })
+
+  it('un nom d’enveloppe se réutilise une fois archivée', async () => {
+    const { data: e } = await admin().from('enveloppe').insert({
+      household_id: moi.householdId, libelle: 'Vacances', plafond_cents: 10_000,
+    }).select().single()
+    await admin().from('enveloppe')
+      .update({ archive_le: new Date().toISOString() }).eq('id', e!.id)
+    const { error } = await admin().from('enveloppe').insert({
+      household_id: moi.householdId, libelle: 'Vacances', plafond_cents: 20_000,
+    })
+    expect(error, 'une enveloppe archivée confisque son nom').toBeNull()
   })
 })

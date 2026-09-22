@@ -64,6 +64,7 @@ export type Depense = {
   charge_id: string | null
   libelle: string
   montant_cents: number
+  montant_prevu_cents: number | null
   nature: 'estimee' | 'connue'
   source: string
   enveloppe_id: string | null
@@ -96,7 +97,7 @@ export function useMois(mois: string) {
         /* ⚠️ Une seule chaîne LITTÉRALE. PostgREST infère le type du résultat
            depuis le texte du `select` ; une concaténation n'est plus un
            littéral pour TypeScript, et tout retombe sur `GenericStringError`. */
-        .select('id, charge_id, libelle, montant_cents, nature, source, enveloppe_id, compte_id, depense_part(user_profile_id, part_cents)')
+        .select('id, charge_id, libelle, montant_cents, montant_prevu_cents, nature, source, enveloppe_id, compte_id, depense_part(user_profile_id, part_cents)')
         .eq('mois', mois).order('libelle'))
       return lignes.map(l => ({
         ...l,
@@ -651,4 +652,35 @@ export function effortMensuel(
   const mois = Math.max(0, (a - n.getFullYear()) * 12 + (m - 1 - n.getMonth()))
   const reste = Math.max(0, objectifCents - dejaCents)
   return { parMois: mois === 0 ? reste : Math.ceil(reste / mois), mois }
+}
+
+/**
+ * L'excédent du mois, par personne.
+ *
+ * Chacun a viré sa part des PROVISIONS ; une fois les réels saisis, la
+ * différence lui revient. Aucun solde bancaire n'est nécessaire — je l'ai cru
+ * un moment, à tort : l'écart entre le prévu et le payé suffit.
+ *
+ * Positif = versé en trop. Négatif = il reste à payer.
+ */
+export function useExcedent(mois: string) {
+  return useQuery({
+    queryKey: ['excedent', mois],
+    queryFn: async () => {
+      const l = ou(await supabase.rpc('excedent_du_mois', { le_mois: mois }))
+      return l.map(x => ({ userId: x.user_profile_id, cents: Number(x.excedent_cents) }))
+    },
+  })
+}
+
+/** Le jour du mois à partir duquel on réclame le relevé. */
+export const JOUR_DU_RELEVE = 27
+
+export function cestLHeureDuReleve(mois: string): boolean {
+  const n = new Date()
+  const [a, m] = mois.split('-').map(Number)
+  // Un mois passé est toujours à confirmer ; le mois courant seulement à partir
+  // du 27 — avant, on n'a pas encore tout dépensé.
+  if (a < n.getFullYear() || (a === n.getFullYear() && m < n.getMonth() + 1)) return true
+  return a === n.getFullYear() && m === n.getMonth() + 1 && n.getDate() >= JOUR_DU_RELEVE
 }

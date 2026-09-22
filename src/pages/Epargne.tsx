@@ -171,8 +171,12 @@ function Poche_({ poche, userId, foyerId, prenoms }: {
                 onClick={() => verse.mutate(
                   { foyerId, pocheId: poche.id, userId, cents: cents! },
                   { onSuccess: () => setMontant('') })}
+                /* Désactivé, il gardait un fond plein qui le faisait passer pour
+                   actif. La bordure et le fond effacé disent mieux « pas
+                   encore » qu'un aplat plus pâle. */
                 className="flex-1 min-h-11 rounded-[14px] bg-herbe text-fond text-[15px]
-                           font-medium disabled:bg-brume disabled:text-encre">
+                           font-medium disabled:bg-transparent disabled:text-doux
+                           disabled:border disabled:border-brume">
           Je verse
         </button>
         <button disabled={!cents || verse.isPending}

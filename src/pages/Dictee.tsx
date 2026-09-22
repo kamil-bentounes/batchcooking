@@ -213,7 +213,9 @@ export function Dictee({ retour, surRetenues }: {
   }
 
   return (
-    <main className="min-h-dvh px-6 pt-14 pb-40">
+    /* `pb-48` et non `pb-40` : la barre d'action flottante recouvrait le bas de
+       la zone de dictée, qui est justement l'endroit où l'on écrit. */
+    <main className="min-h-dvh px-6 pt-14 pb-48">
       <div className="mx-auto w-full max-w-lg">
         <button onClick={retour}
                 className="inline-flex items-center gap-2 min-h-11 -mt-3 text-[15px] text-doux">

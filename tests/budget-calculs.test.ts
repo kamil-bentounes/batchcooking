@@ -17,7 +17,7 @@ const compte = (o: Partial<Compte> & { id: string }): Compte => ({
   nom: 'Commun', genre: 'commun', titulaire_id: null, matelas_cents: 0, ...o,
 })
 const depense = (o: Partial<Depense> & { id: string }): Depense => ({
-  charge_id: null, libelle: 'X', montant_cents: 1000, nature: 'estimee', source: 'modele',
+  charge_id: null, libelle: 'X', montant_cents: 1000, montant_prevu_cents: 1000, nature: 'estimee', source: 'modele',
   enveloppe_id: null, compte_id: null, parts: [], ...o,
 })
 

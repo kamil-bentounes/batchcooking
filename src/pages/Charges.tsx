@@ -19,7 +19,7 @@ import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
   useCharges, useCatalogue, useAjouteCharge, useArchiveCharge, useComptes,
-  useEnveloppesPosees, euros, enCentimes, type Charge,
+  useEnveloppesPosees, useRattacheCharge, euros, enCentimes, type Charge,
 } from '../lib/donnees/budget.ts'
 
 const PERIODE: Record<string, string> = {
@@ -35,7 +35,7 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
   membres: { id: string; display_name: string }[]
   moi: string
   foyerId: string
-  comptes: { id: string; nom: string }[]
+  comptes: { id: string; nom: string; genre: string }[]
   enveloppes: { id: string; libelle: string }[]
   surFini: () => void
 }) {
@@ -46,8 +46,12 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
   const [cle, setCle] = useState<'defaut' | 'prorata' | 'moitie'>('defaut')
   /* Le compte débité et l'enveloppe. Sans eux, l'app ne peut annoncer qu'un
      montant à répartir — jamais un virement, qui est la seule chose sur
-     laquelle on agit. Le premier compte commun est proposé d'office. */
-  const [compteId, setCompteId] = useState<string>(comptes[0]?.id ?? '')
+     laquelle on agit.
+
+     Le COMMUN d'office, pas le premier de la liste : `useComptes` trie par nom,
+     si bien qu'un livret ou le compte de l'autre pouvait être proposé. */
+  const [compteId, setCompteId] = useState<string>(
+    comptes.find(c => c.genre === 'commun')?.id ?? comptes[0]?.id ?? '')
   const [enveloppeId, setEnveloppeId] = useState<string>('')
   /* Le catalogue PRÉ-COCHE : les deux pour l'électricité, une seule personne
      pour un forfait mobile. Ce n'est qu'une suggestion — la case reste ouverte. */
@@ -213,6 +217,9 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   const [filtre, setFiltre] = useState<Filtre>('tout')
   const [dictee, setDictee] = useState(false)
   const [dit, setDit] = useState('')
+  /* Le catalogue fait six hauteurs d'écran de pastilles. Sans moyen d'y
+     chercher, on ne le parcourt pas — on renonce et on tape « Autre chose ». */
+  const [cherche, setCherche] = useState('')
   const [ajout, setAjout] = useState<Parameters<typeof Ajout>[0]['depart'] | undefined>()
   const { data: foyer } = useFoyer()
   const charges = useCharges()
@@ -221,6 +228,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   const ajouteUne = useAjouteCharge()
   const comptes = useComptes()
   const enveloppes = useEnveloppesPosees()
+  const rattache = useRattacheCharge()
   /* Le compte commun, pour la dictée : elle ne demande pas où débiter, et une
      charge sans compte ne produit pas de virement. */
   const compteParDefaut = (comptes.data ?? [])
@@ -247,6 +255,11 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
             participants: l.portee === 'commun' ? membres.map(m => m.id) : [userId],
             variable: l.variable,
             compteId: compteParDefaut,
+            /* Si une enveloppe porte déjà ce nom — « Restaurant », « Culture » —
+               la charge s'y range d'elle-même : sinon la jauge resterait vide
+               alors que la ligne existe. */
+            enveloppeId: (enveloppes.data ?? []).find(
+              e => e.libelle.toLowerCase() === l.libelle.toLowerCase())?.id ?? null,
             foyerId: foyer?.id ?? '',
           })
         }
@@ -280,6 +293,17 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
     filtre === 'tout' ? true
     : filtre === 'commun' ? c.participants.length > 1
     : c.participants.length === 1 && c.participants[0] === userId)
+
+  /* Une recherche insensible à la casse ET aux accents : personne ne tape
+     « électricité » avec son accent sur un clavier de téléphone. */
+  const sansAccent = (s: string) =>
+    s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const q = sansAccent(cherche.trim())
+  const vuesCatalogue = q === ''
+    ? catalogue
+    : catalogue
+        .map(s => ({ ...s, lignes: s.lignes.filter(l => sansAccent(l.libelle).includes(q)) }))
+        .filter(s => s.lignes.length > 0)
 
   const parMois = (c: Charge) =>
     c.periodicite === 'mensuel' ? c.montant_cents
@@ -333,12 +357,29 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                       ? c.participants.map(u => prenoms.get(u) ?? '?').join(' et ')
                       : (prenoms.get(c.participants[0]) ?? 'personne') + ' seul'}
                     {c.cle === 'moitie' && ' · moitié-moitié'}
+                    {c.cle === 'prorata' && ' · au prorata'}
                     {c.variable && ' · variable'}
+                    {!c.compte_id && ' · sans compte'}
                   </span>
                 </span>
                 {/* Une charge sans histoire est réellement SUPPRIMÉE, une autre
                     archivée — et les deux disparaissaient de la liste sans un
                     mot. Un pouce qui glisse ne doit pas effacer une ligne. */}
+                {/* Rattacher après coup : une charge née de la dictée, ou
+                    d'avant que le formulaire ne demande le compte, n'avait
+                    aucun moyen d'en recevoir un — et sans compte, elle ne
+                    produit pas de virement. */}
+                {!c.compte_id && comptes.data && comptes.data.length > 0 && (
+                  <button onClick={() => rattache.mutate({
+                            id: c.id,
+                            compteId: comptes.data!.find(x => x.genre === 'commun')?.id
+                              ?? comptes.data![0].id,
+                          })}
+                          className="min-h-11 px-2 text-[14px]"
+                          style={{ color: 'var(--color-ocre)' }}>
+                    Rattacher
+                  </button>
+                )}
                 <button onClick={() => {
                           if (!confirm(`Retirer « ${c.libelle} » ? Les mois déjà ouverts la gardent.`)) return
                           archive.mutate(c.id, {
@@ -367,8 +408,21 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
         <h2 className="mt-10 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
           Ou une par une
         </h2>
-        <div className="mt-3 space-y-6">
-          {catalogue.map(section => (
+        <label className="mt-3 block">
+          <span className="sr-only">Chercher une charge</span>
+          <input value={cherche} onChange={e => setCherche(e.target.value)}
+                 placeholder="Chercher — « assurance », « mobile »…"
+                 className="w-full min-h-11 rounded-[14px] border border-brume bg-surface
+                            px-4 text-[16px] placeholder:text-doux" />
+        </label>
+        <div className="mt-4 space-y-6">
+          {vuesCatalogue.length === 0 && cherche.trim() !== '' && (
+            <p className="text-[15px] text-doux">
+              Rien sous ce nom. Prends « Autre chose » plus bas, le catalogue
+              n’enferme personne.
+            </p>
+          )}
+          {vuesCatalogue.map(section => (
             <div key={section.nom}>
               <p className="text-[15px] font-semibold">{section.nom}</p>
               <div className="mt-2 flex gap-2 flex-wrap">

@@ -71,7 +71,9 @@ export function Cuisine({ userId, va, cycleId }:
   }
   if (!cycle) {
     return (
-      <Sombre>
+      /* Même sans invitation, il faut une sortie : sans cycle, cet écran n'a ni
+         barre du bas ni bouton, et on y restait bloqué. */
+      <Sombre sortie={invite ? undefined : () => va('/cuisine-accueil')}>
         <Vide titre={invite ? 'Cette session n’est plus ouverte' : 'Aucune session en cours'}
               texte={invite
                 ? 'Ton hôte l’a terminée, ou ne t’y attend plus.'
@@ -92,7 +94,12 @@ export function Cuisine({ userId, va, cycleId }:
   }
   if (isPending) return <Sombre><Attente /></Sombre>
   if (plan.length === 0) {
-    return <Sombre><Vide titre="Aucune session en cours" /></Sombre>
+    return (
+      <Sombre sortie={() => va('/cuisine-accueil')}>
+        <Vide titre="Aucune session en cours"
+              texte="Rien n’est en train de cuire. Le plan du dimanche se prépare depuis l’accueil." />
+      </Sombre>
+    )
   }
 
   const debut = cycle.started_at ? new Date(cycle.started_at) : null
@@ -274,10 +281,29 @@ function restant(a: Action, maintenant: Date): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-function Sombre({ children }: { children: React.ReactNode }) {
+/**
+ * La coque sombre de la cuisine.
+ *
+ * `sortie` n'est pas facultative par confort : cet écran n'a PAS de barre du
+ * bas — c'est voulu, on cuisine sans se disperser — et sans lien de retour, un
+ * état vide y devient un cul-de-sac. On y arrive par une URL ou par la fin
+ * d'une session, et on ne peut plus en partir.
+ */
+function Sombre({ children, sortie }: {
+  children: React.ReactNode
+  sortie?: () => void
+}) {
   return (
-    <main className="min-h-dvh bg-encre text-fond px-6 pt-16 pb-14">
-      <div className="mx-auto w-full max-w-lg">{children}</div>
+    <main className="min-h-dvh bg-encre text-fond px-6 pt-8 pb-14">
+      <div className="mx-auto w-full max-w-lg">
+        {sortie && (
+          <button onClick={sortie}
+                  className="inline-flex items-center gap-2 min-h-11 mb-4 text-[15px] opacity-70">
+            <span aria-hidden="true">‹</span> La cuisine
+          </button>
+        )}
+        {children}
+      </div>
     </main>
   )
 }

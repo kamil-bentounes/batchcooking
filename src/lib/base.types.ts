@@ -488,10 +488,12 @@ export type Database = {
           libelle: string
           mois: string
           montant_cents: number
+          montant_prevu_cents: number | null
           nature: string
           paye_par: string | null
           reference_externe: string | null
           regle_le: string | null
+          regularise_annee: number | null
           source: string
         }
         Insert: {
@@ -504,10 +506,12 @@ export type Database = {
           libelle: string
           mois: string
           montant_cents: number
+          montant_prevu_cents?: number | null
           nature?: string
           paye_par?: string | null
           reference_externe?: string | null
           regle_le?: string | null
+          regularise_annee?: number | null
           source?: string
         }
         Update: {
@@ -520,10 +524,12 @@ export type Database = {
           libelle?: string
           mois?: string
           montant_cents?: number
+          montant_prevu_cents?: number | null
           nature?: string
           paye_par?: string | null
           reference_externe?: string | null
           regle_le?: string | null
+          regularise_annee?: number | null
           source?: string
         }
         Relationships: [
@@ -3003,6 +3009,13 @@ export type Database = {
       current_cycle: { Args: never; Returns: string }
       current_household: { Args: never; Returns: string }
       delete_my_account: { Args: never; Returns: undefined }
+      excedent_du_mois: {
+        Args: { le_mois: string }
+        Returns: {
+          excedent_cents: number
+          user_profile_id: string
+        }[]
+      }
       export_my_data: { Args: never; Returns: Json }
       export_my_data_base: { Args: never; Returns: Json }
       foyers_amis: { Args: never; Returns: string[] }

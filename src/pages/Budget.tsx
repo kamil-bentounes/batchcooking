@@ -18,7 +18,8 @@ import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
   useMois, useEnveloppes, useComptes, useCharges, virements, moisDe, euros,
-  enCentimes, useRegularise, useRegulariseAnnuel, useProvisionsDe, type Depense,
+  enCentimes, useRegularise, useRegulariseAnnuel, useProvisionsDe, useExcedent,
+  cestLHeureDuReleve, JOUR_DU_RELEVE, type Depense,
 } from '../lib/donnees/budget.ts'
 
 /**
@@ -29,9 +30,16 @@ import {
  * facturer 1450 € en octobre — mais on pose l'ÉCART, réparti selon ce que
  * chacun a porté sur l'année.
  */
-function ReleveAnnuel({ charge, annee }: {
-  charge: { id: string; libelle: string }; annee: number
+function ReleveAnnuel({ charge, annees }: {
+  charge: { id: string; libelle: string; periodicite: string }; annees: number[]
 }) {
+  /* ⚠️ L'ANNÉE SE CHOISIT.
+   *
+   *    La première version prenait l'année du mois affiché : en janvier 2027
+   *    elle proposait « le relevé 2027 », provisionné d'un seul douzième, et
+   *    saisir 1450 € facturait 1329 € d'un coup. Pire, le relevé de l'année
+   *    écoulée devenait insaisissable dès le 1er janvier. */
+  const [annee, setAnnee] = useState(annees[0])
   const [reel, setReel] = useState('')
   const provisions = useProvisionsDe(charge.id, annee)
   const regularise = useRegulariseAnnuel()
@@ -44,12 +52,28 @@ function ReleveAnnuel({ charge, annee }: {
       <div className="flex items-baseline justify-between">
         <span className="text-[16px]">{charge.libelle}</span>
         <span className="text-[15px] text-doux">
-          provisionné {euros(provisionne)}
+          provisionné {euros(provisionne)} en {annee}
         </span>
       </div>
+      {annees.length > 1 && (
+        <div role="radiogroup" aria-label="Année" className="mt-2 flex gap-2">
+          {annees.map(a => (
+            <button key={a} role="radio" aria-checked={annee === a}
+                    onClick={() => setAnnee(a)}
+                    className={`px-4 min-h-11 inline-flex items-center rounded-full
+                                text-[14px] transition-colors
+                      ${annee === a ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
+              {a}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="mt-2.5 flex gap-2 items-end">
         <div className="grow">
-          <Champ label={`Le relevé ${annee} (€)`} type="text" inputMode="decimal"
+          {/* Une charge trimestrielle n'a pas de « relevé annuel » : elle en a
+              quatre. On demande donc le TOTAL de l'année, ce qui vaut pour les
+              deux périodicités. */}
+          <Champ label={`Total payé en ${annee} (€)`} type="text" inputMode="decimal"
                  value={reel} onChange={e => setReel(e.target.value)} />
         </div>
         <button disabled={cents === null || ecart === 0 || regularise.isPending}
@@ -61,6 +85,9 @@ function ReleveAnnuel({ charge, annee }: {
           Régulariser
         </button>
       </div>
+      <p className="mt-2 text-[14px] text-doux">
+        L’ajustement se pose sur le mois en cours ; les mois de {annee} ne bougent pas.
+      </p>
       {ecart !== null && ecart !== 0 && (
         <p className="mt-2 text-[15px]"
            style={{ color: ecart > 0 ? 'var(--color-ocre)' : undefined }}>
@@ -141,6 +168,7 @@ function Jauge({ part, depasse }: { part: number; depasse: boolean }) {
 
 export function Budget({ userId, va }: { userId: string; va: (v: string) => void }) {
   const [mois, setMois] = useState(moisDe)
+  const [baisse, setBaisse] = useState(false)
   const { data: foyer } = useFoyer()
   const depenses = useMois(mois)
   const { data: enveloppes = [] } = useEnveloppes(mois)
@@ -149,26 +177,32 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
 
   const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, m.display_name]))
   const aFaire = virements(depenses.data ?? [], userId, comptes, prenoms)
-  /* ⚠️ Seulement les charges MENSUELLES variables.
+  /* Tout ce qui n'était qu'une PRÉVISION : les charges variables, et celles
+   * que porte une enveloppe — le restaurant à 400 € n'est pas un montant connu,
+   * c'est un plafond.
    *
-   *    La première version prenait toute dépense estimée, donc aussi la taxe
-   *    foncière ramenée au douzième : saisir le relevé de 1450 € en octobre
-   *    écrasait le mois d'octobre à 1450 € au lieu d'étaler l'écart sur les
-   *    douze mois déjà partagés. La régularisation ANNUELLE est un autre
-   *    mécanisme, qui n'est pas encore écrit — tant qu'il ne l'est pas, on
-   *    n'offre pas un bouton qui abîme le mois. */
-  const mensuellesVariables = new Set(
+   * ⚠️ Les charges NON mensuelles restent dehors. La taxe foncière au douzième
+   *    ne se confirme pas mois par mois : saisir 1450 € en octobre écraserait
+   *    octobre à 1450 €. Elle a son propre mécanisme, plus bas. */
+  const previsionnelles = new Set(
     (charges.data ?? [])
-      .filter(c => c.variable && c.periodicite === 'mensuel')
+      .filter(c => c.periodicite === 'mensuel' && (c.variable || c.enveloppe_id))
       .map(c => c.id))
   const aConfirmer = (depenses.data ?? []).filter(
-    d => d.nature === 'estimee' && d.charge_id && mensuellesVariables.has(d.charge_id))
+    d => d.nature === 'estimee' && d.charge_id && previsionnelles.has(d.charge_id))
+  const heureDuReleve = cestLHeureDuReleve(mois)
+  const excedent = useExcedent(mois)
+  const monExcedent = (excedent.data ?? []).find(e => e.userId === userId)?.cents ?? 0
 
   /* Les charges non mensuelles, dont le relevé arrive une fois l'an. On ne les
      propose que si elles ont effectivement produit une provision ce mois-ci. */
+  /* Une charge ARCHIVÉE reste régularisable : son relevé arrive justement
+     après qu'on a cessé de la payer. On ne la filtre donc pas. */
   const vues = new Set((depenses.data ?? []).map(d => d.charge_id))
   const annuelles = (charges.data ?? [])
-    .filter(c => c.periodicite !== 'mensuel' && !c.archive_le && vues.has(c.id))
+    .filter(c => c.periodicite !== 'mensuel' && vues.has(c.id))
+  const anneeCourante = new Date().getFullYear()
+  const anneesOuvertes = [anneeCourante, anneeCourante - 1]
   const total = aFaire.reduce((s, v) => s + v.cents, 0)
 
   /* Le dernier jour à 14 h, `fin` valait minuit et tout le bloc disparaissait —
@@ -193,18 +227,27 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
           </button>
         </header>
 
-        <div className="mt-2 flex items-baseline justify-between">
-          <h1 className="titre text-[34px] first-letter:uppercase">{nomDuMois(mois)}</h1>
-          <div className="flex gap-1">
+        {/* Le mois se choisit AVANT le titre, pas par un chevron orphelin posé à
+            sa droite : seul, à l'autre bout de la ligne, il se lisait comme un
+            repli et non comme « le mois d'avant ». */}
+        <div className="mt-2 flex items-center gap-2">
+          <h1 className="titre text-[34px] first-letter:uppercase grow">{nomDuMois(mois)}</h1>
+          <div className="flex gap-1 shrink-0">
             <button onClick={() => setMois(m => decale(m, -1))} aria-label="Mois précédent"
-                    className="w-11 h-11 grid place-items-center text-doux">‹</button>
+                    className="min-h-11 px-3 inline-flex items-center gap-1.5 rounded-full
+                               bg-brume/50 text-[14px]">
+              <span aria-hidden="true">‹</span> Avant
+            </button>
             {/* Pas de flèche vers l'avant au mois courant. Une flèche grisée à
                 1,71:1 ne se lit pas, et laisser passer vers l'avenir CRÉERAIT
                 ses dépenses avec la clé du jour, figée. On n'affiche pas une
                 porte qui ne doit pas s'ouvrir. */}
             {mois < moisDe() && (
               <button onClick={() => setMois(m => decale(m, 1))} aria-label="Mois suivant"
-                      className="w-11 h-11 grid place-items-center text-doux">›</button>
+                      className="min-h-11 px-3 inline-flex items-center gap-1.5 rounded-full
+                                 bg-brume/50 text-[14px]">
+                Après <span aria-hidden="true">›</span>
+              </button>
             )}
           </div>
         </div>
@@ -259,40 +302,68 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
           </>
         )}
 
-        <div className="mt-4 flex gap-2">
-          <button onClick={() => va('/budget-reglages')}
-                  className="flex-1 min-h-11 rounded-[14px] border border-brume
-                             text-[15px] text-doux">
-            Revenus et comptes
-          </button>
-          <button onClick={() => va('/epargne')}
-                  className="flex-1 min-h-11 rounded-[14px] border border-brume
-                             text-[15px] text-doux">
-            L’épargne
-          </button>
-        </div>
-
-        {aFaire.length > 0 && (
-          <button onClick={() => va('/charges')}
-                  className="mt-4 w-full min-h-11 rounded-[14px] border border-brume
-                             text-[15px] text-doux">
-            Voir et modifier les charges
-          </button>
-        )}
-
         {aConfirmer.length > 0 && (
           <>
             <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
-              À confirmer
+              {heureDuReleve ? 'Le relevé du mois' : 'À confirmer, vers le 27'}
             </h2>
             <p className="mt-2 text-[15px] text-doux">
-              Ces montants sont des estimations. Saisis le relevé et le virement du
-              mois suivant s’ajustera tout seul.
+              {heureDuReleve
+                ? 'Saisis ce que vous avez vraiment payé sur chacun. L’écart avec ce qui était prévu revient dans le virement du mois suivant.'
+                : `Ces montants sont des prévisions. On te demandera le réel à partir du ${JOUR_DU_RELEVE}.`}
             </p>
             <Surface className="mt-3">
               {aConfirmer.map(d => (
                 <AConfirmer key={d.id} depense={d} foyerId={foyer?.id ?? ''} />
               ))}
+            </Surface>
+          </>
+        )}
+
+        {monExcedent !== 0 && (
+          <>
+            <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+              {monExcedent > 0 ? 'Tu as versé en trop' : 'Il te reste à verser'}
+            </h2>
+            <Surface className="mt-3">
+              <p className="flex items-baseline gap-2.5">
+                <span className="chiffre text-[32px]"
+                      style={{ color: monExcedent > 0 ? 'var(--color-herbe)' : 'var(--color-ocre)' }}>
+                  {euros(Math.abs(monExcedent))}
+                </span>
+                <span className="text-[15px] text-doux">
+                  {monExcedent > 0 ? 'de plus que ce qui a été dépensé' : 'sur ce qui a été dépensé'}
+                </span>
+              </p>
+              {monExcedent > 0 && (
+                <>
+                  <p className="mt-3 text-[15px] leading-[23px] text-doux">
+                    Cet argent est sur le compte commun. Deux façons de le rendre à qui
+                    l’a versé — et une seule bonne selon le mois : baisser le virement
+                    suivant quand c’est une variation, le mettre de côté quand c’est
+                    structurel.
+                  </p>
+                  <div className="mt-3.5 flex gap-2">
+                    <button onClick={() => va('/epargne')}
+                            className="flex-1 min-h-11 rounded-[14px] bg-herbe text-fond
+                                       text-[15px] font-medium">
+                      Le verser à l’épargne
+                    </button>
+                    <button onClick={() => setBaisse(b => !b)}
+                            className="flex-1 min-h-11 rounded-[14px] border border-brume
+                                       text-[15px]">
+                      Baisser le prochain
+                    </button>
+                  </div>
+                  {baisse && (
+                    <p className="mt-3 text-[15px] leading-[23px]">
+                      Vire {euros(Math.max(0, total - monExcedent))} au lieu de{' '}
+                      {euros(total)} le mois prochain. L’app ne le fait pas à ta place :
+                      c’est ta banque qui vire, pas elle.
+                    </p>
+                  )}
+                </>
+              )}
             </Surface>
           </>
         )}
@@ -308,7 +379,7 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
             </p>
             <Surface className="mt-3">
               {annuelles.map(c => (
-                <ReleveAnnuel key={c.id} charge={c} annee={Number(mois.slice(0, 4))} />
+                <ReleveAnnuel key={c.id} charge={c} annees={anneesOuvertes} />
               ))}
             </Surface>
           </>
@@ -343,6 +414,25 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
             </Surface>
           </>
         )}
+        {/* La navigation EN BAS. Entre « à verser » et « à confirmer », ces
+            trois boutons coupaient la lecture de ce qui compte pour proposer
+            d'aller ailleurs. */}
+        <nav aria-label="Le reste du budget" className="mt-10 flex flex-col gap-2">
+          <button onClick={() => va('/charges')}
+                  className="w-full min-h-11 rounded-[14px] border border-brume text-[15px]">
+            Voir et modifier les charges
+          </button>
+          <div className="flex gap-2">
+            <button onClick={() => va('/budget-reglages')}
+                    className="flex-1 min-h-11 rounded-[14px] border border-brume text-[15px]">
+              Revenus et comptes
+            </button>
+            <button onClick={() => va('/epargne')}
+                    className="flex-1 min-h-11 rounded-[14px] border border-brume text-[15px]">
+              L’épargne
+            </button>
+          </div>
+        </nav>
       </div>
     </main>
   )
