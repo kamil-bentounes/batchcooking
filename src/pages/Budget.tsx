@@ -92,8 +92,15 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
 
         <Erreur de={depenses.error} />
         {depenses.isPending ? <Attente /> : (depenses.data ?? []).length === 0 ? (
-          <Vide titre="Rien à verser"
-                texte="Aucune charge n’est posée pour ce mois. Ajoute-les depuis les réglages du budget." />
+          <>
+            <Vide titre="Rien à verser"
+                  texte="Aucune charge n’est posée. On commence par là." />
+            <button onClick={() => va('/charges')}
+                    className="w-full h-[58px] rounded-[18px] bg-herbe text-fond
+                               text-[17px] font-medium">
+              Poser les charges
+            </button>
+          </>
         ) : (
           <>
             <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
@@ -119,6 +126,14 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
               )}
             </Surface>
           </>
+        )}
+
+        {(depenses.data ?? []).length > 0 && (
+          <button onClick={() => va('/charges')}
+                  className="mt-4 w-full min-h-11 rounded-[14px] border border-brume
+                             text-[15px] text-doux">
+            Voir et modifier les charges
+          </button>
         )}
 
         {enveloppes.length > 0 && (

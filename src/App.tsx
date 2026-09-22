@@ -10,6 +10,7 @@ import { Settings } from './pages/Settings'
 import { AcceptInvite } from './pages/AcceptInvite'
 import { Hub } from './pages/Hub.tsx'
 import { Budget } from './pages/Budget.tsx'
+import { Charges } from './pages/Charges.tsx'
 import { Accueil } from './pages/Accueil.tsx'
 import { Choisir } from './pages/Choisir.tsx'
 import { Magasin } from './pages/Magasin.tsx'
@@ -108,6 +109,7 @@ export default function App() {
        l'écran qu'on quitte immédiatement — et `/cuisine-accueil` est l'accueil
        de la cuisine, qui était `/` jusqu'ici. */
     case '/budget': return <Budget userId={moi} va={va} />
+    case '/charges': return <Charges userId={moi} retour={() => va('/budget')} />
     case '/cuisine-accueil': return <Accueil userId={moi} va={va} />
 
     // Les quatre destinations permanentes.
