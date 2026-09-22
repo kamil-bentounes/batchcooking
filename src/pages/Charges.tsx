@@ -19,7 +19,8 @@ import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
   useCharges, useCatalogue, useAjouteCharge, useArchiveCharge, useComptes,
-  useEnveloppesPosees, useRattacheCharge, euros, enCentimes, type Charge,
+  useEnveloppesPosees, useRattacheCharge, useMajParticipants, euros, enCentimes,
+  type Charge,
 } from '../lib/donnees/budget.ts'
 
 const PERIODE: Record<string, string> = {
@@ -229,6 +230,8 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   const comptes = useComptes()
   const enveloppes = useEnveloppesPosees()
   const rattache = useRattacheCharge()
+  const majQui = useMajParticipants()
+  const [quiOuvert, setQuiOuvert] = useState<string | null>(null)
   /* Le compte commun, pour la dictée : elle ne demande pas où débiter, et une
      charge sans compte ne produit pas de virement. */
   const compteParDefaut = (comptes.data ?? [])
@@ -346,8 +349,8 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
           <Surface className="mt-4">
             {vues.map((c, i) => (
               <div key={c.id}
-                   className={`py-4 flex items-start gap-3
-                               ${i < vues.length - 1 ? 'border-b border-brume' : ''}`}>
+                   className={`py-4 ${i < vues.length - 1 ? 'border-b border-brume' : ''}`}>
+                <div className="flex items-start gap-3">
                 <span className="grow">
                   <span className="block text-[16px]">{c.libelle}</span>
                   <span className="block mt-0.5 text-[14px] text-doux">
@@ -391,6 +394,41 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                         disabled={archive.isPending}
                         aria-label={`Retirer ${c.libelle}`}
                         className="text-doux min-h-11 px-2 text-[14px]">Retirer</button>
+                </div>
+
+                {/* Qui participe se change APRÈS COUP. Sans ça, inviter quelqu'un
+                    une fois les charges posées obligeait à toutes les refaire. */}
+                {membres.length > 1 && (
+                  quiOuvert === c.id ? (
+                    <div className="mt-2 flex gap-2 flex-wrap items-center">
+                      {membres.map(m => {
+                        const dedans = c.participants.includes(m.id)
+                        return (
+                          <button key={m.id} role="checkbox" aria-checked={dedans}
+                                  disabled={majQui.isPending}
+                                  onClick={() => majQui.mutate({
+                                    chargeId: c.id, foyerId: foyer?.id ?? '',
+                                    participants: dedans
+                                      ? c.participants.filter(x => x !== m.id)
+                                      : [...c.participants, m.id],
+                                  })}
+                                  className={`px-3.5 min-h-11 inline-flex items-center rounded-full
+                                              text-[14px] transition-colors
+                                    ${dedans ? 'bg-herbe text-fond' : 'bg-brume/50 text-encre'}`}>
+                            {m.display_name}
+                          </button>
+                        )
+                      })}
+                      <button onClick={() => setQuiOuvert(null)}
+                              className="min-h-11 px-2 text-[14px] text-doux">Fermé</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setQuiOuvert(c.id)}
+                            className="mt-1 min-h-11 text-[14px] text-herbe">
+                      Changer qui participe
+                    </button>
+                  )
+                )}
               </div>
             ))}
           </Surface>

@@ -684,3 +684,38 @@ export function cestLHeureDuReleve(mois: string): boolean {
   if (a < n.getFullYear() || (a === n.getFullYear() && m < n.getMonth() + 1)) return true
   return a === n.getFullYear() && m === n.getMonth() + 1 && n.getDate() >= JOUR_DU_RELEVE
 }
+
+/**
+ * Changer qui participe à une charge.
+ *
+ * Il manquait, et le manque était bloquant : les participants ne se cochaient
+ * qu'à la CRÉATION, si bien qu'inviter quelqu'un après avoir posé ses charges
+ * obligeait à toutes les refaire.
+ *
+ * Le mois en cours se repose derrière, quand il n'a encore rien coûté à
+ * personne : ajouter quelqu'un à une charge doit changer ce qu'il doit, sinon
+ * le bouton ment. Un mois déjà vécu, lui, ne bouge pas — `refige_le_mois` s'en
+ * charge et refuse toute seule.
+ */
+export function useMajParticipants() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (m: { chargeId: string; foyerId: string; participants: string[] }) => {
+      ou(await supabase.from('charge_participant')
+        .delete().eq('charge_id', m.chargeId).select())
+      if (m.participants.length > 0) {
+        ou(await supabase.from('charge_participant').insert(
+          m.participants.map(u => ({
+            charge_id: m.chargeId, user_profile_id: u, household_id: m.foyerId,
+          }))).select())
+      }
+      const { error } = await supabase.rpc('refige_le_mois', { le_mois: moisDe() })
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CLE.charges })
+      qc.invalidateQueries({ queryKey: ['budget-mois'] })
+      qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
+    },
+  })
+}

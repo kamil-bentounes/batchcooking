@@ -50,14 +50,25 @@ export function Settings({ va }: { va: (v: string) => void }) {
 
   async function inviter() {
     try {
-      const r = await callFunction<{ token: string }>('invite', { email: invite })
-      // Le lien est le vrai livrable : sans clé Resend aucun e-mail ne part, et
-      // même avec, le destinataire peut l'avoir classé en indésirable.
-      // ⚠️ `origin` seul perd le préfixe de déploiement : sur GitHub Pages le
-      //    site est servi sous /batchcooking/, et le lien tombait sur une 404.
-      //    `lienDeploye` fait le calcul, et il existait déjà sans appelant.
+      const r = await callFunction<{ token: string; envoye: boolean; dejaUnCompte: boolean }>(
+        'invite', { email: invite })
+
+      /* L'écran DIT ce qui s'est passé. Il affichait le lien quoi qu'il arrive,
+         du temps où aucun mail ne partait — si bien qu'une invitation bel et
+         bien envoyée avait l'air de n'avoir rien fait, et qu'on cherchait le
+         problème là où il n'était pas.
+
+         Le lien reste affiché dans les deux cas : c'est le recours quand le
+         mail tombe en indésirable, et il marche de toute façon.
+
+         ⚠️ `origin` seul perd le préfixe de déploiement : sur GitHub Pages le
+            site est servi sous un sous-chemin, et le lien tombait sur une 404. */
       setLien(lienDeploye(`/invite/${r.token}`))
-      dire(`Invitation créée pour ${invite}. Envoie-lui le lien ci-dessous.`)
+      dire(r.envoye
+        ? `Le mail est parti à ${invite}. S’il n’arrive pas, regarde ses indésirables — ou envoie-lui le lien ci-dessous.`
+        : r.dejaUnCompte
+          ? `${invite} a déjà un compte : aucun mail n’est parti. Envoie-lui le lien ci-dessous.`
+          : `Invitation créée pour ${invite}. Envoie-lui le lien ci-dessous.`)
     }
     catch (e) { dire(String((e as Error).message), true) }
   }
@@ -121,7 +132,9 @@ export function Settings({ va }: { va: (v: string) => void }) {
       <section className="mt-12">
         <h2 className="titre text-xl text-herbe">Inviter</h2>
         <p className="mt-1 text-doux text-[15px]">
-          Tu obtiens un lien à lui transmettre. Elle rejoint le foyer et garde ses propres objectifs.
+          Elle reçoit un mail et arrive déjà connectée. Tu obtiens aussi un lien,
+          au cas où il tomberait en indésirable. Elle rejoint le foyer et garde
+          ses propres objectifs.
         </p>
         <div className="mt-4 space-y-4">
           <Champ label="Son e-mail" type="email" value={invite} placeholder="elle@exemple.fr"
