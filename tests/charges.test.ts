@@ -540,14 +540,14 @@ describe('le relevé du mois et l’excédent', () => {
       .eq('charge_id', id).eq('mois', '2029-01-01').single()
     expect(d!.montant_prevu_cents, 'le prévu n’a pas été gelé').toBe(5_000)
 
-    // On confirme un réel plus bas : 38 € au lieu de 50.
-    await admin().from('depense_part').delete().eq('depense_id', d!.id)
-    await moi.client.from('depense')
-      .update({ montant_cents: 3_800, nature: 'connue' }).eq('id', d!.id)
-    await moi.client.from('depense_part').insert({
-      depense_id: d!.id, user_profile_id: moi.userId,
-      household_id: moi.householdId, part_cents: 3_800, part_bps: 10_000,
-    })
+    /* On confirme un réel plus bas : 38 € au lieu de 50. Par la FONCTION, et
+       non en réécrivant les parts à la main — c'est désormais le seul chemin,
+       et c'est voulu : le contrôle de somme ne regardant que le total, les
+       reposer soi-même permettait de passer de 600/400 à un centime contre
+       999,99 €. */
+    const { error: eConf } = await moi.client.rpc('confirme_la_depense',
+      { la_depense: d!.id, reel_cents: 3_800 })
+    expect(eConf, `confirmation refusée : ${eConf?.message}`).toBeNull()
 
     const { data: apres } = await admin().from('depense')
       .select('montant_cents, montant_prevu_cents').eq('id', d!.id).single()
@@ -1129,5 +1129,95 @@ describe('l’arrondi ne penche d’aucun côté', () => {
     const somme = (exc ?? []).reduce(
       (s: number, l: { excedent_cents: number }) => s + Number(l.excedent_cents), 0)
     expect(somme, 'l’excédent ne recompose pas l’écart du foyer').toBe(125_000 - 155_000)
+  })
+})
+
+describe('les gardes que l’audit a trouvées absentes', () => {
+  it('une part ne s’attribue pas à quelqu’un d’un autre foyer', async () => {
+    /* `depense_part.user_profile_id` n'a plus de clé étrangère — à raison, une
+       part figée doit survivre au départ de son titulaire. Mais la garde de
+       rattachement avait été retirée dans la foulée, au motif qu'elle en
+       dépendait : elle n'en a jamais dépendu, elle lit `user_profile`. */
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('household_id', moi.householdId).limit(1).single()
+    const { error } = await admin().from('depense_part').insert({
+      depense_id: d!.id, user_profile_id: voisin.userId,
+      household_id: moi.householdId, part_cents: 1, part_bps: 1,
+    })
+    expect(error, 'une part a été attribuée au voisin').not.toBeNull()
+  })
+
+  it('les parts ne se réécrivent pas à la main', async () => {
+    /* Le contrôle différé ne regarde que la SOMME : supprimer puis reposer
+       permettait de passer de 600/400 à un centime contre 999,99 €. */
+    const { data: p } = await admin().from('depense_part')
+      .select('depense_id').eq('household_id', moi.householdId).limit(1).single()
+    const { data: pose } = await moi.client.from('depense_part').insert({
+      depense_id: p!.depense_id, user_profile_id: moi.userId,
+      household_id: moi.householdId, part_cents: 1, part_bps: 1,
+    }).select()
+    expect(pose ?? [], 'on peut encore poser une part à la main').toHaveLength(0)
+
+    const { data: reste } = await moi.client.from('depense_part')
+      .delete().eq('depense_id', p!.depense_id).select()
+    expect(reste ?? [], 'on peut encore supprimer les parts à la main').toHaveLength(0)
+  })
+
+  it('un versement d’épargne ne se pose qu’à son propre nom', async () => {
+    const { data: poche } = await admin().from('poche_epargne').insert({
+      household_id: moi.householdId, libelle: `Poche ${Date.now()}`, genre: 'urgence',
+    }).select().single()
+
+    const { data: pose } = await moi.client.from('versement_epargne').insert({
+      household_id: moi.householdId, poche_id: poche!.id,
+      user_profile_id: elle, montant_cents: -49_999,
+    }).select()
+    expect(pose ?? [], 'on a versé — ou retiré — au nom de quelqu’un d’autre')
+      .toHaveLength(0)
+
+    const { data: mien } = await moi.client.from('versement_epargne').insert({
+      household_id: moi.householdId, poche_id: poche!.id,
+      user_profile_id: moi.userId, montant_cents: 5_000,
+    }).select()
+    expect(mien ?? [], 'on ne peut plus verser à son propre nom').toHaveLength(1)
+  })
+
+  it('on ne se retire pas seul d’une charge commune', async () => {
+    const { data: c } = await admin().from('charge').insert({
+      household_id: moi.householdId, libelle: 'Loyer à deux', montant_cents: 100_000,
+      periodicite: 'mensuel', debut: '2026-01-01', commun: true,
+    }).select().single()
+    await admin().from('charge_participant').insert([
+      { charge_id: c!.id, user_profile_id: moi.userId, household_id: moi.householdId },
+      { charge_id: c!.id, user_profile_id: elle, household_id: moi.householdId },
+    ])
+
+    const { error } = await moi.client.from('charge_participant')
+      .delete().eq('charge_id', c!.id).eq('user_profile_id', moi.userId)
+    expect(error, 'on s’est retiré seul d’une charge commune').not.toBeNull()
+  })
+
+  it('un compte, une clé de partage : le voisin ne les lit pas', async () => {
+    // Deux policies dont l'audit a montré qu'aucun test ne les gardait :
+    // les remplacer par `using (true)` laissait la suite entière verte.
+    const { data: comptes } = await voisin.client.from('compte')
+      .select('id').eq('household_id', moi.householdId)
+    expect(comptes ?? [], 'le voisin lit les comptes du foyer d’à côté').toHaveLength(0)
+
+    const { data: parts } = await voisin.client.from('depense_part')
+      .select('depense_id').eq('household_id', moi.householdId)
+    expect(parts ?? [], 'le voisin lit les parts du foyer d’à côté').toHaveLength(0)
+
+    const { data: vers } = await voisin.client.from('versement_epargne')
+      .select('id').eq('household_id', moi.householdId)
+    expect(vers ?? [], 'le voisin lit l’épargne du foyer d’à côté').toHaveLength(0)
+
+    // Et la clé de partage ne s'emprunte pas : l'argument n'est honoré que
+    // pour le rôle de service.
+    const { data: cle } = await voisin.client.rpc('parts_du_foyer',
+      { le_mois: '2026-09-01', le_foyer: moi.householdId })
+    const chezMoi = (cle ?? []).some(
+      (l: { user_profile_id: string }) => l.user_profile_id === moi.userId)
+    expect(chezMoi, 'le voisin a obtenu la clé de partage du foyer d’à côté').toBe(false)
   })
 })

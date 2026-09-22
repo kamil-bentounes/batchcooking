@@ -43,7 +43,13 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
   const { data: cycle } = useCycle()
   const { data: barquettes = [] } = useBarquettes()
   const { data: foyer } = useFoyer()
-  const { data: depenses = [] } = useMois(mois)
+  /* ⚠️ `isPending`, pas seulement `data`. Avec `= []` en défaut, le hub
+     annonçait « Rien de posé » et « Aucune barquette au frais » à CHAQUE
+     ouverture à froid — le cas le plus fréquent — avant de tout corriger une
+     seconde plus tard. C'est le premier écran de l'app : il ne peut pas
+     commencer par un mensonge. */
+  const budget = useMois(mois)
+  const depenses = budget.data ?? []
   const { data: enveloppes = [] } = useEnveloppes(mois)
   const { data: comptes = [] } = useComptes()
   const { data: revenus = [] } = useRevenus()
@@ -76,7 +82,11 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
               Popote
             </h1>
           </span>
-          <button onClick={() => va('/reglages')} aria-label="Réglages"
+          {/* Vers SON profil, pas vers les réglages de la cuisine : l'avatar
+              porte son initiale, un tap dessus doit mener à soi. C'était aussi
+              le seul chemin manquant — une fois le profil rempli, le bandeau
+              disparaissait et la date d'arrivée devenait incorrigeable. */}
+          <button onClick={() => va('/profil')} aria-label="Mon profil"
                   className="w-11 h-11 -mr-2 grid place-items-center">
             <span className="w-[34px] h-[34px] rounded-full bg-herbe text-fond text-[13px]
                              grid place-items-center">
@@ -96,7 +106,9 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
           </Carte>
 
           <Carte titre="Budget" onClick={() => va('/budget')}>
-            {depenses.length === 0 ? (
+            {budget.isPending ? (
+              <p className="titre text-[28px] mt-5 opacity-50">…</p>
+            ) : depenses.length === 0 ? (
               <>
                 <p className="titre text-[28px] mt-5">Rien de posé</p>
                 <p className="mt-2.5 text-[15px] text-doux">

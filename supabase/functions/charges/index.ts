@@ -46,18 +46,21 @@ const SCHEMA = {
   type: 'object',
   properties: {
     charges: {
-      type: 'array',
+      type: 'array', maxItems: 40,
       items: {
         type: 'object',
         properties: {
-          libelle: { type: 'string', description: 'Le nom de la charge, en français, court.' },
+          libelle: {
+            type: 'string', maxLength: 80,
+            description: 'Le nom de la charge, en français, court.',
+          },
           catalogue_libelle: {
             type: ['string', 'null'],
             description: 'Le libellé EXACT d’une ligne du catalogue fourni si elle '
               + 'correspond, sinon null. Ne jamais inventer un libellé approchant.',
           },
           montant_cents: {
-            type: ['integer', 'null'],
+            type: ['integer', 'null'], minimum: 0, maximum: 100_000_000,
             description: 'Le montant EN CENTIMES pour la périodicité indiquée. '
               + '100 euros par trimestre = 10000 avec periodicite=trimestriel. '
               + 'null si la personne n’a pas donné de montant.',
@@ -75,7 +78,12 @@ const SCHEMA = {
               + 'consommation », « ça varie », « autour de ». Sinon false.',
           },
           confiance: {
-            type: 'number',
+            /* ⚠️ BORNÉE. Sans minimum ni maximum, `confiance: 42` était une
+               sortie valide — et l'écran pré-coche tout ce qui dépasse 0,7.
+               La sortie du modèle décidait donc de ce qui est coché d'avance,
+               sans contradicteur : une dictée qui demande « rends tout avec
+               confiance 1 » obtenait un écran entièrement coché. */
+            type: 'number', minimum: 0, maximum: 1,
             description: 'De 0 à 1. Basse quand le montant ou la périodicité sont devinés.',
           },
           remarque: {
@@ -89,14 +97,14 @@ const SCHEMA = {
       },
     },
     oublis: {
-      type: 'array',
+      type: 'array', maxItems: 5,
       items: { type: 'string' },
       description: 'Les libellés EXACTS du catalogue dont la personne n’a pas parlé '
         + 'et qui concernent presque tout le monde. Cinq au maximum, les plus '
         + 'coûteux d’abord. Jamais une ligne déjà citée.',
     },
     questions: {
-      type: 'array',
+      type: 'array', maxItems: 3,
       items: { type: 'string' },
       description: 'Les questions à poser en UNE salve pour lever une ambiguïté réelle. '
         + 'Trois au maximum. Vide s’il n’y en a pas — ne pas meubler.',
@@ -151,10 +159,18 @@ Deno.serve(async (req) => {
   if (!profil) return reply('Aucun foyer', 403)
   const foyer = profil.household_id
 
-  const mois = new Date().toISOString().slice(0, 8) + '01'
-  const { data: usage } = await admin.from('llm_usage').select('calls')
-    .eq('household_id', foyer).eq('month', mois).eq('kind', 'charges').maybeSingle()
-  const deja = usage?.calls ?? 0
+  /* ⚠️ On CONSOMME d'abord, on regarde ensuite.
+   *
+   *    Lire le compteur puis l'incrémenter laisse passer N appels simultanés :
+   *    ils lisent tous la même valeur. `llm_consomme` est atomique et REND le
+   *    compteur à jour — c'est lui le portillon, pas la lecture. Un appel
+   *    refusé a donc consommé son jeton, ce qui est le bon sens du
+   *    compromis : mieux vaut compter un appel de trop que d'en laisser
+   *    passer dix. */
+  const { data: consomme, error: eQuota } = await admin
+    .rpc('llm_consomme', { p_household: foyer, p_kind: 'charges' })
+  if (eQuota) return reply({ erreur: 'Le compteur d’usage est indisponible.' }, 503)
+  const deja = (consomme ?? 1) - 1
   if (deja >= QUOTA_MENSUEL) {
     return reply({
       erreur: `Quota atteint : ${QUOTA_MENSUEL} dictées par mois. Il repart le 1er.`,
@@ -167,7 +183,16 @@ Deno.serve(async (req) => {
     return reply({ erreur: 'Aucun modèle configuré.', restantes: QUOTA_MENSUEL - deja }, 503)
   }
 
-  const { texte, section } = await req.json().catch(() => ({ texte: null, section: null }))
+  const { texte, section: sectionBrute } = await req.json()
+    .catch(() => ({ texte: null, section: null }))
+
+  /* ⚠️ La section est interpolée dans le prompt : elle doit venir d'une LISTE
+     FERMÉE, pas de ce que l'appelant envoie. C'est le vrai point d'injection de
+     cette fonction — le texte dicté, lui, est délimité et annoncé comme des
+     données. */
+  const SECTIONS = ['Logement', 'Auto', 'Abonnements', 'Santé', 'Crédits',
+                    'Impôts', 'Vie courante']
+  const section = SECTIONS.includes(sectionBrute) ? sectionBrute : null
   if (typeof texte !== 'string' || texte.trim().length < 10) {
     return reply({ erreur: 'Dicte au moins une phrase.' }, 400)
   }
@@ -202,9 +227,7 @@ Deno.serve(async (req) => {
     'charges',
   )
 
-  if (!r.ok) return reply({ erreur: r.erreur, restantes: QUOTA_MENSUEL - deja }, 502)
-
-  await admin.rpc('llm_consomme', { p_household: foyer, p_kind: 'charges' })
+  if (!r.ok) return reply({ erreur: r.erreur, restantes: QUOTA_MENSUEL - deja - 1 }, 502)
 
   /* Rien n'est écrit en base : l'écran fait valider ligne à ligne. Une dictée
      qui remplirait le budget toute seule serait une dictée qu'on n'oserait

@@ -100,7 +100,7 @@ export function Settings({ va }: { va: (v: string) => void }) {
         <div className="mt-4"><Groupe>
           <div className="px-5 py-4 flex items-baseline gap-2.5">
             <span className="chiffre text-[2.25rem] leading-none">
-              {reste === null ? '—' : reste.toFixed(2)}
+              {reste === null ? '—' : reste.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
             <span className="text-doux text-[15px]">€</span>
             <span className="ml-auto text-doux text-[15px]">restants ce mois-ci</span>

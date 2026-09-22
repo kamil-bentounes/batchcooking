@@ -53,6 +53,17 @@ export async function callFunction<T = unknown>(name: string, body: unknown): Pr
     },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(await res.text())
+  if (!res.ok) {
+    /* Le corps d'erreur est du JSON : le jeter tel quel affichait
+       `{"erreur":"Quota atteint : 20 dictées…","restantes":0}` à l'écran.
+       On en sort la phrase, et on garde le texte brut quand il n'y en a pas. */
+    const brut = await res.text()
+    let message = brut
+    try {
+      const parsed = JSON.parse(brut) as { erreur?: string; message?: string; error?: string }
+      message = parsed.erreur ?? parsed.message ?? parsed.error ?? brut
+    } catch { /* pas du JSON : on garde le texte */ }
+    throw new Error(message)
+  }
   return res.json()
 }

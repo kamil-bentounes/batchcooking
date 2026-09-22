@@ -15,7 +15,7 @@ import { useState } from 'react'
 import { Champ, Bouton, Message } from '../ui/kit.tsx'
 import { supabase, ou } from '../lib/supabase.ts'
 import { useFoyer } from '../lib/donnees/foyer.ts'
-import { usePoseRevenu, enCentimes, euros, moisDe } from '../lib/donnees/budget.ts'
+import { usePoseRevenu, enCentimes, euros } from '../lib/donnees/budget.ts'
 
 /** Aujourd'hui en heure LOCALE : `toISOString()` recule d'un jour avant 2 h. */
 function aujourdhui(): string {
@@ -88,7 +88,11 @@ export function Profil({ userId, onFini, retour }: {
             mois que tu partages — <strong style={{ color: 'var(--color-ocre)' }}>
             vérifie-la</strong>.
           </p>
-          {entree > moisDe() && (
+          {/* Comparé à AUJOURD'HUI, pas au premier du mois : `moisDe()` vaut le
+              1er, si bien que du 2 au 31 la date par défaut — aujourd'hui —
+              déclenchait l'alerte. Le premier écran du budget annonçait donc une
+              conséquence fausse et inquiétante à tout le monde. */}
+          {entree > aujourdhui() && (
             <p className="mt-1.5 text-[14px] leading-[21px]"
                style={{ color: 'var(--color-ocre)' }}>
               Tu arrives plus tard : tu ne participeras à aucune charge d’ici là.

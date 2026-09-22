@@ -443,3 +443,17 @@ verify_jwt = false
 
 [functions.frigo]
 verify_jwt = false
+
+# Les quatre suivantes vérifient elles aussi le jeton dans leur corps, et
+# retombaient pourtant sur le défaut `true` : leur préflight CORS échouait.
+[functions.charges]
+verify_jwt = false
+
+[functions.etiquette]
+verify_jwt = false
+
+[functions.ticket]
+verify_jwt = false
+
+[functions.importer]
+verify_jwt = false

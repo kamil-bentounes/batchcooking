@@ -86,6 +86,13 @@ export function Dictee({ retour, surRetenues }: {
      montants » sans offrir le moindre champ, et une ligne sans montant entrait
      en base à zéro euro. */
   const [corriges, setCorriges] = useState<Record<number, string>>({})
+  /* La périodicité et la portée aussi : ce sont les deux erreurs les plus
+     plausibles du modèle, et les plus chères. Un trimestriel lu mensuel fait
+     ×3 ; une charge perso marquée commune fait payer l'autre. La seule issue
+     était de décocher et de tout ressaisir à la main. */
+  const [reglages, setReglages] = useState<Record<number, Partial<Proposee>>>({})
+  const ajuste = (i: number, p: Partial<Proposee>) =>
+    setReglages(m => ({ ...m, [i]: { ...m[i], ...p } }))
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState<unknown>(null)
 
@@ -109,11 +116,14 @@ export function Dictee({ retour, surRetenues }: {
 
   /* Le montant retenu est celui qu'on a corrigé, sinon celui du modèle. Une
      ligne sans montant n'est pas ajoutable : elle reste cochée sans compter. */
+  /** Une ligne telle qu'elle est après correction — c'est elle qu'on affiche. */
+  const vue = (i: number): Proposee => ({ ...reponse!.charges[i], ...reglages[i] })
+
   const pretes = reponse
     ? [...retenues].sort((a, b) => a - b).map(i => {
         const saisi = corriges[i]
-        const cents = saisi !== undefined ? enCentimes(saisi) : reponse.charges[i].montant_cents
-        return { ...reponse.charges[i], montant_cents: cents }
+        const cents = saisi !== undefined ? enCentimes(saisi) : vue(i).montant_cents
+        return { ...vue(i), montant_cents: cents }
       }).filter(c => c.montant_cents !== null && c.montant_cents > 0)
     : []
 
@@ -146,11 +156,29 @@ export function Dictee({ retour, surRetenues }: {
                        className="mt-1 w-[22px] h-[22px] accent-[#2F5D45] shrink-0" />
                 <span className="grow">
                   <span className="block text-[16px]">{c.libelle}</span>
-                  <span className="block mt-0.5 text-[14px] text-doux">
-                    {c.periodicite === 'mensuel' ? 'par mois'
-                      : c.periodicite === 'trimestriel' ? 'par trimestre' : 'par an'}
-                    {c.portee === 'commun' ? ' · en commun' : ' · à toi'}
-                    {c.variable && ' · variable'}
+                  <span className="mt-1.5 flex gap-1.5 flex-wrap"
+                        onClick={e => e.preventDefault()}>
+                    {([['mensuel', 'mois'], ['trimestriel', 'trimestre'],
+                       ['annuel', 'an']] as const).map(([v, nom]) => (
+                      <button key={v} type="button" aria-pressed={vue(i).periodicite === v}
+                              onClick={() => ajuste(i, { periodicite: v })}
+                              className={`px-3 min-h-11 inline-flex items-center rounded-full
+                                          text-[13px] transition-colors
+                                ${vue(i).periodicite === v
+                                  ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
+                        {nom}
+                      </button>
+                    ))}
+                    {([['commun', 'en commun'], ['perso', 'à toi']] as const).map(([v, nom]) => (
+                      <button key={v} type="button" aria-pressed={vue(i).portee === v}
+                              onClick={() => ajuste(i, { portee: v })}
+                              className={`px-3 min-h-11 inline-flex items-center rounded-full
+                                          text-[13px] transition-colors
+                                ${vue(i).portee === v
+                                  ? 'bg-herbe text-fond' : 'bg-brume/50 text-encre'}`}>
+                        {nom}
+                      </button>
+                    ))}
                   </span>
                   <span className="mt-2 flex items-center gap-2"
                         onClick={e => e.preventDefault()}>

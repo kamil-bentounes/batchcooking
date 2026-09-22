@@ -294,27 +294,47 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   if (dictee) {
     return (
       <Dictee retour={() => setDictee(false)} surRetenues={async lignes => {
+        /* ⚠️ Cette promesse était lancée sans être attendue ni rattrapée : un
+           libellé trop long ou un montant démesuré faisait lever `ou()`, la
+           promesse partait au néant, l'écran ne bougeait pas, et le lot restait
+           à moitié écrit sans un mot. On compte ce qui est passé, et on dit ce
+           qui a échoué. */
+        let posees = 0
         /* Une ligne sans montant n'entre PAS à zéro : le formulaire manuel
            refuse zéro, et il n'y a aucune raison qu'une dictée l'accepte. Elles
            sont écartées avant l'écriture, et l'écran de revue les montre
            décochées. */
         for (const l of lignes.filter(x => x.montant_cents && x.montant_cents > 0)) {
-          await ajouteUne.mutateAsync({
-            libelle: l.libelle,
+          try {
+            await ajouteUne.mutateAsync({
+            libelle: l.libelle.slice(0, 80),
             montantCents: l.montant_cents!,
             periodicite: l.periodicite,
             participants: l.portee === 'commun' ? membres.map(m => m.id) : [userId],
             commun: l.portee === 'commun',
             variable: l.variable,
             compteId: compteParDefaut,
+            /* Le modèle DÉSIGNE une ligne du catalogue, et on la jetait : un
+               tiers de son prompt travaillait pour rien, et toute charge dictée
+               arrivait détachée du référentiel. */
+            catalogueId: (catalogue.flatMap(s => s.lignes)
+              .find(k => k.libelle === l.catalogue_libelle)?.id) ?? null,
             /* Si une enveloppe porte déjà ce nom — « Restaurant », « Culture » —
                la charge s'y range d'elle-même : sinon la jauge resterait vide
                alors que la ligne existe. */
             enveloppeId: (enveloppes.data ?? []).find(
               e => e.libelle.toLowerCase() === l.libelle.toLowerCase())?.id ?? null,
             foyerId: foyer?.id ?? '',
-          })
+            })
+            posees++
+          } catch (e) {
+            setDit(`${posees} charge${posees > 1 ? 's' : ''} ajoutée${posees > 1 ? 's' : ''}, `
+              + `puis « ${l.libelle} » a été refusée : ${(e as Error).message}`)
+            setDictee(false)
+            return
+          }
         }
+        setDit(`${posees} charge${posees > 1 ? 's' : ''} ajoutée${posees > 1 ? 's' : ''}.`)
         setDictee(false)
       }} />
     )

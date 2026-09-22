@@ -37,6 +37,7 @@ const NOM: Record<Periode, string> = {
 }
 
 export function Bilan({ va }: { va: (v: string) => void }) {
+  const [dit, setDit] = useState('')
   const [periode, setPeriode] = useState<Periode>('semaine')
   const { data: cycle } = useCycle()
   const change = useChangeEtat()
@@ -178,11 +179,20 @@ export function Bilan({ va }: { va: (v: string) => void }) {
               : 'Tout a été mangé.'}
             {' '}Clore permet d’ouvrir le cycle suivant.
           </p>
-          <button onClick={() => change.mutate({ id: cycle.id, vers: 'cloture' })}
+          {/* Irréversible, et ça ne demandait rien — pendant que RETIRER une
+              charge, qui s'archive et se récupère, demandait confirmation.
+              L'échelle de gravité était exactement inversée. */}
+          <button onClick={() => {
+                    if (!confirm('Clore la semaine ? Le cycle se termine et un nouveau '
+                      + 'commence. On ne revient pas en arrière.')) return
+                    change.mutate({ id: cycle.id, vers: 'cloture' },
+                      { onSuccess: () => setDit('Semaine close. La suivante est prête.') })
+                  }}
                   disabled={change.isPending}
                   className="mt-4 w-full h-[46px] rounded-[16px] bg-herbe text-fond text-[15px]">
-            Clore et préparer la semaine prochaine
+            {change.isPending ? 'Je clos…' : 'Clore et préparer la semaine prochaine'}
           </button>
+          {dit && <p className="mt-3 text-[15px] text-doux">{dit}</p>}
           <Erreur de={change.error} />
         </Surface>
       )}

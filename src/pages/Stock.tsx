@@ -55,7 +55,12 @@ export function Stock({ va }: { va: (v: string) => void }) {
           <button key={o} role="tab" aria-selected={onglet === o} onClick={() => setOnglet(o)}
                   className={`px-4 min-h-11 inline-flex items-center rounded-full text-[14px] transition-colors
                     ${onglet === o ? 'bg-encre text-fond' : 'bg-brume/50 hover:bg-brume'}`}>
-            {NOM[o]} <span className="tabular-nums opacity-70">{compte(o)}</span>
+            {/* `gap`, pas une espace : le bouton est `inline-flex`, donc
+                l'espace entre le libellé et le compteur est un item anonyme que
+                flexbox ne rend pas — on lisait « Frigo4 ». */}
+            <span className="inline-flex items-center gap-1.5">
+              {NOM[o]} <span className="tabular-nums opacity-70">{compte(o)}</span>
+            </span>
           </button>
         ))}
       </div>

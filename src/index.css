@@ -37,6 +37,16 @@ html { -webkit-tap-highlight-color: transparent; }
 button, [role="button"], [role="tab"], [role="radio"], [role="checkbox"],
 label:has(> input[type="checkbox"]), summary {
   cursor: pointer;
+  /* Le geste doit RÉPONDRE. Sans retour, on ne sait pas si l'appui a été pris —
+     alors on appuie deux fois, ce qui est la façon la plus sûre de faire deux
+     fois ce qu'on voulait faire une. 120 ms, c'est en dessous du seuil où l'on
+     percevrait une lenteur, et au-dessus de celui où l'on ne verrait rien. */
+  transition: transform 120ms ease, background-color 150ms ease, color 150ms ease;
+}
+button:active:not(:disabled),
+[role="button"]:active, [role="tab"]:active,
+[role="radio"]:active, [role="checkbox"]:active {
+  transform: scale(0.97);
 }
 button:disabled, [role="button"][aria-disabled="true"] {
   cursor: not-allowed;
@@ -76,5 +86,12 @@ body {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+  /* Le retour au clic passe par une COULEUR plutôt qu'un mouvement : quelqu'un
+     qui a demandé moins d'animation veut savoir que son geste est pris, pas
+     être privé de réponse. */
+  button:active:not(:disabled), [role="button"]:active {
+    transform: none;
+    filter: brightness(0.94);
   }
 }

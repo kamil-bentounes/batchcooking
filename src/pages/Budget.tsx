@@ -259,21 +259,44 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
           </p>
         )}
 
+        {/* La porte vers les charges, EN HAUT. Elle était sous les virements,
+            les confirmations, le relevé annuel et les enveloppes — près de trois
+            mille pixels de défilement pour le geste le plus fréquent. */}
+        {aFaire.length > 0 && (
+          <button onClick={() => va('/charges')}
+                  className="mt-5 w-full min-h-11 rounded-[14px] border border-brume
+                             text-[15px]">
+            Voir et modifier les charges
+          </button>
+        )}
+
         <Erreur de={depenses.error} />
         {depenses.isPending ? <Attente /> : aFaire.length === 0 ? (
           <>
-            <Vide titre="Rien à verser"
-                  texte="Aucune charge n’est posée. On commence par là." />
-            <button onClick={() => va('/charges')}
-                    className="w-full h-[58px] rounded-[18px] bg-herbe text-fond
-                               text-[17px] font-medium">
-              Poser les charges
-            </button>
-            <button onClick={() => va('/budget-reglages')}
-                    className="mt-3 w-full min-h-11 rounded-[14px] border border-brume
-                               text-[15px] text-doux">
-              D’abord les revenus et les comptes
-            </button>
+            {/* Deux états VIDES distincts, et les confondre accusait à tort :
+                `virements()` écarte ce qu'on paie depuis son propre compte, et
+                quelqu'un arrivé en cours de mois n'a aucune part. Il voyait donc
+                « aucune charge n'est posée » — avec, juste dessous, les
+                enveloppes pleines de chiffres. */}
+            <Vide titre={(depenses.data ?? []).length === 0
+                    ? 'Rien à verser' : 'Rien à verser pour toi'}
+                  texte={(depenses.data ?? []).length === 0
+                    ? 'Aucune charge n’est posée. On commence par là.'
+                    : 'Les charges du mois sont payées par quelqu’un d’autre, ou tu n’y participes pas.'} />
+            {(depenses.data ?? []).length === 0 && (
+              <button onClick={() => va('/charges')}
+                      className="w-full h-[58px] rounded-[18px] bg-herbe text-fond
+                                 text-[17px] font-medium">
+                Poser les charges
+              </button>
+            )}
+            {(depenses.data ?? []).length === 0 && (
+              <button onClick={() => va('/budget-reglages')}
+                      className="mt-3 w-full min-h-11 rounded-[14px] border border-brume
+                                 text-[15px] text-doux">
+                D’abord les revenus et les comptes
+              </button>
+            )}
           </>
         ) : (
           <>
@@ -418,10 +441,6 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
             trois boutons coupaient la lecture de ce qui compte pour proposer
             d'aller ailleurs. */}
         <nav aria-label="Le reste du budget" className="mt-10 flex flex-col gap-2">
-          <button onClick={() => va('/charges')}
-                  className="w-full min-h-11 rounded-[14px] border border-brume text-[15px]">
-            Voir et modifier les charges
-          </button>
           <div className="flex gap-2">
             <button onClick={() => va('/budget-reglages')}
                     className="flex-1 min-h-11 rounded-[14px] border border-brume text-[15px]">
