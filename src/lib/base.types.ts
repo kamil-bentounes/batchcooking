@@ -97,6 +97,84 @@ export type Database = {
         }
         Relationships: []
       }
+      catalogue_charge: {
+        Row: {
+          id: string
+          libelle: string
+          ordre: number
+          periode: string
+          portee: string
+          precision_txt: string | null
+          section: string
+        }
+        Insert: {
+          id?: string
+          libelle: string
+          ordre: number
+          periode: string
+          portee: string
+          precision_txt?: string | null
+          section: string
+        }
+        Update: {
+          id?: string
+          libelle?: string
+          ordre?: number
+          periode?: string
+          portee?: string
+          precision_txt?: string | null
+          section?: string
+        }
+        Relationships: []
+      }
+      compte: {
+        Row: {
+          archive_le: string | null
+          created_at: string
+          genre: string
+          household_id: string
+          id: string
+          matelas_cents: number
+          nom: string
+          titulaire_id: string | null
+        }
+        Insert: {
+          archive_le?: string | null
+          created_at?: string
+          genre: string
+          household_id: string
+          id?: string
+          matelas_cents?: number
+          nom: string
+          titulaire_id?: string | null
+        }
+        Update: {
+          archive_le?: string | null
+          created_at?: string
+          genre?: string
+          household_id?: string
+          id?: string
+          matelas_cents?: number
+          nom?: string
+          titulaire_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compte_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compte_titulaire_id_fkey"
+            columns: ["titulaire_id"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cycle: {
         Row: {
           budget_eur: number | null
@@ -1577,6 +1655,80 @@ export type Database = {
           },
         ]
       }
+      regle_partage: {
+        Row: {
+          cle: string
+          created_at: string
+          household_id: string
+          id: string
+          valid_from: string
+        }
+        Insert: {
+          cle: string
+          created_at?: string
+          household_id: string
+          id?: string
+          valid_from: string
+        }
+        Update: {
+          cle?: string
+          created_at?: string
+          household_id?: string
+          id?: string
+          valid_from?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "regle_partage_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      revenu: {
+        Row: {
+          created_at: string
+          household_id: string
+          id: string
+          net_mensuel_cents: number
+          user_profile_id: string
+          valid_from: string
+        }
+        Insert: {
+          created_at?: string
+          household_id: string
+          id?: string
+          net_mensuel_cents: number
+          user_profile_id: string
+          valid_from: string
+        }
+        Update: {
+          created_at?: string
+          household_id?: string
+          id?: string
+          net_mensuel_cents?: number
+          user_profile_id?: string
+          valid_from?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenu_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenu_user_profile_id_fkey"
+            columns: ["user_profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_appliance: {
         Row: {
           appliance_code: string
@@ -2232,6 +2384,7 @@ export type Database = {
         Row: {
           created_at: string
           display_name: string
+          entre_le: string
           household_id: string
           id: string
           password_set: boolean
@@ -2239,6 +2392,7 @@ export type Database = {
         Insert: {
           created_at?: string
           display_name: string
+          entre_le?: string
           household_id: string
           id: string
           password_set?: boolean
@@ -2246,6 +2400,7 @@ export type Database = {
         Update: {
           created_at?: string
           display_name?: string
+          entre_le?: string
           household_id?: string
           id?: string
           password_set?: boolean
@@ -2443,6 +2598,13 @@ export type Database = {
       open_cycle: {
         Args: { p_servings?: number; p_week_of: string }
         Returns: string
+      }
+      parts_du_foyer: {
+        Args: { le_mois: string }
+        Returns: {
+          part_bps: number
+          user_profile_id: string
+        }[]
       }
       poids_unitaire: {
         Args: { p_food_id: string; p_unit?: string }

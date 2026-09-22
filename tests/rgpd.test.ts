@@ -41,6 +41,8 @@ describe('RGPD', () => {
       meal_extra: 'meal_extras', frequent_food: 'frequent_foods',
       stock_item: 'stock_items', recipe: 'recipes',
       session_convive: 'session_convives',
+      // Budget, lot 1
+      compte: 'comptes', revenu: 'revenus', regle_partage: 'regles_partage',
     }
 
     const oubliees = (tables as { table_name: string }[])
