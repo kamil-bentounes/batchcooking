@@ -43,7 +43,7 @@ export function AccepteAmi({ jeton, va }: { jeton: string; va: (v: string) => vo
           {accepte.isPending ? 'Un instant…' : 'Accepter'}
         </Principal>
         <Erreur de={accepte.error} />
-        <Secondaire onClick={() => va('/')}>Non merci</Secondaire>
+        <Secondaire onClick={() => va('/cuisine-accueil')}>Non merci</Secondaire>
       </div>
       {accepte.isPending && <Attente />}
     </Page>

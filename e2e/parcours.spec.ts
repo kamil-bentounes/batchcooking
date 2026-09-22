@@ -27,7 +27,7 @@ test.afterAll(async () => { if (foyer) await efface(foyer) })
 
 /** Tous les écrans de l'application, tels que `App.tsx` les aiguille. */
 const ECRANS = [
-  ['/', 'hub'], ['/cuisine-accueil', 'accueil'], ['/budget', 'budget'], ['/charges', 'charges'],
+  ['/', 'hub'], ['/cuisine-accueil', 'accueil'], ['/budget', 'budget'], ['/charges', 'charges'], ['/budget-reglages', 'budget-reglages'],
   ['/semaine', 'semaine'], ['/stock', 'stock'], ['/bilan', 'bilan'],
   ['/choisir', 'choisir'], ['/magasin', 'magasin'], ['/plan', 'plan'],
   ['/cuisine', 'cuisine'], ['/dressage', 'dressage'], ['/inventer', 'inventer'],

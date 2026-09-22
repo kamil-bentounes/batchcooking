@@ -16,7 +16,7 @@ import { useState } from 'react'
 import { Marque, Surface, Vide, Attente, Erreur } from '../ui/coque.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
-  useMois, useEnveloppes, useComptes, virements, moisDe, euros, eurosRonds,
+  useMois, useEnveloppes, useComptes, virements, moisDe, euros,
 } from '../lib/donnees/budget.ts'
 
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
@@ -55,19 +55,21 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
   const aFaire = virements(depenses.data ?? [], userId, comptes, prenoms)
   const total = aFaire.reduce((s, v) => s + v.cents, 0)
 
+  /* Le dernier jour à 14 h, `fin` valait minuit et tout le bloc disparaissait —
+     « Dernier jour. » était du code mort. On compte des JOURS, pas des instants. */
   const joursRestants = (() => {
     const [a, m] = mois.split('-').map(Number)
-    const fin = new Date(a, m, 0)
-    const aujourd = new Date()
-    if (aujourd > fin) return null
-    return Math.max(0, Math.ceil((fin.getTime() - aujourd.getTime()) / 86_400_000))
+    const dernier = new Date(a, m, 0).getDate()
+    const n = new Date()
+    if (n.getFullYear() !== a || n.getMonth() + 1 !== m) return null
+    return dernier - n.getDate()
   })()
 
   return (
     <main className="min-h-dvh px-6 pt-4 pb-16">
       <div className="mx-auto w-full max-w-lg">
         <header className="h-14 flex items-center">
-          <button onClick={() => va('/')} aria-label="Retour à l’accueil"
+          <button onClick={() => va('/')} aria-label="Retour à l’accueil de Popote"
                   className="flex items-center gap-2 min-h-11 text-herbe">
             <span aria-hidden="true" className="text-[20px] text-doux">‹</span>
             <Marque taille={22} />
@@ -80,18 +82,26 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
           <div className="flex gap-1">
             <button onClick={() => setMois(m => decale(m, -1))} aria-label="Mois précédent"
                     className="w-11 h-11 grid place-items-center text-doux">‹</button>
-            <button onClick={() => setMois(m => decale(m, 1))} aria-label="Mois suivant"
-                    className="w-11 h-11 grid place-items-center text-doux">›</button>
+            {/* Pas de flèche vers l'avant au mois courant. Une flèche grisée à
+                1,71:1 ne se lit pas, et laisser passer vers l'avenir CRÉERAIT
+                ses dépenses avec la clé du jour, figée. On n'affiche pas une
+                porte qui ne doit pas s'ouvrir. */}
+            {mois < moisDe() && (
+              <button onClick={() => setMois(m => decale(m, 1))} aria-label="Mois suivant"
+                      className="w-11 h-11 grid place-items-center text-doux">›</button>
+            )}
           </div>
         </div>
         {joursRestants !== null && (
           <p className="mt-1 text-[15px] text-doux">
-            {joursRestants === 0 ? 'Dernier jour.' : `Il reste ${joursRestants} jours.`}
+            {joursRestants === 0 ? 'Dernier jour.'
+              : joursRestants === 1 ? 'Il reste un jour.'
+              : `Il reste ${joursRestants} jours.`}
           </p>
         )}
 
         <Erreur de={depenses.error} />
-        {depenses.isPending ? <Attente /> : (depenses.data ?? []).length === 0 ? (
+        {depenses.isPending ? <Attente /> : aFaire.length === 0 ? (
           <>
             <Vide titre="Rien à verser"
                   texte="Aucune charge n’est posée. On commence par là." />
@@ -99,6 +109,11 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
                     className="w-full h-[58px] rounded-[18px] bg-herbe text-fond
                                text-[17px] font-medium">
               Poser les charges
+            </button>
+            <button onClick={() => va('/budget-reglages')}
+                    className="mt-3 w-full min-h-11 rounded-[14px] border border-brume
+                               text-[15px] text-doux">
+              D’abord les revenus et les comptes
             </button>
           </>
         ) : (
@@ -115,7 +130,7 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
                     <span className="block text-[16px]">{v.vers}</span>
                     <span className="block mt-0.5 text-[14px] text-doux">{v.detail}</span>
                   </span>
-                  <span className="chiffre text-[26px] text-herbe">{eurosRonds(v.cents)}</span>
+                  <span className="chiffre text-[26px] text-herbe">{euros(v.cents)}</span>
                 </div>
               ))}
               {aFaire.length > 1 && (
@@ -128,7 +143,15 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
           </>
         )}
 
-        {(depenses.data ?? []).length > 0 && (
+        <div className="mt-4 flex gap-2">
+          <button onClick={() => va('/budget-reglages')}
+                  className="flex-1 min-h-11 rounded-[14px] border border-brume
+                             text-[15px] text-doux">
+            Revenus, comptes, enveloppes
+          </button>
+        </div>
+
+        {aFaire.length > 0 && (
           <button onClick={() => va('/charges')}
                   className="mt-4 w-full min-h-11 rounded-[14px] border border-brume
                              text-[15px] text-doux">

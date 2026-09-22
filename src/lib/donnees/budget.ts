@@ -36,6 +36,24 @@ export function euros(cents: number, avecUnite = true): string {
   return avecUnite ? `${s} €` : s
 }
 
+/**
+ * Un montant saisi vers des centimes entiers. `null` si ce n'est pas un montant.
+ *
+ * Elle existe parce que `Number(x.replace(',', '.'))` échouait sur « 1 234,56 »
+ * — l'espace insécable que `toLocaleString('fr-FR')` produit LUI-MÊME, si bien
+ * que recopier un montant affiché par l'app était rejeté — sur « 1,2,3 » (une
+ * seule virgule remplacée), et acceptait « 1e3 » comme mille euros.
+ *
+ * Et `Math.round(12.345 * 100)` rend 1234 : le flottant vaut 1234,4999…, donc
+ * on ne multiplie jamais, on découpe la chaîne.
+ */
+export function enCentimes(saisi: string): number | null {
+  const net = saisi.replace(/[\s\u00A0\u202F]/g, '').replace(',', '.')
+  if (!/^\d{1,9}(\.\d{0,2})?$/.test(net)) return null
+  const [entier, decimales = ''] = net.split('.')
+  return Number(entier) * 100 + Number(decimales.padEnd(2, '0'))
+}
+
 /** « 1 619 € » — pour les gros chiffres, où les centimes n'aident personne. */
 export function eurosRonds(cents: number): string {
   return `${Math.round(cents / 100).toLocaleString('fr-FR')} €`
@@ -63,7 +81,16 @@ export function useMois(mois: string) {
   return useQuery({
     queryKey: CLE.mois(mois),
     queryFn: async (): Promise<Depense[]> => {
-      await supabase.rpc('ouvre_le_mois', { le_mois: mois })
+      /* ⚠️ On n'ouvre JAMAIS un mois futur.
+       *
+       *    `ouvre_le_mois` est idempotente et fige la clé au premier appel :
+       *    feuilleter jusqu'en 2028 y créait donc les dépenses avec le partage
+       *    d'aujourd'hui, définitivement. Regarder l'avenir ne doit rien y
+       *    écrire — on le lit, on ne le décide pas. */
+      if (mois <= moisDe()) {
+        const { error } = await supabase.rpc('ouvre_le_mois', { le_mois: mois })
+        if (error) throw new Error(error.message)
+      }
       const lignes = ou(await supabase.from('depense')
         /* ⚠️ Une seule chaîne LITTÉRALE. PostgREST infère le type du résultat
            depuis le texte du `select` ; une concaténation n'est plus un
@@ -103,6 +130,10 @@ export function virements(
   for (const [compteId, cents] of parCompte) {
     if (cents === 0) continue
     const c = comptes.find(x => x.id === compteId)
+    /* Mon PROPRE compte perso : je me dois à moi-même, c'est-à-dire rien. La
+       première version demandait de se virer de l'argent à soi, et gonflait le
+       total d'autant. */
+    if (c?.genre === 'perso' && c.titulaire_id === moi) continue
     // Un compte perso qui n'est pas le sien : on doit à son titulaire, pas au
     // compte. C'est ce que la personne comprend, et ce qu'elle fera.
     const versQuelquun = c?.genre === 'perso' && c.titulaire_id && c.titulaire_id !== moi
@@ -267,5 +298,119 @@ export function useArchiveCharge() {
       return 'archivee' as const
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: CLE.charges }),
+  })
+}
+
+/* ── Ce qui manquait : de quoi POSER les prérequis ─────────────────────────
+ *
+ * Les écrans du budget lisaient des comptes, des enveloppes et des revenus
+ * qu'aucun écran ne permettait d'écrire. Conséquence mesurée : les virements ne
+ * rendaient qu'une ligne « à répartir », la section des enveloppes ne
+ * s'affichait jamais, et le prorata basculait silencieusement en moitié-moitié
+ * faute de revenu — le formulaire proposait « Au prorata » et ne l'honorait pas.
+ */
+
+export type Revenu = { id: string; user_profile_id: string; net_mensuel_cents: number; valid_from: string }
+
+/** Le dernier revenu connu de chacun. C'est lui qui rend le prorata possible. */
+export function useRevenus() {
+  return useQuery({
+    queryKey: CLE.revenus,
+    queryFn: async (): Promise<Revenu[]> => {
+      const l = ou(await supabase.from('revenu')
+        .select('id, user_profile_id, net_mensuel_cents, valid_from')
+        .order('valid_from', { ascending: false }))
+      const derniers = new Map<string, Revenu>()
+      for (const r of l) if (!derniers.has(r.user_profile_id)) derniers.set(r.user_profile_id, r)
+      return [...derniers.values()]
+    },
+  })
+}
+
+/**
+ * Poser son revenu.
+ *
+ * Toujours un INSERT, jamais un update : un revenu est un fait daté, et la
+ * clé de chaque mois passé se lit dessus (D62). Le corriger au lieu d'en
+ * ajouter un réécrirait le partage des mois déjà ouverts.
+ *
+ * La date d'effet est le premier du mois en cours : « à partir de maintenant ».
+ */
+export function usePoseRevenu() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (v: { foyerId: string; userId: string; cents: number }) => {
+      const depuis = moisDe()
+      // Deux saisies le même mois sont la même intention : on remplace celle du
+      // mois courant plutôt que d'échouer sur l'unicité (user, valid_from).
+      await supabase.from('revenu')
+        .delete().eq('user_profile_id', v.userId).eq('valid_from', depuis)
+      return ou(await supabase.from('revenu').insert({
+        household_id: v.foyerId, user_profile_id: v.userId,
+        net_mensuel_cents: v.cents, valid_from: depuis,
+      }).select().single())
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CLE.revenus })
+      qc.invalidateQueries({ queryKey: ['budget-mois'] })
+    },
+  })
+}
+
+export function usePoseCompte() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (c: {
+      foyerId: string; nom: string; genre: 'commun' | 'perso' | 'epargne'
+      titulaireId: string | null; matelasCents: number
+    }) => ou(await supabase.from('compte').insert({
+      household_id: c.foyerId, nom: c.nom, genre: c.genre,
+      /* La contrainte l'exige : un compte `perso` a un titulaire, les autres
+         n'en ont pas. Un compte commun avec titulaire prétendrait le contraire
+         de ce qu'il est. */
+      titulaire_id: c.genre === 'perso' ? c.titulaireId : null,
+      matelas_cents: c.matelasCents,
+    }).select().single()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CLE.comptes })
+      qc.invalidateQueries({ queryKey: ['budget-mois'] })
+    },
+  })
+}
+
+export function usePoseEnveloppe() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (e: { foyerId: string; libelle: string; plafondCents: number }) =>
+      ou(await supabase.from('enveloppe').insert({
+        household_id: e.foyerId, libelle: e.libelle, plafond_cents: e.plafondCents,
+      }).select().single()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
+    },
+  })
+}
+
+export function useEnveloppesPosees() {
+  return useQuery({
+    queryKey: ['enveloppes-posees'],
+    queryFn: async () => ou(await supabase.from('enveloppe')
+      .select('id, libelle, plafond_cents').is('archive_le', null).order('libelle')),
+  })
+}
+
+/** Rattacher une charge à un compte et à une enveloppe, après coup. */
+export function useRattacheCharge() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (r: { id: string; compteId?: string | null; enveloppeId?: string | null }) =>
+      ou(await supabase.from('charge').update({
+        ...(r.compteId !== undefined ? { compte_id: r.compteId } : {}),
+        ...(r.enveloppeId !== undefined ? { enveloppe_id: r.enveloppeId } : {}),
+      }).eq('id', r.id).select().single()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CLE.charges })
+      qc.invalidateQueries({ queryKey: ['budget-mois'] })
+    },
   })
 }

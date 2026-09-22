@@ -80,7 +80,7 @@ export function Cuisine({ userId, va, cycleId }:
             l'écran n'offrait aucune sortie : il fallait attendre que l'hôte y
             pense. */}
         {invite && (
-          <button onClick={async () => { await quitte.mutateAsync(cycleId!); va('/') }}
+          <button onClick={async () => { await quitte.mutateAsync(cycleId!); va('/cuisine-accueil') }}
                   disabled={quitte.isPending}
                   className="mt-8 w-full h-[52px] rounded-[16px] bg-safran text-encre
                              text-[16px] font-medium">
@@ -159,7 +159,7 @@ export function Cuisine({ userId, va, cycleId }:
             {invite ? ' Le dressage revient à ton hôte.' : ' Il reste à dresser.'}
           </p>
           {invite ? (
-            <button onClick={() => va('/')}
+            <button onClick={() => va('/cuisine-accueil')}
                     className="w-full h-[58px] mt-8 rounded-[18px] bg-safran text-encre
                                text-[17px] font-semibold">
               Revenir chez moi
@@ -255,9 +255,9 @@ export function Cuisine({ userId, va, cycleId }:
       <button onClick={async () => {
         // Quitter, c'est partir pour de bon : sinon la ligne survit, l'accueil
         // reproposerait la session et la lecture resterait ouverte.
-        if (invite) { await quitte.mutateAsync(cycle.id); va('/'); return }
+        if (invite) { await quitte.mutateAsync(cycle.id); va('/cuisine-accueil'); return }
         await change.mutateAsync({ id: cycle.id, vers: 'interrompue' })
-        va('/')
+        va('/cuisine-accueil')
       }}
               className="mt-12 w-full h-[46px] rounded-[16px] text-[15px] opacity-60">
         {invite ? 'Quitter la session' : 'Interrompre la session'}

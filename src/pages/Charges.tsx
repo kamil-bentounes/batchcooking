@@ -13,11 +13,13 @@
  * erreur d'un facteur douze.
  */
 import { useState } from 'react'
+import { Dictee } from './Dictee.tsx'
 import { Surface, Vide, Attente, Erreur, Principal, BarreAction } from '../ui/coque.tsx'
 import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
-  useCharges, useCatalogue, useAjouteCharge, useArchiveCharge, euros, type Charge,
+  useCharges, useCatalogue, useAjouteCharge, useArchiveCharge, euros, enCentimes,
+  type Charge,
 } from '../lib/donnees/budget.ts'
 
 const PERIODE: Record<string, string> = {
@@ -46,8 +48,9 @@ function Ajout({ depart, membres, moi, foyerId, surFini }: {
     depart?.portee === 'perso' ? [moi] : membres.map(m => m.id))
   const ajoute = useAjouteCharge()
 
-  const cents = Math.round(Number(montant.replace(',', '.')) * 100)
-  const pret = libelle.trim() !== '' && Number.isFinite(cents) && cents > 0 && qui.length > 0
+  const cents = enCentimes(montant)
+  const saisiFaux = montant.trim() !== '' && cents === null
+  const pret = libelle.trim() !== '' && cents !== null && cents > 0 && qui.length > 0
 
   return (
     <>
@@ -58,6 +61,11 @@ function Ajout({ depart, membres, moi, foyerId, surFini }: {
         )}
         <Champ label="Combien (€)" type="text" inputMode="decimal" value={montant}
                onChange={e => setMontant(e.target.value)} />
+        {saisiFaux && (
+          <p className="-mt-1 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
+            Un montant, avec au plus deux décimales : 37 ou 10,70.
+          </p>
+        )}
 
         <div>
           <span className="block text-[15px] font-semibold">À quel rythme</span>
@@ -74,7 +82,7 @@ function Ajout({ depart, membres, moi, foyerId, surFini }: {
           {periode !== 'mensuel' && (
             <p className="mt-2 text-[14px] text-doux">
               Provisionnée au {periode === 'annuel' ? 'douzième' : 'tiers'} chaque mois :
-              {' '}{euros(Math.round(cents / (periode === 'annuel' ? 12 : 3)) || 0)} par mois.
+              {' '}{euros(Math.round((cents ?? 0) / (periode === 'annuel' ? 12 : 3)))} par mois.
             </p>
           )}
         </div>
@@ -134,7 +142,7 @@ function Ajout({ depart, membres, moi, foyerId, surFini }: {
       <BarreAction>
         <Principal disabled={!pret || ajoute.isPending}
                    onClick={() => ajoute.mutate({
-                     libelle: libelle.trim(), montantCents: cents, periodicite: periode,
+                     libelle: libelle.trim(), montantCents: cents ?? 0, periodicite: periode,
                      participants: qui, cle: cle === 'defaut' ? null : cle,
                      catalogueId: depart?.catalogueId ?? null, variable, foyerId,
                    }, { onSuccess: surFini })}>
@@ -147,14 +155,38 @@ function Ajout({ depart, membres, moi, foyerId, surFini }: {
 
 export function Charges({ userId, retour }: { userId: string; retour: () => void }) {
   const [filtre, setFiltre] = useState<Filtre>('tout')
+  const [dictee, setDictee] = useState(false)
+  const [dit, setDit] = useState('')
   const [ajout, setAjout] = useState<Parameters<typeof Ajout>[0]['depart'] | undefined>()
   const { data: foyer } = useFoyer()
   const charges = useCharges()
   const { data: catalogue = [] } = useCatalogue()
   const archive = useArchiveCharge()
+  const ajouteUne = useAjouteCharge()
 
   const membres = (foyer?.membres ?? []).map(m => ({ id: m.id, display_name: m.display_name }))
   const prenoms = new Map(membres.map(m => [m.id, m.display_name]))
+
+  /* La dictée pose les lignes une à une, par la même mutation que le
+     formulaire : elle n'a aucun chemin d'écriture à elle. Ce qu'un modèle
+     propose entre par la même porte que ce qu'on tape. */
+  if (dictee) {
+    return (
+      <Dictee retour={() => setDictee(false)} surRetenues={async lignes => {
+        for (const l of lignes) {
+          await ajouteUne.mutateAsync({
+            libelle: l.libelle,
+            montantCents: l.montant_cents ?? 0,
+            periodicite: l.periodicite,
+            participants: l.portee === 'commun' ? membres.map(m => m.id) : [userId],
+            variable: l.variable,
+            foyerId: foyer?.id ?? '',
+          })
+        }
+        setDictee(false)
+      }} />
+    )
+  }
 
   if (ajout !== undefined) {
     return (
@@ -195,13 +227,10 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
         </button>
 
         <h1 className="titre text-[34px] mt-6">Les charges</h1>
-        <p className="mt-2 text-[15px] text-doux">
-          {euros(total)} par mois, une fois tout ramené au mois.
-        </p>
 
-        <div role="tablist" className="mt-5 flex gap-2">
+        <div role="group" aria-label="Filtrer" className="mt-5 flex gap-2">
           {([['tout', 'Tout'], ['commun', 'En commun'], ['moi', 'À moi']] as const).map(([v, nom]) => (
-            <button key={v} role="tab" aria-selected={filtre === v} onClick={() => setFiltre(v)}
+            <button key={v} aria-pressed={filtre === v} onClick={() => setFiltre(v)}
                     className={`px-4 min-h-11 inline-flex items-center rounded-full text-[14px]
                                 transition-colors
                       ${filtre === v ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
@@ -210,7 +239,13 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
           ))}
         </div>
 
+        <p className="mt-4 text-[15px] text-doux">
+          {euros(total)} par mois {filtre === 'moi' ? 'pour toi' : 'pour le foyer'},
+          {' '}une fois tout ramené au mois.
+        </p>
+
         <Erreur de={charges.error ?? archive.error} />
+        {dit && <p className="mt-3 text-[15px] text-doux">{dit}</p>}
         {charges.isPending ? <Attente /> : vues.length === 0 ? (
           <Vide titre="Rien encore"
                 texte="Ajoute-les depuis le catalogue : on ne se souvient pas de ses charges, on les reconnaît." />
@@ -232,7 +267,18 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                     {c.variable && ' · variable'}
                   </span>
                 </span>
-                <button onClick={() => archive.mutate(c.id)} disabled={archive.isPending}
+                {/* Une charge sans histoire est réellement SUPPRIMÉE, une autre
+                    archivée — et les deux disparaissaient de la liste sans un
+                    mot. Un pouce qui glisse ne doit pas effacer une ligne. */}
+                <button onClick={() => {
+                          if (!confirm(`Retirer « ${c.libelle} » ? Les mois déjà ouverts la gardent.`)) return
+                          archive.mutate(c.id, {
+                            onSuccess: sort => setDit(sort === 'supprimee'
+                              ? `« ${c.libelle} » supprimée.`
+                              : `« ${c.libelle} » archivée : elle n’engendrera plus rien.`),
+                          })
+                        }}
+                        disabled={archive.isPending}
                         aria-label={`Retirer ${c.libelle}`}
                         className="text-doux min-h-11 px-2 text-[14px]">Retirer</button>
               </div>
@@ -240,8 +286,17 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
           </Surface>
         )}
 
+        <button onClick={() => setDictee(true)}
+                className="mt-8 w-full min-h-[58px] rounded-[18px] bg-encre text-fond
+                           text-[16px] font-medium">
+          Dicte tout, je range
+        </button>
+        <p className="mt-2 text-center text-[14px] text-doux">
+          Plus rapide que cocher cinquante lignes — et ça te dit ce que tu as oublié.
+        </p>
+
         <h2 className="mt-10 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
-          En ajouter
+          Ou une par une
         </h2>
         <div className="mt-3 space-y-6">
           {catalogue.map(section => (
