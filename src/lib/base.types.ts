@@ -135,6 +135,7 @@ export type Database = {
           compte_id: string | null
           created_at: string
           debut: string
+          enveloppe_id: string | null
           fin: string | null
           household_id: string
           id: string
@@ -150,6 +151,7 @@ export type Database = {
           compte_id?: string | null
           created_at?: string
           debut: string
+          enveloppe_id?: string | null
           fin?: string | null
           household_id: string
           id?: string
@@ -165,6 +167,7 @@ export type Database = {
           compte_id?: string | null
           created_at?: string
           debut?: string
+          enveloppe_id?: string | null
           fin?: string | null
           household_id?: string
           id?: string
@@ -186,6 +189,13 @@ export type Database = {
             columns: ["compte_id"]
             isOneToOne: false
             referencedRelation: "compte"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_enveloppe_id_fkey"
+            columns: ["enveloppe_id"]
+            isOneToOne: false
+            referencedRelation: "enveloppe"
             referencedColumns: ["id"]
           },
           {
@@ -472,6 +482,7 @@ export type Database = {
           charge_id: string | null
           compte_id: string | null
           created_at: string
+          enveloppe_id: string | null
           household_id: string
           id: string
           libelle: string
@@ -487,6 +498,7 @@ export type Database = {
           charge_id?: string | null
           compte_id?: string | null
           created_at?: string
+          enveloppe_id?: string | null
           household_id: string
           id?: string
           libelle: string
@@ -502,6 +514,7 @@ export type Database = {
           charge_id?: string | null
           compte_id?: string | null
           created_at?: string
+          enveloppe_id?: string | null
           household_id?: string
           id?: string
           libelle?: string
@@ -526,6 +539,13 @@ export type Database = {
             columns: ["compte_id"]
             isOneToOne: false
             referencedRelation: "compte"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "depense_enveloppe_id_fkey"
+            columns: ["enveloppe_id"]
+            isOneToOne: false
+            referencedRelation: "enveloppe"
             referencedColumns: ["id"]
           },
           {
@@ -624,6 +644,44 @@ export type Database = {
           },
           {
             foreignKeyName: "duration_observation_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enveloppe: {
+        Row: {
+          archive_le: string | null
+          created_at: string
+          household_id: string
+          id: string
+          libelle: string
+          plafond_cents: number
+          report: boolean
+        }
+        Insert: {
+          archive_le?: string | null
+          created_at?: string
+          household_id: string
+          id?: string
+          libelle: string
+          plafond_cents: number
+          report?: boolean
+        }
+        Update: {
+          archive_le?: string | null
+          created_at?: string
+          household_id?: string
+          id?: string
+          libelle?: string
+          plafond_cents?: number
+          report?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enveloppe_household_id_fkey"
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "household"
@@ -1298,6 +1356,102 @@ export type Database = {
             columns: ["user_profile_id"]
             isOneToOne: false
             referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poche_epargne: {
+        Row: {
+          atteinte_le: string | null
+          cle: string | null
+          compte_id: string | null
+          created_at: string
+          echeance: string | null
+          genre: string
+          household_id: string
+          id: string
+          libelle: string
+          objectif_cents: number | null
+        }
+        Insert: {
+          atteinte_le?: string | null
+          cle?: string | null
+          compte_id?: string | null
+          created_at?: string
+          echeance?: string | null
+          genre: string
+          household_id: string
+          id?: string
+          libelle: string
+          objectif_cents?: number | null
+        }
+        Update: {
+          atteinte_le?: string | null
+          cle?: string | null
+          compte_id?: string | null
+          created_at?: string
+          echeance?: string | null
+          genre?: string
+          household_id?: string
+          id?: string
+          libelle?: string
+          objectif_cents?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poche_epargne_compte_id_fkey"
+            columns: ["compte_id"]
+            isOneToOne: false
+            referencedRelation: "compte"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poche_epargne_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poche_poste: {
+        Row: {
+          household_id: string
+          id: string
+          libelle: string
+          montant_cents: number
+          ordre: number
+          poche_id: string
+        }
+        Insert: {
+          household_id: string
+          id?: string
+          libelle: string
+          montant_cents: number
+          ordre?: number
+          poche_id: string
+        }
+        Update: {
+          household_id?: string
+          id?: string
+          libelle?: string
+          montant_cents?: number
+          ordre?: number
+          poche_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poche_poste_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poche_poste_poche_id_fkey"
+            columns: ["poche_id"]
+            isOneToOne: false
+            referencedRelation: "poche_epargne"
             referencedColumns: ["id"]
           },
         ]
@@ -2656,6 +2810,54 @@ export type Database = {
         }
         Relationships: []
       }
+      versement_epargne: {
+        Row: {
+          created_at: string
+          fait_le: string
+          household_id: string
+          id: string
+          montant_cents: number
+          motif: string
+          poche_id: string
+          user_profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          fait_le?: string
+          household_id: string
+          id?: string
+          montant_cents: number
+          motif?: string
+          poche_id: string
+          user_profile_id: string
+        }
+        Update: {
+          created_at?: string
+          fait_le?: string
+          household_id?: string
+          id?: string
+          montant_cents?: number
+          motif?: string
+          poche_id?: string
+          user_profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "versement_epargne_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "versement_epargne_poche_id_fkey"
+            columns: ["poche_id"]
+            isOneToOne: false
+            referencedRelation: "poche_epargne"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weighing: {
         Row: {
           at: string
@@ -2853,7 +3055,24 @@ export type Database = {
         Returns: number
       }
       recettes_partagees: { Args: never; Returns: string[] }
+      reste_enveloppe: {
+        Args: { le_mois: string }
+        Returns: {
+          depense_cents: number
+          enveloppe_id: string
+          libelle: string
+          plafond_cents: number
+          reste_cents: number
+        }[]
+      }
       sessions_partagees: { Args: never; Returns: string[] }
+      solde_epargne: {
+        Args: { la_poche: string }
+        Returns: {
+          cumul_cents: number
+          user_profile_id: string
+        }[]
+      }
       tables_de_foyer: {
         Args: never
         Returns: {
