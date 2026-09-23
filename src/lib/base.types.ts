@@ -3115,6 +3115,7 @@ export type Database = {
           enveloppe_id: string
           libelle: string
           plafond_cents: number
+          prevu_cents: number
           reste_cents: number
         }[]
       }

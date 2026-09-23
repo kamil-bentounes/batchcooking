@@ -155,13 +155,26 @@ function decale(iso: string, pas: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 
-/** Une jauge. Au-delà du plafond elle reste pleine et change de teinte. */
-function Jauge({ part, depasse }: { part: number; depasse: boolean }) {
+/**
+ * Une jauge. Au-delà du plafond elle reste pleine et change de teinte.
+ *
+ * `prevision` la rend CREUSE : une barre pleine et opaque disait « tout est
+ * dépensé » le premier du mois, alors que le chiffre à côté annonçait un
+ * prévu. Deux signaux contradictoires sur la même ligne, et c'est la barre
+ * qu'on lit en premier.
+ */
+function Jauge({ part, depasse, prevision }:
+  { part: number; depasse: boolean; prevision?: boolean }) {
+  const teinte = depasse ? 'var(--color-ocre)' : 'var(--color-herbe)'
   return (
     <div className="mt-2.5 h-[7px] rounded-full bg-brume overflow-hidden">
       <div className="h-[7px] rounded-full transition-[width]"
            style={{ width: `${Math.min(100, Math.max(0, part * 100))}%`,
-                    background: depasse ? 'var(--color-ocre)' : 'var(--color-herbe)' }} />
+                    background: prevision
+                      ? `repeating-linear-gradient(115deg, ${teinte} 0 4px,
+                         transparent 4px 9px)`
+                      : teinte,
+                    opacity: prevision ? 0.65 : 1 }} />
     </div>
   )
 }
@@ -415,7 +428,17 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
             </h2>
             <Surface className="mt-3">
               {enveloppes.map((e, i) => {
-                const depasse = e.reste_cents < 0
+                /* Rien de confirmé encore : la jauge ne mesurerait que la
+                    provision contre le plafond — deux fois la même chose, et
+                    elle affichait « plein » le premier du mois. On montre alors
+                    ce qui est PRÉVU, et on dit que le réel n'est pas connu. */
+                const seulementPrevu = e.depense_cents === 0 && e.prevu_cents > 0
+                const montre = seulementPrevu ? e.prevu_cents : e.depense_cents
+                /* Le dépassement se juge sur le CHIFFRE AFFICHÉ. Calculé sur le
+                   seul réel, une enveloppe montrant « 260,00 / 200,00 € »
+                   restait verte : la couleur disait que tout allait bien
+                   pendant que les chiffres disaient le contraire. */
+                const depasse = montre > e.plafond_cents
                 return (
                   <div key={e.enveloppe_id}
                        className={`py-4 ${i < enveloppes.length - 1 ? 'border-b border-brume' : ''}`}>
@@ -423,14 +446,22 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
                       <span className="text-[15px] font-semibold">{e.libelle}</span>
                       <span className="text-[15px] text-doux">
                         <span className="chiffre text-[17px]"
-                              style={{ color: depasse ? 'var(--color-ocre)' : 'var(--color-herbe)' }}>
-                          {euros(e.depense_cents, false)}
+                              style={{ color: depasse ? 'var(--color-ocre)'
+                                       : seulementPrevu ? 'var(--color-doux)' : 'var(--color-herbe)' }}>
+                          {euros(montre, false)}
                         </span>
                         {' / '}{euros(e.plafond_cents)}
                       </span>
                     </div>
-                    <Jauge part={e.plafond_cents === 0 ? 0 : e.depense_cents / e.plafond_cents}
-                           depasse={depasse} />
+                    <Jauge part={e.plafond_cents === 0 ? 0 : montre / e.plafond_cents}
+                           depasse={depasse} prevision={seulementPrevu} />
+                    {seulementPrevu && (
+                      <p className="mt-1.5 text-[14px] text-doux">
+                        {depasse
+                          ? 'Ce que tu as mis dedans dépasse déjà le plafond — avant la moindre dépense.'
+                          : 'Prévu, pas encore dépensé — le vrai montant se dit en fin de mois.'}
+                      </p>
+                    )}
                   </div>
                 )
               })}

@@ -122,10 +122,15 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
                   <span className="text-[15px]">à verser ce mois</span>
                 </p>
                 <p className="mt-2.5 text-[15px] text-doux">
+                  {/* « Il reste 0,00 € » s'affichait le premier du mois, avant
+                      le moindre achat : la provision comptait comme dépensée.
+                      Tant que rien n'est confirmé, on annonce le plafond. */}
                   {tendue
-                    ? tendue.reste_cents >= 0
-                      ? `${tendue.libelle} : il reste ${euros(tendue.reste_cents)}`
-                      : `${tendue.libelle} : dépassé de ${euros(-tendue.reste_cents)}`
+                    ? tendue.depense_cents === 0
+                      ? `${tendue.libelle} : ${euros(tendue.plafond_cents)} pour le mois`
+                      : tendue.reste_cents >= 0
+                        ? `${tendue.libelle} : il reste ${euros(tendue.reste_cents)}`
+                        : `${tendue.libelle} : dépassé de ${euros(-tendue.reste_cents)}`
                     : 'Aucune enveloppe posée'}
                 </p>
               </>

@@ -165,7 +165,11 @@ export function useComptes() {
 
 export type ResteEnveloppe = {
   enveloppe_id: string; libelle: string
-  plafond_cents: number; depense_cents: number; reste_cents: number
+  /* Trois choses distinctes, et elles l'étaient si peu que la jauge affichait
+     « il reste 0,00 € » le premier du mois : `prevu` est le plan (la provision
+     pas encore confirmée), `depense` est ce qui a réellement été porté. */
+  plafond_cents: number; prevu_cents: number
+  depense_cents: number; reste_cents: number
 }
 
 export function useEnveloppes(mois: string) {
@@ -177,6 +181,7 @@ export function useEnveloppes(mois: string) {
       // fois, plutôt que dans chaque composant qui les affiche.
       return l.map(x => ({
         ...x,
+        prevu_cents: Number(x.prevu_cents),
         depense_cents: Number(x.depense_cents),
         reste_cents: Number(x.reste_cents),
       }))
