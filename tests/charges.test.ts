@@ -557,6 +557,40 @@ describe('la régularisation annuelle (D62)', () => {
       .toMatch(/déjà été saisi/i)
   })
 
+  it('une charge au nom très long se régularise quand même', async () => {
+    /* `depense_libelle_check` s'arrête à 80 caractères, le suffixe
+       « — régularisation 2026 » en fait 23, et `charge.libelle` en permet 80 :
+       une charge nommée à 59 caractères ou plus ne pouvait JAMAIS être
+       régularisée. Erreur de contrainte brute, à chaque tentative, et l'année
+       inaccessible à vie. */
+    const nom = 'Taxe foncière de la maison de campagne de mes beaux-parents'
+    expect(nom.length, 'le nom du test n’est plus assez long').toBeGreaterThan(58)
+    const an = new Date().getFullYear()
+    const id = await poseCharge({ libelle: nom, cents: 120_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    const { error } = await moi.client.rpc('regularise_annuel',
+      { la_charge: id, annee: an, reel_cents: 130_000 })
+    expect(error, `un nom long empêche de régulariser : ${error?.message}`).toBeNull()
+  })
+
+  it('une année trop lointaine se refuse au lieu d’être à moitié ouverte', async () => {
+    /* `ouvre_la_charge` refuse les mois au-delà de cinq ans : une année dont
+       une partie dépasse la fenêtre n'en matérialisait que le début, posait
+       l'écart dessus, et restait figée à 9/12 pour toujours. Une demi-année
+       mesurée est pire qu'un refus. */
+    const trop = new Date().getFullYear() + 5
+    const id = await poseCharge({ libelle: 'Trop loin', cents: 120_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    const { error } = await moi.client.rpc('regularise_annuel',
+      { la_charge: id, annee: trop, reel_cents: 130_000 })
+    expect(error, 'une année à moitié ouverte a été régularisée').not.toBeNull()
+    expect(error!.message).toMatch(/trop loin/i)
+
+    const { data: rien } = await admin().from('releve_annuel')
+      .select('id').eq('charge_id', id)
+    expect(rien ?? [], 'un refus a quand même laissé une trace').toHaveLength(0)
+  })
+
   it('une année EN COURS ne facture pas la charge une fois et demie', async () => {
     /*
      * Le geste le plus ordinaire qui soit, et il coûtait 362 € : l'avis de taxe
@@ -1971,17 +2005,34 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
       'une année dont le relevé est saisi a gagné des mois révolus')
       .toBe(apresReleve)
 
-    /* ⚠️ Les mois à venir SONT DÉJÀ LÀ : le relevé matérialise l'année entière
-       avant de la mesurer. Ouvrir un mois à venir ne change donc plus rien —
-       et c'est tout l'intérêt : il n'y a plus de prédiction à protéger. */
+    /* ⚠️ LA GARDE TOTALE, éprouvée par le seul geste qui la sollicite.
+       La version d'avant se contentait de rouvrir un mois à venir déjà
+       présent : `on conflict do nothing` rendait l'appel inopérant avec ou
+       sans la garde, donc elle ne mesurait RIEN — c'est le titre même de cette
+       migration qui n'était couvert par aucun test. Il faut creuser un trou
+       dans l'avenir, puis tenter de le combler. */
     const an = new Date().getFullYear()
     const prochain = new Date().getMonth() + 2
     if (prochain <= 12) {
-      await seul.client.rpc('ouvre_le_mois',
-        { le_mois: `${an}-${String(prochain).padStart(2, '0')}-01` })
-      expect(await pose(),
-        'un mois à venir a changé le total d’une année déjà matérialisée')
-        .toBe(apresReleve)
+      const futur = `${an}-${String(prochain).padStart(2, '0')}-01`
+      const { data: efface } = await admin().from('depense')
+        .delete().eq('charge_id', c!.id).eq('mois', futur).select()
+      expect(efface ?? [], 'le relevé n’a pas matérialisé le mois à venir')
+        .toHaveLength(1)
+      const creuse = await pose()
+      expect(creuse, 'le trou n’a pas été creusé').toBeLessThan(apresReleve)
+
+      for (const rouvre of [
+        () => seul.client.rpc('ouvre_le_mois', { le_mois: futur }),
+        () => seul.client.rpc('ouvre_la_charge',
+          { la_charge: c!.id, foyer: seul.householdId, le_mois: futur }),
+        () => seul.client.rpc('rattrape_les_mois'),
+      ]) {
+        await rouvre()
+        expect(await pose(),
+          'un mois À VENIR est né dans une année dont le relevé est saisi')
+          .toBe(creuse)
+      }
     }
     /* Et l'année vaut exactement la facture. */
     expect(apresReleve, 'l’année matérialisée ne vaut pas la facture').toBe(145_000)
@@ -2457,7 +2508,7 @@ describe('ce que 0072 corrigeait, et que rien ne retenait', () => {
       participants: [moi.userId, elle],
     })
     const { data: d } = await admin().from('depense').insert({
-      household_id: moi.householdId, charge_id: id, mois: '2031-03-01',
+      household_id: moi.householdId, charge_id: id, mois: '2029-03-01',
       libelle: 'Toute négative', montant_cents: -1_000, nature: 'connue',
       source: 'modele',
     }).select().single()
@@ -2474,7 +2525,7 @@ describe('ce que 0072 corrigeait, et que rien ne retenait', () => {
     await admin().from('charge')
       .update({ archive_le: new Date().toISOString() }).eq('id', id)
     const { error } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2031, reel_cents: 5_000,
+      la_charge: id, annee: 2029, reel_cents: 5_000,
     })
     expect(error, 'des provisions négatives sont passées').not.toBeNull()
     expect(error!.message, 'le message parle de signes mêlés pour un total négatif')
@@ -2581,8 +2632,10 @@ describe('rattraper les mois manquants', () => {
       .eq('charge_id', c!.id).eq('mois', `${an}-03-01`)
     await seul.client.rpc('rattrape_les_mois')
 
+    /* ⚠️ Une ÉGALITÉ. `toBeLessThan` était vert pour n'importe quelle valeur
+       inférieure, y compris un mois reconstruit au mauvais montant. */
     expect(await pose(), 'le rattrapage a rouvert une année close')
-      .toBeLessThan(avant)
+      .toBe(avant - 10_000)
   })
 })
 
