@@ -183,8 +183,9 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
           {periode !== 'mensuel' && debut.slice(0, 4) === String(new Date().getFullYear())
             && Number(debut.slice(5, 7)) > 1 && (
             <p className="mt-2 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
-              Elle ne provisionnera que depuis ce mois-là. Si tu la paies depuis
-              janvier, remonte la date — sinon le relevé annuel tombera d’un coup.
+              On ne mettra de côté qu’à partir de ce mois-là. Si tu la paies
+              depuis janvier, remonte la date — sinon la facture annuelle tombera
+              d’un coup.
             </p>
           )}
         </div>
@@ -491,7 +492,11 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                     {c.cle === 'prorata' && ' · au prorata'}
                     {c.variable && ' · variable'}
                     {!c.compte_id && ' · sans compte'}
-                    {c.commun && c.participants.length === 1 && ' · en attente du foyer'}
+                    {/* « en attente du foyer » ne dit pas ce qui est attendu.
+                        C'est une charge marquée commune alors qu'on est encore
+                        seul : elle attend quelqu'un. */}
+                    {c.commun && c.participants.length === 1
+                      && ' · partagée dès que quelqu’un arrive'}
                     {/* Le foyer partage tout : chacun peut corriger la ligne de
                         l'autre, et c'est voulu. Mais une correction silencieuse
                         sur la ligne de quelqu'un d'autre est une surprise. On ne

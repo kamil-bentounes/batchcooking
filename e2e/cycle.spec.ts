@@ -65,6 +65,40 @@ test.describe('le cycle, d’un bout à l’autre', () => {
       .toBeVisible({ timeout: 20_000 })
     await prend(page, '01-choisir')
 
+    /* Le catalogue : chercher, affiner, tout effacer, ajouter, régler les
+       parts, retirer. C'est la moitié de l'écran, et rien ne la touchait. */
+    const cherche = page.getByPlaceholder(/chercher parmi/i)
+    await cherche.fill('poulet')
+    await page.waitForTimeout(600)
+    await prend(page, '01a-choisir-cherche')
+
+    const affiner = page.getByRole('button', { name: 'Affiner' })
+    if (await affiner.count()) {
+      await affiner.click()
+      await page.waitForTimeout(500)
+      await prend(page, '01b-choisir-filtres')
+      await page.getByRole('button', { name: /masquer les filtres/i }).click()
+    }
+    await cherche.fill('')
+    await page.waitForTimeout(500)
+
+    /* Ajouter une recette, changer ses parts, puis la retirer. */
+    const ajoute = page.getByRole('button', { name: /ajouter/i }).first()
+    if (await ajoute.count()) {
+      await ajoute.click()
+      await page.waitForTimeout(800)
+      await prend(page, '01c-choisir-ajoutee')
+    }
+    const parts = page.getByLabel(/^Parts de /).first()
+    if (await parts.count()) {
+      await parts.fill('6')
+      await page.waitForTimeout(800)
+      await prend(page, '01d-choisir-parts')
+      await page.getByRole('button', { name: 'Retirer' }).first().click()
+      await page.waitForTimeout(800)
+      await prend(page, '01e-choisir-retiree')
+    }
+
     /* ── 2 · Les courses ───────────────────────────────────────────────── */
     await etat('courses')
     await page.goto('/magasin')
@@ -133,9 +167,23 @@ test.describe('le cycle, d’un bout à l’autre', () => {
     await prend(page, '07-cuisine-geste-fini')
 
     /* ── 4 · Le dressage ───────────────────────────────────────────────── */
+    //
+    // Il fabrique les barquettes : c'est le seul écran qui écrit des portions,
+    // et son unique bouton n'était touché par rien. Sans lui, la semaine n'a
+    // jamais de quoi se remplir et le stock reste vide.
     await etat('dressage')
     await page.goto('/dressage')
+    await expect(page.getByRole('heading').first()).toBeVisible({ timeout: 20_000 })
     await prend(page, '08-dressage')
+
+    /* ⚠️ « C'est dressé, ranger » — pas « dresser ». Un accent de différence,
+       et la garde optionnelle sautait en silence. */
+    const dresser = page.getByRole('button', { name: /c’est dressé/i })
+    await expect(dresser, 'le dressage ne propose pas de ranger')
+      .toBeVisible({ timeout: 20_000 })
+    await dresser.click()
+    await page.waitForTimeout(1_500)
+    await prend(page, '08a-dressage-fait')
 
     /* ── 5 · La semaine ────────────────────────────────────────────────── */
     await etat('semaine')

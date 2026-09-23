@@ -93,7 +93,9 @@ export function Settings({ va }: { va: (v: string) => void }) {
   return (
     <Page nav titre="Réglages">
       <section>
-        <h2 className="titre text-xl text-herbe">Budget IA</h2>
+        {/* « Budget IA » : deux mots techniques pour dire une dépense. Le
+            sous-titre disait déjà la bonne chose ; le titre le contredisait. */}
+        <h2 className="titre text-xl text-herbe">Ce que coûtent les photos</h2>
         <p className="mt-1 text-doux text-[15px]">
           Ce qu’on s’autorise à dépenser par mois pour lire une photo du frigo ou un ticket.
         </p>

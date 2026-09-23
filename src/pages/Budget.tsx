@@ -51,8 +51,11 @@ function ReleveAnnuel({ charge, annees }: {
     <div className="py-4 border-b border-brume last:border-0">
       <div className="flex items-baseline justify-between">
         <span className="text-[16px]">{charge.libelle}</span>
+        {/* « provisionné » est un mot de comptable au milieu d'une langue qui
+            n'en emploie aucun autre. Ce qu'on veut dire est plus simple : voilà
+            ce qu'on a déjà mis de côté. */}
         <span className="text-[15px] text-doux">
-          provisionné {euros(provisionne)} en {annee}
+          {euros(provisionne)} mis de côté en {annee}
         </span>
       </div>
       {annees.length > 1 && (
@@ -82,11 +85,13 @@ function ReleveAnnuel({ charge, annees }: {
                   { onSuccess: () => setReel('') })}
                 className="min-h-11 px-4 rounded-[14px] bg-herbe text-fond text-[15px]
                            font-medium disabled:bg-brume disabled:text-encre shrink-0">
-          Régulariser
+          {/* « Régulariser » est le mot de l'avis, pas celui de la personne :
+              elle vient de recevoir une facture et veut la saisir. */}
+          Saisir le vrai montant
         </button>
       </div>
       <p className="mt-2 text-[14px] text-doux">
-        L’ajustement se pose sur le mois en cours ; les mois de {annee} ne bougent pas.
+        La différence se pose sur le mois en cours ; les mois de {annee} ne bougent pas.
       </p>
       {ecart !== null && ecart !== 0 && (
         <p className="mt-2 text-[15px]"
@@ -483,7 +488,7 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
               Le relevé est arrivé ?
             </h2>
             <p className="mt-2 text-[15px] text-doux">
-              Ces charges sont provisionnées. Quand tu reçois le vrai montant, saisis-le :
+              On met de côté un douzième chaque mois. Quand tu reçois la facture, saisis-la :
               l’écart se répartit sur l’année, sans toucher aux mois déjà partagés.
             </p>
             <Surface className="mt-3">
