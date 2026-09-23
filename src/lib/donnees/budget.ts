@@ -671,8 +671,18 @@ export function useProvisionsDe(chargeId: string | undefined, annee: number) {
     queryFn: async () => {
       const l = ou(await supabase.rpc('provisions_de',
         { la_charge: chargeId!, annee }))
+      /* ⚠️ Ce que l'année provisionnera EN ENTIER, pas seulement les mois déjà
+         ouverts. C'est sur ce total que la base calcule l'écart depuis 0073 ;
+         l'écran, lui, était resté sur les mois faits — il annonçait « il
+         manque 362,53 € » pendant que la base en posait 0,04, et la ligne
+         consommait l'index unique, rendant toute correction impossible. */
+      const { data: aVenir, error } = await supabase.rpc('provisions_a_venir',
+        { la_charge: chargeId!, annee })
+      if (error) throw new Error(error.message)
       return {
-        total: Number(l[0]?.total_cents ?? 0),
+        faites: Number(l[0]?.total_cents ?? 0),
+        aVenir: Number(aVenir ?? 0),
+        total: Number(l[0]?.total_cents ?? 0) + Number(aVenir ?? 0),
         parPersonne: l.map(x => ({ userId: x.user_profile_id, cents: Number(x.porte_cents) })),
       }
     },

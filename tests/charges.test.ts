@@ -571,6 +571,115 @@ describe('la régularisation annuelle (D62)', () => {
     expect(d2!.montant_cents, 'l’écart compte les mois à venir deux fois').toBe(5_000)
   })
 
+  it('un mois révolu JAMAIS ouvert ne compte pas comme « à venir »', async () => {
+    /*
+     * Le pendule de l'autre côté. 0073 mesure l'écart sur l'année entière —
+     * juste — mais `provisions_a_venir` comptait « tout mois sans dépense »,
+     * donc AUSSI les mois révolus que personne n'a ouverts. Le cas est le plus
+     * ordinaire qui soit : on installe l'app en septembre et on pose la taxe
+     * foncière avec « depuis janvier », ce que l'écran encourage. Un seul mois
+     * ouvert, et l'app facturait 120,87 € pour une facture de 1 450 €.
+     */
+    const id = await poseCharge({ libelle: 'Foncier tardif ouvert', cents: 120_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    /* UN SEUL mois ouvert sur une année déjà bien avancée. */
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2026-09-01' })
+
+    const { data: aVenir } = await moi.client.rpc('provisions_a_venir',
+      { la_charge: id, annee: 2026 })
+    /* Ce qui reste à provisionner, ce sont les mois À VENIR de l'année — pas
+       les huit mois révolus que personne n'ouvrira jamais. */
+    expect(Number(aVenir),
+      'les mois révolus jamais ouverts sont comptés comme à venir')
+      .toBeLessThanOrEqual(4 * 10_000)
+  })
+
+  it('ne promet pas des provisions que personne ne fera', async () => {
+    /* `ouvre_le_mois` exige un participant déjà arrivé. `provisions_a_venir`
+       n'avait pas ce prédicat : il promettait des mois qui ne s'ouvriront
+       jamais — mesuré à 724,98 € d'écart pour quelqu'un arrivé en juillet. */
+    const tard = (await admin().auth.admin.createUser({
+      email: `tard-av-${Date.now()}@fumee.test`, password: 'x'.repeat(12),
+      email_confirm: true,
+    })).data.user!.id
+    await admin().from('user_profile').insert({
+      id: tard, household_id: moi.householdId, display_name: 'Tard',
+      entre_le: '2027-07-01',
+    })
+    const { data: c } = await admin().from('charge').insert({
+      household_id: moi.householdId, libelle: 'Que pour lui', montant_cents: 120_000,
+      periodicite: 'annuel', debut: '2027-01-01', compte_id: compteCommun,
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: c!.id, user_profile_id: tard, household_id: moi.householdId,
+    })
+
+    /* Il arrive en juillet : six mois, pas douze. Sans le prédicat de
+       participant, la fonction en promettait douze. */
+    const { data: aVenir } = await moi.client.rpc('provisions_a_venir',
+      { la_charge: c!.id, annee: 2027 })
+    expect(Number(aVenir),
+      'on promet des provisions pour des mois sans personne au foyer')
+      .toBe(6 * 10_000)
+
+    await admin().from('user_profile').delete().eq('id', tard)
+  })
+
+  it('ne laisse pas lire les provisions d’une charge d’un autre foyer', async () => {
+    /* `provisions_a_venir` est `security definer` et accordée à
+       `authenticated` : sans filtre de foyer, un identifiant deviné rendait le
+       montant exact de la charge du voisin. `provisions_de` filtrait déjà. */
+    const { data: sienne } = await admin().from('charge').insert({
+      household_id: voisin.householdId, libelle: 'Secrète', montant_cents: 987_660,
+      periodicite: 'annuel', debut: '2030-01-01',
+    }).select().single()
+    const { data: fuite } = await moi.client.rpc('provisions_a_venir',
+      { la_charge: sienne!.id, annee: 2030 })
+    expect(Number(fuite ?? 0), 'le montant du voisin a fuité').toBe(0)
+  })
+
+  it('corriger APRÈS avoir régularisé ne casse pas le total de l’année', async () => {
+    /* Le geste suivant le plus naturel, et la raison d'être de
+       `corrige_la_charge` : la facture tombe à 1 600 €, on régularise, puis on
+       met la charge au vrai montant. La ligne de régularisation survivait —
+       `source = 'manuel'` — et l'année totalisait 1 750 € pour 1 600 €. */
+    const id = await poseCharge({ libelle: 'Foncier réajusté', cents: 144_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    for (let m = 1; m <= 12; m++) {
+      await moi.client.rpc('ouvre_le_mois', { le_mois: `2029-${String(m).padStart(2, '0')}-01` })
+    }
+    await moi.client.rpc('regularise_annuel',
+      { la_charge: id, annee: 2029, reel_cents: 160_000 })
+
+    /* ⚠️ La ligne de régularisation se pose sur le MOIS EN COURS, pas dans
+       l'année qu'elle résume : c'est voulu — on ne réécrit pas un mois passé —
+       mais elle compte dans le total de l'année. */
+    const somme = async () => {
+      const { data: mois } = await admin().from('depense').select('montant_cents')
+        .eq('charge_id', id).gte('mois', '2029-01-01').lte('mois', '2029-12-31')
+      const { data: reg } = await admin().from('depense').select('montant_cents')
+        .eq('charge_id', id).eq('regularise_annee', 2029)
+      return [...(mois ?? []), ...(reg ?? [])]
+        .reduce((s, d) => s + d.montant_cents, 0)
+    }
+    expect(await somme(), 'la régularisation ne fait pas tomber juste').toBe(160_000)
+
+    await moi.client.rpc('corrige_la_charge', {
+      la_charge: id, nouveau_libelle: 'Foncier réajusté',
+      nouveau_montant: 160_000, nouvelle_periodicite: 'annuel',
+    })
+    /* La régularisation périmée est partie : l'année ne totalise plus que ses
+       douze mois. Les quatre centimes manquants sont l'arrondi du douzième
+       (D62) — c'est précisément ce qu'une nouvelle saisie du vrai montant
+       rattrapera. Ce qu'on refuse, c'est le total de 175 000 € que produisait
+       la ligne survivante. */
+    const { data: restante } = await admin().from('depense')
+      .select('id').eq('charge_id', id).eq('regularise_annee', 2029)
+    expect(restante ?? [], 'la régularisation périmée survit').toHaveLength(0)
+    expect(await somme(), 'l’année ne totalise plus ses douze mois')
+      .toBe(12 * Math.round(160_000 / 12))
+  })
+
   it('le voisin ne régularise pas une charge qui n’est pas la sienne', async () => {
     const { data: sienne } = await admin().from('charge').insert({
       household_id: voisin.householdId, libelle: 'Chez le voisin',
@@ -1583,6 +1692,59 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
     const { error } = await voisin.client.rpc('range_le_compte',
       { le_compte: cpt!.id, ranger: true })
     expect(error, 'le voisin a rangé notre compte').not.toBeNull()
+  })
+})
+
+describe('l’excédent et les avoirs', () => {
+  it('un avoir entier compte, il ne disparaît pas', async () => {
+    /*
+     * 0072 écarte du calcul les lignes dont les parts changent de SIGNE : une
+     * proportion n'existe pas entre 8 100 et −7 100. Juste. Mais le filtre
+     * écrit `min(part) >= 0`, qui attrape aussi les lignes ENTIÈREMENT
+     * négatives — un avoir, dont la proportion est parfaitement définie.
+     *
+     * Mesuré par une revue : excédent annoncé 5,00 € pour 65,00 € réels. La
+     * ligne disparaissait en silence, et c'est ce nombre qui pilote « le verser
+     * à l'épargne » et « baisser le prochain virement ».
+     */
+    const id = await poseCharge({
+      libelle: 'Énergie avoir', cents: 5_000, periodicite: 'mensuel',
+      participants: [moi.userId, elle],
+    })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2030-10-01' })
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('charge_id', id).eq('mois', '2030-10-01').single()
+    /* Un avoir : on nous rend 10 €, donc la dépense réelle est négative. */
+    await moi.client.rpc('confirme_la_depense', { la_depense: d!.id, reel_cents: -1_000 })
+
+    const { data: ex } = await moi.client.rpc('excedent_du_mois', { le_mois: '2030-10-01' })
+    const total = (ex ?? []).reduce(
+      (s: number, l: { excedent_cents: number }) => s + Number(l.excedent_cents), 0)
+    /* Prévu 50 €, réel −10 € : le foyer a 60 € de trop. */
+    expect(total, 'un avoir entier est écarté en silence').toBe(6_000)
+  })
+
+  it('mais des parts de signes MÊLÉS restent écartées', async () => {
+    /* Là, la proportion n'existe vraiment pas : on préfère ne rien dire que
+       d'annoncer un chiffre absurde. */
+    const id = await poseCharge({
+      libelle: 'Mêlée', cents: 1_000, periodicite: 'mensuel',
+      participants: [moi.userId, elle],
+    })
+    const { data: d } = await admin().from('depense').insert({
+      household_id: moi.householdId, charge_id: id, mois: '2030-11-01',
+      libelle: 'Mêlée', montant_cents: 1_000, montant_prevu_cents: 1_001,
+      nature: 'connue', source: 'modele',
+    }).select().single()
+    await admin().from('depense_part').insert([
+      { depense_id: d!.id, user_profile_id: moi.userId, household_id: moi.householdId,
+        part_cents: 8_100, part_bps: 8_100 },
+      { depense_id: d!.id, user_profile_id: elle, household_id: moi.householdId,
+        part_cents: -7_100, part_bps: 1_900 },
+    ])
+
+    const { data: ex } = await moi.client.rpc('excedent_du_mois', { le_mois: '2030-11-01' })
+    expect(ex ?? [], 'une ligne de signes mêlés a produit un chiffre').toHaveLength(0)
   })
 })
 

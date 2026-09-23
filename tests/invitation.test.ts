@@ -186,4 +186,35 @@ describe('la durée du lien', () => {
                    - new Date(inv!.created_at).getTime()) / 86_400_000
     expect(jours, 'le lien n’est pas valable trente jours').toBeCloseTo(30, 1)
   })
+
+  it('une invitation EXPIRÉE peut être relancée', async () => {
+    /*
+     * Boucle morte mesurée par une revue : `tg_invitation_borne` rabattait
+     * `expires_at` sur `created_at + 30 jours`. Tant que la durée par défaut
+     * valait sept jours, prolonger passait sous le rabot ; depuis qu'elle vaut
+     * trente, toute prolongation revenait à une date PASSÉE, en silence. Et
+     * l'index partiel interdit d'en créer une seconde — une invitation expirée
+     * ne pouvait plus JAMAIS être relancée.
+     */
+    const hote = await makeActor('relance-invit')
+    const { data: inv } = await hote.client.from('invitation')
+      .insert({ household_id: hote.householdId, email: `r-${Date.now()}@fumee.test`,
+                created_by: hote.userId })
+      .select('id').single()
+
+    // On la fait expirer, comme le temps l'aurait fait.
+    await admin().from('invitation')
+      .update({ created_at: new Date(Date.now() - 40 * 864e5).toISOString(),
+                expires_at: new Date(Date.now() - 10 * 864e5).toISOString() })
+      .eq('id', inv!.id)
+
+    const cible = new Date(Date.now() + 30 * 864e5)
+    const { data: prolongee } = await admin().from('invitation')
+      .update({ expires_at: cible.toISOString() })
+      .eq('id', inv!.id).select('expires_at').single()
+
+    expect(new Date(prolongee!.expires_at).getTime(),
+      'la prolongation est rabattue sur une date passée')
+      .toBeGreaterThan(Date.now())
+  })
 })

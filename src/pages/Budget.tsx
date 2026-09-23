@@ -55,7 +55,9 @@ function ReleveAnnuel({ charge, annees }: {
             n'en emploie aucun autre. Ce qu'on veut dire est plus simple : voilà
             ce qu'on a déjà mis de côté. */}
         <span className="text-[15px] text-doux">
-          {euros(provisionne)} mis de côté en {annee}
+          {euros(provisions.data?.faites ?? 0)} mis de côté en {annee}
+          {(provisions.data?.aVenir ?? 0) > 0
+            && `, ${euros(provisions.data!.aVenir)} d’ici décembre`}
         </span>
       </div>
       {annees.length > 1 && (

@@ -43,9 +43,20 @@ Deno.serve(async (req) => {
 
   let inv = dejaLa
   if (inv && new Date(inv.expires_at) < new Date()) {
-    // Expirée : on la prolonge au lieu d'en créer une seconde.
+    /* ⚠️ TRENTE jours, et un jeton NEUF.
+       Sept jours passaient sous le rabot de `tg_invitation_borne` tant que la
+       durée par défaut valait sept jours ; depuis qu'elle vaut trente, toute
+       prolongation était ramenée à une date PASSÉE, en silence, et l'index
+       partiel interdisait d'en créer une seconde — une invitation expirée ne
+       pouvait plus jamais être relancée.
+
+       Et le jeton change : l'ancien lien est parti par mail il y a un mois, il
+       n'a pas à revivre parce qu'on en renvoie un. */
     const { data: prolongee } = await admin.from('invitation')
-      .update({ expires_at: new Date(Date.now() + 7 * 864e5).toISOString() })
+      .update({
+        expires_at: new Date(Date.now() + 30 * 864e5).toISOString(),
+        token: crypto.randomUUID(),
+      })
       .eq('id', inv.id).select().single()
     inv = prolongee
   }
