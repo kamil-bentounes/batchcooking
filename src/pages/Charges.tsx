@@ -421,9 +421,13 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
           {' '}une fois tout ramené au mois.
         </p>
 
-        {/* `majQui` et `rattache` levaient dans le vide : le bouton ne bougeait
-            pas, aucun message, et on croyait avoir cliqué à côté. */}
-        <Erreur de={charges.error ?? archive.error ?? majQui.error ?? rattache.error ?? corrige.error} />
+        {/* ⚠️ SEULEMENT l'erreur de CHARGEMENT ici.
+            Celles des GESTES descendent sur la ligne qui les a produites. Un
+            refus affiché en tête de page, quatre écrans au-dessus du bouton
+            qu'on vient de toucher, ne se voit pas : on croit que rien ne s'est
+            passé, et on retouche. Vu sur une capture — après avoir cru le
+            problème réglé en câblant ce bandeau le matin même. */}
+        <Erreur de={charges.error} />
         {dit && <p className="mt-3 text-[15px] text-doux">{dit}</p>}
         {charges.isPending ? <Attente /> : vues.length === 0 ? (
           <Vide titre="Rien encore"
@@ -557,6 +561,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                         Les mois déjà confirmés gardent leur montant. Les autres
                         se refont.
                       </p>
+                      <Erreur de={corrige.variables?.id === c.id ? corrige.error : null} />
                       <div className="flex gap-2">
                         <button disabled={!pret || corrige.isPending}
                                 onClick={() => corrige.mutate({
@@ -580,6 +585,15 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                     </div>
                   )
                 })()}
+
+                {/* Chaque mutation ne montre son échec QUE sur sa propre ligne :
+                    `variables` dit laquelle l'a déclenchée. Sans ce filtre, un
+                    refus sur une charge s'afficherait sous les cinq autres. */}
+                <Erreur de={
+                  (archive.error && archive.variables === c.id && archive.error) ||
+                  (rattache.error && rattache.variables?.id === c.id && rattache.error) ||
+                  (majQui.error && majQui.variables?.chargeId === c.id && majQui.error) ||
+                  null} />
 
                 {membres.length > 1 && quiOuvert === c.id && (
                     <div className="mt-2 flex gap-2 flex-wrap items-center">

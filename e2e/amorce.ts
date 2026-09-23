@@ -27,6 +27,9 @@ export type Foyer = {
   /** La SECONDE personne du foyer. Voir l'amorce : sans elle, tout l'objet de
       l'application n'était photographié nulle part. */
   elleId: string
+  /** Son adresse, pour se connecter À SA PLACE : ce qu'elle voit d'elle-même
+      n'était photographié nulle part non plus. */
+  elleEmail: string
   householdId: string
   cycleId: string
 }
@@ -43,7 +46,13 @@ const jour = (decalage: number) => {
   return d.toISOString().slice(0, 10)
 }
 
-export async function amorce(): Promise<Foyer> {
+/**
+ * `budget: false` sème le foyer SANS un centime : ni revenu, ni compte, ni
+ * charge, ni enveloppe, ni épargne. C'est le tout premier soir — le premier
+ * écran que deux personnes voient — et il n'était photographié nulle part.
+ */
+export async function amorce(o: { budget?: boolean } = {}): Promise<Foyer> {
+  const avecBudget = o.budget !== false
   const email = `fumee-${Date.now()}@test.local`
   const u = ou(await db.auth.admin.createUser({
     email, password: MOT_DE_PASSE, email_confirm: true,
@@ -162,13 +171,19 @@ export async function amorce(): Promise<Foyer> {
 
      `user_profile.id` référence `auth.users` : elle a donc un vrai compte, même
      si aucune capture ne s'y connecte — l'invitation a déjà son parcours. */
+  const elleEmail = `thauba-${Date.now()}@test.local`
   const ue = ou(await db.auth.admin.createUser({
-    email: `thauba-${Date.now()}@test.local`, password: MOT_DE_PASSE, email_confirm: true,
+    email: elleEmail, password: MOT_DE_PASSE, email_confirm: true,
   }))
   const elle = ue.user.id
   ou(await db.from('user_profile').insert({
     id: elle, household_id: foyer.id, display_name: 'Thauba', password_set: true,
   }).select())
+
+  if (!avecBudget) {
+    return { email, userId: u.user.id, elleId: elle, elleEmail,
+             householdId: foyer.id, cycleId: cycle.id }
+  }
 
   for (const [qui, cents] of [[u.user.id, 370_000], [elle, 240_000]] as const) {
     ou(await db.from('revenu').insert({
@@ -204,6 +219,14 @@ export async function amorce(): Promise<Foyer> {
        « Retirer » coupé au bord de la carte, et aucune autre ne le pouvait. */
     { libelle: 'Charges de copropriété du bâtiment B', cents: 30_000, env: null,
       variable: false, commun: true, compte: false, periodicite: 'trimestriel' },
+    /* Les BORNES, telles que la base les accepte : 80 caractères — le maximum —
+       et un montant à six chiffres. Aucune capture ne montrait ce que devient
+       une carte, un total ou un virement quand on les pousse jusque-là. */
+    { libelle: 'Crédit immobilier de la résidence principale et de '
+               + 'l’investissement locatif', cents: 158_000,
+      env: null, variable: false, commun: true, compte: true, periodicite: 'mensuel' },
+    { libelle: 'Impôt sur le revenu', cents: 1_284_000, env: null,
+      variable: false, commun: true, compte: true, periodicite: 'annuel' },
   ]) {
     const charge = ou(await db.from('charge').insert({
       household_id: foyer.id, libelle: c.libelle, montant_cents: c.cents,
@@ -225,7 +248,7 @@ export async function amorce(): Promise<Foyer> {
     montant_cents: 31_000,
   }).select())
 
-  return { email, userId: u.user.id, elleId: elle,
+  return { email, userId: u.user.id, elleId: elle, elleEmail,
            householdId: foyer.id, cycleId: cycle.id }
 }
 
