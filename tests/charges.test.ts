@@ -1132,6 +1132,96 @@ describe('l’arrondi ne penche d’aucun côté', () => {
   })
 })
 
+describe('corriger une charge', () => {
+  /* La faute de frappe du premier soir : 11 200 € au lieu de 1 120 €. Avant
+     `corrige_la_charge`, elle était DÉFINITIVE — « Retirer » échoue sur la clé
+     étrangère dès qu'un mois est ouvert, retombe sur l'archivage, la dépense
+     fausse reste, et reposer la charge juste l'ajoute par-dessus. */
+  async function montantDuMois(chargeId: string, mois: string) {
+    const { data } = await admin().from('depense')
+      .select('montant_cents, montant_prevu_cents')
+      .eq('charge_id', chargeId).eq('mois', mois).maybeSingle()
+    return data
+  }
+
+  it('refait le mois ouvert, prévision comprise', async () => {
+    const id = await poseCharge({
+      libelle: 'Loyer', cents: 1_120_000, periodicite: 'mensuel',
+      participants: [moi.userId],
+    })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2026-02-01' })
+    expect((await montantDuMois(id, '2026-02-01'))?.montant_cents).toBe(1_120_000)
+
+    const { data: refaits, error } = await moi.client.rpc('corrige_la_charge', {
+      la_charge: id, nouveau_libelle: 'Loyer', nouveau_montant: 112_000,
+      nouvelle_periodicite: 'mensuel',
+    })
+    expect(error, `correction refusée : ${error?.message}`).toBeNull()
+    expect(refaits, 'aucun mois refait').toBe(1)
+
+    const d = await montantDuMois(id, '2026-02-01')
+    expect(d?.montant_cents, 'le mois garde le montant faux').toBe(112_000)
+    /* `montant_prevu_cents` est gelé par `tg_prevu_gele` : s'il restait à
+       1 120 000, `excedent_du_mois` annoncerait 10 080 € d'excédent fantôme.
+       C'est pour lui que la ligne est supprimée puis refaite. */
+    expect(d?.montant_prevu_cents, 'la prévision fausse a survécu').toBe(112_000)
+
+    const { data: parts } = await admin().from('depense_part')
+      .select('part_cents').eq('household_id', moi.householdId)
+      .in('depense_id', [(await admin().from('depense').select('id')
+        .eq('charge_id', id).eq('mois', '2026-02-01').single()).data!.id])
+    expect((parts ?? []).reduce((s, p) => s + p.part_cents, 0),
+      'les parts ne recomposent pas le nouveau montant').toBe(112_000)
+  })
+
+  it('ne réécrit pas un mois confirmé', async () => {
+    const id = await poseCharge({
+      libelle: 'Électricité', cents: 5_000, periodicite: 'mensuel',
+      participants: [moi.userId],
+    })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2026-03-01' })
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('charge_id', id).eq('mois', '2026-03-01').single()
+    await moi.client.rpc('confirme_la_depense', {
+      la_depense: d!.id, reel_cents: 5_500,
+    })
+
+    const { data: refaits } = await moi.client.rpc('corrige_la_charge', {
+      la_charge: id, nouveau_libelle: 'Électricité', nouveau_montant: 9_000,
+      nouvelle_periodicite: 'mensuel',
+    })
+    expect(refaits, 'un mois confirmé a été refait').toBe(0)
+    expect((await montantDuMois(id, '2026-03-01'))?.montant_cents,
+      'ce qu’on a réellement payé a été réécrit').toBe(5_500)
+  })
+
+  it('refuse la charge d’un autre foyer, et les montants absurdes', async () => {
+    const id = await poseCharge({
+      libelle: 'Internet', cents: 3_700, periodicite: 'mensuel',
+      participants: [moi.userId],
+    })
+    const { error: eVoisin } = await voisin.client.rpc('corrige_la_charge', {
+      la_charge: id, nouveau_libelle: 'Volé', nouveau_montant: 1,
+      nouvelle_periodicite: 'mensuel',
+    })
+    expect(eVoisin, 'le voisin a réécrit notre charge').not.toBeNull()
+
+    for (const [montant, periode] of [[0, 'mensuel'], [-1, 'mensuel'],
+                                      [100_000_001, 'mensuel'], [1000, 'hebdo']] as const) {
+      const { error } = await moi.client.rpc('corrige_la_charge', {
+        la_charge: id, nouveau_libelle: 'Internet',
+        nouveau_montant: montant, nouvelle_periodicite: periode,
+      })
+      expect(error, `${montant} / ${periode} est passé`).not.toBeNull()
+    }
+    const { error: eVide } = await moi.client.rpc('corrige_la_charge', {
+      la_charge: id, nouveau_libelle: '   ', nouveau_montant: 3_700,
+      nouvelle_periodicite: 'mensuel',
+    })
+    expect(eVide, 'une charge sans nom est passée').not.toBeNull()
+  })
+})
+
 describe('se retirer d’une charge commune', () => {
   /* 0065 l'interdisait par trigger, et cette interdiction a tué les DEUX seuls
      chemins qui suppriment une ligne de `charge_participant` : le bouton

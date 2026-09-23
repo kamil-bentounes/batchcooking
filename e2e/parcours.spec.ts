@@ -443,6 +443,48 @@ test.describe('le budget, du vide jusqu’au virement', () => {
 
     expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])
   })
+
+  test('une faute de frappe se corrige, et le mois suit', async ({ page }) => {
+    /*
+     * Le premier soir est le moment de l'année où l'on tape le plus de
+     * montants, donc où l'on se trompe le plus. Et la correction n'existait
+     * pas : « Retirer » échoue sur la clé étrangère dès qu'un mois est ouvert,
+     * retombe sur l'archivage, la dépense fausse reste dans le mois, et
+     * reposer la charge juste l'ajoute PAR-DESSUS.
+     */
+    const erreurs = surveille(page)
+    await connecte(page)
+
+    await page.goto('/charges')
+    /* « Gaz », pas « Internet » : l'amorce en sème déjà un, et deux charges du
+       même nom rendent les deux boutons « Corriger » indiscernables. */
+    await page.getByRole('button', { name: 'Gaz', exact: true }).click()
+    await page.getByLabel(/combien/i).fill('3700')   // au lieu de 37
+    await page.getByRole('button', { name: /ajouter cette charge/i }).click()
+    await expect(page.getByText(/3\s?700,00/).first()).toBeVisible({ timeout: 15_000 })
+    await capture(page, 'clic-21-charge-fausse')
+
+    await page.getByRole('button', { name: 'Corriger Gaz' }).click()
+    const montant = page.getByLabel('Montant de Gaz')
+    await expect(montant).toHaveValue('3700')
+    await montant.fill('37')
+    await capture(page, 'clic-22-correction-ouverte')
+    await page.getByRole('button', { name: 'Enregistrer', exact: true }).click()
+
+    await expect(page.getByText(/corrigée/)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/37,00 € par mois/).first()).toBeVisible()
+    await expect(page.getByText(/3\s?700,00/),
+      'le montant faux est resté dans la liste').toHaveCount(0)
+    await capture(page, 'clic-23-charge-corrigee')
+
+    /* Et le mois, pas seulement la liste : c'est lui qui dit quoi virer. */
+    await page.goto('/budget')
+    await expect(page.getByText(/3\s?700,00/),
+      'le mois facture encore le montant faux').toHaveCount(0)
+    await capture(page, 'clic-24-mois-corrige')
+
+    expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])
+  })
 })
 
 test.describe('ce qui se voit à la souris', () => {

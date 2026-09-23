@@ -109,6 +109,13 @@ test.describe('les captures de revue', () => {
     await page.getByRole('button', { name: /dicte tout/i }).click()
     await prend(page, '25-dictee')
 
+    /* Corriger une charge : le seul recours contre une faute de frappe, et il
+       s'ouvre SOUS la ligne concernée — c'est ce chevauchement-là qu'il faut
+       regarder, aucune assertion ne le verrait. */
+    await page.goto('/charges')
+    await page.getByRole('button', { name: /^Corriger / }).first().click()
+    await prend(page, '27-corriger-charge')
+
     await page.goto('/stock')
     const auFroid = page.getByRole('tab', { name: /congélateur/i })
     if (await auFroid.count()) {

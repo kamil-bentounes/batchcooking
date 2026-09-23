@@ -19,7 +19,7 @@ import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
   useCharges, useCatalogue, useAjouteCharge, useArchiveCharge, useComptes,
-  useEnveloppesPosees, useRattacheCharge, useMajParticipants, euros, enCentimes,
+  useEnveloppesPosees, useRattacheCharge, useMajParticipants, useCorrigeCharge, euros, enCentimes,
   type Charge,
 } from '../lib/donnees/budget.ts'
 
@@ -279,7 +279,14 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   const enveloppes = useEnveloppesPosees()
   const rattache = useRattacheCharge()
   const majQui = useMajParticipants()
+  const corrige = useCorrigeCharge()
   const [quiOuvert, setQuiOuvert] = useState<string | null>(null)
+  /* La charge en cours de correction, et ce qu'on y tape. Une faute de frappe
+     le premier soir était définitive : aucun écran ne revenait sur un montant. */
+  const [corrigeOuvert, setCorrigeOuvert] = useState<string | null>(null)
+  const [cLibelle, setCLibelle] = useState('')
+  const [cMontant, setCMontant] = useState('')
+  const [cPeriode, setCPeriode] = useState<'mensuel' | 'trimestriel' | 'annuel'>('mensuel')
   /* Le compte commun, pour la dictée : elle ne demande pas où débiter, et une
      charge sans compte ne produit pas de virement. */
   const compteParDefaut = (comptes.data ?? [])
@@ -411,7 +418,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
 
         {/* `majQui` et `rattache` levaient dans le vide : le bouton ne bougeait
             pas, aucun message, et on croyait avoir cliqué à côté. */}
-        <Erreur de={charges.error ?? archive.error ?? majQui.error ?? rattache.error} />
+        <Erreur de={charges.error ?? archive.error ?? majQui.error ?? rattache.error ?? corrige.error} />
         {dit && <p className="mt-3 text-[15px] text-doux">{dit}</p>}
         {charges.isPending ? <Attente /> : vues.length === 0 ? (
           <Vide titre="Rien encore"
@@ -459,6 +466,19 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                     Rattacher
                   </button>
                 )}
+                {/* Corriger. Sans ce bouton, 11 200 € tapés au lieu de 1 120 €
+                    restaient dans le mois pour toujours : « Retirer » échoue
+                    sur la clé étrangère et retombe sur l'archivage, et reposer
+                    la charge juste ajoutait la bonne par-dessus la fausse. */}
+                <button onClick={() => {
+                          setCorrigeOuvert(o => (o === c.id ? null : c.id))
+                          setCLibelle(c.libelle)
+                          setCMontant(String(c.montant_cents / 100).replace('.', ','))
+                          setCPeriode(c.periodicite)
+                        }}
+                        aria-label={`Corriger ${c.libelle}`}
+                        aria-expanded={corrigeOuvert === c.id}
+                        className="text-herbe min-h-11 px-2 text-[14px]">Corriger</button>
                 <button onClick={() => {
                           if (!confirm(`Retirer « ${c.libelle} » ? Les mois déjà ouverts la gardent.`)) return
                           archive.mutate(c.id, {
@@ -471,6 +491,70 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                         aria-label={`Retirer ${c.libelle}`}
                         className="text-doux min-h-11 px-2 text-[14px]">Retirer</button>
                 </div>
+
+                {corrigeOuvert === c.id && (() => {
+                  const cents = enCentimes(cMontant)
+                  const pret = cLibelle.trim() !== '' && cents !== null && cents > 0
+                  return (
+                    <div className="mt-3 rounded-[14px] border border-brume p-3 space-y-3">
+                      <label className="block">
+                        <span className="text-[14px] text-doux">Son nom</span>
+                        <input value={cLibelle} onChange={e => setCLibelle(e.target.value)}
+                               className="mt-1 w-full min-h-11 rounded-[12px] border border-brume
+                                          bg-surface px-3 text-[16px]" />
+                      </label>
+                      <label className="block">
+                        <span className="text-[14px] text-doux">Son montant</span>
+                        <span className="mt-1 flex items-center gap-2">
+                          <input value={cMontant} inputMode="decimal"
+                                 onChange={e => setCMontant(e.target.value)}
+                                 aria-label={`Montant de ${c.libelle}`}
+                                 className="w-32 min-h-11 rounded-[12px] border border-brume
+                                            bg-surface px-3 text-[16px]" />
+                          <span className="text-[15px] text-doux">€</span>
+                        </span>
+                      </label>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {([['mensuel', 'par mois'], ['trimestriel', 'par trimestre'],
+                           ['annuel', 'par an']] as const).map(([v, nom]) => (
+                          <button key={v} type="button" aria-pressed={cPeriode === v}
+                                  onClick={() => setCPeriode(v)}
+                                  className={`px-3.5 min-h-11 inline-flex items-center rounded-full
+                                              text-[14px] transition-colors
+                                    ${cPeriode === v ? 'bg-herbe text-fond' : 'bg-brume/50 text-encre'}`}>
+                            {nom}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Ce que ça touche, dit AVANT : un mois confirmé garde ce
+                          qu'on a réellement payé, il ne se réécrit pas. */}
+                      <p className="text-[14px] text-doux">
+                        Les mois déjà confirmés gardent leur montant. Les autres
+                        se refont.
+                      </p>
+                      <div className="flex gap-2">
+                        <button disabled={!pret || corrige.isPending}
+                                onClick={() => corrige.mutate({
+                                  id: c.id, libelle: cLibelle.trim(),
+                                  montantCents: cents ?? 0, periodicite: cPeriode,
+                                }, {
+                                  onSuccess: n => {
+                                    setCorrigeOuvert(null)
+                                    setDit(n === 0
+                                      ? `« ${cLibelle.trim()} » corrigée.`
+                                      : `« ${cLibelle.trim()} » corrigée, ${n} mois refait${n > 1 ? 's' : ''}.`)
+                                  },
+                                })}
+                                className="px-4 min-h-11 rounded-[12px] bg-herbe text-fond
+                                           text-[15px] disabled:opacity-40">
+                          {corrige.isPending ? 'Je corrige…' : 'Enregistrer'}
+                        </button>
+                        <button onClick={() => setCorrigeOuvert(null)}
+                                className="px-3 min-h-11 text-[15px] text-doux">Annuler</button>
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Qui participe se change APRÈS COUP. Sans ça, inviter quelqu'un
                     une fois les charges posées obligeait à toutes les refaire. */}

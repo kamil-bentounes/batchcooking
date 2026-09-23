@@ -3015,6 +3015,15 @@ export type Database = {
         Args: { la_depense: string; reel_cents: number }
         Returns: undefined
       }
+      corrige_la_charge: {
+        Args: {
+          la_charge: string
+          nouveau_libelle: string
+          nouveau_montant: number
+          nouvelle_periodicite: string
+        }
+        Returns: number
+      }
       create_household: { Args: { p_name: string }; Returns: string }
       current_cycle: { Args: never; Returns: string }
       current_household: { Args: never; Returns: string }
@@ -3094,6 +3103,10 @@ export type Database = {
       regularise_annuel: {
         Args: { annee: number; la_charge: string; reel_cents: number }
         Returns: string
+      }
+      repartit_les_lignes: {
+        Args: { foyer: string; le_mois: string }
+        Returns: undefined
       }
       reste_enveloppe: {
         Args: { le_mois: string }

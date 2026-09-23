@@ -310,6 +310,37 @@ export function useAjouteCharge() {
   })
 }
 
+/**
+ * Corriger le libellé, le montant ou le rythme d'une charge.
+ *
+ * Il manquait, et une faute de frappe le premier soir était définitive : « Retirer »
+ * échoue sur la clé étrangère dès qu'un mois est ouvert, retombe sur l'archivage, et
+ * la dépense fausse reste. Reposer la charge corrigée ajoutait la bonne PAR-DESSUS.
+ *
+ * Le SQL refait les mois ouverts qui ne sont ni réglés ni confirmés, et rend
+ * combien — pour pouvoir le dire.
+ */
+export function useCorrigeCharge() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (m: {
+      id: string; libelle: string; montantCents: number
+      periodicite: 'mensuel' | 'trimestriel' | 'annuel'
+    }) => {
+      const { data, error } = await supabase.rpc('corrige_la_charge', {
+        la_charge: m.id, nouveau_libelle: m.libelle,
+        nouveau_montant: m.montantCents, nouvelle_periodicite: m.periodicite,
+      })
+      if (error) throw new Error(error.message)
+      return (data as number) ?? 0
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CLE.charges })
+      qc.invalidateQueries({ queryKey: ['budget-mois'] })
+    },
+  })
+}
+
 export function useArchiveCharge() {
   const qc = useQueryClient()
   return useMutation({
