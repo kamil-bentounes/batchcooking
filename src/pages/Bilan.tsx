@@ -36,7 +36,7 @@ const NOM: Record<Periode, string> = {
   semaine: '7 jours', mois: 'Ce mois', trimestre: '3 mois',
 }
 
-export function Bilan({ va }: { va: (v: string) => void }) {
+export function Bilan({ va, userId }: { va: (v: string) => void; userId: string }) {
   const [dit, setDit] = useState('')
   const [periode, setPeriode] = useState<Periode>('semaine')
   const { data: cycle } = useCycle()
@@ -136,9 +136,16 @@ export function Bilan({ va }: { va: (v: string) => void }) {
           </section>
 
           {/* ── Deux graphiques, jamais deux axes ────────────────────────── */}
-          {bilan.personnes.map(p => (
-            <Courbes key={p.userId} p={p} />
-          ))}
+          {/* ⚠️ SOI D'ABORD.
+              L'ordre venait de la base, donc du hasard : Thauba ouvrait « Le
+              bilan » et lisait en gros, au-dessus de la ligne de flottaison,
+              les courbes de Kamil. Son propre bilan ne lui parlait pas d'elle.
+              Le foyer partage l'écran, il ne partage pas l'ordre de lecture. */}
+          {[...bilan.personnes]
+            .sort((a, b) => (a.userId === userId ? -1 : b.userId === userId ? 1 : 0))
+            .map(p => (
+              <Courbes key={p.userId} p={p} />
+            ))}
 
           {bilan.recettes.length > 0 && (
             <section className="mt-10" aria-label="Ce qui est passé">

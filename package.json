@@ -20,7 +20,7 @@
     "recalcule": "vite-node scripts/recalcule.mjs --",
     "e2e": "playwright test",
     "deploy": "node scripts/deployer.mjs",
-    "couverture": "rm -rf .nyc_output coverage && COUVERTURE=1 npm run build && COUVERTURE=1 npx playwright test && npx nyc report --reporter=text --report-dir coverage"
+    "couverture": "rm -rf .nyc_output coverage && COUVERTURE=1 npm run build -- --mode development && COUVERTURE=1 npx playwright test && npx nyc report --reporter=text --report-dir coverage"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

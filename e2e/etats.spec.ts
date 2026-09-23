@@ -167,11 +167,17 @@ test.describe('les états du foyer rempli', () => {
     /* Un mois PASSÉ réclamait un virement pour ce qu'on a déjà vécu et payé —
        rattraper une charge annuelle depuis janvier en ouvre huit d'un coup — et
        rien ne permettait de le dire. */
-    const deja = page.getByRole('button', { name: /déjà réglé/i })
+    const deja = page.getByRole('button', { name: /marquer ce mois/i })
     if (await deja.count()) {
       await deja.click()
-      await expect(page.getByRole('button', { name: /ce mois est réglé/i }))
+      await expect(page.getByRole('button', { name: /revenir dessus/i }))
         .toBeVisible({ timeout: 15_000 })
+      /* Un mois soldé ne redemande pas le relevé, et il garde sous les yeux ce
+         qu'il demandait : sinon on ne sait plus ce qu'on vient de payer. */
+      await expect(page.getByLabel(/vraiment payé/i),
+        'un mois soldé redemande le relevé').toHaveCount(0)
+      await expect(page.getByText(/Ce mois demandait/),
+        'un mois soldé cache ce qu’il demandait').toBeVisible()
       await prend(page, 'confirme-03-mois-regle')
     }
   })

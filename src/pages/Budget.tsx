@@ -190,6 +190,10 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
 
   const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, prenomDe(m.display_name)]))
   const aFaire = virements(depenses.data ?? [], userId, comptes, prenoms)
+  /* Ce que le mois DEMANDAIT, réglé ou non : un mois soldé cachait le chiffre,
+     et on ne pouvait plus savoir ce qu'on venait de payer. */
+  const aFaireBrut = virements(
+    (depenses.data ?? []).map(d => ({ ...d, regle_le: null })), userId, comptes, prenoms)
   const regleLeMois = useRegleLeMois()
   /* Un mois PASSÉ, et ce qu'on y a déjà réglé. Rattraper une charge annuelle
      depuis janvier ouvre huit mois d'un coup, et chacun réclamait un virement
@@ -299,7 +303,10 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
                     disabled={regleLeMois.isPending}
                     className={`min-h-11 px-4 rounded-full text-[14px] transition-colors
                       ${dejaRegle ? 'bg-herbe text-fond' : 'bg-brume/50 text-encre'}`}>
-              {dejaRegle ? '✓ Ce mois est réglé' : 'Ce mois est déjà réglé'}
+              {/* « Ce mois est déjà réglé » se lit comme un constat, pas comme
+                  un geste : on ne comprend que c'est un interrupteur qu'après
+                  l'avoir touché. */}
+              {dejaRegle ? '✓ Réglé — revenir dessus' : 'Marquer ce mois comme réglé'}
             </button>
             <Erreur de={regleLeMois.error} />
           </div>
@@ -315,6 +322,12 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
             {/* Et un TROISIÈME : un mois qu'on a marqué réglé. Sans lui, il
                 s'annonçait « payé par quelqu'un d'autre », ce qui est faux et
                 inquiétant — on vient de dire l'avoir payé soi-même. */}
+            {dejaRegle && (
+              <p className="mt-4 text-[15px] text-doux">
+                Ce mois demandait {euros(aFaireBrut.reduce((s, v) => s + v.cents, 0))}.
+                Tu l’as marqué comme réglé.
+              </p>
+            )}
             <Vide titre={dejaRegle ? 'Ce mois est soldé'
                     : (depenses.data ?? []).length === 0
                     ? 'Rien à verser' : 'Rien à verser pour toi'}
@@ -365,7 +378,12 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
           </>
         )}
 
-        {aConfirmer.length > 0 && (
+        {/* ⚠️ Un mois SOLDÉ ne redemande pas le relevé.
+            Il annonçait « Ce mois est soldé » et, juste dessous, « saisis ce
+            que vous avez vraiment payé sur chacun », champs actifs — alors que
+            le bloc « À verser » avait disparu. On ne savait plus ce qu'on
+            devait, et on nous redemandait de le confirmer. */}
+        {aConfirmer.length > 0 && !dejaRegle && (
           <>
             <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
               {heureDuReleve ? 'Le relevé du mois' : 'À confirmer, vers le 27'}

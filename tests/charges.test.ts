@@ -1247,27 +1247,62 @@ describe('les quatre rouges de l’argent (0069)', () => {
       id: partant, household_id: moi.householdId, display_name: 'Partant',
     })
 
+    /* ⚠️ TROIS restants, aux portés INÉGAUX, et plusieurs écarts.
+       Une contre-revue a montré que ce test restait vert en remettant les deux
+       défauts centraux du dépôt — division rendue exacte, reliquat non
+       distribué. La raison : à DEUX membres, diviser en numeric puis arrondir
+       redonne Hamilton par hasard, parce que l'arrondi va à la plus grande
+       partie fractionnaire, qui est justement le plus fort reste. Il faut au
+       moins trois parts pour que les arrondis indépendants cessent de
+       recomposer le total, et plusieurs écarts pour en rencontrer un qui
+       laisse un reste. */
+    const tiers: string[] = []
+    for (const n of [1, 2]) {
+      const u = (await admin().auth.admin.createUser({
+        email: `tiers-${n}-${Date.now()}@fumee.test`, password: 'x'.repeat(12),
+        email_confirm: true,
+      })).data.user!.id
+      await admin().from('user_profile').insert({
+        id: u, household_id: moi.householdId, display_name: `Tiers ${n}`,
+      })
+      await admin().from('revenu').insert({
+        household_id: moi.householdId, user_profile_id: u,
+        net_mensuel_cents: 100_000 * n + 7_777, valid_from: '2027-01-01',
+      })
+      tiers.push(u)
+    }
+
     const id = await poseCharge({
       libelle: 'Taxe du partant', cents: 120_000, periodicite: 'annuel',
-      participants: [moi.userId, partant],
+      participants: [moi.userId, elle, ...tiers, partant], cle: 'prorata',
     })
     await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-08-01' })
     await admin().auth.admin.deleteUser(partant)
 
     const { data: ligne, error } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2027, reel_cents: 130_000,
+      la_charge: id, annee: 2027, reel_cents: 130_001,
     })
     expect(error, `régularisation refusée : ${error?.message}`).toBeNull()
     expect(ligne, 'aucune ligne de régularisation').not.toBeNull()
 
     /* Et l'écart va à ceux qui restent, pas à celui qui est parti. */
     const { data: parts } = await admin().from('depense_part')
-      .select('user_profile_id, part_bps').eq('depense_id', ligne as string)
+      .select('user_profile_id, part_bps, part_cents').eq('depense_id', ligne as string)
     expect((parts ?? []).map(p => p.user_profile_id),
       'le partant reçoit une part qu’on ne peut plus lui demander')
       .not.toContain(partant)
+    expect((parts ?? []).length,
+      'un seul restant : le reliquat n’a nulle part où aller, rien ne se mesure')
+      .toBeGreaterThan(1)
     expect((parts ?? []).reduce((s, p) => s + p.part_bps, 0),
       'les points de base ne font pas 10 000').toBe(10_000)
+
+    /* Et les CENTIMES doivent recomposer l'écart, au centime près : c'est ce
+       que la division non entière casse en silence. */
+    const { data: ligneD } = await admin().from('depense')
+      .select('montant_cents').eq('id', ligne as string).single()
+    expect((parts ?? []).reduce((s, p) => s + p.part_cents, 0),
+      'les parts ne recomposent pas l’écart').toBe(ligneD!.montant_cents)
   })
 
   it('une dépense confirmée ne se supprime pas à la main', async () => {
@@ -1290,6 +1325,26 @@ describe('les quatre rouges de l’argent (0069)', () => {
     const { data: parts } = await admin().from('depense_part')
       .select('part_cents').eq('depense_id', d!.id)
     expect(parts ?? [], 'les parts figées ont disparu').toHaveLength(2)
+  })
+
+  it('ni une dépense simplement RÉGLÉE', async () => {
+    /* La policy porte sur DEUX colonnes, et un seul des deux cas était éprouvé.
+       `useRegleLeMois` marque tout un mois d'un clic : supprimer une de ces
+       lignes la ferait recréer par `ouvre_le_mois` avec un partage neuf — le
+       scénario même que 0069 existe pour fermer. */
+    const id = await poseCharge({
+      libelle: 'Déjà virée', cents: 6_000, periodicite: 'mensuel',
+      participants: [moi.userId, elle],
+    })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-11-01' })
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('charge_id', id).eq('mois', '2027-11-01').single()
+    await moi.client.from('depense')
+      .update({ regle_le: new Date().toISOString() }).eq('id', d!.id)
+
+    const { data: reste } = await moi.client.from('depense')
+      .delete().eq('id', d!.id).select()
+    expect(reste ?? [], 'une dépense réglée a été supprimée').toHaveLength(0)
   })
 
   it('mais une dépense NI confirmée NI réglée reste supprimable', async () => {

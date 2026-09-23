@@ -138,7 +138,7 @@ export default function App() {
     // Les quatre destinations permanentes.
     case '/semaine': return <Semaine userId={moi} va={va} />
     case '/stock': return <Stock va={va} />
-    case '/bilan': return <Bilan va={va} />
+    case '/bilan': return <Bilan va={va} userId={moi} />
 
     // Les passages du cycle : une seule sortie, pas de barre du bas.
     case '/choisir': return <Choisir retour={sortie} va={va} />

@@ -15,7 +15,7 @@ import { useState } from 'react'
 import { Champ, Bouton, Message } from '../ui/kit.tsx'
 import { supabase, ou } from '../lib/supabase.ts'
 import { useFoyer } from '../lib/donnees/foyer.ts'
-import { usePoseRevenu, enCentimes, euros } from '../lib/donnees/budget.ts'
+import { usePoseRevenu, useRevenus, enCentimes, euros } from '../lib/donnees/budget.ts'
 
 /** Aujourd'hui en heure LOCALE : `toISOString()` recule d'un jour avant 2 h. */
 function aujourdhui(): string {
@@ -40,7 +40,7 @@ export function Profil({ userId, onFini, retour }: {
      On garde donc l'état à null tant que la réponse n'est pas là, et ce qui
      s'affiche vient de la base jusqu'à la première frappe. */
   const [prenomSaisi, setPrenomSaisi] = useState<string | null>(null)
-  const [revenu, setRevenu] = useState('')
+  const [revenuSaisi, setRevenuSaisi] = useState<string | null>(null)
   const [entreeSaisie, setEntreeSaisie] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
   const [envoi, setEnvoi] = useState(false)
@@ -49,6 +49,20 @@ export function Profil({ userId, onFini, retour }: {
   const entree = entreeSaisie ?? moi?.entre_le ?? aujourdhui()
   const setPrenom = setPrenomSaisi
   const setEntree = setEntreeSaisie
+
+  /* ⚠️ Le revenu DÉJÀ POSÉ s'affiche.
+     Le champ partait vide à chaque ouverture : on rouvre son profil, on lit
+     « Ton revenu net mensuel (€) » sans rien dedans, et on croit qu'il n'est
+     pas enregistré — alors que les réglages du budget l'affichent deux écrans
+     plus loin. Un champ vide dit « il n'y a rien » ; ici il y avait quelque
+     chose. */
+  const revenus = useRevenus()
+  const mien = (revenus.data ?? [])
+    .filter(r => r.user_profile_id === userId)
+    .sort((a, b) => (a.valid_from < b.valid_from ? 1 : -1))[0]
+  const revenu = revenuSaisi ?? (mien ? String(mien.net_mensuel_cents / 100).replace('.', ',') : '')
+  const setRevenu = setRevenuSaisi
+  const dejaPose = mien !== undefined
 
   const cents = enCentimes(revenu)
   const autre = (foyer?.membres ?? []).find(m => m.id !== userId)
@@ -80,8 +94,17 @@ export function Profil({ userId, onFini, retour }: {
           <span aria-hidden="true">‹</span> Popote
         </button>
 
-        <h1 className="titre text-[34px] mt-6">Deux choses, et c’est fini.</h1>
-        <p className="mt-2 text-[15px] text-doux">Le reste s’ajoute quand tu veux.</p>
+        {/* Le titre d'ARRIVÉE ne vaut qu'à l'arrivée. Il s'affichait aussi à
+            quelqu'un qui rouvre son profil trois mois plus tard, et lui
+            annonçait qu'il lui restait deux choses à faire. */}
+        <h1 className="titre text-[34px] mt-6">
+          {dejaPose ? 'Toi, dans le foyer' : 'Deux choses, et c’est fini.'}
+        </h1>
+        <p className="mt-2 text-[15px] text-doux">
+          {dejaPose
+            ? 'Ce que l’application sait de toi. Tout se change ici.'
+            : 'Le reste s’ajoute quand tu veux.'}
+        </p>
 
         <div className="mt-6 space-y-5">
         <Champ label="Ton prénom" value={prenom} onChange={e => setPrenom(e.target.value)} />
