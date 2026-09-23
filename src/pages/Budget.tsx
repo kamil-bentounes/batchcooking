@@ -110,9 +110,14 @@ function ReleveAnnuel({ charge, annees }: {
         <p className="mt-2 text-[15px]" style={{ color: 'var(--color-herbe)' }}>
           ✓ Relevé {annee} saisi le{' '}
           {new Date(provisions.data.releve.saisi_le).toLocaleDateString('fr-FR')}
+          {/* Le SIGNE compte : 604 € de trop-perçu et 604 € qui manquent se
+              lisaient pareil, et la ligne signée est masquée dès que l'année
+              est saisie. */}
           {Number(provisions.data.releve.ecart_cents) === 0
             ? ' — il tombait juste.'
-            : ` — ${euros(Math.abs(Number(provisions.data.releve.ecart_cents)))} d’écart.`}
+            : Number(provisions.data.releve.ecart_cents) > 0
+              ? ` — il manquait ${euros(Number(provisions.data.releve.ecart_cents))}.`
+              : ` — ${euros(-Number(provisions.data.releve.ecart_cents))} avaient été mis de trop.`}
         </p>
       )}
       {/* Le chiffre manquant ne s'annonce plus une fois l'année saisie. */}

@@ -690,9 +690,12 @@ export function useProvisionsDe(chargeId: string | undefined, annee: number) {
       /* Le relevé a-t-il déjà été saisi ? Aucun écran ne le disait, et rien
          n'empêchait donc de le ressaisir — sauf l'index unique, qui rendait
          alors une violation de contrainte brute. */
-      const { data: releve } = await supabase.from('releve_annuel')
+      /* ⚠️ `ou()`, pas un `data` silencieux. Une lecture en échec rendait
+         `releve` indéfini, donc la garde disparaissait et le bouton se
+         réactivait : le garde-fou tombait du mauvais côté. */
+      const releve = ou(await supabase.from('releve_annuel')
         .select('reel_cents, ecart_cents, saisi_le')
-        .eq('charge_id', chargeId!).eq('annee', annee).maybeSingle()
+        .eq('charge_id', chargeId!).eq('annee', annee).maybeSingle())
       return {
         releve,
         faites: Number(l[0]?.total_cents ?? 0),

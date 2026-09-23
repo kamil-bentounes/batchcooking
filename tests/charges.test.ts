@@ -1912,6 +1912,190 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
       'corriger une charge n’a pas ouvert ses propres mois').toBeGreaterThan(1)
   })
 
+  it('une année dont le relevé est saisi ne gagne plus de mois', async () => {
+    /*
+     * LA garde, et elle manquait depuis quatre tours. À chaque tour on
+     * déplaçait l'appelant — `corrige_la_charge`, puis les triggers d'arrivée —
+     * et le suivant rouvrait la porte. Faire naître un mois dans une année
+     * déjà régularisée ajoute sa provision par-dessus un écart qui ne bouge
+     * plus, et la garde « une seule fois » interdit de ressaisir.
+     *
+     * Le geste est celui que le code PRÉVOIT : `accept-invite` pose la date
+     * d'arrivée au 1er du mois prochain exprès, et renvoie la personne vers son
+     * profil « qui lui demande la vraie date ». Reculer cette date est normal.
+     */
+    const seul = await makeActor('garde-releve')
+    const juin = `${new Date().getFullYear()}-06-01`
+    const janvier = `${new Date().getFullYear()}-01-01`
+    await admin().from('user_profile').update({ entre_le: juin }).eq('id', seul.userId)
+
+    const { data: c } = await admin().from('charge').insert({
+      household_id: seul.householdId, libelle: 'Taxe verrouillée',
+      montant_cents: 145_000, periodicite: 'annuel', debut: janvier,
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: c!.id, user_profile_id: seul.userId, household_id: seul.householdId,
+    })
+    for (let m = 1; m <= new Date().getMonth() + 1; m++) {
+      await seul.client.rpc('ouvre_le_mois',
+        { le_mois: `${new Date().getFullYear()}-${String(m).padStart(2, '0')}-01` })
+    }
+
+    const total = async () => {
+      const { data: mois } = await admin().from('depense').select('montant_cents')
+        .eq('charge_id', c!.id).eq('source', 'modele')
+      const { data: reg } = await admin().from('depense').select('montant_cents')
+        .eq('charge_id', c!.id).not('regularise_annee', 'is', null)
+      const { data: v } = await seul.client.rpc('provisions_a_venir',
+        { la_charge: c!.id, annee: new Date().getFullYear() })
+      return [...(mois ?? []), ...(reg ?? [])]
+        .reduce((s, d) => s + d.montant_cents, 0) + Number(v ?? 0)
+    }
+
+    const { error: eReg } = await seul.client.rpc('regularise_annuel', {
+      la_charge: c!.id, annee: new Date().getFullYear(), reel_cents: 145_000,
+    })
+    expect(eReg, `relevé refusé : ${eReg?.message}`).toBeNull()
+    expect(await total(), 'le relevé ne fait pas tomber l’année juste').toBe(145_000)
+
+    /* Le geste qui rouvrait la porte : « en fait, je suis là depuis janvier ». */
+    await seul.client.from('user_profile')
+      .update({ entre_le: janvier }).eq('id', seul.userId)
+
+    expect(await total(),
+      'une année dont le relevé est saisi a gagné des mois').toBe(145_000)
+  })
+
+  it('reculer sa date d’entrée FAIT NAÎTRE les mois, sans feuilleter', async () => {
+    /*
+     * `tg_entre_le_refige` et `tg_membre_rejoint_les_communes` ne faisaient que
+     * REFIGER : ils bouclaient sur les mois qui avaient déjà une dépense, et
+     * `refige_pour` n'en crée jamais. Reculer sa date d'entrée rendait donc
+     * éligibles des mois sans ligne, qui ne naissaient qu'à la première visite
+     * du budget. Le même geste donnait 604,19 € ou 0,04 € d'écart selon qu'on
+     * avait feuilleté entre-temps.
+     *
+     * C'est le geste que le code PRÉVOIT : `accept-invite` pose la date au 1er
+     * du mois prochain, et renvoie la personne vers son profil pour la vraie.
+     */
+    const seul = await makeActor('naissance')
+    const an = new Date().getFullYear()
+    await admin().from('user_profile')
+      .update({ entre_le: `${an}-08-01` }).eq('id', seul.userId)
+
+    const { data: c } = await admin().from('charge').insert({
+      household_id: seul.householdId, libelle: 'Depuis janvier',
+      montant_cents: 12_000, periodicite: 'mensuel', debut: `${an}-01-01`,
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: c!.id, user_profile_id: seul.userId, household_id: seul.householdId,
+    })
+    await seul.client.rpc('ouvre_le_mois', { le_mois: `${an}-08-01` })
+
+    const combien = async () => {
+      const { data } = await admin().from('depense').select('id').eq('charge_id', c!.id)
+      return (data ?? []).length
+    }
+    const avant = await combien()
+
+    /* Le geste, et RIEN d'autre : on ne feuillette aucun mois. */
+    await seul.client.from('user_profile')
+      .update({ entre_le: `${an}-01-01` }).eq('id', seul.userId)
+
+    expect(await combien(),
+      'reculer sa date d’entrée n’a fait naître aucun mois').toBeGreaterThan(avant)
+  })
+
+  it('`ouvre_la_charge` pose la même chose qu’`ouvre_le_mois`', async () => {
+    /*
+     * Les deux doivent être indiscernables : même prédicat de participant,
+     * même nature. Trois clauses d'`ouvre_la_charge` survivaient à leur
+     * suppression sans qu'un test ne bronche — dont celle du participant, qui
+     * avait coûté 724,98 € quand elle manquait ailleurs.
+     */
+    const seul = await makeActor('jumelles')
+    const janvier = `${new Date().getFullYear()}-01-01`
+    await admin().from('user_profile').update({ entre_le: janvier }).eq('id', seul.userId)
+
+    /* Un membre qui n'arrive que PLUS TARD : aucun mois ne doit naître pour sa
+       charge à lui, ni par un chemin ni par l'autre. */
+    const tard = (await admin().auth.admin.createUser({
+      email: `jum-${Date.now()}@fumee.test`, password: 'x'.repeat(12), email_confirm: true,
+    })).data.user!.id
+    await admin().from('user_profile').insert({
+      id: tard, household_id: seul.householdId, display_name: 'Plus tard',
+      entre_le: `${new Date().getFullYear() + 1}-01-01`,
+    })
+    const { data: sienne } = await admin().from('charge').insert({
+      household_id: seul.householdId, libelle: 'Pour lui seul',
+      montant_cents: 3_000, periodicite: 'mensuel', debut: janvier,
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: sienne!.id, user_profile_id: tard, household_id: seul.householdId,
+    })
+
+    await seul.client.rpc('corrige_la_charge', {
+      la_charge: sienne!.id, nouveau_libelle: 'Pour lui seul',
+      nouveau_montant: 3_000, nouvelle_periodicite: 'mensuel',
+    })
+    const { data: rien } = await admin().from('depense').select('id')
+      .eq('charge_id', sienne!.id)
+    expect(rien ?? [],
+      'un mois est né pour quelqu’un qui n’est pas encore arrivé').toHaveLength(0)
+
+    /* Et la NATURE : une charge mensuelle simple est « connue », une variable
+       est « estimee ». C'est elle qui décide de ce qu'on fait confirmer. */
+    const { data: fixe } = await admin().from('charge').insert({
+      household_id: seul.householdId, libelle: 'Fixe', montant_cents: 4_000,
+      periodicite: 'mensuel', debut: janvier,
+    }).select().single()
+    const { data: molle } = await admin().from('charge').insert({
+      household_id: seul.householdId, libelle: 'Molle', montant_cents: 4_000,
+      periodicite: 'mensuel', debut: janvier, variable: true,
+    }).select().single()
+    for (const c of [fixe, molle]) {
+      await admin().from('charge_participant').insert({
+        charge_id: c!.id, user_profile_id: seul.userId, household_id: seul.householdId,
+      })
+      await seul.client.rpc('corrige_la_charge', {
+        la_charge: c!.id, nouveau_libelle: c!.libelle, nouveau_montant: 4_000,
+        nouvelle_periodicite: 'mensuel',
+      })
+    }
+    const nature = async (c: string) => {
+      const { data } = await admin().from('depense').select('nature')
+        .eq('charge_id', c).limit(1).maybeSingle()
+      return data?.nature
+    }
+    expect(await nature(fixe!.id), 'une charge fixe est rendue estimée').toBe('connue')
+    expect(await nature(molle!.id), 'une charge variable est rendue connue').toBe('estimee')
+
+    await admin().from('user_profile').delete().eq('id', tard)
+  })
+
+  it('et `ouvre_la_charge` n’écrit pas chez le voisin', async () => {
+    /* Elle est accordée à `authenticated` et faisait CONFIANCE à son argument
+       de foyer : mesuré, on créait une dépense de 999 € chez le voisin, avec
+       zéro part — l'invariant de somme cassé dans un foyer auquel l'appelant
+       n'a aucun accès. */
+    const { data: sienne } = await admin().from('charge').insert({
+      household_id: voisin.householdId, libelle: 'Chez eux', montant_cents: 99_900,
+      periodicite: 'mensuel', debut: moisCourant(),
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: sienne!.id, user_profile_id: voisin.userId,
+      household_id: voisin.householdId,
+    })
+
+    await moi.client.rpc('ouvre_la_charge', {
+      la_charge: sienne!.id, foyer: voisin.householdId, le_mois: moisCourant(),
+    })
+
+    const { data: chez_eux } = await admin().from('depense').select('id')
+      .eq('charge_id', sienne!.id)
+    expect(chez_eux ?? [], 'on a écrit une dépense chez le voisin').toHaveLength(0)
+  })
+
   it('le voisin ne range pas nos comptes', async () => {
     const { data: cpt } = await admin().from('compte').insert({
       household_id: moi.householdId, nom: 'Le nôtre', genre: 'commun',
