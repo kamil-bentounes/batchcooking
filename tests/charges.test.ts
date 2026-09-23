@@ -1941,29 +1941,42 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
         { le_mois: `${new Date().getFullYear()}-${String(m).padStart(2, '0')}-01` })
     }
 
-    const total = async () => {
-      const { data: mois } = await admin().from('depense').select('montant_cents')
-        .eq('charge_id', c!.id).eq('source', 'modele')
-      const { data: reg } = await admin().from('depense').select('montant_cents')
-        .eq('charge_id', c!.id).not('regularise_annee', 'is', null)
-      const { data: v } = await seul.client.rpc('provisions_a_venir',
-        { la_charge: c!.id, annee: new Date().getFullYear() })
-      return [...(mois ?? []), ...(reg ?? [])]
-        .reduce((s, d) => s + d.montant_cents, 0) + Number(v ?? 0)
+    /* ⚠️ L'ARGENT RÉELLEMENT POSÉ, sans y ajouter `provisions_a_venir`.
+       La première version de ce test additionnait la promesse à la somme : il
+       mesurait donc une intention, pas de l'argent, et restait vert sur un
+       scénario qui en perdait 362,49 € — puisque la garde venait justement de
+       rendre cette promesse intenable. */
+    const pose = async () => {
+      const { data } = await admin().from('depense').select('montant_cents')
+        .eq('charge_id', c!.id)
+      return (data ?? []).reduce((s, d) => s + d.montant_cents, 0)
     }
 
     const { error: eReg } = await seul.client.rpc('regularise_annuel', {
       la_charge: c!.id, annee: new Date().getFullYear(), reel_cents: 145_000,
     })
     expect(eReg, `relevé refusé : ${eReg?.message}`).toBeNull()
-    expect(await total(), 'le relevé ne fait pas tomber l’année juste').toBe(145_000)
+    const apresReleve = await pose()
 
-    /* Le geste qui rouvrait la porte : « en fait, je suis là depuis janvier ». */
+    /* Le geste qui rouvrait la porte : « en fait, je suis là depuis janvier ».
+       Il ne doit RIEN ajouter : les mois révolus de l'année sont clos. */
     await seul.client.from('user_profile')
       .update({ entre_le: janvier }).eq('id', seul.userId)
+    expect(await pose(),
+      'une année dont le relevé est saisi a gagné des mois révolus')
+      .toBe(apresReleve)
 
-    expect(await total(),
-      'une année dont le relevé est saisi a gagné des mois').toBe(145_000)
+    /* ⚠️ Mais les mois À VENIR doivent naître : l'écart les a comptés.
+       Interdire les deux, c'est perdre exactement ce qu'on vient de calculer. */
+    const an = new Date().getFullYear()
+    const prochain = new Date().getMonth() + 2
+    if (prochain <= 12) {
+      await seul.client.rpc('ouvre_le_mois',
+        { le_mois: `${an}-${String(prochain).padStart(2, '0')}-01` })
+      expect(await pose(),
+        'la garde interdit aussi les mois que l’écart avait comptés')
+        .toBeGreaterThan(apresReleve)
+    }
   })
 
   it('reculer sa date d’entrée FAIT NAÎTRE les mois, sans feuilleter', async () => {
@@ -2071,6 +2084,81 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
     expect(await nature(molle!.id), 'une charge variable est rendue connue').toBe('estimee')
 
     await admin().from('user_profile').delete().eq('id', tard)
+  })
+
+  it('corriger une charge n’efface pas les mois d’une année close', async () => {
+    /*
+     * Le pire des défauts de la boucle, et il est né de sa correction :
+     * `corrige_la_charge` effaçait les mois sans regarder si la TRACE de
+     * l'année survivait. Or la trace ne part que si aucune régularisation de
+     * l'année n'est réglée ni confirmée. Quand elle reste, la garde est armée
+     * et les mois effacés ne peuvent PLUS renaître.
+     *
+     * Le geste est entièrement dans l'app : on saisit le relevé, on marque le
+     * mois réglé — `useRegleLeMois` pose `regle_le` sur TOUTES les lignes du
+     * mois, régularisation comprise — puis on corrige une faute de frappe.
+     * Mesuré : 960 € évaporés, année verrouillée à 18 000 centimes pour
+     * toujours.
+     */
+    const an = new Date().getFullYear()
+    const id = await poseCharge({ libelle: 'Année close', cents: 144_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    for (let m = 1; m <= new Date().getMonth() + 1; m++) {
+      await moi.client.rpc('ouvre_le_mois', { le_mois: `${an}-${String(m).padStart(2, '0')}-01` })
+    }
+    await moi.client.rpc('regularise_annuel',
+      { la_charge: id, annee: an, reel_cents: 150_000 })
+
+    /* Le mois en cours est réglé — régularisation comprise, comme le fait
+       l'écran. */
+    await moi.client.from('depense')
+      .update({ regle_le: new Date().toISOString() }).eq('mois', moisCourant())
+
+    const pose = async () => {
+      const { data } = await admin().from('depense').select('montant_cents')
+        .eq('charge_id', id)
+      return (data ?? []).reduce((s, d) => s + d.montant_cents, 0)
+    }
+    const avant = await pose()
+
+    await moi.client.rpc('corrige_la_charge', {
+      la_charge: id, nouveau_libelle: 'Année close, renommée',
+      nouveau_montant: 144_000, nouvelle_periodicite: 'annuel',
+    })
+
+    expect(await pose(),
+      'corriger a effacé les mois d’une année que la garde empêche de renaître')
+      .toBe(avant)
+  })
+
+  it('et `ouvre_la_charge` respecte la garde, elle aussi', async () => {
+    /* La garde vit dans les DEUX ouvreurs. Celle d'`ouvre_la_charge` n'est
+       atteinte que si un mois d'une année close a disparu autrement — par
+       `refige_pour`, qui efface les orphelines — et qu'on tente de le
+       recréer. Rare, mais la fonction est accordée à `authenticated` : sa
+       garde doit tenir seule. */
+    const an = new Date().getFullYear()
+    const id = await poseCharge({ libelle: 'Close et trouée', cents: 120_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: `${an}-01-01` })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: `${an}-02-01` })
+    await moi.client.rpc('regularise_annuel',
+      { la_charge: id, annee: an, reel_cents: 130_000 })
+
+    /* On creuse un trou dans l'année close. */
+    await admin().from('depense').delete()
+      .eq('charge_id', id).eq('mois', `${an}-01-01`)
+    const combien = async () => {
+      const { data } = await admin().from('depense').select('id')
+        .eq('charge_id', id).eq('mois', `${an}-01-01`)
+      return (data ?? []).length
+    }
+    expect(await combien(), 'le trou n’a pas été creusé').toBe(0)
+
+    await moi.client.rpc('ouvre_la_charge',
+      { la_charge: id, foyer: moi.householdId, le_mois: `${an}-01-01` })
+    expect(await combien(),
+      'un mois est né dans une année dont le relevé est saisi').toBe(0)
   })
 
   it('et `ouvre_la_charge` n’écrit pas chez le voisin', async () => {

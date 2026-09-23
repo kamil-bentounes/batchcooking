@@ -12,7 +12,7 @@
  *    troisième mois.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ou, supabase } from '../supabase.ts'
+import { ou, ouNul, supabase } from '../supabase.ts'
 
 export const CLE = {
   mois: (m: string) => ['budget-mois', m] as const,
@@ -690,10 +690,15 @@ export function useProvisionsDe(chargeId: string | undefined, annee: number) {
       /* Le relevé a-t-il déjà été saisi ? Aucun écran ne le disait, et rien
          n'empêchait donc de le ressaisir — sauf l'index unique, qui rendait
          alors une violation de contrainte brute. */
-      /* ⚠️ `ou()`, pas un `data` silencieux. Une lecture en échec rendait
-         `releve` indéfini, donc la garde disparaissait et le bouton se
-         réactivait : le garde-fou tombait du mauvais côté. */
-      const releve = ou(await supabase.from('releve_annuel')
+      /* ⚠️ `ouNul`, PAS `ou`.
+         `ou` lève sur `data === null`, et `maybeSingle()` rend légitimement
+         null quand l'année n'a pas encore été saisie — c'est le seul état où
+         cet écran sert. La requête tombait donc en erreur, `provisions.data`
+         devenait indéfini, et l'écran affichait « 0,00 € mis de côté » et
+         « il manque 1 500,00 € » alors que la base en poserait 60. J'avais
+         remplacé un garde-fou tombé du mauvais côté par un autre tombé de
+         l'autre. Le fichier `supabase.ts` dit pourquoi les deux existent. */
+      const releve = ouNul(await supabase.from('releve_annuel')
         .select('reel_cents, ecart_cents, saisi_le')
         .eq('charge_id', chargeId!).eq('annee', annee).maybeSingle())
       return {
