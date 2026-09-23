@@ -148,8 +148,13 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
                     Son foyer ne la partage plus. Elle n’apporte plus rien aux courses.
                   </span>
                 </span>
+                {/* Le MÊME mot doit avoir la MÊME couleur. « Retirer » était en
+                    groseille ici et en gris sur les charges, pour le même geste
+                    — et c'est ici qu'il est le plus anodin : la recette sort de
+                    la sélection, rien ne se perd. Le rouge est réservé à ce
+                    qui ne se défait pas. */}
                 <button onClick={() => retire.mutate(c.id)} aria-label="Retirer"
-                        className="text-groseille text-[14px] px-2 min-h-11">Retirer</button>
+                        className="text-doux text-[14px] px-2 min-h-11">Retirer</button>
               </li>
             ) : (
               <li key={c.id} className="flex items-center gap-3">
@@ -166,7 +171,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
                   <span className="text-[13px] text-doux">parts</span>
                 </label>
                 <button onClick={() => retire.mutate(c.id)} aria-label="Retirer"
-                        className="text-groseille text-[14px] px-2 min-h-11">Retirer</button>
+                        className="text-doux text-[14px] px-2 min-h-11">Retirer</button>
               </li>
             )))}
           </ul>

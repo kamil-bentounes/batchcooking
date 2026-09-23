@@ -51,8 +51,15 @@ const jour = (decalage: number) => {
  * charge, ni enveloppe, ni épargne. C'est le tout premier soir — le premier
  * écran que deux personnes voient — et il n'était photographié nulle part.
  */
-export async function amorce(o: { budget?: boolean } = {}): Promise<Foyer> {
+export async function amorce(
+  o: { budget?: boolean; cycleEtat?: string } = {},
+): Promise<Foyer> {
   const avecBudget = o.budget !== false
+  /* ⚠️ L'état du cycle se sème À L'INSERT, jamais après.
+     Les transitions sont un graphe à SENS UNIQUE — `semaine` ne mène qu'à
+     `cloture` ou `interrompue` — et un banc qui veut rejouer le cycle entier ne
+     peut donc pas remonter au début. Il le sème au départ. */
+  const cycleEtat = o.cycleEtat ?? 'semaine'
   const email = `fumee-${Date.now()}@test.local`
   const u = ou(await db.auth.admin.createUser({
     email, password: MOT_DE_PASSE, email_confirm: true,
@@ -110,7 +117,7 @@ export async function amorce(o: { budget?: boolean } = {}): Promise<Foyer> {
 
   // ── Un cycle en cours, avec sa liste et ses barquettes ───────────────────
   const cycle = ou(await db.from('cycle').insert({
-    household_id: foyer.id, week_of: jour(0), state: 'semaine', servings_target: 8,
+    household_id: foyer.id, week_of: jour(0), state: cycleEtat, servings_target: 8,
   }).select().single())
   for (const r of recettes) {
     ou(await db.from('cycle_recipe')

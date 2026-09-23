@@ -356,19 +356,27 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
                     : (depenses.data ?? []).length === 0
                     ? 'Aucune charge n’est posée. On commence par là.'
                     : 'Les charges du mois sont payées par quelqu’un d’autre, ou tu n’y participes pas.'} />
+            {/* ⚠️ UN SEUL geste, et c'est le BON dans l'ordre.
+                Il y en avait trois empilés : « Poser les charges » en vert,
+                « D'abord les revenus et les comptes », et « Revenus et comptes »
+                dans la nav du bas. Les deux derniers menaient au même endroit,
+                et le second disait de faire l'inverse du premier. On propose ce
+                qui vient EN PREMIER — sans compte, une charge posée ne produit
+                aucun virement — et l'autre reste accessible par la nav. */}
             {(depenses.data ?? []).length === 0 && (
-              <button onClick={() => va('/charges')}
-                      className="w-full h-[58px] rounded-[18px] bg-herbe text-fond
-                                 text-[17px] font-medium">
-                Poser les charges
-              </button>
-            )}
-            {(depenses.data ?? []).length === 0 && (
-              <button onClick={() => va('/budget-reglages')}
-                      className="mt-3 w-full min-h-11 rounded-[14px] border border-brume
-                                 text-[15px] text-doux">
-                D’abord les revenus et les comptes
-              </button>
+              comptes.length === 0 ? (
+                <button onClick={() => va('/budget-reglages')}
+                        className="w-full h-[58px] rounded-[18px] bg-herbe text-fond
+                                   text-[17px] font-medium">
+                  Commencer par les revenus et les comptes
+                </button>
+              ) : (
+                <button onClick={() => va('/charges')}
+                        className="w-full h-[58px] rounded-[18px] bg-herbe text-fond
+                                   text-[17px] font-medium">
+                  Poser les charges
+                </button>
+              )
             )}
           </>
         ) : (
