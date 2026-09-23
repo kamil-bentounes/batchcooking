@@ -7,7 +7,8 @@
  * s'affiche. Une relecture a trouvé trois défauts dedans.
  */
 import { describe, expect, it } from 'vitest'
-import { virements, euros, eurosRonds, enCentimes, effortMensuel, type Depense, type Compte }
+import { virements, euros, eurosRonds, enCentimes, effortMensuel, diffParticipants,
+         type Depense, type Compte }
   from '../src/lib/donnees/budget.ts'
 
 const MOI = 'moi', ELLE = 'elle'
@@ -157,5 +158,35 @@ describe('effortMensuel', () => {
   it('ne dit rien sans objectif ou sans date : il n’y a rien à tenir', () => {
     expect(effortMensuel(null, '2027-12-01', 0)).toBeNull()
     expect(effortMensuel(120_000, null, 0)).toBeNull()
+  })
+})
+
+describe('diffParticipants', () => {
+  /* L'écran supprimait TOUS les participants d'une charge pour en reposer
+     deux, sa propre ligne comprise. Tant que rien ne surveillait ces
+     suppressions, ça passait ; le jour où un trigger l'a fait, le bouton est
+     mort en silence sur toute charge commune — et la suppression de compte
+     avec lui, même cascade. */
+  it('ne touche que ce qui change', () => {
+    expect(diffParticipants(['a', 'b'], ['a']))
+      .toEqual({ retires: ['b'], ajoutes: [] })
+    expect(diffParticipants(['a'], ['a', 'b']))
+      .toEqual({ retires: [], ajoutes: ['b'] })
+  })
+
+  it('ne retire rien quand rien ne change', () => {
+    // C'est le cas le plus fréquent — et c'était une réécriture complète.
+    expect(diffParticipants(['a', 'b'], ['b', 'a']))
+      .toEqual({ retires: [], ajoutes: [] })
+  })
+
+  it('laisse se retirer soi-même sans emporter l’autre', () => {
+    expect(diffParticipants(['moi', 'elle'], ['elle']))
+      .toEqual({ retires: ['moi'], ajoutes: [] })
+  })
+
+  it('accepte la liste vide : on peut tous se décocher', () => {
+    expect(diffParticipants(['moi', 'elle'], []))
+      .toEqual({ retires: ['moi', 'elle'], ajoutes: [] })
   })
 })

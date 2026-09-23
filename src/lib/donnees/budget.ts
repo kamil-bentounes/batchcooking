@@ -715,15 +715,44 @@ export function cestLHeureDuReleve(mois: string): boolean {
  * le bouton ment. Un mois déjà vécu, lui, ne bouge pas — `refige_le_mois` s'en
  * charge et refuse toute seule.
  */
+/**
+ * Qui retirer, qui ajouter — et personne d'autre.
+ *
+ * Sortie de la mutation pour être éprouvable : le défaut n'était pas dans le
+ * SQL mais ici, dans un `delete` sans discernement.
+ */
+export function diffParticipants(avant: string[], veut: string[]) {
+  const dedans = new Set(veut)
+  return {
+    retires: avant.filter(u => !dedans.has(u)),
+    ajoutes: veut.filter(u => !avant.includes(u)),
+  }
+}
+
 export function useMajParticipants() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (m: { chargeId: string; foyerId: string; participants: string[] }) => {
-      ou(await supabase.from('charge_participant')
-        .delete().eq('charge_id', m.chargeId).select())
-      if (m.participants.length > 0) {
+      /* ⚠️ On ne supprime QUE ceux qu'on retire.
+         Cette fonction effaçait tous les participants pour en reposer deux, sa
+         propre ligne comprise. Elle a survécu tant que rien ne surveillait ces
+         suppressions ; le jour où un trigger l'a fait, le bouton est mort en
+         silence sur toute charge commune. Un écrasement complet est une
+         écriture de plus, pas une simplification : il touche des lignes que
+         personne n'a demandé à changer, et il les touche à chaque clic. */
+      const avant = ou(await supabase.from('charge_participant')
+        .select('user_profile_id').eq('charge_id', m.chargeId))
+        .map(r => r.user_profile_id as string)
+      const { retires, ajoutes } = diffParticipants(avant, m.participants)
+
+      if (retires.length > 0) {
+        ou(await supabase.from('charge_participant')
+          .delete().eq('charge_id', m.chargeId)
+          .in('user_profile_id', retires).select())
+      }
+      if (ajoutes.length > 0) {
         ou(await supabase.from('charge_participant').insert(
-          m.participants.map(u => ({
+          ajoutes.map(u => ({
             charge_id: m.chargeId, user_profile_id: u, household_id: m.foyerId,
           }))).select())
       }

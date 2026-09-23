@@ -1132,6 +1132,58 @@ describe('l’arrondi ne penche d’aucun côté', () => {
   })
 })
 
+describe('se retirer d’une charge commune', () => {
+  /* 0065 l'interdisait par trigger, et cette interdiction a tué les DEUX seuls
+     chemins qui suppriment une ligne de `charge_participant` : le bouton
+     « Changer qui participe » et la cascade de `delete_my_account()`. Aucun
+     test ne l'a vu — celui de suppression de compte a un foyer sans charge
+     commune, et le bouton n'est appelé par aucun test d'intégration.
+
+     Ces deux-là mordent : reposer le trigger les fait rougir. */
+  async function chargeCommune(libelle: string): Promise<string> {
+    const { data: c, error } = await admin().from('charge').insert({
+      household_id: moi.householdId, libelle, montant_cents: 100_000,
+      periodicite: 'mensuel', compte_id: compteCommun, debut: '2026-01-01',
+      commun: true,
+    }).select().single()
+    expect(error, `charge refusée : ${error?.message}`).toBeNull()
+    const { error: eP } = await admin().from('charge_participant').insert(
+      [moi.userId, elle].map(u => ({
+        charge_id: c!.id, user_profile_id: u, household_id: moi.householdId,
+      })))
+    expect(eP, `participants refusés : ${eP?.message}`).toBeNull()
+    return c!.id
+  }
+
+  it('un membre retire SA ligne d’une charge commune', async () => {
+    const id = await chargeCommune('Loyer à quitter')
+    const { data, error } = await moi.client.from('charge_participant')
+      .delete().eq('charge_id', id).eq('user_profile_id', moi.userId).select()
+    expect(error, `retrait refusé : ${error?.message}`).toBeNull()
+    expect(data ?? [], 'la ligne est restée').toHaveLength(1)
+  })
+
+  it('et n’emporte pas celle de l’autre au passage', async () => {
+    /* L'écran supprimait TOUS les participants pour en reposer deux. Une
+       suppression de masse touche des lignes que personne n'a demandé à
+       changer — et c'est elle qui a fait mourir le bouton en silence. */
+    const id = await chargeCommune('Loyer partagé')
+    await moi.client.from('charge_participant')
+      .delete().eq('charge_id', id).eq('user_profile_id', moi.userId)
+    const { data } = await admin().from('charge_participant')
+      .select('user_profile_id').eq('charge_id', id)
+    expect((data ?? []).map(r => r.user_profile_id))
+      .toEqual([elle])
+  })
+
+  it('mais pas celle de quelqu’un d’un autre foyer', async () => {
+    const id = await chargeCommune('Loyer d’à côté')
+    const { data } = await voisin.client.from('charge_participant')
+      .delete().eq('charge_id', id).select()
+    expect(data ?? [], 'le voisin a défait notre charge').toHaveLength(0)
+  })
+})
+
 describe('les gardes que l’audit a trouvées absentes', () => {
   it('une part ne s’attribue pas à quelqu’un d’un autre foyer', async () => {
     /* `depense_part.user_profile_id` n'a plus de clé étrangère — à raison, une
@@ -1182,20 +1234,6 @@ describe('les gardes que l’audit a trouvées absentes', () => {
     expect(mien ?? [], 'on ne peut plus verser à son propre nom').toHaveLength(1)
   })
 
-  it('on ne se retire pas seul d’une charge commune', async () => {
-    const { data: c } = await admin().from('charge').insert({
-      household_id: moi.householdId, libelle: 'Loyer à deux', montant_cents: 100_000,
-      periodicite: 'mensuel', debut: '2026-01-01', commun: true,
-    }).select().single()
-    await admin().from('charge_participant').insert([
-      { charge_id: c!.id, user_profile_id: moi.userId, household_id: moi.householdId },
-      { charge_id: c!.id, user_profile_id: elle, household_id: moi.householdId },
-    ])
-
-    const { error } = await moi.client.from('charge_participant')
-      .delete().eq('charge_id', c!.id).eq('user_profile_id', moi.userId)
-    expect(error, 'on s’est retiré seul d’une charge commune').not.toBeNull()
-  })
 
   it('un compte, une clé de partage : le voisin ne les lit pas', async () => {
     // Deux policies dont l'audit a montré qu'aucun test ne les gardait :

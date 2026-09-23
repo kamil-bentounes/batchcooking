@@ -409,7 +409,9 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
           {' '}une fois tout ramené au mois.
         </p>
 
-        <Erreur de={charges.error ?? archive.error} />
+        {/* `majQui` et `rattache` levaient dans le vide : le bouton ne bougeait
+            pas, aucun message, et on croyait avoir cliqué à côté. */}
+        <Erreur de={charges.error ?? archive.error ?? majQui.error ?? rattache.error} />
         {dit && <p className="mt-3 text-[15px] text-doux">{dit}</p>}
         {charges.isPending ? <Attente /> : vues.length === 0 ? (
           <Vide titre="Rien encore"
@@ -427,7 +429,11 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                     {' · '}
                     {c.participants.length > 1
                       ? c.participants.map(u => prenoms.get(u) ?? '?').join(' et ')
-                      : (prenoms.get(c.participants[0]) ?? 'personne') + ' seul'}
+                      /* Zéro participant est un état atteignable — on peut tous
+                         se décocher — et il se lisait « personne seul ». */
+                      : c.participants.length === 0
+                        ? 'personne n’y participe'
+                        : (prenoms.get(c.participants[0]) ?? '?') + ' seul'}
                     {c.cle === 'moitie' && ' · moitié-moitié'}
                     {c.cle === 'prorata' && ' · au prorata'}
                     {c.variable && ' · variable'}

@@ -79,4 +79,28 @@ describe('RGPD', () => {
     const { data: u } = await a.auth.admin.getUserById(victim.userId)
     expect(u.user, "le compte d'authentification doit avoir disparu").toBeNull()
   })
+
+  it('supprime le compte MÊME avec des charges communes', async () => {
+    /* La fixture ci-dessus n'a aucune charge : un trigger posé sur la
+       suppression de `charge_participant` a tué la suppression de compte
+       pendant une journée entière sans la faire rougir. La cascade
+       `user_profile → charge_participant` retire la ligne du partant de
+       chaque charge commune ; c'est le cas NORMAL, pas un cas limite. */
+    const victim = await makeActor('victime-commune')
+    const { data: c } = await admin().from('charge').insert({
+      household_id: victim.householdId, libelle: 'Loyer', montant_cents: 90_000,
+      periodicite: 'mensuel', debut: '2026-01-01', commun: true,
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: c!.id, user_profile_id: victim.userId,
+      household_id: victim.householdId,
+    })
+
+    const { error } = await victim.client.rpc('delete_my_account')
+    expect(error, `suppression refusée : ${error?.message}`).toBeNull()
+
+    const { data: prof } = await admin().from('user_profile')
+      .select('id').eq('id', victim.userId)
+    expect(prof, 'le profil doit avoir disparu').toHaveLength(0)
+  })
 })
