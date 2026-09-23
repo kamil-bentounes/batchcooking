@@ -14,6 +14,7 @@
  * complexité : on ne peut rien calculer sans les revenus.
  */
 import { useState } from 'react'
+import { useRoute } from '../lib/route.ts'
 import { Surface, Erreur, Attente } from '../ui/coque.tsx'
 import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
@@ -34,6 +35,7 @@ function Section({ titre, aide, children }:
 }
 
 export function BudgetReglages({ userId, retour }: { userId: string; retour: () => void }) {
+  const { va } = useRoute()
   const { data: foyer, isPending } = useFoyer()
   const revenus = useRevenus()
   const comptes = useComptes()
@@ -68,6 +70,23 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
           <span aria-hidden="true">‹</span> Le mois
         </button>
         <h1 className="titre text-[34px] mt-6">Réglages du budget</h1>
+
+        {/* ⚠️ « Inviter » ne vivait QUE dans les réglages de la cuisine.
+            Depuis l'univers budget — celui où l'on découvre qu'on est seul et
+            que le prorata ne sert à rien — aucun écran ne contenait le mot :
+            il fallait repasser par le hub, la cuisine, ses réglages. C'est le
+            geste fondateur du partage, il se pose là où le partage se règle. */}
+        {membres.length < 2 && (
+          <Section titre="Ton foyer"
+                   aide="Un partage à deux commence par quelqu'un d'autre. Tant que tu es
+                         seul, tout t'est attribué et la règle de partage ne change rien.">
+            <button onClick={() => va('/reglages')}
+                    className="mt-4 w-full min-h-[52px] rounded-[14px] bg-herbe text-fond
+                               text-[16px] font-medium">
+              Inviter quelqu’un
+            </button>
+          </Section>
+        )}
 
         <Section titre="Les revenus"
                  aide="Ton net mensuel après impôt. Il ne sert qu'à calculer votre partage,

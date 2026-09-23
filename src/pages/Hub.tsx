@@ -19,7 +19,7 @@
 import { Marque } from '../ui/coque.tsx'
 import { useCycle, GESTE } from '../lib/donnees/cycle.ts'
 import { useBarquettes } from '../lib/donnees/barquettes.ts'
-import { useFoyer } from '../lib/donnees/foyer.ts'
+import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import { useMois, useEnveloppes, useComptes, useRevenus, virements, moisDe, eurosRonds, euros }
   from '../lib/donnees/budget.ts'
 
@@ -56,7 +56,7 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
   const revenuPose = revenus.some(r => r.user_profile_id === userId)
 
   const moi = foyer?.membres.find(m => m.id === userId)
-  const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, m.display_name]))
+  const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, prenomDe(m.display_name)]))
   const aVerser = virements(depenses, userId, comptes, prenoms)
     .reduce((s, v) => s + v.cents, 0)
 

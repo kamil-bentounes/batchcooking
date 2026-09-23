@@ -12,7 +12,7 @@
 import { useState } from 'react'
 import { Surface, Vide, Attente, Erreur } from '../ui/coque.tsx'
 import { Champ } from '../ui/kit.tsx'
-import { useFoyer } from '../lib/donnees/foyer.ts'
+import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
   usePoches, useSolde, usePosePoche, useVerse, usePostes, usePosePoste,
   useRetirePoste, useMajPoche, effortMensuel, euros, enCentimes, type Poche,
@@ -214,7 +214,7 @@ export function Epargne({ userId, retour }: { userId: string; retour: () => void
   const [cle, setCle] = useState<'defaut' | 'moitie' | 'prorata'>('defaut')
 
   const foyerId = foyer?.id ?? ''
-  const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, m.display_name]))
+  const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, prenomDe(m.display_name)]))
   const cObjectif = enCentimes(objectif)
 
   return (

@@ -49,10 +49,16 @@ Deno.serve(async (req) => {
   if (ce) return reply(ce.message, 500)
   if (!consommee) return reply('Invitation déjà utilisée', 409)
 
+  /* ⚠️ PAS de prénom fabriqué depuis l'adresse.
+     `thauba-1790147184836@…` donnait `display_name = 'thauba-1790147184836'`,
+     et l'écran d'arrivée PRÉ-REMPLISSAIT le champ « Ton prénom » avec ça : on
+     valide sans regarder, et c'est ce que l'autre lit sur chaque ligne de
+     charge pendant des mois. Un champ vide se remplit ; un champ faux se
+     garde. */
   const { error: pe } = await admin.from('user_profile').insert({
     id: user.id,
     household_id: inv.household_id,
-    display_name: (user.email ?? 'invité').split('@')[0],
+    display_name: '',
   })
   if (pe) {
     // Le rattachement a échoué : on rend le jeton, sinon l'invitation est

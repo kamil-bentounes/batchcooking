@@ -142,7 +142,7 @@ export function Settings({ va }: { va: (v: string) => void }) {
           <Bouton onClick={inviter} disabled={!invite}>Créer l’invitation</Bouton>
           {lien && (
             <div className="rounded-xl border border-brume bg-surface p-4">
-              <p className="text-doux text-[15px]">Son lien, valable 7 jours :</p>
+              <p className="text-doux text-[15px]">Son lien, valable 30 jours :</p>
               <p className="mt-2 break-all text-[15px] text-encre">{lien}</p>
               <button
                 onClick={() => { navigator.clipboard.writeText(lien); dire('Lien copié.') }}

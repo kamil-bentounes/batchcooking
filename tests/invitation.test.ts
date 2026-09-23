@@ -166,3 +166,24 @@ describe('supprimer son compte', () => {
     expect(prof ?? [], 'le profil a survécu').toHaveLength(0)
   })
 })
+
+describe('la durée du lien', () => {
+  /* Mesuré sur le parcours : le lien expirait au bout de SEPT jours et elle
+     emménageait dans dix. Elle cliquait, obtenait « Invitation expirée », se
+     retrouvait authentifiée sans foyer — et l'écran d'arrivée lui proposait
+     d'en créer un autre. Sept jours est la durée d'un lien de
+     réinitialisation, où la brièveté protège ; une invitation à emménager
+     s'envoie quand on y pense et se lit quand on s'installe. */
+  it('tient trente jours, pas sept', async () => {
+    const hote = await makeActor('duree-invit')
+    const { data: inv, error } = await hote.client.from('invitation')
+      .insert({ household_id: hote.householdId, email: `x-${Date.now()}@fumee.test`,
+                created_by: hote.userId })
+      .select('created_at, expires_at').single()
+    expect(error, `invitation refusée : ${error?.message}`).toBeNull()
+
+    const jours = (new Date(inv!.expires_at).getTime()
+                   - new Date(inv!.created_at).getTime()) / 86_400_000
+    expect(jours, 'le lien n’est pas valable trente jours').toBeCloseTo(30, 1)
+  })
+})

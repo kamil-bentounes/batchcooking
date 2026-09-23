@@ -166,6 +166,25 @@ test.describe('inviter quelqu’un dans le foyer', () => {
     await sonEcran.waitForTimeout(3_000)
     await sonEcran.screenshot({ path: '.shots/invitation/05-elle-est-entree.png' })
     await releve(sonEcran)
+
+    /* Le mot de passe, puis SON écran à elle. On ne fabrique plus de prénom
+       depuis son adresse — `thauba-1790147184836` finissait pré-rempli, validé
+       sans regarder, puis lu sur chaque ligne de charge — et l'application la
+       mène donc au profil avant tout le reste : sa date d'entrée et son revenu
+       décident de tout le partage, et le hub ne lui en parle jamais. */
+    const mdp = sonEcran.getByLabel(/mot de passe/i)
+    if (await mdp.count()) {
+      await mdp.fill(MOT_DE_PASSE)
+      await sonEcran.getByRole('button', { name: /enregistrer/i }).click()
+      await sonEcran.waitForTimeout(2_500)
+    }
+    await expect(sonEcran.getByLabel(/ton prénom/i),
+      'elle n’est pas menée à son profil, où tout se décide')
+      .toBeVisible({ timeout: 15_000 })
+    await expect(sonEcran.getByLabel(/ton prénom/i),
+      'un prénom a été fabriqué depuis son adresse').toHaveValue('')
+    await sonEcran.screenshot({ path: '.shots/invitation/07-son-profil.png' })
+    await releve(sonEcran)
     await elle.close()
 
     const apres = (await db.from('user_profile')

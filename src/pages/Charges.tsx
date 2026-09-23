@@ -16,7 +16,7 @@ import { useState } from 'react'
 import { Dictee } from './Dictee.tsx'
 import { Surface, Vide, Attente, Erreur, Principal, BarreAction } from '../ui/coque.tsx'
 import { Champ } from '../ui/kit.tsx'
-import { useFoyer } from '../lib/donnees/foyer.ts'
+import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
   useCharges, useCatalogue, useAjouteCharge, useArchiveCharge, useComptes,
   useEnveloppesPosees, useRattacheCharge, useMajParticipants, useCorrigeCharge, euros, enCentimes,
@@ -301,7 +301,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
     .find(c => c.genre === 'commun')?.id ?? (comptes.data ?? [])[0]?.id ?? null
 
   const membres = (foyer?.membres ?? []).map(m => ({ id: m.id, display_name: m.display_name }))
-  const prenoms = new Map(membres.map(m => [m.id, m.display_name]))
+  const prenoms = new Map(membres.map(m => [m.id, prenomDe(m.display_name)]))
 
   /* La dictée pose les lignes une à une, par la même mutation que le
      formulaire : elle n'a aucun chemin d'écriture à elle. Ce qu'un modèle

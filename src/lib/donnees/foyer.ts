@@ -111,3 +111,17 @@ export function objectifDe(m: Membre): { kcal: number; proteinG: number } {
     proteinG: Number(m.objectif?.protein_g ?? 0),
   }
 }
+
+/**
+ * Le prénom à AFFICHER.
+ *
+ * Quelqu'un qui vient d'accepter une invitation n'en a pas encore : on ne le
+ * fabrique plus depuis son adresse — `thauba-1790147184836` s'est retrouvé
+ * pré-rempli dans « Ton prénom », validé sans regarder, et lu sur chaque ligne
+ * de charge pendant des mois. Un champ vide se remplit, un champ faux se garde.
+ * En attendant qu'elle le pose, les écrans disent quelque chose de lisible.
+ */
+export function prenomDe(nom: string | null | undefined): string {
+  const n = (nom ?? '').trim()
+  return n === '' ? 'Sans prénom' : n
+}

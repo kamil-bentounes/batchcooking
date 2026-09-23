@@ -15,7 +15,7 @@
 import { useState } from 'react'
 import { Marque, Surface, Vide, Attente, Erreur } from '../ui/coque.tsx'
 import { Champ } from '../ui/kit.tsx'
-import { useFoyer } from '../lib/donnees/foyer.ts'
+import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
   useMois, useEnveloppes, useComptes, useCharges, virements, moisDe, euros,
   enCentimes, useRegularise, useRegulariseAnnuel, useProvisionsDe, useExcedent,
@@ -188,7 +188,7 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
   const { data: comptes = [] } = useComptes()
   const charges = useCharges()
 
-  const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, m.display_name]))
+  const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, prenomDe(m.display_name)]))
   const aFaire = virements(depenses.data ?? [], userId, comptes, prenoms)
   const regleLeMois = useRegleLeMois()
   /* Un mois PASSÉ, et ce qu'on y a déjà réglé. Rattraper une charge annuelle

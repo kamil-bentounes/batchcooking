@@ -33,6 +33,12 @@ import { AccepteAmi } from './pages/AccepteAmi.tsx'
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [foyer, setFoyer] = useState<string | null>(null)
+  /* Quelqu'un qui vient d'accepter une invitation n'a PAS de prénom : on ne le
+     fabrique plus depuis son adresse — `thauba-1790147184836` finissait
+     pré-rempli, validé sans regarder, puis lu sur chaque ligne de charge. Mais
+     un prénom vide ne peut pas rester : c'est ce que l'autre lit. On mène donc
+     au profil, une fois, avant le reste. */
+  const [sansPrenom, setSansPrenom] = useState(false)
   const [mdpPose, setMdpPose] = useState(true)
   const [pret, setPret] = useState(false)
   const { ici, va, retour } = useRoute()
@@ -46,9 +52,10 @@ export default function App() {
       // Tant que le mot de passe n'est pas posé, on n'entre pas : sinon la
       // personne repart sur un lien par mail à chaque connexion.
       const { data: p } = await supabase.from('user_profile')
-        .select('password_set').eq('id', data.session.user.id).maybeSingle()
+        .select('password_set, display_name').eq('id', data.session.user.id).maybeSingle()
       setMdpPose(p ? !!p.password_set : true)
-    } else { setFoyer(null); setMdpPose(true) }
+      setSansPrenom(p ? (p.display_name ?? '').trim() === '' : false)
+    } else { setFoyer(null); setMdpPose(true); setSansPrenom(false) }
     setPret(true)
   }, [])
 
@@ -95,6 +102,12 @@ export default function App() {
   // un lien par mail à chaque connexion. Un retour de réinitialisation remet
   // `password_set` à faux, ce qui range les deux cas sous la même règle.
   if (!mdpPose) return <Password userId={session.user.id} onDone={relire} />
+  /* ⚠️ APRÈS le mot de passe : elle vient d'arriver, sa date d'entrée et son
+     revenu décident de tout le partage, et le hub ne lui en parle jamais. Cet
+     écran-là est le sien ; il la mène ensuite où elle veut. */
+  if (sansPrenom) {
+    return <Profil userId={session.user.id} onFini={relire} retour={relire} />
+  }
 
   const moi = session.user.id
   // Retour à l'accueil plutôt qu'à l'historique du navigateur : un passage
