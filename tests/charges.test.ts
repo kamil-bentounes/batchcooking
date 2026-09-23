@@ -1514,6 +1514,78 @@ describe('corriger une charge', () => {
   })
 })
 
+describe('ranger un compte, une enveloppe, et corriger la date', () => {
+  it('la date de départ se corrige, et les mois hors période s’en vont', async () => {
+    /* C'était le seul champ que l'écran signale comme dangereux — « remonte la
+       date, sinon le relevé annuel tombera d'un coup » — et le seul qu'on ne
+       pouvait plus toucher : « Retirer » échoue sur la clé étrangère dès qu'un
+       mois est ouvert et retombe sur l'archivage. */
+    const { data: c } = await admin().from('charge').insert({
+      household_id: moi.householdId, libelle: 'Foncier décalé',
+      montant_cents: 120_000, periodicite: 'annuel', debut: '2030-01-01',
+      compte_id: compteCommun,
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: c!.id, user_profile_id: moi.userId, household_id: moi.householdId,
+    })
+    for (const m of ['2030-01-01', '2030-02-01', '2030-03-01']) {
+      await moi.client.rpc('ouvre_le_mois', { le_mois: m })
+    }
+
+    const { error } = await moi.client.rpc('corrige_la_charge', {
+      la_charge: c!.id, nouveau_libelle: 'Foncier décalé',
+      nouveau_montant: 120_000, nouvelle_periodicite: 'annuel',
+      nouveau_debut: '2030-03-01',
+    })
+    expect(error, `correction refusée : ${error?.message}`).toBeNull()
+
+    const { data: apres } = await admin().from('depense')
+      .select('mois').eq('charge_id', c!.id).order('mois')
+    expect((apres ?? []).map(d => d.mois),
+      'les mois d’avant la nouvelle date facturent encore').toEqual(['2030-03-01'])
+
+    const { data: ch } = await admin().from('charge')
+      .select('debut, modifie_par').eq('id', c!.id).single()
+    expect(ch!.debut, 'la date n’a pas bougé').toBe('2030-03-01')
+    expect(ch!.modifie_par, 'on ne sait pas qui a touché la ligne').toBe(moi.userId)
+  })
+
+  it('un compte qui porte encore des charges ne se range pas', async () => {
+    const { data: cpt } = await admin().from('compte').insert({
+      household_id: moi.householdId, nom: 'À ranger', genre: 'commun',
+    }).select().single()
+    const { data: ch } = await admin().from('charge').insert({
+      household_id: moi.householdId, libelle: 'Sur ce compte', montant_cents: 1_000,
+      periodicite: 'mensuel', debut: '2031-01-01', compte_id: cpt!.id,
+    }).select().single()
+
+    const { error: eOccupe } = await moi.client.rpc('range_le_compte',
+      { le_compte: cpt!.id, ranger: true })
+    expect(eOccupe, 'un compte encore utilisé a été rangé').not.toBeNull()
+    expect(eOccupe!.message).toMatch(/charge/i)
+
+    /* Détaché, il se range — et il disparaît des comptes proposés. */
+    await admin().from('charge').update({ compte_id: null }).eq('id', ch!.id)
+    const { error } = await moi.client.rpc('range_le_compte',
+      { le_compte: cpt!.id, ranger: true })
+    expect(error, `rangement refusé : ${error?.message}`).toBeNull()
+
+    const { data: vivants } = await moi.client.from('compte')
+      .select('id').is('archive_le', null)
+    expect((vivants ?? []).map(x => x.id),
+      'un compte rangé se propose encore').not.toContain(cpt!.id)
+  })
+
+  it('le voisin ne range pas nos comptes', async () => {
+    const { data: cpt } = await admin().from('compte').insert({
+      household_id: moi.householdId, nom: 'Le nôtre', genre: 'commun',
+    }).select().single()
+    const { error } = await voisin.client.rpc('range_le_compte',
+      { le_compte: cpt!.id, ranger: true })
+    expect(error, 'le voisin a rangé notre compte').not.toBeNull()
+  })
+})
+
 describe('retirer le dernier participant', () => {
   /* Mesuré : on décoche tout le monde, la ligne affiche « personne n'y
      participe », et elle continue de facturer. `refige_pour` ne supprimait les

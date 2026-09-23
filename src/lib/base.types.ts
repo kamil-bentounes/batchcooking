@@ -141,6 +141,8 @@ export type Database = {
           household_id: string
           id: string
           libelle: string
+          modifie_le: string | null
+          modifie_par: string | null
           montant_cents: number
           periodicite: string
           variable: boolean
@@ -158,6 +160,8 @@ export type Database = {
           household_id: string
           id?: string
           libelle: string
+          modifie_le?: string | null
+          modifie_par?: string | null
           montant_cents: number
           periodicite: string
           variable?: boolean
@@ -175,6 +179,8 @@ export type Database = {
           household_id?: string
           id?: string
           libelle?: string
+          modifie_le?: string | null
+          modifie_par?: string | null
           montant_cents?: number
           periodicite?: string
           variable?: boolean
@@ -206,6 +212,13 @@ export type Database = {
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_modifie_par_fkey"
+            columns: ["modifie_par"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
             referencedColumns: ["id"]
           },
         ]
@@ -3018,6 +3031,7 @@ export type Database = {
       corrige_la_charge: {
         Args: {
           la_charge: string
+          nouveau_debut?: string
           nouveau_libelle: string
           nouveau_montant: number
           nouvelle_periodicite: string
@@ -3086,6 +3100,10 @@ export type Database = {
         Args: { montant_cents: number; periodicite: string }
         Returns: number
       }
+      provisions_a_venir: {
+        Args: { annee: number; la_charge: string }
+        Returns: number
+      }
       provisions_de: {
         Args: { annee: number; la_charge: string }
         Returns: {
@@ -3093,6 +3111,14 @@ export type Database = {
           total_cents: number
           user_profile_id: string
         }[]
+      }
+      range_l_enveloppe: {
+        Args: { l_enveloppe: string; ranger: boolean }
+        Returns: undefined
+      }
+      range_le_compte: {
+        Args: { le_compte: string; ranger: boolean }
+        Returns: undefined
       }
       recettes_partagees: { Args: never; Returns: string[] }
       refige_le_mois: { Args: { le_mois: string }; Returns: number }

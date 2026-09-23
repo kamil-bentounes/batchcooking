@@ -60,8 +60,15 @@ function Projet({ poche, foyerId, deja }: {
             ? 'C’est pour ce mois-ci.'
             : <>
                 {euros(effort.parMois)} par mois pendant {effort.mois} mois pour tenir
-                la date. {deja >= (poche.objectif_cents ?? 0)
-                  ? 'C’est déjà atteint.' : 'Vous êtes à l’heure tant que vous versez ça.'}
+                la date. {/* ⚠️ Une CONDITION déguisée en constat.
+                     « Vous êtes à l'heure tant que vous versez ça » s'affichait
+                     sur une poche où rien n'avait encore été versé, et c'est la
+                     seule chose que l'œil retient. On dit où on en est. */}
+                {deja >= (poche.objectif_cents ?? 0)
+                  ? 'C’est déjà atteint.'
+                  : deja === 0
+                    ? 'Rien n’y est encore versé.'
+                    : `Il y a ${euros(deja)} dessus pour l’instant.`}
               </>}
         </p>
       )}

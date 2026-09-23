@@ -295,6 +295,10 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   const [cLibelle, setCLibelle] = useState('')
   const [cMontant, setCMontant] = useState('')
   const [cPeriode, setCPeriode] = useState<'mensuel' | 'trimestriel' | 'annuel'>('mensuel')
+  /* La date de départ. C'était le seul champ que le formulaire d'ajout signale
+     comme dangereux — « remonte la date, sinon le relevé annuel tombera d'un
+     coup » — et le seul qu'on ne pouvait plus toucher ensuite. */
+  const [cDebut, setCDebut] = useState('')
   /* Le compte commun, pour la dictée : elle ne demande pas où débiter, et une
      charge sans compte ne produit pas de virement. */
   const compteParDefaut = (comptes.data ?? [])
@@ -488,6 +492,12 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                     {c.variable && ' · variable'}
                     {!c.compte_id && ' · sans compte'}
                     {c.commun && c.participants.length === 1 && ' · en attente du foyer'}
+                    {/* Le foyer partage tout : chacun peut corriger la ligne de
+                        l'autre, et c'est voulu. Mais une correction silencieuse
+                        sur la ligne de quelqu'un d'autre est une surprise. On ne
+                        verrouille pas, on dit qui. */}
+                    {c.modifie_par && c.modifie_par !== userId
+                      && ` · ✎ ${prenoms.get(c.modifie_par) ?? 'quelqu’un'}`}
                   </span>
                 </span>
                 <div className="mt-1 flex items-center gap-1 flex-wrap -ml-2">
@@ -518,6 +528,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                           setCLibelle(c.libelle)
                           setCMontant(String(c.montant_cents / 100).replace('.', ','))
                           setCPeriode(c.periodicite)
+                          setCDebut(c.debut)
                         }}
                         aria-label={`Corriger ${c.libelle}`}
                         aria-expanded={corrigeOuvert === c.id}
@@ -579,6 +590,20 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                           </button>
                         ))}
                       </div>
+                      {cPeriode !== 'mensuel' && (
+                        <label className="block">
+                          <span className="text-[14px] text-doux">Elle court depuis</span>
+                          <input type="month" value={cDebut.slice(0, 7)}
+                                 aria-label={`Depuis quand court ${c.libelle}`}
+                                 onChange={e => setCDebut(`${e.target.value}-01`)}
+                                 className="mt-1 min-h-11 rounded-[12px] border border-brume
+                                            bg-surface px-3 text-[16px]" />
+                          <span className="mt-1 block text-[14px] text-doux">
+                            C’est elle qui décide sur combien de mois le montant
+                            se répartit.
+                          </span>
+                        </label>
+                      )}
                       {/* Ce que ça touche, dit AVANT : un mois confirmé garde ce
                           qu'on a réellement payé, il ne se réécrit pas. */}
                       <p className="text-[14px] text-doux">
@@ -591,6 +616,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                                 onClick={() => corrige.mutate({
                                   id: c.id, libelle: cLibelle.trim(),
                                   montantCents: cents ?? 0, periodicite: cPeriode,
+                                  debut: cDebut || c.debut,
                                 }, {
                                   onSuccess: n => {
                                     setCorrigeOuvert(null)

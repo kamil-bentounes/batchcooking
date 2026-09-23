@@ -19,7 +19,7 @@ import { Surface, Erreur, Attente } from '../ui/coque.tsx'
 import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
-  useRevenus, usePoseRevenu, useComptes, usePoseCompte, useRegle, usePoseRegle,
+  useRevenus, usePoseRevenu, useComptes, usePoseCompte, useRegle, usePoseRegle, useRangeCompte, useRangeEnveloppe,
   useEnveloppesPosees, usePoseEnveloppe, euros, enCentimes,
 } from '../lib/donnees/budget.ts'
 
@@ -45,6 +45,8 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
   const poseEnveloppe = usePoseEnveloppe()
   const regle = useRegle()
   const poseRegle = usePoseRegle()
+  const rangeCompte = useRangeCompte()
+  const rangeEnveloppe = useRangeEnveloppe()
 
   const [monRevenu, setMonRevenu] = useState('')
   const [nomCompte, setNomCompte] = useState('')
@@ -157,6 +159,8 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
           <Erreur de={regle.error ?? poseRegle.error} />
         </Section>
 
+        <Erreur de={rangeCompte.error ?? rangeEnveloppe.error} />
+
         <Section titre="Les comptes"
                  aide="Un par vrai compte bancaire. Sans eux, l'app ne peut annoncer qu'un
                        montant ; avec eux, elle dit où virer.">
@@ -168,10 +172,20 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
                        className={`py-3.5 flex items-baseline justify-between
                                    ${i < (comptes.data ?? []).length - 1 ? 'border-b border-brume' : ''}`}>
                     <span className="text-[16px]">{c.nom}</span>
-                    <span className="text-[15px] text-doux">
-                      {c.genre === 'commun' ? 'commun'
-                        : c.genre === 'epargne' ? 'épargne'
-                        : membres.find(m => m.id === c.titulaire_id)?.display_name ?? 'perso'}
+                    <span className="flex items-baseline gap-2">
+                      <span className="text-[15px] text-doux">
+                        {c.genre === 'commun' ? 'commun'
+                          : c.genre === 'epargne' ? 'épargne'
+                          : membres.find(m => m.id === c.titulaire_id)?.display_name ?? 'perso'}
+                      </span>
+                      {/* On pouvait ajouter, jamais retirer : « Compte commn »
+                          restait pour toujours, dans la liste ET dans le menu
+                          « où débiter » de chaque charge. On ARCHIVE — il a
+                          débité des mois qu'on relit. */}
+                      <button onClick={() => rangeCompte.mutate({ id: c.id, ranger: true })}
+                              disabled={rangeCompte.isPending}
+                              aria-label={`Ranger ${c.nom}`}
+                              className="min-h-11 px-2 text-[14px] text-doux">Ranger</button>
                     </span>
                   </div>
                 ))}
@@ -215,7 +229,13 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
                        className={`py-3.5 flex items-baseline justify-between
                                    ${i < (enveloppes.data ?? []).length - 1 ? 'border-b border-brume' : ''}`}>
                     <span className="text-[16px]">{e.libelle}</span>
-                    <span className="text-[15px] text-doux">{euros(e.plafond_cents)} / mois</span>
+                    <span className="flex items-baseline gap-2">
+                      <span className="text-[15px] text-doux">{euros(e.plafond_cents)} / mois</span>
+                      <button onClick={() => rangeEnveloppe.mutate({ id: e.id, ranger: true })}
+                              disabled={rangeEnveloppe.isPending}
+                              aria-label={`Ranger ${e.libelle}`}
+                              className="min-h-11 px-2 text-[14px] text-doux">Ranger</button>
+                    </span>
                   </div>
                 ))}
           </Surface>

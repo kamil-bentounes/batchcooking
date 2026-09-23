@@ -63,7 +63,14 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
   /* L'enveloppe la plus TENDUE, pas la première : c'est celle-là qui peut
      changer ce qu'on fait dans l'heure, et c'est le seul critère qui vaille
      pour mériter sa place ici. */
-  const tendue = [...enveloppes].sort((a, b) => a.reste_cents - b.reste_cents)[0]
+  /* ⚠️ La plus TENDUE, pas la plus petite.
+     Le tri portait sur `reste_cents`, qui ignore le prévu : le premier du mois,
+     rien n'est confirmé, tous les restes valent le plafond, et le hub
+     désignait donc la plus petite enveloppe — « Culture, 100 € » — au lieu de
+     celle qui serre. On compare ce qui est ENGAGÉ à son plafond. */
+  const part = (e: { plafond_cents: number; prevu_cents: number; depense_cents: number }) =>
+    e.plafond_cents === 0 ? 0 : Math.max(e.depense_cents, e.prevu_cents) / e.plafond_cents
+  const tendue = [...enveloppes].sort((a, b) => part(b) - part(a))[0]
   const geste = GESTE[cycle?.state ?? 'vide']
 
   return (

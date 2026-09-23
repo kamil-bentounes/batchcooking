@@ -186,7 +186,9 @@ export function useComptes() {
   return useQuery({
     queryKey: CLE.comptes,
     queryFn: async (): Promise<Compte[]> => ou(await supabase.from('compte')
-      .select('id, nom, genre, titulaire_id, matelas_cents')
+      .select('id, nom, genre, titulaire_id, matelas_cents, archive_le')
+      /* Un compte rangé ne se propose plus — ni dans la liste, ni dans le menu
+         « où débiter » de chaque charge. C'est tout l'intérêt de le ranger. */
       .is('archive_le', null).order('nom')) as Compte[],
   })
 }
@@ -219,6 +221,10 @@ export function useEnveloppes(mois: string) {
 
 export type Charge = {
   id: string; libelle: string; montant_cents: number; commun: boolean; debut: string
+  /* Qui a touché la ligne en dernier. Le foyer partage tout — chacun peut
+     corriger la charge de l'autre — mais une correction silencieuse sur la
+     ligne de quelqu'un d'autre est une surprise. On ne verrouille pas, on dit. */
+  modifie_par: string | null
   periodicite: 'mensuel' | 'trimestriel' | 'annuel'
   variable: boolean; cle: 'prorata' | 'moitie' | null
   compte_id: string | null; enveloppe_id: string | null
@@ -231,13 +237,18 @@ export function useCharges() {
     queryKey: CLE.charges,
     queryFn: async (): Promise<Charge[]> => {
       const l = ou(await supabase.from('charge')
-        .select('id, libelle, montant_cents, periodicite, variable, cle, compte_id, enveloppe_id, archive_le, commun, debut, charge_participant(user_profile_id)')
+        .select('id, libelle, montant_cents, periodicite, variable, cle, compte_id, enveloppe_id, archive_le, commun, debut, modifie_par, charge_participant(user_profile_id)')
         .order('libelle'))
       return l.map(c => ({
         ...c,
         periodicite: c.periodicite as Charge['periodicite'],
         cle: c.cle as Charge['cle'],
-        participants: (c.charge_participant ?? []).map(p => p.user_profile_id),
+        /* ⚠️ TRIÉS. Sans ordre, PostgREST rend les participants dans celui de
+           la base : on lisait « Thauba et Kamil » sur une ligne et « Kamil et
+           Thauba » sur la suivante, du même écran. Deux façons d'écrire la même
+           chose se lisent comme deux choses. */
+        participants: (c.charge_participant ?? [])
+          .map(p => p.user_profile_id).sort(),
       }))
     },
   })
@@ -359,10 +370,14 @@ export function useCorrigeCharge() {
     mutationFn: async (m: {
       id: string; libelle: string; montantCents: number
       periodicite: 'mensuel' | 'trimestriel' | 'annuel'
+      /* La date de départ : le seul champ que l'écran signale comme dangereux,
+         et le seul qu'on ne pouvait plus toucher. */
+      debut: string
     }) => {
       const { data, error } = await supabase.rpc('corrige_la_charge', {
         la_charge: m.id, nouveau_libelle: m.libelle,
         nouveau_montant: m.montantCents, nouvelle_periodicite: m.periodicite,
+        nouveau_debut: m.debut,
       })
       if (error) throw new Error(error.message)
       return (data as number) ?? 0
@@ -826,6 +841,36 @@ export function useMajParticipants() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CLE.charges })
       qc.invalidateQueries({ queryKey: ['budget-mois'] })
+      qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
+    },
+  })
+}
+
+/** Archiver un compte, ou le remettre. Il a débité des mois qu'on relit : on
+    le RANGE, on ne le supprime pas. */
+export function useRangeCompte() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (m: { id: string; ranger: boolean }) => {
+      const { error } = await supabase.rpc('range_le_compte',
+        { le_compte: m.id, ranger: m.ranger })
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: CLE.comptes }),
+  })
+}
+
+/** Idem pour une enveloppe. */
+export function useRangeEnveloppe() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (m: { id: string; ranger: boolean }) => {
+      const { error } = await supabase.rpc('range_l_enveloppe',
+        { l_enveloppe: m.id, ranger: m.ranger })
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['enveloppes-posees'] })
       qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
     },
   })
