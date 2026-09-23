@@ -2131,6 +2131,112 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
       .toBe(avant)
   })
 
+  it('changer la DATE d’une charge n’efface pas une année close', async () => {
+    /* La garde n'avait été posée que sur UNE des deux suppressions. Celle-ci —
+       « la charge ne court plus sur ces mois-là » — est déclenchée par le champ
+       « elle court depuis », affiché pour toute charge non mensuelle, donc pour
+       toute taxe foncière. Mesuré : 720 € perdus et l'année figée. */
+    const an = new Date().getFullYear()
+    const id = await poseCharge({ libelle: 'Date et année close', cents: 144_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    for (let m = 1; m <= new Date().getMonth() + 1; m++) {
+      await moi.client.rpc('ouvre_le_mois', { le_mois: `${an}-${String(m).padStart(2, '0')}-01` })
+    }
+    await moi.client.rpc('regularise_annuel',
+      { la_charge: id, annee: an, reel_cents: 150_000 })
+    await moi.client.from('depense')
+      .update({ regle_le: new Date().toISOString() }).eq('mois', moisCourant())
+
+    const pose = async () => {
+      const { data } = await admin().from('depense').select('montant_cents')
+        .eq('charge_id', id)
+      return (data ?? []).reduce((s, d) => s + d.montant_cents, 0)
+    }
+    const avant = await pose()
+
+    /* Le geste : « en fait elle court depuis juillet ». Il est REFUSÉ, pour la
+       même raison que changer le montant : les mois d'avant juillet
+       disparaîtraient d'une année close, et la garde les empêcherait de
+       renaître — 720 € perdus, année figée. */
+    const { error } = await moi.client.rpc('corrige_la_charge', {
+      la_charge: id, nouveau_libelle: 'Date et année close',
+      nouveau_montant: 144_000, nouvelle_periodicite: 'annuel',
+      nouveau_debut: `${an}-07-01`,
+    })
+    expect(error, 'la date d’une année close et réglée a été changée').not.toBeNull()
+    expect(await pose(),
+      'changer la date a effacé les mois d’une année close').toBe(avant)
+  })
+
+  it('changer le MONTANT d’une année close et réglée se refuse, en le disant', async () => {
+    /* Aucune valeur ne serait juste : les mois passés garderaient l'ancien
+       douzième, ceux à venir naîtraient au nouveau — 1 590 € pour une facture
+       de 1 500 € — et le relevé, verrouillé par une régularisation réglée, ne
+       pourrait pas être ressaisi. On refuse plutôt que de mentir. */
+    const an = new Date().getFullYear()
+    const id = await poseCharge({ libelle: 'Montant verrouillé', cents: 144_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    for (let m = 1; m <= new Date().getMonth() + 1; m++) {
+      await moi.client.rpc('ouvre_le_mois', { le_mois: `${an}-${String(m).padStart(2, '0')}-01` })
+    }
+    await moi.client.rpc('regularise_annuel',
+      { la_charge: id, annee: an, reel_cents: 150_000 })
+    await moi.client.from('depense')
+      .update({ regle_le: new Date().toISOString() }).eq('mois', moisCourant())
+
+    const { error } = await moi.client.rpc('corrige_la_charge', {
+      la_charge: id, nouveau_libelle: 'Montant verrouillé',
+      nouveau_montant: 180_000, nouvelle_periodicite: 'annuel',
+    })
+    expect(error, 'le montant d’une année close et réglée a été changé').not.toBeNull()
+    expect(error!.message).toMatch(/déjà réglé/i)
+
+    /* Mais RENOMMER reste permis : le nom ne change aucun chiffre. */
+    const { error: eNom } = await moi.client.rpc('corrige_la_charge', {
+      la_charge: id, nouveau_libelle: 'Renommée quand même',
+      nouveau_montant: 144_000, nouvelle_periodicite: 'annuel',
+    })
+    expect(eNom, `renommer a été refusé : ${eNom?.message}`).toBeNull()
+  })
+
+  it('avancer sa date d’entrée ne vide pas une année close', async () => {
+    /* La troisième porte : `refige_pour` supprime les mois sans participant
+       arrivé, et la garde des ouvreurs les empêche ensuite de renaître.
+       Mesuré : 1 140 € tombaient à 420 €, et reculer la date ne restaurait
+       rien. */
+    const seul = await makeActor('entree-close')
+    const an = new Date().getFullYear()
+    await admin().from('user_profile')
+      .update({ entre_le: `${an}-01-01` }).eq('id', seul.userId)
+
+    const { data: c } = await admin().from('charge').insert({
+      household_id: seul.householdId, libelle: 'Close et vidée',
+      montant_cents: 144_000, periodicite: 'annuel', debut: `${an}-01-01`,
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: c!.id, user_profile_id: seul.userId, household_id: seul.householdId,
+    })
+    for (let m = 1; m <= new Date().getMonth() + 1; m++) {
+      await seul.client.rpc('ouvre_le_mois', { le_mois: `${an}-${String(m).padStart(2, '0')}-01` })
+    }
+    await seul.client.rpc('regularise_annuel',
+      { la_charge: c!.id, annee: an, reel_cents: 150_000 })
+
+    const pose = async () => {
+      const { data } = await admin().from('depense').select('montant_cents')
+        .eq('charge_id', c!.id)
+      return (data ?? []).reduce((s, d) => s + d.montant_cents, 0)
+    }
+    const avant = await pose()
+
+    /* « En fait je suis arrivé en juillet. » */
+    await seul.client.from('user_profile')
+      .update({ entre_le: `${an}-07-01` }).eq('id', seul.userId)
+
+    expect(await pose(),
+      'avancer sa date d’entrée a vidé une année close').toBe(avant)
+  })
+
   it('et `ouvre_la_charge` respecte la garde, elle aussi', async () => {
     /* La garde vit dans les DEUX ouvreurs. Celle d'`ouvre_la_charge` n'est
        atteinte que si un mois d'une année close a disparu autrement — par

@@ -3128,6 +3128,10 @@ export type Database = {
         Args: { p_servings?: number; p_week_of: string }
         Returns: string
       }
+      ouvre_la_charge: {
+        Args: { foyer: string; la_charge: string; le_mois: string }
+        Returns: number
+      }
       ouvre_le_mois: {
         Args: { le_foyer?: string; le_mois: string }
         Returns: number
@@ -3175,6 +3179,7 @@ export type Database = {
         Args: { le_compte: string; ranger: boolean }
         Returns: undefined
       }
+      rattrape_les_mois: { Args: never; Returns: number }
       recettes_partagees: { Args: never; Returns: string[] }
       refige_le_mois: { Args: { le_mois: string }; Returns: number }
       refige_pour: {

@@ -94,6 +94,13 @@ export function useMois(mois: string) {
        *    d'aujourd'hui, définitivement. Regarder l'avenir ne doit rien y
        *    écrire — on le lit, on ne le décide pas. */
       if (mois <= moisDe()) {
+        /* ⚠️ On RATTRAPE tous les mois manquants, pas seulement celui qu'on
+           regarde. Un mois qu'on n'ouvrait pas pendant son propre mois ne
+           s'ouvrait plus jamais — 120,83 € par mois d'absence, jamais mis de
+           côté, sans un mot. Le passé cesse de dépendre du moment où l'on a
+           regardé. */
+        const { error: eR } = await supabase.rpc('rattrape_les_mois')
+        if (eR) throw new Error(eR.message)
         const { error } = await supabase.rpc('ouvre_le_mois', { le_mois: mois })
         if (error) throw new Error(error.message)
       }
