@@ -178,7 +178,16 @@ export async function amorce(o: { budget?: boolean } = {}): Promise<Foyer> {
   const elle = ue.user.id
   ou(await db.from('user_profile').insert({
     id: elle, household_id: foyer.id, display_name: 'Thauba', password_set: true,
+    entre_le: `${new Date().getFullYear()}-01-01`,
   }).select())
+  /* ⚠️ `entre_le` par DÉFAUT vaut aujourd'hui, et aucun mois passé ne
+     contenait alors la moindre dépense : `ouvre_le_mois` exige un participant
+     déjà arrivé. Les captures d'un mois vécu montraient donc un écran vide, et
+     le bouton « ce mois est déjà réglé » n'était jamais atteignable. On habite
+     là depuis janvier, ce qui est aussi le cas ordinaire. */
+  ou(await db.from('user_profile')
+    .update({ entre_le: `${new Date().getFullYear()}-01-01` })
+    .eq('id', u.user.id).select())
 
   if (!avecBudget) {
     return { email, userId: u.user.id, elleId: elle, elleEmail,

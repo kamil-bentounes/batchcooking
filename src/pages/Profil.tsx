@@ -31,15 +31,31 @@ export function Profil({ userId, onFini, retour }: {
   const poseRevenu = usePoseRevenu()
   const moi = foyer?.membres.find(m => m.id === userId)
 
-  const [prenom, setPrenom] = useState(moi?.display_name ?? '')
+  /* ⚠️ `useState` ne lit son argument QU'AU PREMIER RENDU, et `useFoyer` n'a
+     encore rien répondu à ce moment-là. Sur cet écran rechargé à froid — un F5,
+     un lien direct, le retour d'un onglet — le prénom s'affichait VIDE et la
+     date d'entrée AUJOURD'HUI, alors que la base dit autre chose. Enregistrer
+     écrasait alors la vraie date d'arrivée, celle dont dépend tout le partage.
+
+     On garde donc l'état à null tant que la réponse n'est pas là, et ce qui
+     s'affiche vient de la base jusqu'à la première frappe. */
+  const [prenomSaisi, setPrenomSaisi] = useState<string | null>(null)
   const [revenu, setRevenu] = useState('')
-  const [entree, setEntree] = useState(moi?.entre_le ?? aujourdhui())
+  const [entreeSaisie, setEntreeSaisie] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
   const [envoi, setEnvoi] = useState(false)
 
+  const prenom = prenomSaisi ?? moi?.display_name ?? ''
+  const entree = entreeSaisie ?? moi?.entre_le ?? aujourdhui()
+  const setPrenom = setPrenomSaisi
+  const setEntree = setEntreeSaisie
+
   const cents = enCentimes(revenu)
   const autre = (foyer?.membres ?? []).find(m => m.id !== userId)
-  const pret = prenom.trim() !== '' && cents !== null && cents > 0 && entree !== ''
+  /* Et on n'enregistre PAS tant que le foyer n'est pas chargé : sans lui, on
+     ne sait pas ce qu'on est en train de remplacer. */
+  const pret = foyer !== undefined && moi !== undefined
+    && prenom.trim() !== '' && cents !== null && cents > 0 && entree !== ''
 
   async function enregistre() {
     setEnvoi(true); setMsg('')

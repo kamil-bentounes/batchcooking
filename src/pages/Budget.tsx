@@ -19,7 +19,7 @@ import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
   useMois, useEnveloppes, useComptes, useCharges, virements, moisDe, euros,
   enCentimes, useRegularise, useRegulariseAnnuel, useProvisionsDe, useExcedent,
-  cestLHeureDuReleve, JOUR_DU_RELEVE, type Depense,
+  cestLHeureDuReleve, JOUR_DU_RELEVE, useRegleLeMois, type Depense,
 } from '../lib/donnees/budget.ts'
 
 /**
@@ -190,6 +190,13 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
 
   const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, m.display_name]))
   const aFaire = virements(depenses.data ?? [], userId, comptes, prenoms)
+  const regleLeMois = useRegleLeMois()
+  /* Un mois PASSÉ, et ce qu'on y a déjà réglé. Rattraper une charge annuelle
+     depuis janvier ouvre huit mois d'un coup, et chacun réclamait un virement
+     pour un mois qu'on a vécu et payé — sans aucun moyen de le dire. */
+  const moisPasse = mois < moisDe()
+  const lignes = depenses.data ?? []
+  const dejaRegle = lignes.length > 0 && lignes.every(d => d.regle_le)
   /* Tout ce qui n'était qu'une PRÉVISION : les charges variables, et celles
    * que porte une enveloppe — le restaurant à 400 € n'est pas un montant connu,
    * c'est un plafond.
@@ -284,6 +291,20 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
         )}
 
         <Erreur de={depenses.error} />
+        {/* Le geste n'existe QUE sur un mois passé : sur le mois courant, ce qui
+            dit qu'une ligne est payée, c'est la confirmation du 27. */}
+        {moisPasse && lignes.length > 0 && (
+          <div className="mt-3">
+            <button onClick={() => regleLeMois.mutate({ mois, regle: !dejaRegle })}
+                    disabled={regleLeMois.isPending}
+                    className={`min-h-11 px-4 rounded-full text-[14px] transition-colors
+                      ${dejaRegle ? 'bg-herbe text-fond' : 'bg-brume/50 text-encre'}`}>
+              {dejaRegle ? '✓ Ce mois est réglé' : 'Ce mois est déjà réglé'}
+            </button>
+            <Erreur de={regleLeMois.error} />
+          </div>
+        )}
+
         {depenses.isPending ? <Attente /> : aFaire.length === 0 ? (
           <>
             {/* Deux états VIDES distincts, et les confondre accusait à tort :
@@ -291,9 +312,15 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
                 quelqu'un arrivé en cours de mois n'a aucune part. Il voyait donc
                 « aucune charge n'est posée » — avec, juste dessous, les
                 enveloppes pleines de chiffres. */}
-            <Vide titre={(depenses.data ?? []).length === 0
+            {/* Et un TROISIÈME : un mois qu'on a marqué réglé. Sans lui, il
+                s'annonçait « payé par quelqu'un d'autre », ce qui est faux et
+                inquiétant — on vient de dire l'avoir payé soi-même. */}
+            <Vide titre={dejaRegle ? 'Ce mois est soldé'
+                    : (depenses.data ?? []).length === 0
                     ? 'Rien à verser' : 'Rien à verser pour toi'}
-                  texte={(depenses.data ?? []).length === 0
+                  texte={dejaRegle
+                    ? 'Tu l’as marqué comme déjà réglé. Retouche le bouton pour revenir dessus.'
+                    : (depenses.data ?? []).length === 0
                     ? 'Aucune charge n’est posée. On commence par là.'
                     : 'Les charges du mois sont payées par quelqu’un d’autre, ou tu n’y participes pas.'} />
             {(depenses.data ?? []).length === 0 && (

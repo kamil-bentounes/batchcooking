@@ -140,6 +140,17 @@ test.describe('les états du foyer rempli', () => {
     await page.getByRole('button', { name: 'Mois précédent' }).click()
     await page.waitForTimeout(800)
     await prend(page, 'confirme-02-mois-precedent')
+
+    /* Un mois PASSÉ réclamait un virement pour ce qu'on a déjà vécu et payé —
+       rattraper une charge annuelle depuis janvier en ouvre huit d'un coup — et
+       rien ne permettait de le dire. */
+    const deja = page.getByRole('button', { name: /déjà réglé/i })
+    if (await deja.count()) {
+      await deja.click()
+      await expect(page.getByRole('button', { name: /ce mois est réglé/i }))
+        .toBeVisible({ timeout: 15_000 })
+      await prend(page, 'confirme-03-mois-regle')
+    }
   })
 
   test('ce que Thauba voit d’elle-même', async ({ page }) => {

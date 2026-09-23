@@ -19,7 +19,7 @@ const compte = (o: Partial<Compte> & { id: string }): Compte => ({
 })
 const depense = (o: Partial<Depense> & { id: string }): Depense => ({
   charge_id: null, libelle: 'X', montant_cents: 1000, montant_prevu_cents: 1000, nature: 'estimee', source: 'modele',
-  enveloppe_id: null, compte_id: null, parts: [], ...o,
+  regle_le: null, enveloppe_id: null, compte_id: null, parts: [], ...o,
 })
 
 describe('enCentimes', () => {
@@ -188,5 +188,21 @@ describe('diffParticipants', () => {
   it('accepte la liste vide : on peut tous se décocher', () => {
     expect(diffParticipants(['moi', 'elle'], []))
       .toEqual({ retires: ['moi', 'elle'], ajoutes: [] })
+  })
+})
+
+describe('un mois déjà réglé', () => {
+  it('ne se redemande pas', () => {
+    /* Rattraper une charge annuelle depuis janvier ouvre huit mois d'un coup,
+       et chacun réclamait un virement pour un mois déjà vécu et déjà payé. */
+    const commun = compte({ id: 'c1' })
+    const v = virements([
+      depense({ id: 'd1', compte_id: 'c1', regle_le: '2026-02-03T10:00:00Z',
+                parts: [{ user_profile_id: MOI, part_cents: 22_083 }] }),
+      depense({ id: 'd2', compte_id: 'c1',
+                parts: [{ user_profile_id: MOI, part_cents: 5_000 }] }),
+    ], MOI, [commun], prenoms)
+    expect(v, 'un mois réglé réclame encore un virement').toHaveLength(1)
+    expect(v[0].cents).toBe(5_000)
   })
 })

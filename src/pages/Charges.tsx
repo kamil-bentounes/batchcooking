@@ -63,7 +63,15 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
      Sans elle, `qui.length > 1` était impossible et aucune charge inventée ne
      pouvait accueillir le second membre à son arrivée. Le catalogue la
      pré-coche ; une ligne libre demande. */
-  const [commune, setCommune] = useState(depart?.portee === 'commun' || membres.length > 1)
+  /* ⚠️ Une ligne LIBRE ne présume rien, même à deux.
+     `membres.length > 1` suffisait à la cocher : dans un foyer de deux, toute
+     charge inventée entrait d'office dans le budget de l'autre. Le catalogue
+     sait ce que vaut chaque poste et le pré-coche ; « Autre chose », par
+     définition, ne sait rien. */
+  const [commune, setCommune] = useState(
+    depart?.catalogueId
+      ? (depart.portee === 'commun' || membres.length > 1)
+      : depart?.portee === 'commun')
   const [enveloppeId, setEnveloppeId] = useState<string>('')
   /* Le catalogue PRÉ-COCHE : les deux pour l'électricité, une seule personne
      pour un forfait mobile. Ce n'est qu'une suggestion — la case reste ouverte. */
@@ -394,6 +402,16 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
     : c.periodicite === 'annuel' ? Math.round(c.montant_cents / 12)
     : Math.round(c.montant_cents / 3)
   const total = vues.reduce((s, c) => s + parMois(c), 0)
+  /* Ce que le MOIS ne demandera pas de virer : une charge qu'on paie depuis son
+     propre compte ne crée pas de dette — `virements()` l'écarte, à raison.
+     Mais les deux écrans affichaient alors deux totaux différents sans qu'un
+     mot ne l'explique : 2 964 € ici, 2 878 € là, et on cherche l'erreur. */
+  const sienPropre = new Set((comptes.data ?? [])
+    .filter(c => c.genre === 'perso' && c.titulaire_id === userId).map(c => c.id))
+  const avance = vues
+    .filter(c => c.compte_id && sienPropre.has(c.compte_id)
+                 && c.participants.length === 1 && c.participants[0] === userId)
+    .reduce((s, c) => s + parMois(c), 0)
 
   return (
     <main className="min-h-dvh px-6 pt-14 pb-16">
@@ -419,6 +437,12 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
         <p className="mt-4 text-[15px] text-doux">
           {euros(total)} par mois {filtre === 'moi' ? 'pour toi' : 'pour le foyer'},
           {' '}une fois tout ramené au mois.
+          {avance > 0 && (
+            <>
+              {' '}Dont {euros(avance)} que tu paies depuis ton propre compte :
+              le mois ne te demandera pas de te les virer à toi-même.
+            </>
+          )}
         </p>
 
         {/* ⚠️ SEULEMENT l'erreur de CHARGEMENT ici.
@@ -669,8 +693,14 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
               </div>
             </div>
           ))}
+          {/* ⚠️ `portee: 'perso'`, pas `'commun'`.
+              « Autre chose » pré-cochait « Elle se partagera avec le foyer » :
+              une charge inventée pour soi seul entrait donc automatiquement
+              dans le budget de l'autre à son arrivée, sans que rien ne l'ait
+              demandé. Le catalogue, lui, sait ce que chaque poste vaut — c'est
+              la ligne LIBRE, celle dont on ne sait rien, qui doit demander. */}
           <button onClick={() => setAjout({
-                    libelle: '', periode: 'mensuel', portee: 'commun',
+                    libelle: '', periode: 'mensuel', portee: 'perso',
                     precision: null, catalogueId: null })}
                   className="w-full min-h-11 rounded-[14px] border border-dashed border-brume
                              text-[15px] text-doux">

@@ -67,6 +67,10 @@ export type Depense = {
   montant_prevu_cents: number | null
   nature: 'estimee' | 'connue'
   source: string
+  /* Quand ça a été réellement payé. Un mois rattrapé — la taxe foncière posée
+     en septembre ouvre janvier à août — annonçait « à verser » des mois qu'on
+     a déjà vécus et déjà payés, sans aucun moyen de le dire. */
+  regle_le: string | null
   enveloppe_id: string | null
   compte_id: string | null
   parts: { user_profile_id: string; part_cents: number }[]
@@ -97,7 +101,7 @@ export function useMois(mois: string) {
         /* ⚠️ Une seule chaîne LITTÉRALE. PostgREST infère le type du résultat
            depuis le texte du `select` ; une concaténation n'est plus un
            littéral pour TypeScript, et tout retombe sur `GenericStringError`. */
-        .select('id, charge_id, libelle, montant_cents, montant_prevu_cents, nature, source, enveloppe_id, compte_id, depense_part(user_profile_id, part_cents)')
+        .select('id, charge_id, libelle, montant_cents, montant_prevu_cents, nature, source, enveloppe_id, compte_id, regle_le, depense_part(user_profile_id, part_cents)')
         .eq('mois', mois).order('libelle'))
       return lignes.map(l => ({
         ...l,
@@ -105,6 +109,26 @@ export function useMois(mois: string) {
         parts: (l.depense_part ?? []) as Depense['parts'],
       }))
     },
+  })
+}
+
+/**
+ * Marquer un mois comme déjà réglé — et revenir dessus.
+ *
+ * Il manquait, et c'était bloquant à l'arrivée : poser une charge annuelle qui
+ * court depuis janvier ouvre huit mois d'un coup, et chacun réclamait un
+ * virement pour un mois déjà vécu. La seule issue était de ne pas regarder.
+ */
+export function useRegleLeMois() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (m: { mois: string; regle: boolean }) => {
+      const lignes = ou(await supabase.from('depense')
+        .update({ regle_le: m.regle ? new Date().toISOString() : null })
+        .eq('mois', m.mois).select('id'))
+      return lignes.length
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['budget-mois'] }),
   })
 }
 
@@ -123,6 +147,10 @@ export function virements(
 ): Virement[] {
   const parCompte = new Map<string | null, number>()
   for (const d of depenses) {
+    /* Une dépense DÉJÀ RÉGLÉE ne se redemande pas. Sans ça, rattraper une
+       charge annuelle depuis janvier réclamait huit virements pour des mois
+       qu'on a vécus et payés. */
+    if (d.regle_le) continue
     const mienne = d.parts.find(p => p.user_profile_id === moi)
     if (!mienne) continue
     parCompte.set(d.compte_id, (parCompte.get(d.compte_id) ?? 0) + mienne.part_cents)
