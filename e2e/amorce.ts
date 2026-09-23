@@ -24,6 +24,9 @@ export const MOT_DE_PASSE = 'fumee-e2e-12345'
 export type Foyer = {
   email: string
   userId: string
+  /** La SECONDE personne du foyer. Voir l'amorce : sans elle, tout l'objet de
+      l'application n'était photographié nulle part. */
+  elleId: string
   householdId: string
   cycleId: string
 }
@@ -150,10 +153,29 @@ export async function amorce(): Promise<Foyer> {
    * cible de « Retirer ». Un audit qui ne voit rien ne trouve rien, et c'est
    * exactement le « test vide » que ce dépôt s'est déjà reproché.
    */
-  ou(await db.from('revenu').insert({
-    household_id: foyer.id, user_profile_id: u.user.id,
-    net_mensuel_cents: 370_000, valid_from: moisCourant(),
+  /* ⚠️ DEUX personnes, et c'est le point.
+     Toutes les captures étaient celles d'un foyer SOLO : le partage au
+     prorata, « Kamil et Thauba » sur une ligne, « Changer qui participe », ce
+     que chacun doit — le sujet même de l'application — n'était photographié
+     nulle part. Le seul écran à deux qui existait, celui du parcours
+     d'invitation, a montré du premier coup un bouton qui sortait de la carte.
+
+     `user_profile.id` référence `auth.users` : elle a donc un vrai compte, même
+     si aucune capture ne s'y connecte — l'invitation a déjà son parcours. */
+  const ue = ou(await db.auth.admin.createUser({
+    email: `thauba-${Date.now()}@test.local`, password: MOT_DE_PASSE, email_confirm: true,
+  }))
+  const elle = ue.user.id
+  ou(await db.from('user_profile').insert({
+    id: elle, household_id: foyer.id, display_name: 'Thauba', password_set: true,
   }).select())
+
+  for (const [qui, cents] of [[u.user.id, 370_000], [elle, 240_000]] as const) {
+    ou(await db.from('revenu').insert({
+      household_id: foyer.id, user_profile_id: qui,
+      net_mensuel_cents: cents, valid_from: moisCourant(),
+    }).select())
+  }
 
   const compte = ou(await db.from('compte').insert({
     household_id: foyer.id, nom: 'Compte commun', genre: 'commun', matelas_cents: 100_000,
@@ -167,18 +189,32 @@ export async function amorce(): Promise<Foyer> {
      l'audit mesure la teinte ocre du dépassement, qui n'existe nulle part
      ailleurs dans l'application. */
   for (const c of [
-    { libelle: 'Internet', cents: 3_700, env: null as string | null, variable: false },
-    { libelle: 'Électricité', cents: 5_000, env: null, variable: true },
-    { libelle: 'Restaurant', cents: 26_000, env: enveloppe.id, variable: false },
+    { libelle: 'Internet', cents: 3_700, env: null as string | null, variable: false,
+      commun: true, compte: true, periodicite: 'mensuel' },
+    { libelle: 'Électricité', cents: 5_000, env: null, variable: true,
+      commun: true, compte: true, periodicite: 'mensuel' },
+    { libelle: 'Restaurant', cents: 26_000, env: enveloppe.id, variable: false,
+      commun: true, compte: true, periodicite: 'mensuel' },
+    /* Une charge PERSO : sans elle, le filtre « À moi » et la mention
+       « Kamil seul » ne se voyaient sur aucune capture. */
+    { libelle: 'Forfait mobile', cents: 1_990, env: null, variable: false,
+      commun: false, compte: true, periodicite: 'mensuel' },
+    /* Et la pire ligne possible : un libellé long, NON MENSUELLE, et SANS
+       COMPTE — donc trois actions côte à côte. C'est elle qui a montré
+       « Retirer » coupé au bord de la carte, et aucune autre ne le pouvait. */
+    { libelle: 'Charges de copropriété du bâtiment B', cents: 30_000, env: null,
+      variable: false, commun: true, compte: false, periodicite: 'trimestriel' },
   ]) {
     const charge = ou(await db.from('charge').insert({
       household_id: foyer.id, libelle: c.libelle, montant_cents: c.cents,
-      periodicite: 'mensuel', debut: moisCourant(), compte_id: compte.id,
-      enveloppe_id: c.env, variable: c.variable,
+      periodicite: c.periodicite, debut: `${new Date().getFullYear()}-01-01`,
+      compte_id: c.compte ? compte.id : null,
+      enveloppe_id: c.env, variable: c.variable, commun: c.commun,
     }).select().single())
-    ou(await db.from('charge_participant').insert({
-      charge_id: charge.id, user_profile_id: u.user.id, household_id: foyer.id,
-    }).select())
+    ou(await db.from('charge_participant').insert(
+      (c.commun ? [u.user.id, elle] : [u.user.id]).map(qui => ({
+        charge_id: charge.id, user_profile_id: qui, household_id: foyer.id,
+      }))).select())
   }
 
   const poche = ou(await db.from('poche_epargne').insert({
@@ -189,7 +225,8 @@ export async function amorce(): Promise<Foyer> {
     montant_cents: 31_000,
   }).select())
 
-  return { email, userId: u.user.id, householdId: foyer.id, cycleId: cycle.id }
+  return { email, userId: u.user.id, elleId: elle,
+           householdId: foyer.id, cycleId: cycle.id }
 }
 
 /** Le premier du mois courant, en heure LOCALE. */
@@ -235,5 +272,6 @@ export async function remetLeMotDePasse(f: Foyer) {
 
 export async function efface(f: Foyer) {
   await db.auth.admin.deleteUser(f.userId)
+  if (f.elleId) await db.auth.admin.deleteUser(f.elleId)
   await db.from('household').delete().eq('id', f.householdId)
 }

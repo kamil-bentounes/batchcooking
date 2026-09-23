@@ -433,8 +433,17 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
             {vues.map((c, i) => (
               <div key={c.id}
                    className={`py-4 ${i < vues.length - 1 ? 'border-b border-brume' : ''}`}>
-                <div className="flex items-start gap-3">
-                <span className="grow">
+                {/* ⚠️ Le libellé SEUL sur sa ligne, les actions en dessous.
+                    Elles étaient à droite du nom : une ligne portant
+                    « Rattacher », « Corriger » ET « Retirer » dépassait la
+                    largeur du téléphone, et « Retirer » était coupé au bord de
+                    la carte. Les faire déborder l'une après l'autre était pire
+                    — trois boutons empilés, chacun sur sa ligne, et plus aucun
+                    alignement. Une rangée à part tient quel que soit le nombre
+                    d'actions et la longueur du nom, et c'est ce qui se touche
+                    au pouce. Vu sur la seule capture à DEUX personnes. */}
+                <div>
+                <span className="block">
                   <span className="block text-[16px]">{c.libelle}</span>
                   <span className="block mt-0.5 text-[14px] text-doux">
                     {euros(c.montant_cents)} {PERIODE[c.periodicite]}
@@ -453,6 +462,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                     {c.commun && c.participants.length === 1 && ' · en attente du foyer'}
                   </span>
                 </span>
+                <div className="mt-1 flex items-center gap-1 flex-wrap -ml-2">
                 {/* Une charge sans histoire est réellement SUPPRIMÉE, une autre
                     archivée — et les deux disparaissaient de la liste sans un
                     mot. Un pouce qui glisse ne doit pas effacer une ligne. */}
@@ -495,6 +505,16 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                         disabled={archive.isPending}
                         aria-label={`Retirer ${c.libelle}`}
                         className="text-doux min-h-11 px-2 text-[14px]">Retirer</button>
+                {/* Qui participe se change APRÈS COUP. Sans ça, inviter quelqu'un
+                    une fois les charges posées obligeait à toutes les refaire.
+                    Sa place est ici, avec les autres actions de la ligne. */}
+                {membres.length > 1 && quiOuvert !== c.id && (
+                  <button onClick={() => setQuiOuvert(c.id)}
+                          className="min-h-11 px-2 text-[14px] text-herbe">
+                    Changer qui participe
+                  </button>
+                )}
+                </div>
                 </div>
 
                 {corrigeOuvert === c.id && (() => {
@@ -561,10 +581,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                   )
                 })()}
 
-                {/* Qui participe se change APRÈS COUP. Sans ça, inviter quelqu'un
-                    une fois les charges posées obligeait à toutes les refaire. */}
-                {membres.length > 1 && (
-                  quiOuvert === c.id ? (
+                {membres.length > 1 && quiOuvert === c.id && (
                     <div className="mt-2 flex gap-2 flex-wrap items-center">
                       {membres.map(m => {
                         const dedans = c.participants.includes(m.id)
@@ -587,12 +604,6 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                       <button onClick={() => setQuiOuvert(null)}
                               className="min-h-11 px-2 text-[14px] text-doux">Fermé</button>
                     </div>
-                  ) : (
-                    <button onClick={() => setQuiOuvert(c.id)}
-                            className="mt-1 min-h-11 text-[14px] text-herbe">
-                      Changer qui participe
-                    </button>
-                  )
                 )}
               </div>
             ))}

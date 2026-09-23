@@ -437,9 +437,19 @@ test.describe('le budget, du vide jusqu’au virement', () => {
     await expect(page.getByRole('heading', { name: /rien à verser/i })).toHaveCount(0)
     await expect(page.getByText('Commun', { exact: true }).first())
       .toBeVisible({ timeout: 10_000 })
-    await expect(page.getByText(/à répartir/i),
-      'une charge posée par l’écran ne porte pas de compte').toHaveCount(0)
     await capture(page, 'clic-20-budget-rempli')
+
+    /* ⚠️ L'assertion portait sur l'ABSENCE de « à répartir » sur tout l'écran.
+       Elle disait la bonne chose tant que l'amorce n'avait aucune charge sans
+       compte ; depuis qu'elle en sème une exprès — pour photographier les
+       trois actions d'une même ligne — elle accusait la ligne d'à côté. On
+       interroge donc la charge qu'on vient de poser, elle seule : c'est elle
+       que le défaut d'origine laissait sans compte. */
+    await page.goto('/charges')
+    const ligne = page.getByText(/^37,00 € par mois/).first()
+    await expect(ligne).toBeVisible({ timeout: 15_000 })
+    await expect(ligne, 'une charge posée par l’écran ne porte pas de compte')
+      .not.toContainText('sans compte')
 
     expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])
   })
