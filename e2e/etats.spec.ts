@@ -193,6 +193,53 @@ test.describe('les états du foyer rempli', () => {
     await tousLesEcrans(page, 'lui')
   })
 
+  test('les gestes d’une ligne de charge, un par un', async ({ page }) => {
+    /*
+     * Ce sont EXACTEMENT les gestes qui ont cassé aujourd'hui : « Changer qui
+     * participe » ne faisait rien en silence, « Rattacher » levait dans le
+     * vide, et rien ne les touchait. Ils étaient la moitié des branches non
+     * mesurées de cet écran.
+     */
+    test.setTimeout(120_000)
+    await connecte(page, foyer.email)
+    await page.goto('/charges')
+
+    /* ── Retirer quelqu'un d'une charge commune, puis le remettre ───────── */
+    await page.getByRole('button', { name: 'Changer qui participe' }).first().click()
+    const thauba = page.getByRole('checkbox', { name: 'Thauba' }).first()
+    await expect(thauba).toHaveAttribute('aria-checked', 'true')
+    await thauba.click()
+    await expect(thauba).toHaveAttribute('aria-checked', 'false', { timeout: 15_000 })
+    await prend(page, 'gestes-01-qui-participe')
+    await thauba.click()
+    await expect(thauba).toHaveAttribute('aria-checked', 'true', { timeout: 15_000 })
+    await page.getByRole('button', { name: 'Fermer' }).click()
+
+    /* ── Rattacher une charge sans compte ──────────────────────────────── */
+    const rattacher = page.getByRole('button', { name: 'Rattacher' }).first()
+    await expect(rattacher, 'l’amorce n’a plus de charge sans compte').toBeVisible()
+    await rattacher.click()
+    await expect(page.getByRole('button', { name: 'Rattacher' }),
+      'la charge n’a pas reçu de compte').toHaveCount(0, { timeout: 15_000 })
+    await prend(page, 'gestes-02-rattachee')
+
+    /* ── Chercher dans le catalogue ────────────────────────────────────── */
+    await page.getByLabel(/chercher une charge/i).fill('assurance')
+    await page.waitForTimeout(400)
+    await prend(page, 'gestes-03-catalogue-cherche')
+    await page.getByLabel(/chercher une charge/i).fill('zzzz')
+    await page.waitForTimeout(400)
+    await prend(page, 'gestes-04-catalogue-vide')
+    await page.getByLabel(/chercher une charge/i).fill('')
+
+    /* ── Retirer une charge. Elle a une histoire : elle s'ARCHIVE, et l'écran
+           doit le dire — les deux disparaissaient de la liste sans un mot. ── */
+    page.on('dialog', d => d.accept())
+    await page.getByRole('button', { name: 'Retirer Forfait mobile' }).click()
+    await expect(page.getByText(/archivée|supprimée/)).toBeVisible({ timeout: 15_000 })
+    await prend(page, 'gestes-05-charge-retiree')
+  })
+
   test('les libellés et les montants poussés jusqu’aux bornes', async ({ page }) => {
     /* L'amorce sème un libellé de 75 caractères et un montant à sept chiffres,
        les deux au maximum de ce que la base accepte. Une carte, un total et un

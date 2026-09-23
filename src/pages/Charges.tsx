@@ -640,7 +640,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                         )
                       })}
                       <button onClick={() => setQuiOuvert(null)}
-                              className="min-h-11 px-2 text-[14px] text-doux">Fermé</button>
+                              className="min-h-11 px-2 text-[14px] text-doux">Fermer</button>
                     </div>
                 )}
               </div>
