@@ -485,6 +485,59 @@ test.describe('le budget, du vide jusqu’au virement', () => {
 
     expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])
   })
+
+  test('la dictée demande depuis quand court une charge annuelle', async ({ page }) => {
+    /*
+     * Le chemin de la dictée ne passait PAS `debut` : toute charge dictée
+     * partait au mois courant. Mesuré par une revue : une taxe foncière de
+     * 1 450 € dictée en septembre ne provisionne que quatre mois, et sa
+     * régularisation en réclame 1 329 € d'un coup au lieu de 362 €. C'est
+     * exactement ce que D61 dit empêcher, et l'exemple proposé par l'écran
+     * menait droit dedans.
+     *
+     * La réponse du modèle est FEINTE : ce test porte sur l'écran de revue et
+     * sur ce qu'il transmet, pas sur l'extraction — le banc `banc-charges`
+     * s'occupe du modèle.
+     */
+    const erreurs = surveille(page)
+    await page.route('**/functions/v1/charges', route => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        charges: [
+          { libelle: 'Taxe foncière', catalogue_libelle: 'Taxe foncière',
+            montant_cents: 145_000, periodicite: 'annuel', portee: 'commun',
+            variable: false, confiance: 1, remarque: null },
+          { libelle: 'Internet', catalogue_libelle: 'Internet',
+            montant_cents: 3_700, periodicite: 'mensuel', portee: 'commun',
+            variable: false, confiance: 1, remarque: null },
+        ],
+        oublis: ['Assurance habitation'], questions: [], restantes: 19,
+      }),
+    }))
+    await connecte(page)
+
+    await page.goto('/charges')
+    await page.getByRole('button', { name: /dicte tout/i }).click()
+    await page.getByRole('textbox').first().fill('la taxe foncière 1450 et internet 37')
+    await page.getByRole('button', { name: /range|j’écoute|c’est dit/i }).first().click()
+
+    /* La ligne ANNUELLE porte la question, la mensuelle non : demander
+       « depuis quand » pour un abonnement mensuel serait du bruit. */
+    const depuis = page.getByLabel('Depuis quand court Taxe foncière')
+    await expect(depuis).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByLabel('Depuis quand court Internet')).toHaveCount(0)
+    await expect(depuis, 'le défaut n’est pas janvier de l’année en cours')
+      .toHaveValue(`${new Date().getFullYear()}-01`)
+    await capture(page, 'clic-25-dictee-depuis-quand')
+
+    /* L'oubli proposé s'ajoute d'une touche : le signaler sans offrir de le
+       combler faisait porter deux fois le travail. */
+    await page.getByRole('button', { name: '+ Assurance habitation' }).click()
+    await expect(page.getByText('Assurance habitation')).toBeVisible()
+    await capture(page, 'clic-26-dictee-oubli-ajoute')
+
+    expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])
+  })
 })
 
 test.describe('ce qui se voit à la souris', () => {

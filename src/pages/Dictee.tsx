@@ -29,6 +29,11 @@ type Proposee = {
   variable: boolean
   confiance: number
   remarque: string | null
+  /* Depuis quand elle court. Le modèle ne le dit pas — on ne le dicte pas —
+     mais une charge NON MENSUELLE en dépend entièrement : une taxe foncière de
+     1 450 € posée en septembre ne provisionne que quatre mois, et sa
+     régularisation en réclame 1 329 € d'un coup au lieu de 362 €. */
+  debut?: string
 }
 
 type Reponse = {
@@ -93,6 +98,10 @@ export function Dictee({ retour, surRetenues }: {
   const [reglages, setReglages] = useState<Record<number, Partial<Proposee>>>({})
   const ajuste = (i: number, p: Partial<Proposee>) =>
     setReglages(m => ({ ...m, [i]: { ...m[i], ...p } }))
+  /* Le 1er janvier de l'année en cours : une charge annuelle ou trimestrielle
+     couvre l'année civile, pas les mois qui restent. C'est le défaut juste
+     dans la quasi-totalité des cas, et il se change d'un geste. */
+  const DEBUT_PAR_DEFAUT = `${new Date().getFullYear()}-01-01`
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState<unknown>(null)
   const catalogue = useCatalogue()
@@ -151,7 +160,11 @@ export function Dictee({ retour, surRetenues }: {
     ? [...retenues].sort((a, b) => a - b).map(i => {
         const saisi = corriges[i]
         const cents = saisi !== undefined ? enCentimes(saisi) : vue(i).montant_cents
-        return { ...vue(i), montant_cents: cents }
+        const v = vue(i)
+        return {
+          ...v, montant_cents: cents,
+          debut: v.periodicite === 'mensuel' ? undefined : (v.debut ?? DEBUT_PAR_DEFAUT),
+        }
       }).filter(c => c.montant_cents !== null && c.montant_cents > 0)
     : []
 
@@ -220,6 +233,22 @@ export function Dictee({ retour, surRetenues }: {
                                       bg-surface px-3 text-[16px] placeholder:text-doux" />
                     <span className="text-[15px] text-doux">€</span>
                   </span>
+                  {/* Une charge NON MENSUELLE se provisionne au douzième depuis
+                      sa date de départ. Sans elle, une taxe foncière dictée en
+                      septembre ne provisionne que quatre mois, et la
+                      régularisation réclame le reste d'un coup. */}
+                  {vue(i).periodicite !== 'mensuel' && (
+                    <span className="mt-2 flex items-center gap-2 flex-wrap"
+                          onClick={e => e.preventDefault()}>
+                      <span className="text-[14px] text-doux">Elle court depuis</span>
+                      <input type="month"
+                             aria-label={`Depuis quand court ${c.libelle}`}
+                             value={(vue(i).debut ?? DEBUT_PAR_DEFAUT).slice(0, 7)}
+                             onChange={e => ajuste(i, { debut: `${e.target.value}-01` })}
+                             className="min-h-11 rounded-[12px] border border-brume
+                                        bg-surface px-3 text-[15px]" />
+                    </span>
+                  )}
                   {c.remarque && (
                     <span className="block mt-1.5 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
                       {c.remarque}

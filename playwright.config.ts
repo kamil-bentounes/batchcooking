@@ -26,6 +26,19 @@ export default defineConfig({
     // Le format de référence : cette application se tient d'une main, debout,
     // dans une cuisine. Un rendu « desktop » ne dirait rien d'utile.
     ...devices['Pixel 7'],
+    /* Le français, et l'heure de Paris. Sans ça, les widgets natifs du
+       navigateur — `input[type=month]` en tête — s'affichent en anglais dans
+       les captures : on relit « January 2026 » sur un écran français et on ne
+       peut plus juger de ce que la personne verra. */
+    locale: 'fr-FR',
+    timezoneId: 'Europe/Paris',
+    /* ⚠️ `locale` ne porte QUE sur ce que le JavaScript rend : les widgets
+       natifs de Chromium — le sélecteur d'`input[type=month]` — suivent la
+       langue de l'interface du navigateur, et `--lang=fr-FR` ne la change pas
+       dans ce binaire headless. Une capture montrant « January 2026 » sous un
+       « Elle court depuis » français est donc un artefact du banc, pas un
+       défaut de l'écran : sur un téléphone français, le même champ dit
+       « janvier 2026 ». Ne pas partir en chasse une deuxième fois. */
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },

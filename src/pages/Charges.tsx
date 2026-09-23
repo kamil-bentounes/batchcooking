@@ -332,6 +332,11 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
             enveloppeId: (enveloppes.data ?? []).find(
               e => e.libelle.toLowerCase() === l.libelle.toLowerCase())?.id ?? null,
             foyerId: foyer?.id ?? '',
+            /* Une charge non mensuelle dictée en septembre ne provisionnait que
+               les mois restants, et sa régularisation réclamait l'année entière
+               d'un coup — 1 329 € au lieu de 362 € pour une taxe foncière. La
+               dictée demande désormais depuis quand. */
+            debut: l.debut,
             })
             posees++
           } catch (e) {
