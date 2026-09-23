@@ -1132,6 +1132,181 @@ describe('l’arrondi ne penche d’aucun côté', () => {
   })
 })
 
+describe('les quatre rouges de l’argent (0069)', () => {
+  /* Aucun des quatre n'était retenu par un test : trois revues les ont trouvés
+     à la main, et la suite restait verte en les remettant. */
+
+  it('l’excédent ne favorise pas toujours le même identifiant', async () => {
+    /* `excedent_du_mois` est la CINQUIÈME fonction à départager une égalité, et
+       la seule que 0064 n'a jamais migrée : `order by … , uid` donnait le
+       centime au plus petit uuid, 60 fois sur 60.
+
+       ⚠️ SON PROPRE FOYER, sans un seul revenu. Deux versions de ce test ont
+       passé en présence du défaut : dans le foyer partagé, les revenus changent
+       d'un mois à l'autre, les parts avec, et il n'y a donc AUCUNE égalité à
+       départager — le test mesurait la variation des parts, pas le tirage.
+       Sans revenu, `parts_du_foyer` retombe sur moitié-moitié, et l'égalité est
+       garantie tous les mois. */
+    const seul = await makeActor('excedent')
+    const autre = (await admin().auth.admin.createUser({
+      email: `excedent-2-${Date.now()}@fumee.test`, password: 'x'.repeat(12),
+      email_confirm: true,
+    })).data.user!.id
+    await admin().from('user_profile').insert({
+      id: autre, household_id: seul.householdId, display_name: 'Autre',
+    })
+
+    const gagnants = new Set<string>()
+    for (let n = 0; n < 12; n++) {
+      const { data: c } = await admin().from('charge').insert({
+        household_id: seul.householdId, libelle: `Égalité ${n}`,
+        montant_cents: 9_999, periodicite: 'mensuel', debut: '2027-01-01',
+      }).select().single()
+      await admin().from('charge_participant').insert(
+        [seul.userId, autre].map(u => ({
+          charge_id: c!.id, user_profile_id: u, household_id: seul.householdId,
+        })))
+
+      const mois = `2027-${String(n + 1).padStart(2, '0')}-01`
+      await seul.client.rpc('ouvre_le_mois', { le_mois: mois })
+      const { data: d } = await admin().from('depense').select('id')
+        .eq('charge_id', c!.id).eq('mois', mois).single()
+      /* ⚠️ Le PRÉVU est impair et le RÉEL pair, pas l'inverse.
+         `excedent_du_mois` lit les parts APRÈS confirmation : confirmer un
+         montant impair les rend inégales (5000/4999), l'égalité est déjà
+         tranchée en amont, et son propre départage n'est jamais sollicité —
+         une version de ce test passait ainsi en présence du défaut. Un réel
+         PAIR laisse 5000/5000, et l'écart d'un centime doit alors être
+         attribué par elle. */
+      await seul.client.rpc('confirme_la_depense', { la_depense: d!.id, reel_cents: 10_000 })
+
+      const { data: parts } = await admin().from('depense_part')
+        .select('part_cents').eq('depense_id', d!.id)
+      expect(new Set((parts ?? []).map(p => p.part_cents)).size,
+        'les parts ne sont pas égales : il n’y a rien à départager').toBe(1)
+
+      const { data: ex } = await seul.client.rpc('excedent_du_mois', { le_mois: mois })
+      const impair = (ex ?? []).filter(
+        (l: { excedent_cents: number }) => Math.abs(Number(l.excedent_cents)) === 1)
+      expect(impair, 'personne ne prend le centime').toHaveLength(1)
+      gagnants.add(impair[0].user_profile_id)
+    }
+    expect(gagnants.size,
+      'le centime va toujours au même : le départage ne varie pas').toBeGreaterThan(1)
+  })
+
+  it('la régularisation refuse des provisions de signes mêlés', async () => {
+    /* Sans cette garde, les points de base sortaient de [0, 10000] et la seule
+       chose qui arrêtait le calcul était la borne de la colonne — sur un
+       message de contrainte brut. En centimes, le partage sommait juste tout
+       en étant absurde. */
+    const id = await poseCharge({
+      libelle: 'Copro mêlée', cents: 30_000, periodicite: 'trimestriel',
+      participants: [moi.userId, elle],
+    })
+    /* ⚠️ On POSE la ligne, on ne la retouche pas : le contrôle de somme est
+       différé mais chaque appel PostgREST est sa propre transaction, si bien
+       que changer le montant puis les parts échoue au premier des deux — et
+       les données restaient intactes, le test passant pour la mauvaise raison.
+       Les deux parts partent donc dans UN seul insert. */
+    const { data: d, error: eD } = await admin().from('depense').insert({
+      household_id: moi.householdId, charge_id: id, mois: '2027-06-01',
+      libelle: 'Copro mêlée', montant_cents: 1_000, nature: 'connue',
+      source: 'modele',
+    }).select().single()
+    expect(eD, `dépense refusée : ${eD?.message}`).toBeNull()
+    /* Un avoir au milieu de l'année : l'un porte plus que le total, l'autre
+       porte négatif. Les deux sommes font bien le montant. */
+    const { error: eP } = await admin().from('depense_part').insert([
+      { depense_id: d!.id, user_profile_id: moi.userId, household_id: moi.householdId,
+        part_cents: 8_100, part_bps: 8_100 },
+      { depense_id: d!.id, user_profile_id: elle, household_id: moi.householdId,
+        part_cents: -7_100, part_bps: 1_900 },
+    ])
+    expect(eP, `parts refusées : ${eP?.message}`).toBeNull()
+
+    const { error } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2027, reel_cents: 200_000,
+    })
+    expect(error, 'des provisions de signes mêlés sont passées').not.toBeNull()
+    expect(error!.message, 'le message ne dit pas ce qui ne va pas')
+      .toMatch(/sens|négatif/i)
+  })
+
+  it('la régularisation survit au départ d’un membre', async () => {
+    /* `provisions_de` groupe par `depense_part.user_profile_id`, y compris
+       l'identifiant de quelqu'un parti — c'est voulu, une part figée est un
+       fait comptable. Mais réinsérer cet identifiant dans `depense_part` est
+       refusé par la garde de rattachement : la régularisation de l'année
+       devenait impossible dès qu'une personne quittait le foyer. */
+    const partant = (await admin().auth.admin.createUser({
+      email: `partant-${Date.now()}@fumee.test`, password: 'x'.repeat(12),
+      email_confirm: true,
+    })).data.user!.id
+    await admin().from('user_profile').insert({
+      id: partant, household_id: moi.householdId, display_name: 'Partant',
+    })
+
+    const id = await poseCharge({
+      libelle: 'Taxe du partant', cents: 120_000, periodicite: 'annuel',
+      participants: [moi.userId, partant],
+    })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-08-01' })
+    await admin().auth.admin.deleteUser(partant)
+
+    const { data: ligne, error } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2027, reel_cents: 130_000,
+    })
+    expect(error, `régularisation refusée : ${error?.message}`).toBeNull()
+    expect(ligne, 'aucune ligne de régularisation').not.toBeNull()
+
+    /* Et l'écart va à ceux qui restent, pas à celui qui est parti. */
+    const { data: parts } = await admin().from('depense_part')
+      .select('user_profile_id, part_bps').eq('depense_id', ligne as string)
+    expect((parts ?? []).map(p => p.user_profile_id),
+      'le partant reçoit une part qu’on ne peut plus lui demander')
+      .not.toContain(partant)
+    expect((parts ?? []).reduce((s, p) => s + p.part_bps, 0),
+      'les points de base ne font pas 10 000').toBe(10_000)
+  })
+
+  it('une dépense confirmée ne se supprime pas à la main', async () => {
+    /* 0065 a fermé `depense_part` ; la grande porte restait ouverte. Supprimer
+       la DÉPENSE emporte ses parts en cascade, `ouvre_le_mois` la recrée, et
+       le partage figé est réécrit. */
+    const id = await poseCharge({
+      libelle: 'Déjà payée', cents: 7_000, periodicite: 'mensuel',
+      participants: [moi.userId, elle],
+    })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-09-01' })
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('charge_id', id).eq('mois', '2027-09-01').single()
+    await moi.client.rpc('confirme_la_depense', { la_depense: d!.id, reel_cents: 7_500 })
+
+    const { data: reste } = await moi.client.from('depense')
+      .delete().eq('id', d!.id).select()
+    expect(reste ?? [], 'une dépense confirmée a été supprimée').toHaveLength(0)
+
+    const { data: parts } = await admin().from('depense_part')
+      .select('part_cents').eq('depense_id', d!.id)
+    expect(parts ?? [], 'les parts figées ont disparu').toHaveLength(2)
+  })
+
+  it('mais une dépense NI confirmée NI réglée reste supprimable', async () => {
+    // Sinon `corrige_la_charge` et le ménage ordinaire seraient bloqués.
+    const id = await poseCharge({
+      libelle: 'Encore ouverte', cents: 4_000, periodicite: 'mensuel',
+      participants: [moi.userId],
+    })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-10-01' })
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('charge_id', id).eq('mois', '2027-10-01').single()
+    const { data: parti } = await moi.client.from('depense')
+      .delete().eq('id', d!.id).select()
+    expect(parti ?? [], 'un mois ouvert non confirmé ne se supprime plus').toHaveLength(1)
+  })
+})
+
 describe('corriger une charge', () => {
   /* La faute de frappe du premier soir : 11 200 € au lieu de 1 120 €. Avant
      `corrige_la_charge`, elle était DÉFINITIVE — « Retirer » échoue sur la clé
