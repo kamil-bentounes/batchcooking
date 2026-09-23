@@ -1,0 +1,52 @@
+Logement | Loyer | mensuel | commun
+Logement | Mensualité de prêt | mensuel | perso
+Logement | Charges de copropriété | trimestriel | commun
+Logement | Taxe foncière | annuel | commun
+Logement | Assurance habitation | mensuel | commun
+Logement | Électricité | mensuel | commun
+Logement | Gaz | mensuel | commun
+Logement | Eau | trimestriel | commun
+Logement | Internet | mensuel | commun
+Logement | Entretien et petits travaux | mensuel | commun
+Auto | Essence ou recharge | mensuel | perso
+Auto | Assurance auto | mensuel | perso
+Auto | Second conducteur | mensuel | perso
+Auto | Entretien et révision | annuel | perso
+Auto | Contrôle technique | annuel | perso
+Auto | Péages | mensuel | perso
+Auto | Stationnement | mensuel | perso
+Auto | Crédit auto ou LOA | mensuel | perso
+Auto | Carte grise, malus | annuel | perso
+Auto | Transports en commun | mensuel | perso
+Abonnements | Forfait mobile | mensuel | perso
+Abonnements | Streaming vidéo | mensuel | commun
+Abonnements | Musique | mensuel | commun
+Abonnements | Stockage en ligne | mensuel | perso
+Abonnements | Assistant IA | mensuel | perso
+Abonnements | Presse et livres | mensuel | perso
+Abonnements | Jeux vidéo | mensuel | perso
+Abonnements | Salle de sport | mensuel | perso
+Santé | Mutuelle | mensuel | perso
+Santé | Prévoyance | mensuel | perso
+Santé | Consultations non remboursées | mensuel | perso
+Santé | Dentiste et optique | annuel | perso
+Santé | Pharmacie | mensuel | perso
+Crédits | Crédit immobilier — résidence | mensuel | perso
+Crédits | Crédit immobilier — locatif | mensuel | perso
+Crédits | Crédit à la consommation | mensuel | perso
+Crédits | Prêt étudiant | mensuel | perso
+Crédits | Assurance emprunteur | mensuel | perso
+Impôts | Impôt sur le revenu | mensuel | perso
+Impôts | Taxe foncière — locatif | annuel | perso
+Impôts | Frais de comptable | annuel | perso
+Impôts | CFE | annuel | perso
+Vie courante | Courses | mensuel | commun
+Vie courante | Restaurants | mensuel | commun
+Vie courante | Sorties et culture | mensuel | commun
+Vie courante | Droguerie et hygiène | mensuel | commun
+Vie courante | Vêtements | mensuel | perso
+Vie courante | Coiffeur et soins | mensuel | perso
+Vie courante | Cadeaux et anniversaires | annuel | commun
+Vie courante | Animaux | mensuel | commun
+Vie courante | Dons et associations | mensuel | perso
+Vie courante | Frais bancaires | mensuel | perso

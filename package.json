@@ -16,6 +16,7 @@
     "banc": "vite-node scripts/banc.mjs --",
     "banc-vision": "vite-node scripts/banc-vision.mjs --",
     "banc-ticket": "vite-node scripts/banc-ticket.mjs --",
+    "banc-charges": "node --experimental-strip-types scripts/banc-charges.mjs",
     "recalcule": "vite-node scripts/recalcule.mjs --",
     "e2e": "playwright test",
     "deploy": "node scripts/deployer.mjs"

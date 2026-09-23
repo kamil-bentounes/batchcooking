@@ -18,7 +18,7 @@
 import { useState } from 'react'
 import { Surface, Principal, Erreur, BarreAction } from '../ui/coque.tsx'
 import { callFunction } from '../lib/supabase.ts'
-import { enCentimes } from '../lib/donnees/budget.ts'
+import { enCentimes, useCatalogue } from '../lib/donnees/budget.ts'
 
 type Proposee = {
   libelle: string
@@ -95,6 +95,34 @@ export function Dictee({ retour, surRetenues }: {
     setReglages(m => ({ ...m, [i]: { ...m[i], ...p } }))
   const [envoi, setEnvoi] = useState(false)
   const [erreur, setErreur] = useState<unknown>(null)
+  const catalogue = useCatalogue()
+
+  /* Un oubli n'était qu'un mot posé sur l'écran : « Charges de copropriété »,
+     et débrouille-toi. On le rend AJOUTABLE — le rythme et la portée viennent
+     du catalogue, le montant reste à taper. Signaler ce qui manque sans offrir
+     de le combler, c'est faire porter deux fois le travail. */
+  const posteDuCatalogue = new Map(
+    (catalogue.data ?? []).flatMap(s => s.lignes).map(l => [l.libelle, l]))
+
+  function ajouteLOubli(libelle: string) {
+    const l = posteDuCatalogue.get(libelle)
+    setReponse(r => r && {
+      ...r,
+      oublis: r.oublis.filter(o => o !== libelle),
+      charges: [...r.charges, {
+        libelle,
+        catalogue_libelle: l ? libelle : null,
+        montant_cents: null,
+        periodicite: (l?.periode ?? 'mensuel') as Proposee['periodicite'],
+        portee: (l?.portee ?? 'commun') as Proposee['portee'],
+        variable: false, confiance: 0,
+        remarque: 'Ajoutée par toi — il ne manque que le montant.',
+      }],
+    })
+    /* Cochée d'avance : on vient de la demander. Elle ne partira quand même
+       pas sans montant, `pretes` filtre les lignes vides. */
+    setRetenues(s => new Set(s).add(reponse!.charges.length))
+  }
 
   const consigne = CONSIGNE[etape]
 
@@ -221,11 +249,22 @@ export function Dictee({ retour, surRetenues }: {
           {reponse.oublis.length > 0 && (
             <>
               <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
-                Tu n’en as pas parlé
+                Tu n’en as pas parlé — tu en as ?
               </h2>
               <p className="mt-2 text-[15px] text-doux">
-                {reponse.oublis.join(' · ')}
+                Touche celles que tu paies, elles s’ajoutent en haut et il ne
+                restera qu’à mettre le montant.
               </p>
+              <div className="mt-3 flex gap-2 flex-wrap">
+                {reponse.oublis.map(o => (
+                  <button key={o} type="button" onClick={() => ajouteLOubli(o)}
+                          className="px-3.5 min-h-11 inline-flex items-center rounded-full
+                                     border border-brume bg-surface text-[15px]
+                                     transition-colors hover:bg-brume/40">
+                    + {o}
+                  </button>
+                ))}
+              </div>
             </>
           )}
 
