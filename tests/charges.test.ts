@@ -578,7 +578,12 @@ describe('la régularisation annuelle (D62)', () => {
        une partie dépasse la fenêtre n'en matérialisait que le début, posait
        l'écart dessus, et restait figée à 9/12 pour toujours. Une demi-année
        mesurée est pire qu'un refus. */
-    const trop = new Date().getFullYear() + 5
+    /* ⚠️ +6, pas +5. Avec +5, l'année entière rentre dans la fenêtre à partir
+       du 1er décembre — `make_date(Y+5, 12, 1) <= current_date + 5 ans` — et
+       le test devenait rouge tout le mois de décembre, chaque année. Avec +6,
+       janvier dépasse toujours, quel que soit le jour. Un test qui suppose une
+       date est un test qui ment un mois sur douze. */
+    const trop = new Date().getFullYear() + 6
     const id = await poseCharge({ libelle: 'Trop loin', cents: 120_000,
                                   periodicite: 'annuel', participants: [moi.userId] })
     const { error } = await moi.client.rpc('regularise_annuel',
