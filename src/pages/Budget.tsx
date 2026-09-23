@@ -19,7 +19,7 @@ import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
   useMois, useEnveloppes, useComptes, useCharges, virements, moisDe, euros,
   enCentimes, useRegularise, useRegulariseAnnuel, useProvisionsDe, useExcedent,
-  cestLHeureDuReleve, JOUR_DU_RELEVE, useRegleLeMois, type Depense,
+  cestLHeureDuReleve, JOUR_DU_RELEVE, useRegleLeMois, useRevenus, type Depense,
 } from '../lib/donnees/budget.ts'
 
 /**
@@ -199,6 +199,13 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
      depuis janvier ouvre huit mois d'un coup, et chacun réclamait un virement
      pour un mois qu'on a vécu et payé — sans aucun moyen de le dire. */
   const moisPasse = mois < moisDe()
+  /* Qui n'a pas encore dit son revenu. `parts_du_foyer` retombe alors sur
+     moitié-moitié pour TOUT LE FOYER, silencieusement. */
+  const revenus = useRevenus()
+  const avecRevenu = new Set((revenus.data ?? []).map(r => r.user_profile_id))
+  const sansRevenu = (foyer?.membres ?? [])
+    .filter(m => !avecRevenu.has(m.id))
+    .map(m => prenomDe(m.display_name))
   const lignes = depenses.data ?? []
   const dejaRegle = lignes.length > 0 && lignes.every(d => d.regle_le)
   /* Tout ce qui n'était qu'une PRÉVISION : les charges variables, et celles
@@ -295,6 +302,19 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
         )}
 
         <Erreur de={depenses.error} />
+        {/* ⚠️ Le partage bascule en MOITIÉ-MOITIÉ dès qu'un revenu manque, et
+            c'est le seul écran où l'on lit les chiffres qui en découlent.
+            L'avertissement existait dans les réglages, donc là où l'on ne
+            revient jamais — quelqu'un qui arrive sans avoir posé son revenu
+            voyait « au prorata » sur chaque ligne et 50/50 dans les montants. */}
+        {sansRevenu.length > 0 && (
+          <p className="mt-4 text-[15px]" style={{ color: 'var(--color-ocre)' }}>
+            {sansRevenu.length === 1
+              ? `${sansRevenu[0]} n’a pas encore dit son revenu : tant qu’il manque, le partage se fait à parts égales.`
+              : 'Aucun revenu n’est posé : le partage se fait à parts égales.'}
+          </p>
+        )}
+
         {/* Le geste n'existe QUE sur un mois passé : sur le mois courant, ce qui
             dit qu'une ligne est payée, c'est la confirmation du 27. */}
         {moisPasse && lignes.length > 0 && (

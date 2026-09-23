@@ -55,10 +55,27 @@ Deno.serve(async (req) => {
      valide sans regarder, et c'est ce que l'autre lit sur chaque ligne de
      charge pendant des mois. Un champ vide se remplit ; un champ faux se
      garde. */
+  /* ⚠️ `entre_le` au PREMIER DU MOIS PROCHAIN, pas aujourd'hui.
+     La colonne vaut `current_date` par défaut, et `tg_membre_rejoint_les_communes`
+     l'inscrit aussitôt à toutes les charges communes puis refige chaque mois à
+     partir de là — le mois EN COURS compris. Mesuré : au seul clic
+     « Rejoindre le foyer », avant même d'avoir posé un mot de passe, elle se
+     voyait 854 € pour un mois où elle n'habite pas encore là, et le virement de
+     l'hôte se divisait en silence.
+
+     On invite quelqu'un AVANT qu'il arrive : le premier du mois prochain est
+     le défaut conservateur — il ne touche à aucun mois déjà annoncé. Et
+     l'écran de profil, où elle atterrit immédiatement, lui demande la vraie
+     date avec l'avertissement qui va avec. */
+  const arrivee = new Date()
+  arrivee.setUTCDate(1)
+  arrivee.setUTCMonth(arrivee.getUTCMonth() + 1)
+
   const { error: pe } = await admin.from('user_profile').insert({
     id: user.id,
     household_id: inv.household_id,
     display_name: '',
+    entre_le: arrivee.toISOString().slice(0, 10),
   })
   if (pe) {
     // Le rattachement a échoué : on rend le jeton, sinon l'invitation est

@@ -597,7 +597,10 @@ test.describe('ce qui se voit à la souris', () => {
     // et on y restait.
     await connecte(page)
     await page.goto('/profil')
-    await expect(page.getByRole('heading', { name: /deux choses/i }))
+    /* Le titre d'ARRIVÉE ne s'affiche qu'à l'arrivée : quelqu'un dont le revenu
+       est déjà posé lit « Toi, dans le foyer », pas « deux choses, et c'est
+       fini » — on lui annonçait qu'il lui restait du travail. */
+    await expect(page.getByRole('heading', { name: /toi, dans le foyer/i }))
       .toBeVisible({ timeout: 15_000 })
     await page.getByRole('button', { name: /popote/i }).click()
     await expect(page.getByRole('heading', { name: 'Popote' })).toBeVisible({ timeout: 10_000 })

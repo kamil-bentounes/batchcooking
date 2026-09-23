@@ -39,6 +39,8 @@ export default function App() {
      un prénom vide ne peut pas rester : c'est ce que l'autre lit. On mène donc
      au profil, une fois, avant le reste. */
   const [sansPrenom, setSansPrenom] = useState(false)
+  /** Elle a choisi de le faire plus tard : on ne la ramène pas de force. */
+  const [prenomRemis, setPrenomRemis] = useState(false)
   const [mdpPose, setMdpPose] = useState(true)
   const [pret, setPret] = useState(false)
   const { ici, va, retour } = useRoute()
@@ -105,8 +107,15 @@ export default function App() {
   /* ⚠️ APRÈS le mot de passe : elle vient d'arriver, sa date d'entrée et son
      revenu décident de tout le partage, et le hub ne lui en parle jamais. Cet
      écran-là est le sien ; il la mène ensuite où elle veut. */
-  if (sansPrenom) {
-    return <Profil userId={session.user.id} onFini={relire} retour={relire} />
+  if (sansPrenom && !prenomRemis) {
+    /* ⚠️ Une INVITATION à remplir, pas un mur.
+       Avec `retour={relire}`, le bouton « ‹ Popote » recalculait `sansPrenom`,
+       réaffichait le même écran, et il n'y avait plus aucune sortie. Un écran
+       dont on ne sort pas est pire que le champ vide qu'il réclame : les
+       écrans disent « Sans prénom » en attendant, et l'avatar du hub ramène
+       ici quand elle veut. */
+    return <Profil userId={session.user.id} onFini={relire}
+                   retour={() => setPrenomRemis(true)} />
   }
 
   const moi = session.user.id
