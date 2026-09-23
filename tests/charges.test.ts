@@ -523,10 +523,24 @@ describe('la régularisation annuelle (D62)', () => {
     for (let m = 1; m <= 12; m++) {
       await moi.client.rpc('ouvre_le_mois', { le_mois: `2028-${String(m).padStart(2, '0')}-01` })
     }
+    /* ⚠️ Une ligne à ZÉRO, et c'est voulu.
+       Sans elle, `regularise_annee` n'est jamais consommé : la garde « une
+       seule fois par an » ne s'arme pas, rien ne dit que le relevé a été saisi,
+       et on le ressaisit indéfiniment. Une régularisation à zéro est un fait —
+       l'année est tombée juste — pas une absence. */
     const { data: ligne } = await moi.client.rpc('regularise_annuel', {
       la_charge: id, annee: 2028, reel_cents: 120_000,
     })
-    expect(ligne, 'une ligne d’ajustement à zéro a été créée').toBeNull()
+    expect(ligne, 'un relevé juste ne laisse aucune trace').not.toBeNull()
+    const { data: d } = await admin().from('depense')
+      .select('montant_cents').eq('id', ligne as string).single()
+    expect(d!.montant_cents, 'la ligne d’un relevé juste n’est pas à zéro').toBe(0)
+
+    /* Et on ne le ressaisit pas : la garde s'arme. */
+    const { error } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2028, reel_cents: 120_000,
+    })
+    expect(error, 'l’année se régularise deux fois').not.toBeNull()
   })
 
   it('une année EN COURS ne facture pas la charge une fois et demie', async () => {
@@ -558,13 +572,29 @@ describe('la régularisation annuelle (D62)', () => {
     const { data: ligne } = await moi.client.rpc('regularise_annuel', {
       la_charge: id, annee: 2028, reel_cents: faites + Number(aVenir),
     })
-    expect(ligne,
-      'une année en cours provisionnée juste produit quand même un écart').toBeNull()
+    const { data: dJuste } = await admin().from('depense')
+      .select('montant_cents').eq('id', ligne as string).single()
+    expect(dJuste!.montant_cents,
+      'une année en cours provisionnée juste produit quand même un écart').toBe(0)
 
     /* Et si la facture dépasse VRAIMENT, l'écart ne vaut que le dépassement —
-       pas les mois qui restent à provisionner. */
+       pas les mois qui restent à provisionner.
+
+       ⚠️ Sur une AUTRE charge : l'année précédente vient d'être régularisée, et
+       la garde « une seule fois » s'arme désormais même quand l'écart est nul. */
+    const id2 = await poseCharge({ libelle: 'Foncier dépassé', cents: 145_000,
+                                   periodicite: 'annuel', participants: [moi.userId] })
+    for (let m = 1; m <= 9; m++) {
+      await moi.client.rpc('ouvre_le_mois', { le_mois: `2028-${String(m).padStart(2, '0')}-01` })
+    }
+    const { data: f2 } = await admin().from('depense')
+      .select('montant_cents').eq('charge_id', id2).eq('source', 'modele')
+    const { data: v2 } = await moi.client.rpc('provisions_a_venir',
+      { la_charge: id2, annee: 2028 })
+    const attendu = (f2 ?? []).reduce((s, d) => s + d.montant_cents, 0) + Number(v2)
+
     const { data: ligne2 } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2028, reel_cents: faites + Number(aVenir) + 5_000,
+      la_charge: id2, annee: 2028, reel_cents: attendu + 5_000,
     })
     const { data: d2 } = await admin().from('depense')
       .select('montant_cents').eq('id', ligne2 as string).single()
@@ -1692,6 +1722,132 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
     const { error } = await voisin.client.rpc('range_le_compte',
       { le_compte: cpt!.id, ranger: true })
     expect(error, 'le voisin a rangé notre compte').not.toBeNull()
+  })
+})
+
+describe('ce que 0072 corrigeait, et que rien ne retenait', () => {
+  /* Une contre-revue a montré que les TROIS corrections annoncées par 0072
+     survivaient à la suite entière : on pouvait remettre chaque défaut sans
+     qu'un seul test ne rougisse. */
+
+  it('le départage de la régularisation VARIE', async () => {
+    /* `regularise_annuel` départage les égalités par `md5(uid || ligne)`. Rien
+       ne le mesurait — alors que c'est la règle que ce dépôt enfreint le plus
+       souvent, et que `excedent_du_mois` a le sien depuis 0064.
+
+       ⚠️ TROIS membres, sans revenu : à deux, la division exacte suivie d'un
+       arrondi redonne Hamilton par hasard. */
+    const seul = await makeActor('departage-regul')
+    const autres: string[] = []
+    for (const n of [1, 2]) {
+      const u = (await admin().auth.admin.createUser({
+        email: `dr-${n}-${Date.now()}@fumee.test`, password: 'x'.repeat(12),
+        email_confirm: true,
+      })).data.user!.id
+      await admin().from('user_profile').insert({
+        id: u, household_id: seul.householdId, display_name: `Autre ${n}`,
+      })
+      autres.push(u)
+    }
+
+    /* ⚠️ `charge.debut` est borné à cinq ans : on ne peut pas s'étaler sur dix
+       années. On pose donc DEUX charges par année — la garde « une seule fois »
+       porte sur la charge, pas sur l'année. */
+    const gagnants = new Set<string>()
+    for (let n = 0; n < 10; n++) {
+      const annee = 2027 + (n % 5)
+      const { data: c, error: eC } = await admin().from('charge').insert({
+        household_id: seul.householdId, libelle: `Égale ${n}`,
+        /* ⚠️ DIVISIBLE PAR TROIS, et par douze. 108 000 / 12 = 9 000 par mois,
+           / 3 = 3 000 par personne : les portés sont exactement égaux, donc il
+           y a vraiment une égalité à départager. Avec 120 000 les portés
+           divergent de quelques centimes et Hamilton tranche tout seul — le
+           test mesurait alors la division, pas le tirage. */
+        montant_cents: 108_000, periodicite: 'annuel', debut: `${annee}-01-01`,
+        fin: `${annee}-12-31`,
+      }).select().single()
+      expect(eC, `charge refusée : ${eC?.message}`).toBeNull()
+      await admin().from('charge_participant').insert(
+        [seul.userId, ...autres].map(u => ({
+          charge_id: c!.id, user_profile_id: u, household_id: seul.householdId,
+        })))
+      for (let m = 1; m <= 12; m++) {
+        await seul.client.rpc('ouvre_le_mois',
+          { le_mois: `${annee}-${String(m).padStart(2, '0')}-01` })
+      }
+      /* Un centime d'écart sur trois parts égales : il faut bien que
+         quelqu'un le prenne. */
+      const { data: ligne } = await seul.client.rpc('regularise_annuel',
+        { la_charge: c!.id, annee, reel_cents: 108_000 + 1 })
+      if (!ligne) continue
+      const { data: parts } = await admin().from('depense_part')
+        .select('user_profile_id, part_cents').eq('depense_id', ligne as string)
+      const { data: portes } = await seul.client.rpc('provisions_de',
+        { la_charge: c!.id, annee })
+      expect(new Set((portes ?? []).map((v: { porte_cents: number }) => Number(v.porte_cents))).size,
+        'les portés ne sont pas égaux : il n’y a rien à départager').toBe(1)
+
+      const pris = (parts ?? []).filter(p => p.part_cents === 1)
+      expect(pris, 'personne ne prend le centime').toHaveLength(1)
+      gagnants.add(pris[0].user_profile_id)
+    }
+    expect(gagnants.size,
+      'le centime va toujours au même : le départage ne varie pas')
+      .toBeGreaterThan(1)
+  })
+
+  it('l’ordre des gardes distingue un total négatif d’un mélange de signes', async () => {
+    /* « Les provisions ne sont pas positives » était inatteignable : dès qu'un
+       porté était négatif, le message des signes mêlés sortait d'abord. Ce ne
+       sont pas les mêmes choses à corriger. */
+    const id = await poseCharge({
+      libelle: 'Toute négative', cents: 1_000, periodicite: 'mensuel',
+      participants: [moi.userId, elle],
+    })
+    const { data: d } = await admin().from('depense').insert({
+      household_id: moi.householdId, charge_id: id, mois: '2031-03-01',
+      libelle: 'Toute négative', montant_cents: -1_000, nature: 'connue',
+      source: 'modele',
+    }).select().single()
+    await admin().from('depense_part').insert([
+      { depense_id: d!.id, user_profile_id: moi.userId, household_id: moi.householdId,
+        part_cents: -600, part_bps: 6_000 },
+      { depense_id: d!.id, user_profile_id: elle, household_id: moi.householdId,
+        part_cents: -400, part_bps: 4_000 },
+    ])
+
+    const { error } = await moi.client.rpc('regularise_annuel', {
+      la_charge: id, annee: 2031, reel_cents: 5_000,
+    })
+    expect(error, 'des provisions négatives sont passées').not.toBeNull()
+    expect(error!.message, 'le message parle de signes mêlés pour un total négatif')
+      .toMatch(/pas positives/i)
+  })
+
+  it('corriger une charge ÉPARGNE les mois déjà réglés hors période', async () => {
+    /* 0074 l'énonce en toutes lettres — « un mois réglé ou confirmé garde la
+       sienne » — et rien ne le mesurait. */
+    const id = await poseCharge({
+      libelle: 'Décalée réglée', cents: 6_000, periodicite: 'mensuel',
+      participants: [moi.userId],
+    })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2031-01-01' })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2031-02-01' })
+    const { data: d } = await admin().from('depense').select('id')
+      .eq('charge_id', id).eq('mois', '2031-01-01').single()
+    await moi.client.from('depense')
+      .update({ regle_le: new Date().toISOString() }).eq('id', d!.id)
+
+    await moi.client.rpc('corrige_la_charge', {
+      la_charge: id, nouveau_libelle: 'Décalée réglée', nouveau_montant: 6_000,
+      nouvelle_periodicite: 'mensuel', nouveau_debut: '2031-02-01',
+    })
+
+    const { data: restants } = await admin().from('depense')
+      .select('mois').eq('charge_id', id).order('mois')
+    expect((restants ?? []).map(x => x.mois),
+      'un mois déjà réglé a été effacé par la correction')
+      .toContain('2031-01-01')
   })
 })
 
