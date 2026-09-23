@@ -81,7 +81,12 @@ function ReleveAnnuel({ charge, annees }: {
           <Champ label={`Total payé en ${annee} (€)`} type="text" inputMode="decimal"
                  value={reel} onChange={e => setReel(e.target.value)} />
         </div>
-        <button disabled={cents === null || ecart === 0 || regularise.isPending}
+        {/* ⚠️ `ecart === 0` grisait le bouton : un relevé qui tombe JUSTE ne
+            pouvait pas être saisi, alors que c'est précisément celui qu'il faut
+            consigner pour ne pas le ressaisir. Ce qui grise, c'est qu'il l'ait
+            DÉJÀ été. */}
+        <button disabled={cents === null || !!provisions.data?.releve
+                          || regularise.isPending}
                 onClick={() => regularise.mutate(
                   { chargeId: charge.id, annee, reelCents: cents! },
                   { onSuccess: () => setReel('') })}

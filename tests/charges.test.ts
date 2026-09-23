@@ -19,6 +19,12 @@ let voisin: Actor
 let compteCommun: string
 
 /** Le total des parts d'une dépense, en centimes. */
+/** Le premier du mois courant, en heure locale. */
+function moisCourant(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+
 async function sommeDesParts(depenseId: string): Promise<number> {
   const { data } = await admin().from('depense_part')
     .select('part_cents').eq('depense_id', depenseId)
@@ -523,20 +529,23 @@ describe('la régularisation annuelle (D62)', () => {
     for (let m = 1; m <= 12; m++) {
       await moi.client.rpc('ouvre_le_mois', { le_mois: `2028-${String(m).padStart(2, '0')}-01` })
     }
-    /* ⚠️ Une ligne à ZÉRO, et c'est voulu.
-       Sans elle, `regularise_annee` n'est jamais consommé : la garde « une
-       seule fois par an » ne s'arme pas, rien ne dit que le relevé a été saisi,
-       et on le ressaisit indéfiniment. Une régularisation à zéro est un fait —
-       l'année est tombée juste — pas une absence. */
+    /* ⚠️ AUCUNE dépense, mais une TRACE.
+       Un relevé qui tombe juste ne doit rien facturer — donc pas de ligne de
+       dépense. Mais il doit se souvenir d'avoir été saisi, sinon on le
+       ressaisit indéfiniment. 0077 posait une dépense à 0 € pour ça : mauvaise
+       idée, ses points de base 10000/0/0 étaient une proportion fausse que
+       `confirme_la_depense` relit comme poids. C'est une table. */
     const { data: ligne } = await moi.client.rpc('regularise_annuel', {
       la_charge: id, annee: 2028, reel_cents: 120_000,
     })
-    expect(ligne, 'un relevé juste ne laisse aucune trace').not.toBeNull()
-    const { data: d } = await admin().from('depense')
-      .select('montant_cents').eq('id', ligne as string).single()
-    expect(d!.montant_cents, 'la ligne d’un relevé juste n’est pas à zéro').toBe(0)
+    expect(ligne, 'un relevé juste a posé une dépense').toBeNull()
 
-    /* Et on ne le ressaisit pas : la garde s'arme. */
+    const { data: trace } = await moi.client.from('releve_annuel')
+      .select('reel_cents, ecart_cents').eq('charge_id', id).eq('annee', 2028)
+    expect(trace ?? [], 'un relevé juste ne laisse aucune trace').toHaveLength(1)
+    expect(trace![0].ecart_cents, 'l’écart consigné n’est pas nul').toBe(0)
+
+    /* Et on ne le ressaisit pas : la garde s'arme, même sans dépense. */
     const { error } = await moi.client.rpc('regularise_annuel', {
       la_charge: id, annee: 2028, reel_cents: 120_000,
     })
@@ -572,10 +581,11 @@ describe('la régularisation annuelle (D62)', () => {
     const { data: ligne } = await moi.client.rpc('regularise_annuel', {
       la_charge: id, annee: 2028, reel_cents: faites + Number(aVenir),
     })
-    const { data: dJuste } = await admin().from('depense')
-      .select('montant_cents').eq('id', ligne as string).single()
-    expect(dJuste!.montant_cents,
-      'une année en cours provisionnée juste produit quand même un écart').toBe(0)
+    expect(ligne,
+      'une année en cours provisionnée juste produit quand même une dépense').toBeNull()
+    const { data: traceJuste } = await moi.client.from('releve_annuel')
+      .select('ecart_cents').eq('charge_id', id).eq('annee', 2028)
+    expect(traceJuste?.[0]?.ecart_cents, 'le relevé juste n’est pas consigné').toBe(0)
 
     /* Et si la facture dépasse VRAIMENT, l'écart ne vaut que le dépassement —
        pas les mois qui restent à provisionner.
@@ -587,11 +597,11 @@ describe('la régularisation annuelle (D62)', () => {
     for (let m = 1; m <= 9; m++) {
       await moi.client.rpc('ouvre_le_mois', { le_mois: `2028-${String(m).padStart(2, '0')}-01` })
     }
-    const { data: f2 } = await admin().from('depense')
-      .select('montant_cents').eq('charge_id', id2).eq('source', 'modele')
-    const { data: v2 } = await moi.client.rpc('provisions_a_venir',
-      { la_charge: id2, annee: 2028 })
-    const attendu = (f2 ?? []).reduce((s, d) => s + d.montant_cents, 0) + Number(v2)
+    /* ⚠️ Le total attendu se calcule À LA MAIN, pas en appelant la fonction
+       qu'on teste. La version d'avant demandait `provisions_a_venir`, puis
+       vérifiait que la base posait le même écart : quelle que soit la valeur
+       rendue, le test était vert. */
+    const attendu = 12 * Math.round(145_000 / 12)
 
     const { data: ligne2 } = await moi.client.rpc('regularise_annuel', {
       la_charge: id2, annee: 2028, reel_cents: attendu + 5_000,
@@ -619,9 +629,13 @@ describe('la régularisation annuelle (D62)', () => {
       { la_charge: id, annee: 2026 })
     /* Ce qui reste à provisionner, ce sont les mois À VENIR de l'année — pas
        les huit mois révolus que personne n'ouvrira jamais. */
+    /* ⚠️ Une ÉGALITÉ, pas un « au plus » : une fonction qui rendrait zéro
+       passait l'ancienne assertion. Il reste exactement les mois d'octobre à
+       décembre — le mois courant est déjà ouvert. */
+    const moisRestants = 12 - (new Date().getMonth() + 1)
     expect(Number(aVenir),
       'les mois révolus jamais ouverts sont comptés comme à venir')
-      .toBeLessThanOrEqual(4 * 10_000)
+      .toBe(moisRestants * 10_000)
   })
 
   it('ne promet pas des provisions que personne ne fera', async () => {
@@ -659,10 +673,18 @@ describe('la régularisation annuelle (D62)', () => {
     /* `provisions_a_venir` est `security definer` et accordée à
        `authenticated` : sans filtre de foyer, un identifiant deviné rendait le
        montant exact de la charge du voisin. `provisions_de` filtrait déjà. */
+    /* ⚠️ AVEC un participant, sinon le test est vide : le prédicat de
+       participant ajouté par la même migration rend déjà zéro, et il passerait
+       que le filtre de foyer soit là ou non. Toute charge réelle en a un. */
     const { data: sienne } = await admin().from('charge').insert({
       household_id: voisin.householdId, libelle: 'Secrète', montant_cents: 987_660,
       periodicite: 'annuel', debut: '2030-01-01',
     }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: sienne!.id, user_profile_id: voisin.userId,
+      household_id: voisin.householdId,
+    })
+
     const { data: fuite } = await moi.client.rpc('provisions_a_venir',
       { la_charge: sienne!.id, annee: 2030 })
     expect(Number(fuite ?? 0), 'le montant du voisin a fuité').toBe(0)
@@ -1588,7 +1610,12 @@ describe('corriger une charge', () => {
       nouvelle_periodicite: 'mensuel',
     })
     expect(error, `correction refusée : ${error?.message}`).toBeNull()
-    expect(refaits, 'aucun mois refait').toBe(1)
+    /* ⚠️ TOUS les mois depuis le départ, pas seulement ceux qui avaient déjà
+       une ligne. Corriger une charge ouvre désormais ce qu'elle couvre jusqu'à
+       aujourd'hui, comme le fait déjà le fait de la POSER — sinon le passé
+       dépend de ce qu'on a feuilleté, et le relevé annuel se calcule sur un
+       trou. */
+    expect(refaits, 'aucun mois refait').toBeGreaterThanOrEqual(1)
 
     const d = await montantDuMois(id, '2026-02-01')
     expect(d?.montant_cents, 'le mois garde le montant faux').toBe(112_000)
@@ -1621,7 +1648,9 @@ describe('corriger une charge', () => {
       la_charge: id, nouveau_libelle: 'Électricité', nouveau_montant: 9_000,
       nouvelle_periodicite: 'mensuel',
     })
-    expect(refaits, 'un mois confirmé a été refait').toBe(0)
+    /* Le mois CONFIRMÉ n'est pas refait — c'est ce qui compte — mais les mois
+       que la charge couvre et qui n'avaient pas de ligne s'ouvrent. */
+    expect(refaits, 'rien n’a été ouvert').toBeGreaterThan(0)
     expect((await montantDuMois(id, '2026-03-01'))?.montant_cents,
       'ce qu’on a réellement payé a été réécrit').toBe(5_500)
   })
@@ -1713,6 +1742,68 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
       .select('id').is('archive_le', null)
     expect((vivants ?? []).map(x => x.id),
       'un compte rangé se propose encore').not.toContain(cpt!.id)
+  })
+
+  it('un compte qui porte une poche d’épargne ne se range pas', async () => {
+    /* La garde ne regardait que `charge.compte_id` — exactement contre son
+       propre argument. Mesuré : elle archivait un Livret A portant 2 500 € de
+       versements, et la poche continuait de pointer vers un compte filtré hors
+       de tous les écrans. */
+    const { data: cpt } = await admin().from('compte').insert({
+      household_id: moi.householdId, nom: 'Livret à ranger', genre: 'epargne',
+    }).select().single()
+    const { data: poche } = await admin().from('poche_epargne').insert({
+      household_id: moi.householdId, libelle: 'Urgence rangée', genre: 'urgence',
+      compte_id: cpt!.id,
+    }).select().single()
+
+    const { error } = await moi.client.rpc('range_le_compte',
+      { le_compte: cpt!.id, ranger: true })
+    expect(error, 'un compte portant une poche a été rangé').not.toBeNull()
+    expect(error!.message).toMatch(/épargne/i)
+
+    await admin().from('poche_epargne').delete().eq('id', poche!.id)
+    const { error: apres } = await moi.client.rpc('range_le_compte',
+      { le_compte: cpt!.id, ranger: true })
+    expect(apres, `rangement refusé : ${apres?.message}`).toBeNull()
+  })
+
+  it('une enveloppe qui porte les dépenses du mois ne se range pas', async () => {
+    /* Rangée au milieu du mois, elle emportait sa jauge alors que les dépenses
+       continuaient d'y tomber. Et elle n'avait aucun test, nulle part. */
+    const { data: env } = await admin().from('enveloppe').insert({
+      household_id: moi.householdId, libelle: 'Courses à ranger', plafond_cents: 50_000,
+    }).select().single()
+    /* ⚠️ L'enveloppe est attachée AVANT d'ouvrir le mois. `ouvre_le_mois` pose
+       l'enveloppe à la création de la dépense et ne repasse pas dessus
+       (`on conflict do nothing`) : l'attacher après laissait la dépense sans
+       enveloppe, et la garde n'avait rien à voir. */
+    const { data: ch } = await admin().from('charge').insert({
+      household_id: moi.householdId, libelle: 'Dans l’enveloppe',
+      montant_cents: 4_000, periodicite: 'mensuel', debut: moisCourant(),
+      compte_id: compteCommun, enveloppe_id: env!.id,
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: ch!.id, user_profile_id: moi.userId, household_id: moi.householdId,
+    })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: moisCourant() })
+
+    const { data: dans } = await admin().from('depense').select('id')
+      .eq('enveloppe_id', env!.id).eq('mois', moisCourant())
+    expect(dans ?? [], 'aucune dépense dans l’enveloppe : la garde ne verra rien')
+      .toHaveLength(1)
+
+    /* ⚠️ On ARCHIVE la charge d'abord. Sinon c'est la garde des charges qui
+       lève, et celle des dépenses du mois n'est jamais atteinte — la retirer
+       ne changeait rien au test. */
+    await admin().from('charge')
+      .update({ archive_le: new Date().toISOString() }).eq('id', ch!.id)
+
+    const { error } = await moi.client.rpc('range_l_enveloppe',
+      { l_enveloppe: env!.id, ranger: true })
+    expect(error, 'une enveloppe portant les dépenses du mois a été rangée')
+      .not.toBeNull()
+    expect(error!.message).toMatch(/dépense/i)
   })
 
   it('le voisin ne range pas nos comptes', async () => {
@@ -1848,6 +1939,52 @@ describe('ce que 0072 corrigeait, et que rien ne retenait', () => {
     expect((restants ?? []).map(x => x.mois),
       'un mois déjà réglé a été effacé par la correction')
       .toContain('2031-01-01')
+  })
+})
+
+describe('le prédicat de participant, le même partout', () => {
+  it('saisir son revenu n’efface pas le mois qu’on vient d’ouvrir', async () => {
+    /*
+     * `ouvre_le_mois`, `provisions_a_venir` et `parts_du_foyer` écrivent tous
+     * `entre_le <= fin_mois`. `refige_pour` écrivait `<= debut_mois` — le
+     * PREMIER du mois — et supprimait donc comme orphelines les lignes que les
+     * trois autres comptent.
+     *
+     * Le cas le plus ordinaire : quelqu'un dont la date d'entrée vaut
+     * aujourd'hui — le défaut de la colonne, et ce que l'écran de profil
+     * propose — pose une charge, puis saisit son revenu. Le trigger du revenu
+     * appelle `refige_pour`, qui ne le voit pas encore arrivé au 1er du mois,
+     * et EFFACE la dépense. Le membre invité était protégé, le fondateur non.
+     */
+    const seul = await makeActor('predicat-milieu')
+    const aujourdhui = new Date().toISOString().slice(0, 10)
+    await admin().from('user_profile')
+      .update({ entre_le: aujourdhui }).eq('id', seul.userId)
+
+    const { data: c } = await admin().from('charge').insert({
+      household_id: seul.householdId, libelle: 'Milieu de mois',
+      montant_cents: 12_000, periodicite: 'mensuel', debut: aujourdhui.slice(0, 8) + '01',
+    }).select().single()
+    await admin().from('charge_participant').insert({
+      charge_id: c!.id, user_profile_id: seul.userId, household_id: seul.householdId,
+    })
+
+    const mois = aujourdhui.slice(0, 8) + '01'
+    await seul.client.rpc('ouvre_le_mois', { le_mois: mois })
+    const { data: avant } = await admin().from('depense').select('id')
+      .eq('charge_id', c!.id).eq('mois', mois)
+    expect(avant ?? [], 'le mois ne s’est pas ouvert').toHaveLength(1)
+
+    /* Le geste qui déclenchait la perte. */
+    await seul.client.from('revenu').insert({
+      household_id: seul.householdId, user_profile_id: seul.userId,
+      net_mensuel_cents: 250_000, valid_from: mois,
+    })
+
+    const { data: apres } = await admin().from('depense').select('id')
+      .eq('charge_id', c!.id).eq('mois', mois)
+    expect(apres ?? [],
+      'saisir son revenu a effacé la dépense du mois en cours').toHaveLength(1)
   })
 })
 

@@ -48,6 +48,7 @@ describe('RGPD', () => {
       depense: 'depenses', depense_part: 'depense_parts',
       // Budget, lot 3
       enveloppe: 'enveloppes', poche_epargne: 'poches_epargne',
+      releve_annuel: 'releves_annuels',
       poche_poste: 'poche_postes', versement_epargne: 'versements_epargne',
     }
 

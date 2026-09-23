@@ -679,7 +679,14 @@ export function useProvisionsDe(chargeId: string | undefined, annee: number) {
       const { data: aVenir, error } = await supabase.rpc('provisions_a_venir',
         { la_charge: chargeId!, annee })
       if (error) throw new Error(error.message)
+      /* Le relevé a-t-il déjà été saisi ? Aucun écran ne le disait, et rien
+         n'empêchait donc de le ressaisir — sauf l'index unique, qui rendait
+         alors une violation de contrainte brute. */
+      const { data: releve } = await supabase.from('releve_annuel')
+        .select('reel_cents, ecart_cents, saisi_le')
+        .eq('charge_id', chargeId!).eq('annee', annee).maybeSingle()
       return {
+        releve,
         faites: Number(l[0]?.total_cents ?? 0),
         aVenir: Number(aVenir ?? 0),
         total: Number(l[0]?.total_cents ?? 0) + Number(aVenir ?? 0),

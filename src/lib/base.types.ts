@@ -2092,6 +2092,61 @@ export type Database = {
           },
         ]
       }
+      releve_annuel: {
+        Row: {
+          annee: number
+          charge_id: string
+          ecart_cents: number
+          household_id: string
+          id: string
+          reel_cents: number
+          saisi_le: string
+          saisi_par: string | null
+        }
+        Insert: {
+          annee: number
+          charge_id: string
+          ecart_cents: number
+          household_id: string
+          id?: string
+          reel_cents: number
+          saisi_le?: string
+          saisi_par?: string | null
+        }
+        Update: {
+          annee?: number
+          charge_id?: string
+          ecart_cents?: number
+          household_id?: string
+          id?: string
+          reel_cents?: number
+          saisi_le?: string
+          saisi_par?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "releve_annuel_charge_id_fkey"
+            columns: ["charge_id"]
+            isOneToOne: false
+            referencedRelation: "charge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "releve_annuel_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "releve_annuel_saisi_par_fkey"
+            columns: ["saisi_par"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       revenu: {
         Row: {
           created_at: string
