@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest'
 import { makeActor, makeOrphan, admin, type Actor } from './helpers/db'
 
 let alice: Actor, bob: Actor
@@ -236,6 +236,17 @@ describe('création du premier foyer', () => {
   beforeAll(async () => {
     await admin().from('instance_setting')
       .upsert({ key: 'allow_household_creation', value: { enabled: true } })
+  })
+
+  /* 0070 REFERME la création dès qu'un foyer existe : c'est ce qui empêche
+     quelqu'un arrivé sans son lien d'invitation de se fabriquer un second
+     foyer, et donc un couple de finir avec deux budgets séparés. Ces tests-ci
+     portent sur le garde « déjà rattaché », pas sur ce verrou-là : on rouvre
+     donc avant chacun, sinon le premier d'entre eux referme pour les suivants
+     et ils échoueraient tous sur le mauvais motif. */
+  beforeEach(async () => {
+    await admin().from('instance_setting')
+      .update({ value: { enabled: true } }).eq('key', 'allow_household_creation')
   })
 
   it('un authentifié sans profil peut créer son foyer, une seule fois', async () => {

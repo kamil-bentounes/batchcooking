@@ -33,6 +33,10 @@ async function connecte(page: Page) {
      bougera pas. */
   await expect(page.getByRole('heading', { name: 'Popote' }))
     .toBeVisible({ timeout: 15_000 })
+  /* ⚠️ ICI, avant le premier `page.goto` : une navigation dure remet
+     `window.__coverage__` à zéro. L'écran de connexion — le seul que TOUT le
+     monde voit — était mesuré à 0 % de branches pour cette seule raison. */
+  await releve(page)
 }
 
 /**

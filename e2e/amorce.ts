@@ -302,6 +302,32 @@ export async function remetLeMotDePasse(f: Foyer) {
   if (error) throw error
 }
 
+/**
+ * Quelqu'un d'AUTHENTIFIÉ mais SANS FOYER.
+ *
+ * `Onboarding` est le premier écran d'une personne qui arrive sans son lien
+ * d'invitation, et il n'était rendu par aucune capture — zéro branche mesurée.
+ * C'est pourtant là que se joue le choix entre « crée ton foyer » et « on
+ * t'attend », et ce choix décide si un couple se retrouve avec deux budgets
+ * séparés.
+ */
+export async function sansFoyer(): Promise<{ email: string; userId: string }> {
+  /* ⚠️ On remet le verrou dans l'état de la PRODUCTION.
+     0070 referme la création dès qu'un foyer existe, mais les tests unitaires
+     la rouvrent pour éprouver un autre garde, et l'ordre d'exécution décidait
+     donc de ce que cette capture montre. Une image qui dépend du test d'à côté
+     ne prouve rien. */
+  ou(await db.from('instance_setting')
+    .update({ value: { enabled: false } })
+    .eq('key', 'allow_household_creation').select())
+
+  const email = `sans-foyer-${Date.now()}@test.local`
+  const u = ou(await db.auth.admin.createUser({
+    email, password: MOT_DE_PASSE, email_confirm: true,
+  }))
+  return { email, userId: u.user.id }
+}
+
 export async function efface(f: Foyer) {
   await db.auth.admin.deleteUser(f.userId)
   if (f.elleId) await db.auth.admin.deleteUser(f.elleId)

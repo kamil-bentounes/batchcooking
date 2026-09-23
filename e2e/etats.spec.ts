@@ -20,7 +20,7 @@
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { MOT_DE_PASSE, amorce, efface } from './amorce.ts'
+import { MOT_DE_PASSE, amorce, efface, sansFoyer } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
 import { releve } from './couverture.ts'
 
@@ -31,6 +31,10 @@ async function connecte(page: Page, email: string) {
   await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Popote' }))
     .toBeVisible({ timeout: 15_000 })
+  /* ⚠️ ICI, avant le premier `page.goto` : une navigation dure remet
+     `window.__coverage__` à zéro. L'écran de connexion — le seul que TOUT le
+     monde voit — était mesuré à 0 % de branches pour cette seule raison. */
+  await releve(page)
 }
 
 /** Deux images, pour la même raison que dans `captures.spec.ts`. */
@@ -79,6 +83,25 @@ test.describe('le tout premier soir', () => {
     test.setTimeout(300_000)
     await connecte(page, vide.email)
     await tousLesEcrans(page, 'vide')
+  })
+})
+
+test.describe('arriver sans foyer', () => {
+  /* Le premier écran de quelqu'un qui se connecte sans son lien d'invitation.
+     Aucune capture ne le rendait : zéro branche mesurée sur `Onboarding`, alors
+     que c'est là que se décide si un couple finit avec deux budgets séparés. */
+  let perdu: { email: string; userId: string }
+  test.beforeAll(async () => { perdu = await sansFoyer() })
+
+  test('on lui dit qu’on l’attend, ou on le laisse créer', async ({ page }) => {
+    await page.goto('/')
+    await page.getByLabel(/e-?mail/i).fill(perdu.email)
+    await page.getByLabel(/mot de passe/i).fill(MOT_DE_PASSE)
+    await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+    /* Pas de marque « Popote » ici : l'écran d'arrivée n'est pas le hub. On
+       attend donc n'importe lequel des deux titres possibles. */
+    await expect(page.getByRole('heading').first()).toBeVisible({ timeout: 20_000 })
+    await prend(page, 'sansfoyer-01-arrivee')
   })
 })
 

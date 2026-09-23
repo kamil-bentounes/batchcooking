@@ -21,6 +21,7 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { MOT_DE_PASSE, amorce, efface, db } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
+import { releve } from './couverture.ts'
 
 let foyer: Foyer
 const MAILPIT = 'http://127.0.0.1:54324'
@@ -59,6 +60,7 @@ async function connecte(page: Page, email: string, motDePasse: string) {
 async function prend(page: Page, nom: string) {
   await page.waitForTimeout(400)
   await page.screenshot({ path: `.shots/invitation/${nom}.png` })
+  await releve(page)
 }
 
 /** Le dernier mail reçu par cette adresse, tel qu'il est arrivé. */
@@ -147,6 +149,7 @@ test.describe('inviter quelqu’un dans le foyer', () => {
     await sonEcran.goto(cible!)
     await sonEcran.waitForTimeout(2_500)
     await sonEcran.screenshot({ path: '.shots/invitation/03-elle-arrive.png' })
+    await releve(sonEcran)
 
     /* Le lien doit charger l'APPLICATION, pas une page d'erreur : c'est
        exactement ce qui manquait quand tous les sous-chemins répondaient 404. */
@@ -158,9 +161,11 @@ test.describe('inviter quelqu’un dans le foyer', () => {
     await expect(rejoindre, 'l’écran d’invitation n’offre pas de rejoindre')
       .toBeVisible({ timeout: 15_000 })
     await sonEcran.screenshot({ path: '.shots/invitation/04-on-t-attend.png' })
+    await releve(sonEcran)
     await rejoindre.click()
     await sonEcran.waitForTimeout(3_000)
     await sonEcran.screenshot({ path: '.shots/invitation/05-elle-est-entree.png' })
+    await releve(sonEcran)
     await elle.close()
 
     const apres = (await db.from('user_profile')
