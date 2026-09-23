@@ -545,11 +545,16 @@ describe('la régularisation annuelle (D62)', () => {
     expect(trace ?? [], 'un relevé juste ne laisse aucune trace').toHaveLength(1)
     expect(trace![0].ecart_cents, 'l’écart consigné n’est pas nul').toBe(0)
 
-    /* Et on ne le ressaisit pas : la garde s'arme, même sans dépense. */
+    /* Et on ne le ressaisit pas : la garde s'arme, même sans dépense.
+       ⚠️ On vérifie LE MESSAGE, pas seulement l'échec : sans la garde, c'est
+       l'index unique qui lève — une violation de contrainte brute — et le test
+       ne voyait aucune différence. */
     const { error } = await moi.client.rpc('regularise_annuel', {
       la_charge: id, annee: 2028, reel_cents: 120_000,
     })
     expect(error, 'l’année se régularise deux fois').not.toBeNull()
+    expect(error!.message, 'le refus est une violation d’index, pas une phrase')
+      .toMatch(/déjà été saisi/i)
   })
 
   it('une année EN COURS ne facture pas la charge une fois et demie', async () => {
@@ -730,6 +735,68 @@ describe('la régularisation annuelle (D62)', () => {
     expect(restante ?? [], 'la régularisation périmée survit').toHaveLength(0)
     expect(await somme(), 'l’année ne totalise plus ses douze mois')
       .toBe(12 * Math.round(160_000 / 12))
+  })
+
+  it('corriger une charge n’efface pas le relevé d’une année CLOSE', async () => {
+    /*
+     * `corrige_la_charge` supprimait les régularisations de TOUTES les années.
+     * Renommer une charge un an plus tard évaporait 150,04 € d'une année close
+     * et payée, en silence. Le test d'avant n'utilisait qu'UNE année : il ne
+     * pouvait structurellement pas distinguer « toutes » de « celles qu'on
+     * refait ».
+     */
+    const id = await poseCharge({ libelle: 'Deux années', cents: 120_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    for (const annee of [2029, 2030]) {
+      for (let m = 1; m <= 12; m++) {
+        await moi.client.rpc('ouvre_le_mois',
+          { le_mois: `${annee}-${String(m).padStart(2, '0')}-01` })
+      }
+    }
+    /* 2029 est RÉGLÉE : ses douze mois sont payés, l'année est close. */
+    await moi.client.rpc('regularise_annuel',
+      { la_charge: id, annee: 2029, reel_cents: 135_000 })
+    await admin().from('depense')
+      .update({ regle_le: new Date().toISOString() })
+      .eq('charge_id', id).gte('mois', '2029-01-01').lte('mois', '2029-12-31')
+
+    /* On renomme la charge — le geste le plus anodin qui soit. */
+    await moi.client.rpc('corrige_la_charge', {
+      la_charge: id, nouveau_libelle: 'Deux années, renommée',
+      nouveau_montant: 120_000, nouvelle_periodicite: 'annuel',
+    })
+
+    const { data: trace } = await moi.client.from('releve_annuel')
+      .select('annee').eq('charge_id', id)
+    expect((trace ?? []).map(t => t.annee),
+      'le relevé d’une année close a été effacé').toContain(2029)
+
+    const { data: reg } = await admin().from('depense')
+      .select('montant_cents').eq('charge_id', id).eq('regularise_annee', 2029)
+    expect(reg ?? [], 'la régularisation d’une année close a été effacée')
+      .toHaveLength(1)
+  })
+
+  it('mais on peut RESSAISIR le relevé d’une année qu’on vient de refaire', async () => {
+    /* Le pendant : si les mois de l'année bougent, le relevé ne vaut plus rien
+       et doit pouvoir être ressaisi. Sans effacer la trace, la garde
+       l'interdisait à jamais. */
+    const id = await poseCharge({ libelle: 'À ressaisir', cents: 120_000,
+                                  periodicite: 'annuel', participants: [moi.userId] })
+    for (let m = 1; m <= 12; m++) {
+      await moi.client.rpc('ouvre_le_mois', { le_mois: `2030-${String(m).padStart(2, '0')}-01` })
+    }
+    await moi.client.rpc('regularise_annuel',
+      { la_charge: id, annee: 2030, reel_cents: 130_000 })
+
+    await moi.client.rpc('corrige_la_charge', {
+      la_charge: id, nouveau_libelle: 'À ressaisir', nouveau_montant: 132_000,
+      nouvelle_periodicite: 'annuel',
+    })
+
+    const { error } = await moi.client.rpc('regularise_annuel',
+      { la_charge: id, annee: 2030, reel_cents: 140_000 })
+    expect(error, `ressaisie refusée : ${error?.message}`).toBeNull()
   })
 
   it('le voisin ne régularise pas une charge qui n’est pas la sienne', async () => {
@@ -1804,6 +1871,45 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
     expect(error, 'une enveloppe portant les dépenses du mois a été rangée')
       .not.toBeNull()
     expect(error!.message).toMatch(/dépense/i)
+  })
+
+  it('corriger une charge n’ouvre PAS les mois des autres charges', async () => {
+    /*
+     * 0078 faisait ouvrir à `corrige_la_charge` tous les mois de `debut` à
+     * aujourd'hui — avec `ouvre_le_mois`, qui les ouvre pour TOUTES les charges
+     * du foyer. Mesuré : on saisit le relevé de la taxe foncière, puis on
+     * corrige le LOYER, une charge sans aucun rapport. Neuf mois de taxe
+     * naissent, le provisionné bouge, l'écart posé ne bouge pas, et la garde
+     * interdit de ressaisir : 2 416,64 € portés pour une facture de 1 450 €.
+     */
+    const taxe = await poseCharge({ libelle: 'Taxe intouchable', cents: 145_000,
+                                    periodicite: 'annuel', participants: [moi.userId] })
+    const loyer = await poseCharge({ libelle: 'Loyer à corriger', cents: 58_000,
+                                     periodicite: 'mensuel', participants: [moi.userId] })
+    /* ⚠️ Un mois de l'ANNÉE EN COURS, et un seul, ouvert pour les deux.
+       `poseCharge` fait courir les charges depuis janvier ; corriger le loyer
+       doit donc ouvrir janvier→aujourd'hui pour LUI, et rien pour la taxe. Une
+       première version déplaçait la date vers 2031 : `generate_series` partait
+       du futur vers le passé et n'ouvrait rien du tout. */
+    const moisCi = moisCourant()
+    await moi.client.rpc('ouvre_le_mois', { le_mois: moisCi })
+    const combien = async (c: string) => {
+      const { data } = await admin().from('depense').select('id')
+        .eq('charge_id', c).eq('source', 'modele')
+      return (data ?? []).length
+    }
+    const avant = await combien(taxe)
+
+    /* On corrige le LOYER, en reculant sa date : ses mois à lui s'ouvrent. */
+    await moi.client.rpc('corrige_la_charge', {
+      la_charge: loyer, nouveau_libelle: 'Loyer à corriger',
+      nouveau_montant: 58_000, nouvelle_periodicite: 'mensuel',
+    })
+
+    expect(await combien(taxe),
+      'corriger une charge a fait naître les mois d’une autre').toBe(avant)
+    expect(await combien(loyer),
+      'corriger une charge n’a pas ouvert ses propres mois').toBeGreaterThan(1)
   })
 
   it('le voisin ne range pas nos comptes', async () => {

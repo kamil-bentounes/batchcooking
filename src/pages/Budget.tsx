@@ -100,7 +100,23 @@ function ReleveAnnuel({ charge, annees }: {
       <p className="mt-2 text-[14px] text-doux">
         La différence se pose sur le mois en cours ; les mois de {annee} ne bougent pas.
       </p>
-      {ecart !== null && ecart !== 0 && (
+      {/* ⚠️ Une année déjà saisie SE DIT.
+          Le bouton grisait sans un mot, pendant que le message au-dessus
+          continuait d'annoncer « il manque 604,19 € » : l'écran se
+          contredisait. (Et ce bloc avait été perdu : le script qui l'écrivait
+          a levé sur la modification suivante avant d'enregistrer le fichier —
+          c'est la revue qui l'a vu, pas moi.) */}
+      {provisions.data?.releve && (
+        <p className="mt-2 text-[15px]" style={{ color: 'var(--color-herbe)' }}>
+          ✓ Relevé {annee} saisi le{' '}
+          {new Date(provisions.data.releve.saisi_le).toLocaleDateString('fr-FR')}
+          {Number(provisions.data.releve.ecart_cents) === 0
+            ? ' — il tombait juste.'
+            : ` — ${euros(Math.abs(Number(provisions.data.releve.ecart_cents)))} d’écart.`}
+        </p>
+      )}
+      {/* Le chiffre manquant ne s'annonce plus une fois l'année saisie. */}
+      {!provisions.data?.releve && ecart !== null && ecart !== 0 && (
         <p className="mt-2 text-[15px]"
            style={{ color: ecart > 0 ? 'var(--color-ocre)' : undefined }}>
           {ecart > 0

@@ -659,7 +659,15 @@ export function useRegulariseAnnuel() {
       ou(await supabase.rpc('regularise_annuel', {
         la_charge: r.chargeId, annee: r.annee, reel_cents: r.reelCents,
       })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['budget-mois'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['budget-mois'] })
+      /* ⚠️ Et les PROVISIONS, qui vivent sous une autre clé. Sans ça, dans la
+         session même où l'on saisit le relevé, l'écran ne voit pas qu'il
+         existe : le bouton ne grise pas, on reclique, et on reçoit une
+         violation d'index brute. Le seul garde-fou promis ne se déclenchait
+         jamais au moment où il servait. */
+      qc.invalidateQueries({ queryKey: ['provisions'] })
+    },
   })
 }
 
