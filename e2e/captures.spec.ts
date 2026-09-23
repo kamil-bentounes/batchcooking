@@ -15,6 +15,7 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { MOT_DE_PASSE, amorce, efface } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
+import { releve } from './couverture.ts'
 
 let foyer: Foyer
 
@@ -46,6 +47,7 @@ async function prend(page: Page, nom: string) {
   await page.waitForTimeout(500)
   await page.screenshot({ path: `.shots/revue/${nom}.png` })
   await page.screenshot({ path: `.shots/revue/${nom}-entier.png`, fullPage: true })
+  await releve(page)
 }
 
 test.describe('les captures de revue', () => {

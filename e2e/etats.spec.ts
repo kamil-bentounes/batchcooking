@@ -22,6 +22,7 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { MOT_DE_PASSE, amorce, efface } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
+import { releve } from './couverture.ts'
 
 async function connecte(page: Page, email: string) {
   await page.goto('/')
@@ -37,6 +38,36 @@ async function prend(page: Page, nom: string) {
   await page.waitForTimeout(500)
   await page.screenshot({ path: `.shots/etats/${nom}.png` })
   await page.screenshot({ path: `.shots/etats/${nom}-entier.png`, fullPage: true })
+  /* ⚠️ AVANT de quitter la page : `window.__coverage__` meurt avec elle, et
+     une navigation suffit à perdre tout ce qu'on venait de mesurer. */
+  await releve(page)
+}
+
+/**
+ * TOUS les écrans, pas seulement ceux du budget.
+ *
+ * Choisir à la main quels écrans photographier dans quel état, c'est décider
+ * d'avance où sont les défauts — or ils étaient chaque fois là où je ne
+ * regardais pas. La liste vient donc du routeur, et chaque état la parcourt en
+ * entier : ce qui n'a rien à montrer produit une image vide, et une image vide
+ * est une information.
+ */
+const ECRANS = [
+  ['/', 'hub'], ['/budget', 'budget'], ['/charges', 'charges'],
+  ['/budget-reglages', 'budget-reglages'], ['/epargne', 'epargne'],
+  ['/profil', 'profil'], ['/cuisine-accueil', 'accueil'], ['/semaine', 'semaine'],
+  ['/stock', 'stock'], ['/bilan', 'bilan'], ['/choisir', 'choisir'],
+  ['/magasin', 'magasin'], ['/plan', 'plan'], ['/cuisine', 'cuisine'],
+  ['/dressage', 'dressage'], ['/inventer', 'inventer'], ['/photo', 'photo'],
+  ['/ticket', 'ticket'], ['/peser', 'peser'], ['/importer', 'importer'],
+  ['/objectifs', 'objectifs'], ['/reglages', 'reglages'], ['/motdepasse', 'motdepasse'],
+] as const
+
+async function tousLesEcrans(page: Page, prefixe: string) {
+  for (const [chemin, nom] of ECRANS) {
+    await page.goto(chemin)
+    await prend(page, `${prefixe}-${nom}`)
+  }
 }
 
 test.describe('le tout premier soir', () => {
@@ -44,21 +75,10 @@ test.describe('le tout premier soir', () => {
   test.beforeAll(async () => { vide = await amorce({ budget: false }) })
   test.afterAll(async () => { if (vide) await efface(vide) })
 
-  test('un foyer sans un centime : ce que deux personnes voient en arrivant', async ({ page }) => {
-    test.setTimeout(120_000)
+  test('un foyer sans un centime, écran par écran', async ({ page }) => {
+    test.setTimeout(300_000)
     await connecte(page, vide.email)
-
-    for (const [chemin, nom] of [
-      ['/', 'vide-01-hub'],
-      ['/budget', 'vide-02-budget'],
-      ['/charges', 'vide-03-charges'],
-      ['/budget-reglages', 'vide-04-reglages'],
-      ['/epargne', 'vide-05-epargne'],
-      ['/profil', 'vide-06-profil'],
-    ] as const) {
-      await page.goto(chemin)
-      await prend(page, nom)
-    }
+    await tousLesEcrans(page, 'vide')
   })
 })
 
@@ -126,18 +146,17 @@ test.describe('les états du foyer rempli', () => {
     /* Elle n'a posé aucun de ces chiffres. Les écrans lui parlent-ils d'elle,
        ou de celui qui a rempli ? Le parcours d'invitation la crée mais ne
        photographie que la liste des charges. */
+    test.setTimeout(300_000)
     await connecte(page, foyer.elleEmail)
-    for (const [chemin, nom] of [
-      ['/', 'elle-01-hub'],
-      ['/budget', 'elle-02-budget'],
-      ['/charges', 'elle-03-charges'],
-      ['/budget-reglages', 'elle-04-reglages'],
-      ['/epargne', 'elle-05-epargne'],
-      ['/profil', 'elle-06-profil'],
-    ] as const) {
-      await page.goto(chemin)
-      await prend(page, nom)
-    }
+    await tousLesEcrans(page, 'elle')
+  })
+
+  test('et le même foyer, écran par écran, vu par celui qui l’a rempli', async ({ page }) => {
+    /* Le témoin. Sans lui, on ne sait pas si ce qui cloche chez elle vient de
+       ce qu'elle est l'autre, ou de l'écran lui-même. */
+    test.setTimeout(300_000)
+    await connecte(page, foyer.email)
+    await tousLesEcrans(page, 'lui')
   })
 
   test('les libellés et les montants poussés jusqu’aux bornes', async ({ page }) => {

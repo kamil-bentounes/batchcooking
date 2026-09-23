@@ -11,3 +11,7 @@ supabase/functions/.env
 test-results/
 playwright-report/
 .apercu/
+
+# La couverture de branches des écrans : mesure locale, jamais versionnée.
+.nyc_output/
+coverage/

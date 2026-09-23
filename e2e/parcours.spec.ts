@@ -19,6 +19,7 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { MOT_DE_PASSE, amorce, efface } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
+import { releve } from './couverture.ts'
 
 let foyer: Foyer
 
@@ -63,10 +64,15 @@ async function connecte(page: Page) {
 async function capture(page: Page, nom: string) {
   await page.waitForTimeout(350)
   await page.screenshot({ path: `.shots/parcours/${nom}.png`, fullPage: true })
+  await releve(page)
 }
 
 test.describe('on passe par tous les écrans', () => {
   test('chacun s’ouvre, montre un titre, et ne crie pas dans la console', async ({ page }) => {
+    /* Vingt-trois écrans, deux images chacun. Sous `COUVERTURE=1` le bundle est
+       instrumenté et tout ralentit d'un tiers : la minute par défaut ne suffit
+       plus, et le test échouait sur un délai, pas sur un défaut. */
+    test.setTimeout(180_000)
     const erreurs = surveille(page)
     await connecte(page)
 
