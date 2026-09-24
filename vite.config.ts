@@ -67,5 +67,19 @@ export default defineConfig({
     // propre lanceur. Les laisser ici les ferait échouer au chargement — et
     // faire cohabiter deux lanceurs sur le même fichier n'a aucun sens.
     exclude: ['node_modules/**', 'dist/**', 'e2e/**'],
+    /* ⚠️ Les 5 s par défaut de Vitest sont faites pour des tests PURS.
+       La moitié de ce dépôt parle à un Postgres local : un seul `it` peut
+       créer trois comptes `auth`, poser une charge, ouvrir douze mois et
+       relire les parts — six à quinze allers-retours. Seul, le fichier passe
+       en 33 s ; dans la suite entière, derrière 47 autres fichiers sur la même
+       base, `charges.test.ts` est sorti rouge UNE fois sur trois passages, et
+       vert les deux autres. Le message exact s'est perdu — je ne peux donc pas
+       affirmer que c'était le délai, seulement que 5 s pour quinze allers-
+       retours en est le suspect le plus simple, et que c'est trop court de
+       toute façon. Un banc qui tombe au hasard ne se lit plus : on cesse de le
+       croire rouge, donc on cesse de le croire. 30 s ne masque aucun blocage —
+       un test vraiment bloqué le reste — et rend le rouge significatif. */
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
   },
 })
