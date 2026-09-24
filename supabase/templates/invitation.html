@@ -15,6 +15,15 @@
   — La largeur tient en 600 px, et tout descend en une colonne sur téléphone.
     Le mail sera lu sur un téléphone, pas ailleurs.
 
+  ⚠️ UNE HEURE, pas vingt-quatre. Le gabarit a annoncé 24 h pendant tout le
+    temps où personne ne l'avait lu — le lien de `inviteUserByEmail` est
+    gouverné par `mailer_otp_exp`, qui vaut 3600 s sur le projet hébergé
+    (vérifié le 24 septembre 2026 par l'API de gestion, pas deviné). Une
+    invitée qui ouvrait son mail le soir tombait sur un lien mort en croyant
+    l'application cassée. Les trente jours sont ceux de la ligne `invitation`,
+    que `invite/index.ts` prolonge avec un jeton NEUF : c'est ce qui rend la
+    relance possible, et c'est ce que la phrase promet désormais.
+
   Variables Supabase : {{ .ConfirmationURL }} porte le lien qui crée le compte
   ET ouvre la session. {{ .Data.invite_par }} vient du `data` passé à
   inviteUserByEmail() — sans lui, on retombe sur « quelqu'un ».
@@ -117,7 +126,9 @@
 
               <tr>
                 <td align="center" style="padding:16px 36px 36px 36px; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:22px; color:#5F6B62;">
-                  Ce lien crée ton compte et t’installe dans le foyer. Il expire dans 24&nbsp;heures.
+                  Ce lien crée ton compte et t’installe dans le foyer.
+                  Il expire dans une&nbsp;heure&nbsp;— passé ce délai, redemande-le :
+                  l’invitation, elle, reste ouverte trente jours.
                 </td>
               </tr>
 
