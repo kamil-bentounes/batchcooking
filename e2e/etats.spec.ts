@@ -131,6 +131,45 @@ test.describe('le tout premier soir', () => {
     await connecte(page, vide.email)
     await tousLesEcrans(page, 'vide')
   })
+
+  /*
+   * Une pastille se CLIQUE. Une capture prouve qu'elle est dessinée, pas
+   * qu'elle fait quelque chose — trois fois cette session un banc est resté
+   * vert avec un mauvais libellé, parce que rien n'actionnait ce qu'il
+   * montrait. Ici on tape, et on vérifie les trois effets :
+   * le nom se pose, le GENRE se pose avec lui, et la proposition disparaît
+   * une fois le compte créé.
+   */
+  test('les propositions remplissent le formulaire, et s’effacent une fois prises',
+    async ({ page }) => {
+      test.setTimeout(120_000)
+      await connecte(page, vide.email)
+      await page.goto('/budget-reglages')
+
+      /* « Livret A » est en épargne alors que le formulaire s'ouvre sur
+         « Commun » : si le genre ne suivait pas, l'erreur serait invisible. */
+      const epargne = page.getByRole('radio', { name: 'Épargne' })
+      await expect(epargne).toHaveAttribute('aria-checked', 'false')
+      await page.getByRole('button', { name: 'Livret A', exact: true }).click()
+      await expect(page.getByLabel('Nom du compte')).toHaveValue('Livret A')
+      await expect(epargne).toHaveAttribute('aria-checked', 'true')
+
+      await page.getByRole('button', { name: 'Ajouter ce compte' }).click()
+      await expect(page.getByText('Livret A', { exact: true })).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByRole('button', { name: 'Livret A', exact: true }),
+        'la proposition survit à sa propre création').toHaveCount(0)
+
+      /* Et le libellé d'enveloppe part du catalogue TEL QUEL : c'est lui qui
+         rattachera la charge « Courses » à la jauge « Courses ». */
+      await page.getByRole('button', { name: 'Courses', exact: true }).click()
+      await expect(page.getByLabel('Nom de l’enveloppe')).toHaveValue('Courses')
+      await page.getByLabel('Plafond mensuel (€)').fill('800')
+      await page.getByRole('button', { name: 'Ajouter cette enveloppe' }).click()
+      await expect(page.getByText('800,00 € / mois')).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByRole('button', { name: 'Courses', exact: true })).toHaveCount(0)
+
+      await prend(page, 'vide-budget-reglages-pioche')
+    })
 })
 
 test.describe('arriver sans foyer', () => {

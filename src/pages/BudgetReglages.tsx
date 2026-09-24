@@ -20,8 +20,50 @@ import { Champ } from '../ui/kit.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
   useRevenus, usePoseRevenu, useComptes, usePoseCompte, useRegle, usePoseRegle, useRangeCompte, useRangeEnveloppe,
-  useEnveloppesPosees, usePoseEnveloppe, euros, enCentimes,
+  useEnveloppesPosees, usePoseEnveloppe, useSuggestionsEnveloppe, euros, enCentimes,
 } from '../lib/donnees/budget.ts'
+
+/**
+ * Ce qu'on propose, plutôt qu'un champ vide.
+ *
+ * 0050 l'avait écrit pour les charges et jamais appliqué ici : « on ne se
+ * souvient pas de ses charges, on les RECONNAÎT ». Kamil, qui a pourtant écrit
+ * l'application, a dû demander ce qu'il fallait mettre dans « Les comptes et
+ * les enveloppes » — et s'attendait à ce qu'on lui propose les catégories.
+ *
+ * Une suggestion REMPLIT le formulaire, elle ne crée rien : le montant reste à
+ * poser, et c'est le seul chiffre que nous n'avons pas le droit d'inventer.
+ * Ce qui existe déjà disparaît de la liste — proposer « Courses » à quelqu'un
+ * qui vient de créer « Courses » est une façon de ne pas le regarder.
+ */
+function Suggestions({ amorce, de, sur }:
+  { amorce: string; de: string[]; sur: (x: string) => void }) {
+  if (de.length === 0) return null
+  return (
+    <div className="mt-4">
+      <p className="text-[14px] text-doux">{amorce}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {de.map(x => (
+          <button key={x} onClick={() => sur(x)}
+                  className="min-h-11 px-3.5 rounded-[12px] bg-brume/50 text-encre text-[14px]">
+            {x}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* Les comptes ne sont pas un référentiel : ce sont QUATRE noms que presque tout
+   foyer reconnaît, et le genre qui va avec — c'est lui qu'on se trompe à
+   choisir, pas le nom. « Le mien » appartient à qui le crée, donc on ne
+   propose pas celui de l'autre. */
+const COMPTES_SUGGERES = [
+  { nom: 'Compte joint', genre: 'commun' },
+  { nom: 'Mon compte courant', genre: 'perso' },
+  { nom: 'Livret A', genre: 'epargne' },
+  { nom: 'LDDS', genre: 'epargne' },
+] as const
 
 function Section({ titre, aide, children }:
   { titre: string; aide: string; children: React.ReactNode }) {
@@ -40,6 +82,7 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
   const revenus = useRevenus()
   const comptes = useComptes()
   const enveloppes = useEnveloppesPosees()
+  const suggestions = useSuggestionsEnveloppe()
   const poseRevenu = usePoseRevenu()
   const poseCompte = usePoseCompte()
   const poseEnveloppe = usePoseEnveloppe()
@@ -191,6 +234,20 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
                 ))}
           </Surface>
 
+          {/* AVANT le formulaire : on pioche, puis on ajuste. Sous le bouton
+              « Ajouter », les pastilles ne se découvraient qu'après avoir tapé
+              le nom à la main — c'est-à-dire trop tard. Le genre se pose AVEC
+              le nom, parce que c'est lui qu'on se trompe à choisir. */}
+          <Suggestions amorce="Les plus courants :"
+            de={COMPTES_SUGGERES
+              .filter(c => !(comptes.data ?? []).some(
+                x => x.nom.toLowerCase() === c.nom.toLowerCase()))
+              .map(c => c.nom)}
+            sur={nom => {
+              setNomCompte(nom)
+              const c = COMPTES_SUGGERES.find(x => x.nom === nom)
+              if (c) setGenreCompte(c.genre)
+            }} />
           <div className="mt-4 space-y-3">
             <Champ label="Nom du compte" value={nomCompte}
                    onChange={e => setNomCompte(e.target.value)} />
@@ -240,6 +297,15 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
                 ))}
           </Surface>
 
+          {/* Le libellé part du catalogue TEL QUEL : une charge « Restaurants »
+              se range d'elle-même dans l'enveloppe qui porte le même nom, et
+              « Restaurant » au singulier casserait ce rattachement. */}
+          <Suggestions amorce="Les postes qui se plafonnent :"
+            de={(suggestions.data ?? [])
+              .map(c => c.libelle)
+              .filter(l => !(enveloppes.data ?? []).some(
+                e => e.libelle.toLowerCase() === l.toLowerCase()))}
+            sur={setNomEnveloppe} />
           <div className="mt-4 space-y-3">
             <Champ label="Nom de l’enveloppe" value={nomEnveloppe}
                    onChange={e => setNomEnveloppe(e.target.value)} />
@@ -254,7 +320,7 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
               Ajouter cette enveloppe
             </button>
           </div>
-          <Erreur de={enveloppes.error ?? poseEnveloppe.error} />
+          <Erreur de={enveloppes.error ?? poseEnveloppe.error ?? suggestions.error} />
         </Section>
       </div>
     </main>

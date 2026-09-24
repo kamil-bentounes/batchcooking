@@ -103,6 +103,7 @@ export type Database = {
           libelle: string
           ordre: number
           periode: string
+          plafond_ordre: number | null
           portee: string
           precision_txt: string | null
           section: string
@@ -112,6 +113,7 @@ export type Database = {
           libelle: string
           ordre: number
           periode: string
+          plafond_ordre?: number | null
           portee: string
           precision_txt?: string | null
           section: string
@@ -121,6 +123,7 @@ export type Database = {
           libelle?: string
           ordre?: number
           periode?: string
+          plafond_ordre?: number | null
           portee?: string
           precision_txt?: string | null
           section?: string

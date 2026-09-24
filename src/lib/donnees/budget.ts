@@ -499,6 +499,15 @@ export function usePoseEnveloppe() {
         household_id: e.foyerId, libelle: e.libelle, plafond_cents: e.plafondCents,
       }).select().single()),
     onSuccess: () => {
+      /* ⚠️ LES DEUX clés. `budget-enveloppes` porte la jauge de l'écran du
+         mois ; `enveloppes-posees` porte la LISTE de l'écran des réglages,
+         celle qu'on vient de remplir. Seule la première était invalidée : on
+         ajoutait une enveloppe, les champs se vidaient — donc l'écriture avait
+         bien eu lieu — et la liste au-dessus continuait d'afficher « Aucune
+         enveloppe » jusqu'au rechargement. `useRangeEnveloppe`, juste en
+         dessous, invalidait pourtant les deux : ARCHIVER rafraîchissait,
+         CRÉER non. */
+      qc.invalidateQueries({ queryKey: ['enveloppes-posees'] })
       qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
     },
   })
@@ -509,6 +518,33 @@ export function useEnveloppesPosees() {
     queryKey: ['enveloppes-posees'],
     queryFn: async () => ou(await supabase.from('enveloppe')
       .select('id, libelle, plafond_cents').is('archive_le', null).order('libelle')),
+  })
+}
+
+/**
+ * Les enveloppes qu'on PROPOSE, prises dans le référentiel.
+ *
+ * Le catalogue des charges existe depuis 0050 pour une raison écrite dans son
+ * en-tête : « on ne se souvient pas de ses charges, on les RECONNAÎT ». Les
+ * enveloppes n'avaient rien de tel — un champ vide, et à chacun de deviner ce
+ * qu'on attend de lui.
+ *
+ * ⚠️ On rend le LIBELLÉ du catalogue tel quel, sans le réécrire. `Charges.tsx`
+ *    rattache une charge à l'enveloppe qui porte le même nom : « Restaurants »
+ *    proposé ici et « Restaurant » tapé à la main ne sont pas la même
+ *    enveloppe, et la jauge resterait vide.
+ *
+ * ⚠️ Et on trie sur `plafond_ordre`, PAS sur `ordre`. Le second range les
+ *    charges par section, si bien que les enveloppes sortaient « Essence,
+ *    Pharmacie, Courses… » — les deux plus rares en tête.
+ */
+export function useSuggestionsEnveloppe() {
+  return useQuery({
+    queryKey: ['suggestions-enveloppe'],
+    queryFn: async () => ou(await supabase.from('catalogue_charge')
+      .select('id, libelle, plafond_ordre')
+      .not('plafond_ordre', 'is', null).order('plafond_ordre')),
+    staleTime: Infinity,   // un référentiel ne bouge pas pendant une session
   })
 }
 
