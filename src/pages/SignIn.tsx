@@ -105,7 +105,15 @@ export function SignIn({ redirectTo }: { redirectTo?: string }) {
   }
 
   return (
-    <Page centre titre="On cuisine ?" chapeau={CHAPEAU[mode]}>
+    /* ⚠️ Le titre date du premier jour — 17 septembre, « interface, 5 écrans » —
+       quand l'application ne faisait que le batch cooking. « On cuisine ? »
+       était alors la bonne question. Elle s'appelle Popote depuis, et gère
+       aussi ce que ça coûte : on ne se connecte plus seulement pour cuisiner.
+
+       Personne ne l'avait vu parce que TOUS les bancs commencent par se
+       connecter : le seul écran qu'on voit avant de l'être est le seul que
+       personne ne regardait. */
+    <Page centre marque titre="On s’y met ?" chapeau={CHAPEAU[mode]}>
       <div className="space-y-5">
         <Champ label="Ton e-mail" type="email" value={email} autoComplete="email"
                placeholder="toi@exemple.fr" onChange={e => setEmail(e.target.value)} />

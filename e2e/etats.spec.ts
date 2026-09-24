@@ -74,6 +74,53 @@ async function tousLesEcrans(page: Page, prefixe: string) {
   }
 }
 
+test.describe('avant d’être connecté', () => {
+  /*
+   * LE TROU DE MÉTHODE.
+   *
+   * Treize revues, une centaine de captures, et pas une n'avait jamais vu cet
+   * écran — parce que tous les bancs commencent par `connecte(page)`. Le seul
+   * écran que TOUT LE MONDE voit avant les autres est resté le seul que
+   * personne ne regardait : son titre datait du premier jour et demandait
+   * encore « On cuisine ? » à quelqu'un qui vient gérer son budget.
+   *
+   * Ce banc-ci ne se connecte pas. C'est tout son intérêt.
+   */
+  test('les trois chemins d’entrée, et ce qu’ils disent', async ({ page }) => {
+    test.setTimeout(120_000)
+    await page.goto('/')
+    await expect(page.getByRole('button', { name: 'Se connecter', exact: true }))
+      .toBeVisible({ timeout: 20_000 })
+    await prend(page, 'avant-01-connexion')
+
+    /* Le titre ne parle plus que de cuisine : l'application gère aussi
+       l'argent, et c'est le premier mot qu'on lit d'elle. */
+    await expect(page.getByRole('heading', { name: /on cuisine/i }),
+      'le titre d’entrée ne parle que de cuisine').toHaveCount(0)
+    /* La marque est un `span`, pas un titre — on vise le texte. */
+    await expect(page.getByText('Popote', { exact: true }),
+      'rien ne dit où l’on vient d’arriver').toBeVisible()
+
+    await page.getByRole('button', { name: 'Première connexion' }).click()
+    await expect(page.getByRole('button', { name: /recevoir le lien/i }))
+      .toBeVisible({ timeout: 10_000 })
+    await prend(page, 'avant-02-premiere')
+
+    await page.getByRole('button', { name: 'Mot de passe oublié' }).click()
+    await expect(page.getByRole('button', { name: /réinitialiser/i }))
+      .toBeVisible({ timeout: 10_000 })
+    await prend(page, 'avant-03-oubli')
+
+    /* Et le message d'erreur, que personne n'avait vu non plus. */
+    await page.getByRole('button', { name: 'J’ai déjà un mot de passe' }).click()
+    await page.getByLabel(/e-?mail/i).fill('personne@nulle-part.test')
+    await page.getByLabel(/mot de passe/i).fill('faux-mot-de-passe')
+    await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+    await expect(page.getByText(/incorrect/i)).toBeVisible({ timeout: 20_000 })
+    await prend(page, 'avant-04-refus')
+  })
+})
+
 test.describe('le tout premier soir', () => {
   let vide: Foyer
   test.beforeAll(async () => { vide = await amorce({ budget: false }) })

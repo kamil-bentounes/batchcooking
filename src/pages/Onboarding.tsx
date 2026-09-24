@@ -32,7 +32,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
   if (!ouvert) {
     return (
-      <Page centre titre="Il te faut une invitation"
+      <Page centre marque titre="Il te faut une invitation"
             chapeau="Cette application se rejoint sur invitation. Demande à la personne du foyer de t’envoyer son lien.">
         <div className="rounded-2xl border border-brume bg-surface p-5">
           <p className="text-doux text-[15px] leading-relaxed">
@@ -49,7 +49,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <Page centre titre="Votre foyer"
+    <Page centre marque titre="Votre foyer"
           chapeau="Un foyer, deux objectifs différents, une seule session de cuisine le dimanche.">
       <div className="space-y-5">
         <Champ label="Comment vous l’appelez" value={nom} onChange={e => setNom(e.target.value)} />
