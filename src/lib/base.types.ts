@@ -99,6 +99,7 @@ export type Database = {
       }
       catalogue_charge: {
         Row: {
+          exclu_par: string[]
           id: string
           libelle: string
           ordre: number
@@ -109,6 +110,7 @@ export type Database = {
           section: string
         }
         Insert: {
+          exclu_par?: string[]
           id?: string
           libelle: string
           ordre: number
@@ -119,6 +121,7 @@ export type Database = {
           section: string
         }
         Update: {
+          exclu_par?: string[]
           id?: string
           libelle?: string
           ordre?: number

@@ -14,6 +14,7 @@
  */
 import { useState } from 'react'
 import { Dictee } from './Dictee.tsx'
+import { RevueCharges } from './RevueCharges.tsx'
 import { Surface, Vide, Attente, Erreur, Principal, BarreAction } from '../ui/coque.tsx'
 import { Champ } from '../ui/kit.tsx'
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
@@ -449,6 +450,28 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
             </>
           )}
         </p>
+
+        {/* La relecture est UNE PORTE, pas un écran : elle se lance d'ici, au
+            pied de la liste qu'elle relit, et rend ses constats au même endroit.
+            Elle ne s'affiche qu'avec des charges à relire — sur une liste vide
+            elle ne pourrait que répondre « il n'y a rien ». */}
+        {(charges.data ?? []).length > 0 && (
+          <RevueCharges surOubli={libelle => {
+            /* ⚠️ On retrouve la LIGNE DU CATALOGUE, on ne fabrique pas un
+               départ à partir du seul libellé : sans `catalogueId`, la charge
+               créée serait détachée du référentiel, et sans `periode` ni
+               `portee` elle repartirait sur « mensuel / commun » quoi qu'elle
+               soit. Le serveur garantit déjà que le libellé vient du catalogue
+               — si on ne le retrouve pas, on ouvre quand même, vide plutôt que
+               faux. */
+            const l = catalogue.flatMap(sec => sec.lignes).find(x => x.libelle === libelle)
+            setAjout(l
+              ? { libelle: l.libelle, periode: l.periode, portee: l.portee,
+                  precision: l.precision_txt, catalogueId: l.id }
+              : { libelle, periode: 'mensuel', portee: 'commun',
+                  precision: null, catalogueId: null })
+          }} />
+        )}
 
         {/* ⚠️ SEULEMENT l'erreur de CHARGEMENT ici.
             Celles des GESTES descendent sur la ligne qui les a produites. Un

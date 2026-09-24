@@ -249,3 +249,65 @@ test.describe('importer une recette', () => {
     await expect(page.getByText(/durée de la cuisson/i)).toBeVisible()
   })
 })
+
+/**
+ * LA REVUE DES CHARGES.
+ *
+ * Le banc `npm run banc-revue` éprouve le modèle avec de vraies réponses ; ici
+ * on éprouve l'ÉCRAN — ce qu'il montre d'un constat, ce qu'il rend cliquable,
+ * et surtout ce qu'il dit quand la revue ne trouve rien. Ce dernier cas est le
+ * plus fréquent une fois le budget propre, et c'est celui qu'on oublie
+ * d'écrire : un écran qui répond au clic par le silence se fait recliquer.
+ */
+test.describe('relire ses charges', () => {
+  const REVUE = {
+    verdict: 'Un doublon à corriger, le reste semble cohérent.',
+    doublons: [{ libelles: ['Internet', 'Box'], pourquoi: 'C’est le même abonnement, je garderais Internet.' }],
+    incoherences: [{
+      libelle: 'Taxe foncière',
+      quoi: 'Elle est saisie à 1450,00 € par mois alors qu’elle se paie une fois par an.',
+      question: 'C’est bien 1450 € à l’année ?',
+    }],
+    oublis: ['Forfait mobile', 'Mutuelle'],
+    restantes: 29,
+  }
+
+  test('elle montre ce qui cloche, et ses oublis sont cliquables', async ({ page }) => {
+    await page.route('**/functions/v1/revue-charges', r => r.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify(REVUE),
+    }))
+    await connecte(page)
+    await page.goto('/charges')
+    await prend(page, 'revue-01-avant')
+
+    await page.getByRole('button', { name: 'Vérifier mes charges' }).click()
+    await expect(page.getByText(REVUE.verdict)).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('Internet · Box')).toBeVisible()
+    await expect(page.getByText(/1450 € à l’année/)).toBeVisible()
+    await prend(page, 'revue-02-constats')
+
+    /* ⚠️ L'oubli est un BOUTON, et on le CLIQUE. Une capture prouve qu'il est
+       dessiné, pas qu'il ouvre le formulaire pré-rempli — trois fois cette
+       session un banc est resté vert sur un libellé qui n'actionnait rien. */
+    const oublis = page.getByRole('group', { name: 'Postes dont tu n’as pas parlé' })
+    await oublis.getByRole('button', { name: 'Forfait mobile', exact: true }).click()
+    await expect(page.getByLabel('Quoi')).toHaveValue('Forfait mobile')
+    await prend(page, 'revue-03-oubli-ouvert')
+  })
+
+  test('quand tout va bien, elle le dit au lieu de se taire', async ({ page }) => {
+    await page.route('**/functions/v1/revue-charges', r => r.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        verdict: 'Tout semble en ordre.',
+        doublons: [], incoherences: [], oublis: [], restantes: 28,
+      }),
+    }))
+    await connecte(page)
+    await page.goto('/charges')
+    await page.getByRole('button', { name: 'Vérifier mes charges' }).click()
+    await expect(page.getByText(/Ni doublon, ni montant qui détonne/))
+      .toBeVisible({ timeout: 20_000 })
+    await prend(page, 'revue-04-rien-a-dire')
+  })
+})
