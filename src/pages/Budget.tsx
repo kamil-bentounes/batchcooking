@@ -325,8 +325,26 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
 
         {/* La porte vers les charges, EN HAUT. Elle était sous les virements,
             les confirmations, le relevé annuel et les enveloppes — près de trois
-            mille pixels de défilement pour le geste le plus fréquent. */}
-        {aFaire.length > 0 && (
+            mille pixels de défilement pour le geste le plus fréquent.
+
+            ⚠️ ET SANS CONDITION. Elle ne s'affichait que si `aFaire` n'était pas
+               vide, c'est-à-dire s'il restait un virement à faire ce mois-ci. Or
+               un foyer qui paie tout depuis le compte joint n'a JAMAIS de
+               virement : `virements()` écarte ce qu'on paie depuis son propre
+               compte. L'autre porte — « Poser les charges » — ne s'ouvre, elle,
+               que tant qu'aucune dépense n'existe. Entre les deux il y avait un
+               trou, et c'est celui où l'on se trouve une fois tout installé :
+               charges posées, rien à virer, et plus aucun chemin pour aller les
+               corriger. `/charges` n'est pas dans la barre du bas — elle ne
+               porte que le cycle de cuisine — donc l'écran devenait
+               définitivement inatteignable. Mesuré par Kamil, qui ne pouvait
+               plus rouvrir ses propres charges.
+
+               La condition porte donc sur ce qui la justifie — EXISTE-T-IL des
+               charges à modifier — et non sur ce qui n'a rien à y voir. Tant
+               qu'il n'y en a aucune, c'est le geste vert d'en bas qui ouvre la
+               porte, et on n'en empile pas deux. */}
+        {(depenses.data ?? []).length > 0 && (
           <button onClick={() => va('/charges')}
                   className="mt-5 w-full min-h-11 rounded-[14px] border border-brume
                              text-[15px]">
@@ -395,7 +413,12 @@ export function Budget({ userId, va }: { userId: string; va: (v: string) => void
                 dans la nav du bas. Les deux derniers menaient au même endroit,
                 et le second disait de faire l'inverse du premier. On propose ce
                 qui vient EN PREMIER — sans compte, une charge posée ne produit
-                aucun virement — et l'autre reste accessible par la nav. */}
+                aucun virement.
+                ⚠️ « et l'autre reste accessible par la nav » disait ce
+                   commentaire : c'était faux. La barre du bas ne porte que le
+                   cycle de cuisine — Accueil, Semaine, Ce que j'ai, Bilan. La
+                   seule porte permanente vers les charges est celle d'en haut,
+                   et c'est pour ça qu'elle n'a plus de condition. */}
             {(depenses.data ?? []).length === 0 && (
               comptes.length === 0 ? (
                 <button onClick={() => va('/budget-reglages')}

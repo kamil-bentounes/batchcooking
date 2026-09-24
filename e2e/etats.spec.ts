@@ -253,8 +253,13 @@ test.describe('les états du foyer rempli', () => {
     /* Un mois PASSÉ réclamait un virement pour ce qu'on a déjà vécu et payé —
        rattraper une charge annuelle depuis janvier en ouvre huit d'un coup — et
        rien ne permettait de le dire. */
+    /* ⚠️ Plus de `if (await count())` ici. Trois fois cette session un tel
+       garde-fou a masqué un mauvais libellé : le banc restait vert en ne
+       faisant rien. Un mois précédent PROPOSE de se marquer réglé — si ce
+       n'est plus vrai, on veut le savoir. */
     const deja = page.getByRole('button', { name: /marquer ce mois/i })
-    if (await deja.count()) {
+    await expect(deja, 'un mois passé ne propose plus de se marquer réglé').toBeVisible()
+    {
       await deja.click()
       await expect(page.getByRole('button', { name: /revenir dessus/i }))
         .toBeVisible({ timeout: 15_000 })
@@ -265,6 +270,18 @@ test.describe('les états du foyer rempli', () => {
       await expect(page.getByText(/Ce mois demandait/),
         'un mois soldé cache ce qu’il demandait').toBeVisible()
       await prend(page, 'confirme-03-mois-regle')
+
+      /* ⚠️ LA PORTE VERS LES CHARGES, dans l'état précis où elle disparaissait.
+         Un mois soldé n'a plus AUCUN virement à faire, et le bouton « Voir et
+         modifier les charges » était conditionné à `aFaire.length > 0`. Comme
+         `/charges` n'est pas dans la barre du bas, l'écran devenait
+         inatteignable : charges posées, rien à virer, aucun chemin pour aller
+         les corriger. */
+      await expect(page.getByRole('button', { name: 'Voir et modifier les charges' }),
+        'un mois sans virement n’a plus de porte vers les charges').toBeVisible()
+      await page.getByRole('button', { name: 'Voir et modifier les charges' }).click()
+      await expect(page.getByRole('heading', { name: 'Les charges' }),
+        'la porte ne mène pas à l’écran des charges').toBeVisible({ timeout: 15_000 })
     }
   })
 
