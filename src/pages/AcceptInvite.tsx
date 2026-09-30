@@ -25,7 +25,9 @@ export function AcceptInvite({ token, dejaChezToi, va, compte }: {
      ⚠️ Et sur un appareil PARTAGÉ, c'est l'invitée qui lit, sur la session
      de l'hôte : elle doit voir quel compte est ouvert, et pouvoir en sortir.
      `scope: 'local'` — la sortie par défaut fermait la session de l'hôte sur
-     TOUS ses appareils. */
+     TOUS ses appareils. Puis on RECHARGE, comme la sortie des réglages : la
+     mémoire de l'application — charges, revenus de l'hôte — restait sinon
+     là pour la personne suivante. */
   if (dejaChezToi) {
     return (
       <Page centre marque titre="Tu es déjà dans un foyer"
@@ -36,7 +38,10 @@ export function AcceptInvite({ token, dejaChezToi, va, compte }: {
         <p className="mt-6 text-[15px] text-doux">
           Compte ouvert ici : <span className="text-encre">{compte}</span>
         </p>
-        <button onClick={() => supabase.auth.signOut({ scope: 'local' })}
+        <button onClick={async () => {
+                  await supabase.auth.signOut({ scope: 'local' })
+                  window.location.reload()
+                }}
                 className="mt-2 text-herbe underline underline-offset-4 text-[15px]">
           Ce n’est pas moi
         </button>

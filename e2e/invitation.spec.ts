@@ -234,8 +234,10 @@ async function lienDuMail(page: Page, pour: string): Promise<string> {
   /* La CAUSE, pas seulement le symptôme : `fragmentRepare` rattrape
      aujourd'hui un lien empoisonné, et masquerait donc le retour du défaut.
      C'est l'adresse de retour elle-même qui ne doit porter aucun fragment. */
-  expect(new URL(lien!).searchParams.get('redirect_to') ?? '',
-    'l’adresse de retour du lien porte un fragment : c’est ce qui l’empoisonne')
+  const retour = new URL(lien!).searchParams.get('redirect_to')
+  expect(retour, 'le lien ne porte plus d’adresse de retour : l’assertion suivante serait muette')
+    .toBeTruthy()
+  expect(retour, 'l’adresse de retour du lien porte un fragment : c’est ce qui l’empoisonne')
     .not.toContain('#')
   return lien!
 }
@@ -353,9 +355,13 @@ test.describe('un lien expiré ne condamne pas les suivants', () => {
        déconnecté de tous ses appareils. */
     await expect(page.getByText(foyer.email)).toBeVisible()
     const sortie = page.waitForRequest(r => r.url().includes('/auth/v1/logout'))
+    /* Et la page se RECHARGE : sans quoi la mémoire de l'application — les
+       charges, les revenus de l'hôte — restait là pour la personne suivante. */
+    const recharge = page.waitForEvent('load')
     await page.getByRole('button', { name: /ce n’est pas moi/i }).click()
     expect(new URL((await sortie).url()).searchParams.get('scope'),
       'se déconnecter ici fermait la session de l’hôte partout').toBe('local')
+    await recharge
     await expect(page.getByRole('button', { name: 'Se connecter', exact: true }))
       .toBeVisible({ timeout: 15_000 })
     expect(new URL(page.url()).pathname, 'on a quitté le lien d’invitation')
@@ -380,19 +386,26 @@ test.describe('un lien expiré ne condamne pas les suivants', () => {
     await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
     // L'aller-retour ralenti commence APRÈS la connexion : c'est de là qu'on observe.
     await jeton_
-    /* Et le bouton reste en attente : réactivé, un second clic ouvrait une
-       seconde session — ou, pris par la limite de débit, disait « mot de
-       passe incorrect » à quelqu'un de connecté. */
-    await expect(page.getByRole('button', { name: /un instant/i })).toBeDisabled()
     /* ⚠️ On OBSERVE pendant l'aller-retour, on n'attend pas la fin.
        `toHaveCount(0)` réessaie jusqu'à ce que le compte tombe à zéro : il
-       passait donc dès que le bouton disparaissait, c'est-à-dire toujours. */
-    let vu = false
-    for (let i = 0; i < 15 && !vu; i++) {
-      vu = await page.getByRole('button', { name: /rejoindre le foyer/i }).count() > 0
+       passait donc dès que le bouton disparaissait, c'est-à-dire toujours.
+       Deux choses ne doivent JAMAIS apparaître dans cette fenêtre : le bouton
+       « Rejoindre », et « Se connecter » réactivé — un second clic ouvrait
+       une seconde session, ou, pris par la limite de débit, disait « mot de
+       passe incorrect » à quelqu'un qui venait d'entrer. Un seul échantillon
+       ne suffisait pas : la réactivation suit la réponse de quelques
+       millisecondes. */
+    let rejoindreVu = false
+    let reactive = false
+    for (let i = 0; i < 15 && !rejoindreVu && !reactive; i++) {
+      rejoindreVu = await page.getByRole('button', { name: /rejoindre le foyer/i }).count() > 0
+      const seConnecter = page.getByRole('button', { name: 'Se connecter', exact: true })
+      reactive = await seConnecter.count() > 0 && await seConnecter.isEnabled()
       await page.waitForTimeout(100)
     }
-    expect(vu, 'un membre s’est vu offrir de rejoindre le foyer, le temps d’un aller-retour')
+    expect(rejoindreVu, 'un membre s’est vu offrir de rejoindre le foyer, le temps d’un aller-retour')
+      .toBe(false)
+    expect(reactive, '« Se connecter » s’est réactivé alors que la connexion avait réussi')
       .toBe(false)
     await expect(page.getByRole('heading', { name: /tu es déjà dans un foyer/i }))
       .toBeVisible({ timeout: 15_000 })
