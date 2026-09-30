@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
-import { useRoute } from './lib/route.ts'
+import { lienDeploye, useRoute } from './lib/route.ts'
 import { SignIn } from './pages/SignIn'
 import { Password } from './pages/Password'
 import { Onboarding } from './pages/Onboarding'
@@ -45,19 +45,35 @@ export default function App() {
   const [pret, setPret] = useState(false)
   const { ici, va, retour } = useRoute()
 
+  /* Le numéro de la DERNIÈRE relecture : une plus ancienne qui répond après
+     elle n'a plus rien à dire. */
+  const tour = useRef(0)
   const relire = useCallback(async () => {
+    const ceTour = ++tour.current
     const { data } = await supabase.auth.getSession()
-    setSession(data.session)
+    /* ⚠️ On LIT tout, puis on ÉCRIT tout, d'un coup.
+       La session était posée avant le foyer, qu'on attendait ensuite : le
+       temps de cet aller-retour, l'écran croyait la personne connectée SANS
+       foyer — et offrait à un membre, sur un lien d'invitation, de rejoindre
+       un foyer qu'il a déjà (refus 409 au clic). Et plusieurs relectures se
+       croisent — le montage, `INITIAL_SESSION`, `PASSWORD_RECOVERY` — : sans
+       le numéro de tour, la plus lente gagnait, fût-elle la plus ancienne, et
+       pouvait remettre « mot de passe posé » juste après qu'une
+       réinitialisation l'avait retiré. */
+    let hh: string | null = null
+    let p: { password_set: boolean; display_name: string | null } | null = null
     if (data.session) {
-      const { data: hh } = await supabase.rpc('current_household')
-      setFoyer(hh ?? null)
+      hh = (await supabase.rpc('current_household')).data ?? null
       // Tant que le mot de passe n'est pas posé, on n'entre pas : sinon la
       // personne repart sur un lien par mail à chaque connexion.
-      const { data: p } = await supabase.from('user_profile')
-        .select('password_set, display_name').eq('id', data.session.user.id).maybeSingle()
-      setMdpPose(p ? !!p.password_set : true)
-      setSansPrenom(p ? (p.display_name ?? '').trim() === '' : false)
-    } else { setFoyer(null); setMdpPose(true); setSansPrenom(false) }
+      p = (await supabase.from('user_profile')
+        .select('password_set, display_name').eq('id', data.session.user.id).maybeSingle()).data
+    }
+    if (ceTour !== tour.current) return
+    setSession(data.session)
+    setFoyer(hh)
+    setMdpPose(p ? !!p.password_set : true)
+    setSansPrenom(p ? (p.display_name ?? '').trim() === '' : false)
     setPret(true)
   }, [])
 
@@ -79,6 +95,10 @@ export default function App() {
        *    plus qu'une seule règle à tenir.
        */
       if (evenement === 'PASSWORD_RECOVERY' && s?.user) {
+        /* Le tour avance DÈS l'événement, avant l'écriture : la relecture
+           d'`INITIAL_SESSION`, partie plus tôt, lirait encore « posé » et
+           ouvrirait l'accueil le temps que l'écriture aboutisse. */
+        tour.current++
         await supabase.from('user_profile')
           .update({ password_set: false }).eq('id', s.user.id)
       }
@@ -97,8 +117,17 @@ export default function App() {
 
   // L'ordre compte. Une invitation prime sur tout : sans cela, l'invité se voit
   // proposer de créer SON foyer au lieu de rejoindre celui qui l'attend.
-  if (!session) return <SignIn redirectTo={window.location.href} />
-  if (invitation) return <AcceptInvite token={invitation[1]} />
+  /* ⚠️ Le CHEMIN, jamais `window.location.href`.
+     Le fragment venait avec : après un lien expiré, `#error=…otp_expired…`.
+     Supabase colle `#access_token=…` derrière l'adresse de retour — deux `#`,
+     et supabase-js, qui lit le premier, y trouvait l'erreur et refusait la
+     session. Un seul lien mort condamnait tous les suivants : le 30 septembre,
+     trois connexions acceptées par Supabase, trois sessions jetées ici. */
+  if (!session) return <SignIn redirectTo={lienDeploye(ici)} />
+  if (invitation) {
+    return <AcceptInvite token={invitation[1]} dejaChezToi={!!foyer} va={va}
+                         compte={session.user.email ?? ''} />
+  }
   if (!foyer) return <Onboarding onDone={relire} />
   // Tant qu'aucun mot de passe n'est posé, on n'entre pas — sinon on repart sur
   // un lien par mail à chaque connexion. Un retour de réinitialisation remet

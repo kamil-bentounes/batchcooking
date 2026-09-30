@@ -1,9 +1,48 @@
 import { useState } from 'react'
-import { callFunction } from '../lib/supabase'
+import { callFunction, supabase } from '../lib/supabase'
 import { Page, Bouton, Message } from '../ui/kit'
 
-export function AcceptInvite({ token }: { token: string }) {
+export function AcceptInvite({ token, dejaChezToi, va, compte }: {
+  token: string
+  /** La session ouverte a déjà un foyer. */
+  dejaChezToi: boolean
+  va: (vers: string) => void
+  /** L'adresse de la session ouverte. */
+  compte: string
+}) {
   const [msg, setMsg] = useState('')
+
+  /* ⚠️ Pas de bouton voué à l'échec.
+     `accept-invite` refuse qui a déjà un foyer (« Déjà rattaché à un foyer »).
+     Le 30 septembre, le seul « Rejoindre le foyer » cliqué venait de la session
+     de l'hôte, sur son ordinateur : il ouvrait le lien qu'il venait de créer,
+     l'écran lui proposait de rejoindre son propre foyer, et le refus arrivait
+     après le clic au lieu de la phrase qui dit à qui ce lien s'adresse.
+     ⚠️ Sans présumer QUI lit : l'invitée déjà entrée qui rouvre son mail, ou
+     revient en arrière après avoir rejoint, tombe sur ce même écran — lui
+     dire « envoie-le à la personne que tu invites » l'aurait prise pour
+     l'hôte.
+     ⚠️ Et sur un appareil PARTAGÉ, c'est l'invitée qui lit, sur la session
+     de l'hôte : elle doit voir quel compte est ouvert, et pouvoir en sortir.
+     `scope: 'local'` — la sortie par défaut fermait la session de l'hôte sur
+     TOUS ses appareils. */
+  if (dejaChezToi) {
+    return (
+      <Page centre marque titre="Tu es déjà dans un foyer"
+            chapeau="Ce lien sert à en rejoindre un quand on n’en a pas encore. Si c’est
+                     toi qui l’as créé, envoie-le à la personne invitée : c’est sur son
+                     téléphone qu’il s’ouvre.">
+        <Bouton onClick={() => va('/')}>Retour à l’accueil</Bouton>
+        <p className="mt-6 text-[15px] text-doux">
+          Compte ouvert ici : <span className="text-encre">{compte}</span>
+        </p>
+        <button onClick={() => supabase.auth.signOut({ scope: 'local' })}
+                className="mt-2 text-herbe underline underline-offset-4 text-[15px]">
+          Ce n’est pas moi
+        </button>
+      </Page>
+    )
+  }
 
   async function rejoindre() {
     /* `'/'` sortait de l'application : le site est servi sous un sous-chemin,

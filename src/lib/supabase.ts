@@ -1,6 +1,18 @@
 import { createClient } from '@supabase/supabase-js'
 import type { PostgrestSingleResponse } from '@supabase/supabase-js'
 import type { Database } from './base.types.ts'
+import { fragmentRepare } from './lien.ts'
+
+/* ⚠️ AVANT `createClient` : c'est lui qui lit l'URL pour y chercher la session.
+   Un lien empoisonné (`#error=…#access_token=…`, voir `fragmentRepare`) y
+   serait lu comme une erreur, et la session jetée. */
+if (typeof window !== 'undefined') {
+  const repare = fragmentRepare(window.location.hash)
+  if (repare) {
+    window.history.replaceState(window.history.state, '',
+      window.location.pathname + window.location.search + repare)
+  }
+}
 
 export const supabase = createClient<Database>(
   import.meta.env.VITE_SUPABASE_URL,

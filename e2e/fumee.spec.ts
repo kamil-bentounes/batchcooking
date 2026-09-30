@@ -14,7 +14,7 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import {
-  MOT_DE_PASSE, amorce, efface, lienDeReinitialisation, remetLeMotDePasse,
+  MOT_DE_PASSE, amorce, efface, lienDeReinitialisation, remetLeMotDePasse, db,
 } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
 
@@ -283,6 +283,74 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
     // On remet celui de l'amorce : tous les tests suivants s'y connectent, et
     // sans cela l'échec apparaissait sur un test sans aucun rapport.
     await remetLeMotDePasse(foyer)
+  })
+
+  test('une relecture lente ne rend pas l’entrée après une réinitialisation', async ({ page }) => {
+    /*
+     * Trois relectures se croisent au retour d'un lien : celle du montage,
+     * celle d'`INITIAL_SESSION`, et celle qui suit `PASSWORD_RECOVERY` — après
+     * que l'écriture a remis `password_set` à faux. Les deux premières lisent
+     * AVANT cette écriture. Si l'une répond après la troisième, elle remettait
+     * « mot de passe posé » : l'écran du mot de passe s'effaçait, et l'on
+     * entrait sans en avoir posé de nouveau.
+     *
+     * On force l'ordre : l'écriture part avec une seconde de retard, et les
+     * deux premières lectures — faites tout de suite, donc sur l'ancienne
+     * valeur — ne reviennent qu'au bout de trois.
+     */
+    let lectures = 0
+    await page.route('**/rest/v1/user_profile*', async r => {
+      const req = r.request()
+      if (req.method() === 'PATCH') {
+        await new Promise(s => setTimeout(s, 1_000))
+        return r.continue()
+      }
+      if (req.method() === 'GET' && req.url().includes('password_set') && lectures++ < 2) {
+        const reponse = await r.fetch()
+        await new Promise(s => setTimeout(s, 3_000))
+        return r.fulfill({ response: reponse })
+      }
+      return r.continue()
+    })
+    try {
+      await page.goto(await lienDeReinitialisation(foyer.email))
+      await expect(page.getByRole('heading', { name: /ton mot de passe/i }))
+        .toBeVisible({ timeout: 15_000 })
+      // Les lectures en retard reviennent ici. L'écran doit TENIR.
+      await page.waitForTimeout(4_000)
+      await expect(page.getByRole('heading', { name: /ton mot de passe/i }),
+        'une relecture plus ancienne a rendu l’entrée sans nouveau mot de passe')
+        .toBeVisible()
+    } finally {
+      await db.from('user_profile').update({ password_set: true }).eq('id', foyer.userId)
+      await remetLeMotDePasse(foyer)
+    }
+  })
+
+  test('l’accueil ne s’ouvre pas le temps d’écrire la réinitialisation', async ({ page }) => {
+    /* La relecture d'`INITIAL_SESSION` part AVANT `PASSWORD_RECOVERY`, émis
+       dans un `setTimeout(0)`. Tant que l'écriture de `password_set = false`
+       n'a pas abouti, elle lit « posé » — et ouvrait l'accueil, cliquable,
+       jusqu'à ce que l'écran du mot de passe le remplace. On ralentit
+       l'écriture pour que la fenêtre se voie. */
+    await page.route('**/rest/v1/user_profile*', async r => {
+      if (r.request().method() === 'PATCH') await new Promise(s => setTimeout(s, 2_500))
+      return r.continue()
+    })
+    try {
+      await page.goto(await lienDeReinitialisation(foyer.email))
+      let vu = false
+      for (let i = 0; i < 20 && !vu; i++) {
+        vu = await page.getByRole('heading', { name: 'Popote' }).count() > 0
+        await page.waitForTimeout(100)
+      }
+      expect(vu, 'l’accueil s’est ouvert avant l’écran du nouveau mot de passe').toBe(false)
+      await expect(page.getByRole('heading', { name: /ton mot de passe/i }))
+        .toBeVisible({ timeout: 15_000 })
+    } finally {
+      await db.from('user_profile').update({ password_set: true }).eq('id', foyer.userId)
+      await remetLeMotDePasse(foyer)
+    }
   })
 
   test('la marque est dans l’onglet ET sur l’accueil', async ({ page }) => {

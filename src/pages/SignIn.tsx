@@ -14,8 +14,9 @@
  *     un lien de RÉINITIALISATION, et il mène à l'écran du mot de passe quoi
  *     qu'en dise `password_set`.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { erreurDeLien } from '../lib/lien.ts'
 import { Page, Bouton, Champ, Message } from '../ui/kit'
 
 type Mode = 'mdp' | 'premiere' | 'oubli'
@@ -34,15 +35,28 @@ const ACTION: Record<Mode, string> = {
   oubli: 'Réinitialiser mon mot de passe',
 }
 
-export function SignIn({ redirectTo }: { redirectTo?: string }) {
+/**
+ * `redirectTo` est OBLIGATOIRE : le défaut `window.location.href` emportait le
+ * fragment de l'URL dans chaque lien envoyé. Voir `App.tsx`.
+ */
+export function SignIn({ redirectTo: cible }: { redirectTo: string }) {
   const [mode, setMode] = useState<Mode>('mdp')
   const [email, setEmail] = useState('')
   const [mdp, setMdp] = useState('')
-  const [msg, setMsg] = useState(''); const [err, setErr] = useState(false)
+  /* Un lien mort le DIT. L'écran se taisait : on arrivait d'un clic sur un
+     lien, et rien n'expliquait pourquoi on se retrouvait à la porte. */
+  const [lienMort] = useState(() => erreurDeLien(window.location.href))
+  const [msg, setMsg] = useState(lienMort ?? ''); const [err, setErr] = useState(!!lienMort)
   const [envoi, setEnvoi] = useState(false)
 
+  /* Puis on l'efface de la barre d'adresse : un fragment d'erreur qui traîne
+     est exactement ce qui empoisonnait les liens suivants. Le chemin seul
+     suffit — l'application ne porte rien dans la requête. */
+  useEffect(() => {
+    if (lienMort) window.history.replaceState(window.history.state, '', window.location.pathname)
+  }, [lienMort])
+
   const dire = (t: string, e = false) => { setErr(e); setMsg(t) }
-  const cible = redirectTo ?? window.location.href
 
   /**
    * Le même message, que l'adresse ait un compte ou non.
@@ -72,10 +86,17 @@ export function SignIn({ redirectTo }: { redirectTo?: string }) {
 
   async function agir() {
     setEnvoi(true)
+    /* Une connexion RÉUSSIE garde le bouton en attente : l'écran ne change
+       qu'une fois le foyer relu, deux allers-retours plus tard. Réactivé
+       entre-temps, un second clic ouvrait une seconde session — ou, pris par
+       la limite de débit, disait « mot de passe incorrect » à quelqu'un qui
+       venait d'entrer. */
+    let entre = false
     try {
       if (mode === 'mdp') {
         const { error } = await supabase.auth.signInWithPassword({ email, password: mdp })
         if (error) dire('E-mail ou mot de passe incorrect.', true)
+        else entre = true
         return
       }
       if (mode === 'premiere') {
@@ -100,7 +121,7 @@ export function SignIn({ redirectTo }: { redirectTo?: string }) {
         `Si un compte existe pour ${email}, le lien vient de partir. `
         + `Il est valable une heure.`), false)
     } finally {
-      setEnvoi(false)
+      if (!entre) setEnvoi(false)
     }
   }
 
