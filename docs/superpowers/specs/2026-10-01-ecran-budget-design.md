@@ -254,6 +254,14 @@ Les cas d'affichage :
 Le revenu du mois est le `revenu` de la personne dont le `valid_from` est le plus
 récent, sans dépasser le dernier jour du mois.
 
+**Le premier revenu d'un membre compte dès son arrivée** (choix de Kamil, le 01/10). Un
+trigger `before insert` sur `revenu` remonte le `valid_from` du premier revenu d'un
+membre au mois de son `entre_le`, sans passer avant le mois qui suit la dernière
+clôture du foyer. Thauba arrive le 15/11 et pose son revenu le 02/12 : il vaut dès
+novembre, et `tg_revenu_refige` repartage novembre, encore ouvert. Sans cela, novembre
+n'aurait jamais de revenu pour elle, et la garde de la clôture (§ 4.5) l'attendrait
+pour toujours. Les revenus suivants prennent effet au mois de leur saisie.
+
 ### 3.2 · Feuille « Déclarer » (au fil du mois)
 
 C'est une feuille qui monte du bas (un `<dialog>` modal, à la poignée). Elle contient :
@@ -871,7 +879,12 @@ D'où le trigger d'instruction : il passe avant que la ligne visée soit verroui
     - le mois n'est pas déjà clôturé ;
     - l'appelant a un revenu ce mois-là : « Ajoute ton revenu d'août pour clôturer
       août. » Sans revenu, `reste_cents` serait NULL, et la clôture échouerait sur une
-      erreur brute. Cela garde aussi les mois d'avant Popote hors de toute clôture.
+      erreur brute. Cela garde aussi les mois d'avant Popote hors de toute clôture ;
+    - chaque autre membre présent ce mois-là (`entre_le` au plus tard le dernier jour)
+      y a un revenu : « Thauba n'a pas encore posé son revenu : novembre attend. »
+      Sans lui, le partage bascule à moitié-moitié (0064), et la clôture le figerait :
+      une commune de 1 000 € à 500/500 au lieu de 633,70/366,30 (choix de Kamil, le
+      01/10). Un membre parti ne compte pas : son revenu est parti avec lui.
   - **D'abord, le mois est mis à jour** : `ouvre_le_mois(le_mois)` y fait naître les
     lignes qui manquent, et `repartit_les_lignes` leur donne leurs parts. Le verrou,
     déjà tenu, se reprend sans attendre. Sans cela, octobre clôturé juste après la
@@ -938,9 +951,13 @@ D'où le trigger d'instruction : il passe avant que la ligne visée soit verroui
     « Retirer », ni le client ne peuvent alors y toucher : les deux premiers épargnent
     le confirmé, et le client n'écrit plus les lignes.
 
-    Une ligne sans aucune part, quelle que soit sa façon, n'est jamais recalculée :
-    `confirme_la_ligne` la refuserait (0064), et une ligne anormale ne doit pas empêcher
-    toute la clôture. Elle ne reçoit que ce gel.
+    Une ligne sans aucune part, quelle que soit sa façon, n'est jamais recalculée par
+    l'étape 3 : `confirme_la_ligne` la refuserait (0064), et une ligne anormale ne doit
+    pas empêcher toute la clôture. Elle ne reçoit que ce gel. C'est une ligne qui est
+    restée sans part **après** l'ouverture du début : `ouvre_le_mois` donne leurs parts
+    à toutes les lignes qui peuvent en avoir, comme à chaque ouverture de `/budget`, et
+    la clôture fige ainsi ce que l'écran montrait. Seule une ligne sans participant
+    présent reste sans part.
   - **L'enregistrement.**
     - Elle insère `cloture`, puis `cloture_choix` pour l'appelant, avec `reste_cents`
       calculé **en base** : le revenu du mois (§ 3.1.1) moins la somme de ses
@@ -969,8 +986,11 @@ D'où le trigger d'instruction : il passe avant que la ligne visée soit verroui
   « Retirées, encore à régler » et la borne de « Autre jour » la lisent. `useProvisionsDe`
   disparaît : elle comptait les douze mois et ignorait `prevu_cents`.
 - **`recale_la_charge(la_charge uuid) → void`** — interne, appelée par `retire_charge`
-  (`security definer`) sous son verrou. Elle appelle `recale_l_annee` sans mois cible
-  sur chaque année ouverte de la charge. Aucun écran ne l'appelle : l'aperçu de la clôture vient de
+  et `delete_my_account` sous leur verrou. Elle appelle `recale_l_annee` sans mois
+  cible sur chaque année ouverte de la charge. Comme les autres fonctions internes,
+  elle ne revérifie pas le foyer et ne lit pas `current_household()` : ses appelants
+  l'ont fait, et `delete_my_account`, qui l'appelle après avoir supprimé le profil, n'a
+  plus de foyer courant. Aucun écran ne l'appelle : l'aperçu de la clôture vient de
   `apercu_des_soldes`, qui n'écrit rien, alors que `recale_la_charge` écrit sur le mois
   en cours.
 - **`rouvre_le_mois(le_mois date) → void`**
@@ -1046,7 +1066,9 @@ D'où le trigger d'instruction : il passe avant que la ligne visée soit verroui
     l'Entretien d'octobre rouvert, et ses 41,67 € ne revenaient jamais. « Retirer » l'archive : ses factures et ses années soldées restent, et
     la clôture solde ses années ouvertes, archivée ou non. Sans histoire, c'est une simple correction : les
     lignes se refont.
-- **`retire_charge(p_charge uuid, avec_les_saisies boolean default false)`** remplace
+- **`retire_charge(p_charge uuid, avec_les_saisies boolean default false) → text`**
+  (`'supprimee'` ou `'archivee'`, comme 0088 : l'ancien paquet exige une réponse non
+  nulle, `budget.ts:407`, `supabase.ts:40`) remplace
   l'actuelle (drop, puis create : l'ancien paquet l'appelle avec un seul argument).
   - Elle passe en `security definer` : la policy `depense_delete`, qui gardait le
     confirmé, n'existe plus. Elle prend le verrou du foyer, revérifie que la charge est
@@ -1494,12 +1516,17 @@ Les habitudes du dépôt s'appliquent :
     d'octobre (839,27 € de communes pour Kamil, et non 1 678,53 €) ;
   - une facture du mois en cours, sans aucun revenu au foyer, est refusée (« Ajoute ton
     revenu d'abord. ») ; changer un revenu ne pose rien ;
+  - à deux, Thauba arrivée le 15/11 sans revenu : la clôture de novembre est refusée ;
+    son premier revenu, posé le 02/12, vaut dès novembre, et novembre se clôture
+    alors au prorata ; un second revenu prend effet au mois de sa saisie ;
   - « Fixe » est refusé pour l'Entretien d'octobre clôturé puis rouvert ;
   - « Retirer » le 20/01/2027 garde l'ajustement « — solde 2026 » de 60 € posé sur
     janvier 2027 ;
   - Pl ne compte que les lignes `mis_de_cote` des mois suivis : l'assurance à 100 € par
-    mois, clôturée en septembre et en octobre puis passée à 1 200 € par an, a un Pl de
-    200 € ; une ligne sans part n'y compte pas.
+    mois, clôturée en septembre et en octobre puis passée à 1 200 € par an en novembre,
+    a un Pl de 200 € (ses provisions de novembre et décembre), et non 400 € : ses
+    lignes fixes de septembre et d'octobre n'y comptent pas ; une ligne sans part n'y
+    compte pas.
 - **`confirme_la_depense`** : elle refuse une ligne au fil du mois, et valide toujours
   une facture du mois. Un montant négatif ou au-delà de 1 000 000 € est refusé, par la
   feuille comme à la clôture.
