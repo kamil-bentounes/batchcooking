@@ -409,8 +409,9 @@ Chaque charge gagne deux choix, dans sa fiche :
   - Les trois premiers choix fixent la périodicité à mensuel.
   - « Mise de côté » demande « tous les trois mois » ou « une fois par an ».
   - C'est ce choix qui remplace la périodicité seule et la case « variable ».
-  - Une charge mise de côté qui a déjà des factures, ou des lignes dans un mois clôturé,
-    ne devient pas mensuelle. Les trois premiers choix sont alors grisés, avec « Pour la
+  - Une charge mise de côté qui a déjà des factures, ou une ligne confirmée, réglée ou
+    dans un mois clôturé (un mois rouvert reste tout confirmé), ne devient pas
+    mensuelle. Les trois premiers choix sont alors grisés, avec « Pour la
     payer chaque mois, retire-la et ajoute la nouvelle. Ses factures et ses années
     soldées restent ; une année encore ouverte se soldera à la clôture de décembre. »
     (§ 4.5).
@@ -547,7 +548,11 @@ create index saisie_depense_idx on public.saisie (depense_id);
 - **Rattachée à la ligne du mois**, et non à la charge : quand « Retirer » (0088)
   supprime les lignes non confirmées, leurs saisies partent avec elles. Celles d'un
   mois clôturé restent avec leur ligne confirmée.
-- **Idempotente.** L'`id` vient de l'appareil (`crypto.randomUUID()`). Un second envoi
+- **Idempotente.** L'`id` vient de l'appareil (`crypto.randomUUID()`), un par saisie
+  voulue : la feuille le crée à la frappe du montant, le garde pour ses renvois, et en
+  prend un neuf après un succès. Créé à l'ouverture de la feuille, il faisait d'un
+  second montant (50 €, puis 30 €) un renvoi du premier : 23505, et 30 € perdus. Même
+  règle pour les factures. Un second envoi
   du même `id`, après une coupure réseau ou un double toucher, est un succès sans
   effet : le front traite le code `23505` sur la clé primaire comme réussi. À
   l'insertion, `tg_saisie_garde` regarde d'abord si l'`id` existe, et lève alors
@@ -561,6 +566,9 @@ create index saisie_depense_idx on public.saisie (depense_id);
   - à l'insertion et à la modification, la ligne est à `source = 'modele'` et sa façon
     est `au_fil` (celle de la ligne, § 4.1), `fait_le` tombe dans le mois de la ligne,
     et ce mois n'est pas clôturé (pas de `cloture` pour le foyer et ce mois) ;
+  - la somme des saisies de la ligne, celle-ci comprise, ne dépasse pas 1 000 000 € :
+    `confirme_la_ligne` la refuserait, et toute la clôture avec (deux fautes de frappe
+    de 999 999 € sur les Courses) ;
   - à la modification, l'ancien mois ne l'est pas non plus. À la suppression, le mois de
     l'ancienne saisie (`date_trunc('month', old.fait_le)`) ne l'est pas, et la garde
     rend `old` ;
@@ -614,6 +622,12 @@ create index facture_charge_annee_idx on public.facture (charge_id, annee);
   supprime un foyer. Avant le foyer, il supprime ses factures : sinon la cascade
   `household → charge` pourrait buter sur le `restrict` d'une facture pas encore
   partie, car l'ordre des cascades n'est pas garanti.
+- **Les comptes perso de qui part.** Avant le profil, `delete_my_account` supprime les
+  comptes `perso` dont il est titulaire (les `compte_id` des charges et des lignes
+  passent à null). Aujourd'hui, la suppression du profil met `titulaire_id` à null
+  (`on delete set null`), ce que `compte_titulaire_coherent` (0051) refuse pour un
+  compte perso : en prod, Kamil a deux comptes perso, et son effacement échoue
+  déjà.
 - **`releve_annuel` change de sens.** Il ne porte plus le montant saisi, il marque
   **l'année soldée**. `reel_cents` vaut le total des factures au moment du solde, et
   `ecart_cents` l'écart avec le prévu à ce moment-là. Il gagne `prevu_cents`, ce prévu
@@ -727,7 +741,7 @@ prise du verrou du foyer.
   fermé.
 
 **Les fonctions internes** (`confirme_la_ligne`, `recale_l_annee`, `solde_l_annee`,
-`recale_la_charge`, `cible_de`) sont
+`cible_de`) sont
 fermées par `revoke execute … from public, anon, authenticated`, comme en 0061 et 0064.
 Sur Supabase, les droits par défaut accordent toute nouvelle fonction à `anon` et à
 `authenticated`, et `revoke … from public` ne les leur retire pas : `retire_charge`
@@ -735,7 +749,8 @@ porte encore `anon` en prod. Sans cela, un appel direct à `solde_l_annee` solde
 en octobre, sans verrou ni clôture. Chacune revérifie aussi le foyer.
 
 **Les fonctions de trigger qui regardent `current_user`** (le gel d'un mois clôturé, le
-versement de clôture, le changement direct de façon, et le verrou d'instruction) sont
+versement de clôture, le changement direct de façon, le trigger de `charge` qui refuse
+les colonnes d'argent et `archive_le`, et le verrou d'instruction) sont
 `security invoker`. En `security definer`, `current_user` vaudrait leur propriétaire,
 et elles ne refuseraient jamais rien.
 
@@ -751,7 +766,8 @@ prennent en tête :
 - `delete_my_account`, qui écrit désormais dans `cloture_choix` et `facture` : sans
   le verrou, un départ pendant un « Revenir dessus » s'interbloquait ;
 - toute écriture du client sur `saisie`, `depense`, `depense_part`, `charge`,
-  `charge_participant`, `revenu` et `regle_partage`, par un trigger
+  `charge_participant`, `revenu`, `regle_partage` et `user_profile` (`entre_le`,
+  `Profil.tsx:77`), par un trigger
   `before insert or update or delete for each statement`, `security invoker`. Il prend
   le verrou du foyer de l'appelant (`current_household()`) quand `current_user =
   'authenticated'` : une écriture directe, ou faite par un trigger invoker, comme
@@ -841,12 +857,15 @@ D'où le trigger d'instruction : il passe avant que la ligne visée soit verroui
       août. » Sans revenu, `reste_cents` serait NULL, et la clôture échouerait sur une
       erreur brute. Cela garde aussi les mois d'avant Popote hors de toute clôture.
   - **D'abord, le mois est mis à jour** : `ouvre_le_mois(le_mois)` y fait naître les
-    lignes qui manquent, puis `refige_le_mois(le_mois)` refait les parts des lignes non
-    confirmées. Le verrou, déjà tenu, se reprend sans attendre. Sans cela, octobre
-    clôturé juste après la migration, sans avoir ouvert `/budget`, gardait 22 lignes et
-    3 898,20 € au lieu de 25 lignes et 4 008,20 € : 110 € de reste en trop, et des
-    lignes qui ne pouvaient plus naître. Un participant retiré juste avant gardait de
-    même sa part.
+    lignes qui manquent, et `repartit_les_lignes` leur donne leurs parts. Le verrou,
+    déjà tenu, se reprend sans attendre. Sans cela, octobre clôturé juste après la
+    migration, sans avoir ouvert `/budget`, gardait 22 lignes et 3 898,20 € au lieu de
+    25 lignes et 4 008,20 € : 110 € de reste en trop, et des lignes qui ne pouvaient
+    plus naître. Elle ne refait **pas** les parts des lignes existantes
+    (`refige_le_mois`) : un mois passé ne se repartage pas (0065, `budget.ts:871`). À
+    deux, Thauba partie le 03/11, refiger octobre le 05/11 mettait les 1 678,53 € de
+    communes sur Kamil seul (839,26 € de reste en moins) et effaçait les lignes
+    perso de Thauba.
   - **Quatre étapes, dans cet ordre**, une fois les gardes passées.
   - **1. Les années à solder.** Pour chaque charge du foyer, archivée ou non, qui a dans
     l'année des lignes de façon `mis_de_cote` ou des factures, on solde toute année
@@ -864,6 +883,15 @@ D'où le trigger d'instruction : il passe avant que la ligne visée soit verroui
     Les factures n'entrent pas dans ce critère : une facture d'avant Popote ferait
     suivre un mois que personne n'a suivi. Le revenu de Kamil part du 01/09/2026 :
     septembre 2026 est son premier mois suivi.
+
+    Poser un revenu peut rendre suivis des mois qui ne l'étaient pas : le premier
+    revenu d'un foyer. Le trigger de `revenu`, après `refige_pour` et sous le même
+    verrou, appelle donc `recale_l_annee` sans mois cible sur chaque année ouverte des
+    charges du foyer qui y ont des factures. Un nouveau foyer paie 320 € d'entretien
+    le 10/03/2027, sans revenu : Pl vaut 0, +320 € sur mars. Le revenu posé le 15/03
+    (effet au 01/03) fait passer Pl à 416,70 € : −320 € sur mars, et mars ne compte plus
+    une facture que ses provisions couvrent. Changer un revenu déjà là, ou celui de
+    Thauba en novembre, ne change aucun mois suivi : rien ne se pose.
 
     Une année sans mois suivi se solde donc à 0, sans ligne : Pl n'y compte rien. Une
     assurance de 240 € par an, posée en 2026 avec un départ en janvier 2025, ne rend rien
@@ -926,9 +954,12 @@ D'où le trigger d'instruction : il passe avant que la ligne visée soit verroui
   premier_mois_suivi }`, par `cible_de`. La feuille « Facture mise de côté », la liste
   « Retirées, encore à régler » et la borne de « Autre jour » la lisent. `useProvisionsDe`
   disparaît : elle comptait les douze mois et ignorait `prevu_cents`.
-- **`recale_la_charge(la_charge uuid) → void`** — interne, appelée par `retire_charge`
-  sous son verrou. Elle appelle `recale_l_annee` sans mois cible sur chaque année
-  ouverte de la charge. Aucun écran ne l'appelle : l'aperçu de la clôture vient de
+- **`recale_la_charge(la_charge uuid) → void`** — `security definer`, accordée à
+  `authenticated`, verrou pris, foyer revérifié. Elle appelle `recale_l_annee` sans
+  mois cible sur chaque année ouverte de la charge. Elle est accordée parce que
+  `retire_charge`, qui l'appelle, est `security invoker` : fermée, elle ferait échouer
+  tout « Retirer » sur un refus de droit. Recaler est idempotent : l'exposer n'ouvre
+  pas la porte que fermer `solde_l_annee` a fermée. Aucun écran ne l'appelle : l'aperçu de la clôture vient de
   `apercu_des_soldes`, qui n'écrit rien, alors que `recale_la_charge` écrit sur le mois
   en cours.
 - **`rouvre_le_mois(le_mois date) → void`**
@@ -945,8 +976,10 @@ D'où le trigger d'instruction : il passe avant que la ligne visée soit verroui
   Seuls les ajustements, que la base pose elle-même, sont signés. `cloture_le_mois` l'appelle avant d'insérer la clôture, donc ce refus ne la
   gêne pas.
 - **`confirme_la_depense(la_depense uuid, reel_cents integer)`** garde sa signature. Elle
-  prend le verrou du foyer, puis appelle `confirme_la_ligne`. Elle refuse une ligne au
-  fil du mois : « Cette dépense se déclare désormais au fil du mois. Recharge la page. »
+  prend le verrou du foyer, puis appelle `confirme_la_ligne`. Elle n'accepte qu'une
+  ligne `modele` de façon `facture` ou `fixe`. Confirmer l'Entretien d'octobre à 320 €
+  faisait passer Pl à 445,01 €, et un ajustement confirmé à 0 € effaçait ses 60 €.
+  Pour une ligne au fil du mois, elle dit : « Cette dépense se déclare désormais au fil du mois. Recharge la page. »
   Seul l'ancien paquet l'appellerait ainsi, et sa confirmation, sans saisie, serait
   défaite à la clôture : 780 € confirmés le 30, puis 800 € retenus. La feuille
   « Facture du mois » l'appelle, elle, pour une facture.
@@ -1286,7 +1319,8 @@ La couleur n'est jamais seule : la légende et les cartes portent le nom.
     `facon` dans son `select` (`budget.ts:111`) ;
   - les crochets nouveaux : `useSaisies(mois)`, `useAjouteSaisie`, `useRetireSaisie`,
     `useFactures(chargeId, annee)`, `usePaieFacture`, `useRetireFacture`,
-    `useCloture(mois)`, `useClotureLeMois`, `useRouvreLeMois`, `useApercuDesSoldes(mois)` ;
+    `useCloture(mois)`, `useClotureLeMois`, `useRouvreLeMois`, `useApercuDesSoldes(mois)`,
+    `useCorrigeLeReleve` ;
   - on retire `useRegulariseAnnuel`, `useEnveloppes`, `usePoseEnveloppe`,
     `useEnveloppesPosees`, `useSuggestionsEnveloppe`, `useRangeEnveloppe` et
     `useProvisionsDe` ; `useRattacheCharge` ne garde que `compte_id`, que `virements()`
@@ -1296,7 +1330,10 @@ La couleur n'est jamais seule : la légende et les cartes portent le nom.
   - `useRevenus` rend tout l'historique, et `mois.ts` prend le revenu en vigueur à la
     fin du mois affiché, comme la base. Ne garder que le dernier faisait afficher
     décembre « sur 4 500 € » si le revenu changeait en janvier ;
-  - chaque mutation invalide `budget-mois`, `saisies`, `factures` et `cloture`. Le
+  - chaque mutation invalide `budget-mois`, `saisies`, `factures`, `cloture`,
+    `etat-de-l-annee` et `apercu-des-soldes` : sinon la feuille restée ouverte après une
+    facture de 320 € annonçait « Il restera 66,68 € de côté » pour 100 €, quand la base
+    pose +100 €. Le
     nouvel écran ne lit plus `excedent_du_mois` : la fonction reste pour l'ancien
     paquet, et le lot 4 dira s'il la garde.
 - **`src/ui/budget/`** (nouveau) : `Recap`, `Gestes`, `CarteEpargne`, `Filtre`,
@@ -1340,7 +1377,7 @@ La couleur n'est jamais seule : la légende et les cartes portent le nom.
 | Saisie, facture ou validation pendant une clôture du foyer | elle attend la fin de la clôture (verrou du foyer), puis la voit : une saisie sur le mois clôturé est refusée ; l'ajustement d'une facture tombe sur le mois en cours |
 | Correction d'une charge (`corrige_la_charge`) après une clôture | les mois clôturés n'ont que des lignes confirmées : elle ne les refait pas, et n'y fait naître aucune ligne |
 | Nouvelle charge, ou date de départ reculée, sur un mois clôturé | aucune ligne n'y naît, et le mois garde ses chiffres ; « Revenir dessus », puis reclôturer, l'y fait entrer |
-| Une charge mise de côté devient mensuelle | refusé si elle a des factures ou un mois clôturé : on la retire (ses factures et ses années soldées restent, une année ouverte se solde à la clôture) et on ajoute la nouvelle |
+| Une charge mise de côté devient mensuelle | refusé si elle a des factures, ou une ligne confirmée, réglée ou dans un mois clôturé (rouvert compris) : on la retire (ses factures et ses années soldées restent, une année ouverte se solde à la clôture) et on ajoute la nouvelle |
 | Une garde refuse le solde d'une année à la clôture | l'année reste ouverte, la clôture passe, la page le dit ; la clôture suivante réessaie |
 | Le relevé de copropriété, 1 200 € pour toute l'année | il s'affiche « Relevé 2026 — total de l'année », et la carte dit « 2026 est soldée. » : un appel du trimestre saisi ensuite s'ajouterait en entier, et l'aperçu le dit avant |
 | Corriger un relevé (taxe foncière 1 450 € → 1 460 €) | l'année reste soldée, son prévu figé ne bouge pas : +10 € sur le mois en cours ; « Retirer » n'est pas proposé, et la base le refuse |
@@ -1349,7 +1386,7 @@ La couleur n'est jamais seule : la légende et les cartes portent le nom.
 | L'ancien paquet (service worker) au premier chargement | lecture : fonctionne ; « Le relevé est arrivé ? » : refusé (« Recharge la page ») ; une charge créée par l'ancien « Mes charges » reçoit sa façon et sa catégorie par trigger (§ 4.1) ; confirmer une ligne au fil du mois est refusé (« Recharge la page ») ; « Marquer ce mois comme réglé » sur un mois clôturé est refusé par le gel, avec la même phrase ; le chargement suivant sert le nouveau paquet |
 | Charge retirée qui a des factures | archivée, jamais supprimée (`restrict`) ; les lignes de ses années soldées et tous ses ajustements restent (la copro garde ses 1 200 € de 2026) ; dans une année ouverte, ses provisions non confirmées partent, et le recalage pose la différence tout de suite (Entretien : 83,34 + 153,32 + 83,34 = 320 €) |
 | La facture d'une charge déjà retirée | Mes charges, « Retirées, encore à régler », ouvre sa feuille jusqu'au 31 décembre de l'année qui suit le retrait ; une facture de l'année suivante s'ajoute en entier |
-| Clôturer un mois juste après la migration, sans avoir ouvert `/budget` | la clôture ouvre et refige d'abord le mois : octobre a ses 25 lignes |
+| Clôturer un mois juste après la migration, sans avoir ouvert `/budget` | la clôture ouvre d'abord le mois, sans refaire les parts des lignes existantes : octobre a ses 25 lignes |
 | Renvoi d'une saisie déjà enregistrée, arrivé après la clôture | `23505` avant le refus « mois clôturé » : succès sans effet |
 | Charge passée d'une façon à une autre avec une ligne déjà confirmée dans un mois ouvert | la ligne garde sa façon (`depense.facon`) : la clôture la traite comme elle est née |
 | Facture qui attend le verrou pendant que minuit passe | le mois cible se calcule après le verrou, sur `clock_timestamp()` : l'ajustement tombe sur le mois qui vient de commencer |
@@ -1397,7 +1434,8 @@ Les habitudes du dépôt s'appliquent :
   - « Retirer » supprime les saisies des mois non clôturés, et garde les autres, y
     compris sur une charge au fil du mois sans aucune ligne confirmée ;
   - `delete_my_account`, et le départ du dernier membre du foyer, passent avec des
-    saisies dans un mois clôturé, et avec une facture ;
+    saisies dans un mois clôturé, avec une facture, et avec un compte perso (actif et
+    archivé, comme en prod) ;
   - une saisie lancée pendant une clôture du même mois attend, puis est refusée, y
     compris quand c'est le trigger d'une autre table qui l'écrit ;
   - un montant négatif ou nul est refusé ;
@@ -1419,7 +1457,13 @@ Les habitudes du dépôt s'appliquent :
     septembre et octobre clôturés, facture de 320 € le 10/11, retrait le 15/11 : le
     retrait pose +83,34 € sur novembre tout de suite, la clôture de décembre ne pose
     rien, et l'année compte 320 € en tout ;
-  - ouvrir l'écran de clôture n'écrit aucune `depense` ;
+  - ouvrir l'écran de clôture ne pose aucun ajustement (ni recalage ni solde) ; il
+    ouvre le mois comme `/budget`, et montre les 25 lignes que la clôture confirmera ;
+  - à deux, un membre parti le 03/11 : clôturer octobre le 05/11 garde les parts
+    d'octobre (839,27 € de communes pour Kamil, et non 1 678,53 €) ;
+  - le premier revenu d'un foyer recale l'année : 320 € payés le 10/03 sans revenu,
+    puis le revenu du 15/03 pose −320 € sur mars ; changer ce revenu ne pose rien ;
+  - « Fixe » est refusé pour l'Entretien d'octobre clôturé puis rouvert ;
   - « Retirer » le 20/01/2027 garde l'ajustement « — solde 2026 » de 60 € posé sur
     janvier 2027 ;
   - Pl ne compte que les lignes `mis_de_cote` des mois suivis : l'assurance à 100 € par
@@ -1512,8 +1556,9 @@ Les habitudes du dépôt s'appliquent :
 - **Les interblocages, encore** : un compte supprimé pendant un « Revenir dessus » ne
   s'interbloque pas.
 - **Les droits** : ni `anon` ni `authenticated` n'appellent `confirme_la_ligne`, `cible_de`,
-  `recale_l_annee`, `recale_la_charge` ou `solde_l_annee` ; chaque garde qui regarde `current_user` refuse
-  bien un appel direct du client.
+  `recale_l_annee` ou `solde_l_annee` ; `retire_charge`, invoker, appelle bien
+  `recale_la_charge` sous `authenticated` ; chaque garde qui regarde `current_user` refuse
+  bien un appel direct du client, dont un `update charge set montant_cents` direct ;
 - **Le verrou** : l'arrivée d'un membre par la clé de service verrouille bien son foyer ;
   un compte supprimé pendant une ouverture du mois ne s'interbloque pas ; une facture qui
   obtient le verrou après minuit, le 1er, pose son ajustement sur le nouveau mois.
