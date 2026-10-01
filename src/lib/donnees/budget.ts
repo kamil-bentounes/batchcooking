@@ -396,21 +396,24 @@ export function useCorrigeCharge() {
   })
 }
 
-export function useArchiveCharge() {
+export function useRetireCharge() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      /* On tente la suppression : une charge qui n'a rien produit part sans
-         laisser de trace. Si elle a une histoire, la base refuse (`restrict`)
-         et on l'archive — arrêter de payer Netflix n'efface pas les douze mois
-         où on l'a payé. */
-      const { error } = await supabase.from('charge').delete().eq('id', id)
-      if (!error) return 'supprimee' as const
-      ou(await supabase.from('charge')
-        .update({ archive_le: new Date().toISOString() }).eq('id', id).select())
-      return 'archivee' as const
+      /* « Retirer », c'est retirer : la charge part de TOUS les mois, puis
+         elle-même. Elle s'archivait dès qu'elle avait une ligne, et les mois
+         déjà ouverts la gardaient — un doublon retiré comptait encore 580 €
+         en septembre. Seuls restent le confirmé et le réglé ; voir 0088. */
+      const sort = ou(await supabase.rpc('retire_charge', { p_charge: id }))
+      return sort as 'supprimee' | 'archivee'
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: CLE.charges }),
+    /* Le MOIS aussi : ses lignes viennent de partir. Seules les charges
+       étaient relues, et le budget gardait la ligne jusqu'au rechargement. */
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CLE.charges })
+      qc.invalidateQueries({ queryKey: ['budget-mois'] })
+      qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
+    },
   })
 }
 

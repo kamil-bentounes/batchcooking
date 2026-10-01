@@ -19,7 +19,7 @@ import { Surface, Vide, Attente, Erreur, Principal, BarreAction } from '../ui/co
 import { Champ } from '../ui/kit.tsx'
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
-  useCharges, useCatalogue, useAjouteCharge, useArchiveCharge, useComptes,
+  useCharges, useCatalogue, useAjouteCharge, useRetireCharge, useComptes,
   useEnveloppesPosees, useRattacheCharge, useMajParticipants, useCorrigeCharge, euros, enCentimes,
   type Charge,
 } from '../lib/donnees/budget.ts'
@@ -283,7 +283,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   const { data: foyer } = useFoyer()
   const charges = useCharges()
   const { data: catalogue = [] } = useCatalogue()
-  const archive = useArchiveCharge()
+  const retire = useRetireCharge()
   const ajouteUne = useAjouteCharge()
   const comptes = useComptes()
   const enveloppes = useEnveloppesPosees()
@@ -562,14 +562,14 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                         aria-expanded={corrigeOuvert === c.id}
                         className="text-herbe min-h-11 px-2 text-[14px]">Corriger</button>
                 <button onClick={() => {
-                          if (!confirm(`Retirer « ${c.libelle} » ? Les mois déjà ouverts la gardent.`)) return
-                          archive.mutate(c.id, {
+                          if (!confirm(`Retirer « ${c.libelle} » ? Elle disparaîtra de tous les mois.`)) return
+                          retire.mutate(c.id, {
                             onSuccess: sort => setDit(sort === 'supprimee'
-                              ? `« ${c.libelle} » supprimée.`
-                              : `« ${c.libelle} » archivée : elle n’engendrera plus rien.`),
+                              ? `« ${c.libelle} » retirée.`
+                              : `« ${c.libelle} » retirée. Les mois que tu as confirmés ou réglés la gardent : c’est de l’argent sorti.`),
                           })
                         }}
-                        disabled={archive.isPending}
+                        disabled={retire.isPending}
                         aria-label={`Retirer ${c.libelle}`}
                         className="text-doux min-h-11 px-2 text-[14px]">Retirer</button>
                 {/* Qui participe se change APRÈS COUP. Sans ça, inviter quelqu'un
@@ -668,7 +668,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                     `variables` dit laquelle l'a déclenchée. Sans ce filtre, un
                     refus sur une charge s'afficherait sous les cinq autres. */}
                 <Erreur de={
-                  (archive.error && archive.variables === c.id && archive.error) ||
+                  (retire.error && retire.variables === c.id && retire.error) ||
                   (rattache.error && rattache.variables?.id === c.id && rattache.error) ||
                   (majQui.error && majQui.variables?.chargeId === c.id && majQui.error) ||
                   null} />

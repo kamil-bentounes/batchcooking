@@ -20,7 +20,7 @@
  */
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { MOT_DE_PASSE, amorce, efface, sansFoyer } from './amorce.ts'
+import { MOT_DE_PASSE, amorce, efface, sansFoyer, db } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
 import { releve } from './couverture.ts'
 
@@ -341,11 +341,20 @@ test.describe('les états du foyer rempli', () => {
     await prend(page, 'gestes-04-catalogue-vide')
     await page.getByLabel(/chercher une charge/i).fill('')
 
-    /* ── Retirer une charge. Elle a une histoire : elle s'ARCHIVE, et l'écran
-           doit le dire — les deux disparaissaient de la liste sans un mot. ── */
-    page.on('dialog', d => d.accept())
+    /* ── Retirer une charge : elle part de TOUS les mois, et l'écran le dit.
+           Elle s'archivait dès qu'elle avait une ligne, et les mois déjà
+           ouverts la gardaient — un doublon retiré comptait encore 580 € en
+           septembre. La confirmation annonce désormais ce qui va se passer. ── */
+    let annonce = ''
+    page.on('dialog', d => { annonce = d.message(); d.accept() })
     await page.getByRole('button', { name: 'Retirer Forfait mobile' }).click()
-    await expect(page.getByText(/archivée|supprimée/)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/« Forfait mobile » retirée/)).toBeVisible({ timeout: 15_000 })
+    expect(annonce, 'la confirmation ne dit pas que la charge part de tous les mois')
+      .toMatch(/disparaîtra de tous les mois/)
+    const { data: restes } = await db.from('depense').select('mois, confirme_le, regle_le')
+      .eq('household_id', foyer.householdId).eq('libelle', 'Forfait mobile')
+    expect((restes ?? []).filter(l => !l.confirme_le && !l.regle_le),
+      'un mois ouvert garde encore la charge retirée').toEqual([])
     await prend(page, 'gestes-05-charge-retiree')
   })
 

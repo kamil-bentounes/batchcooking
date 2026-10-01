@@ -3211,6 +3211,7 @@ export type Database = {
           reste_cents: number
         }[]
       }
+      retire_charge: { Args: { p_charge: string }; Returns: string }
       sessions_partagees: { Args: never; Returns: string[] }
       solde_epargne: {
         Args: { la_poche: string }

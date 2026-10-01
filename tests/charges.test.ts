@@ -255,6 +255,73 @@ describe('ce qui ne change pas', () => {
   })
 })
 
+describe('retirer une charge', () => {
+  /*
+   * « Retirer » veut dire une seule chose : la charge disparaît, et on ne la
+   * revoit plus. Elle s'archivait dès qu'elle avait une ligne, et les mois
+   * déjà ouverts la GARDAIENT — le 25/09, un doublon retiré sur la foi de la
+   * revue comptait encore 580 € en septembre.
+   *
+   * Seules restent les lignes que la base protège déjà : celles qu'on a
+   * confirmées, et celles d'un mois marqué réglé. C'est de l'argent dont on a
+   * dit qu'il était sorti ; la charge s'archive alors pour les garder.
+   */
+  async function lignes(libelle: string) {
+    const { data } = await admin().from('depense').select('id, mois')
+      .eq('household_id', moi.householdId).eq('libelle', libelle).order('mois')
+    return data ?? []
+  }
+
+  it('la retire de TOUS les mois, et la charge avec', async () => {
+    const id = await poseCharge({ libelle: 'Doublon du prêt', cents: 58_000,
+                                  periodicite: 'mensuel', participants: [moi.userId] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2026-08-01' })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2026-09-01' })
+    expect((await lignes('Doublon du prêt')).length).toBe(2)
+
+    const { data, error } = await moi.client.rpc('retire_charge', { p_charge: id })
+    expect(error, `retrait refusé : ${error?.message}`).toBeNull()
+    expect(data).toBe('supprimee')
+    expect(await lignes('Doublon du prêt'), 'un mois ouvert garde la charge retirée')
+      .toEqual([])
+    const { data: reste } = await admin().from('charge').select('id').eq('id', id)
+    expect(reste, 'la charge retirée existe encore').toEqual([])
+  })
+
+  it('garde le mois marqué réglé et la ligne confirmée, et archive la charge', async () => {
+    const id = await poseCharge({ libelle: 'Netflix arrêté', cents: 1_400,
+                                  periodicite: 'mensuel', participants: [moi.userId] })
+    for (const m of ['2026-06-01', '2026-07-01', '2026-08-01']) {
+      await moi.client.rpc('ouvre_le_mois', { le_mois: m })
+    }
+    const avant = await lignes('Netflix arrêté')
+    await admin().from('depense').update({ regle_le: new Date().toISOString() })
+      .eq('id', avant[0].id)
+    await admin().from('depense').update({ confirme_le: new Date().toISOString() })
+      .eq('id', avant[1].id)
+
+    const { data, error } = await moi.client.rpc('retire_charge', { p_charge: id })
+    expect(error, `retrait refusé : ${error?.message}`).toBeNull()
+    expect(data).toBe('archivee')
+    expect((await lignes('Netflix arrêté')).map(l => l.mois),
+      'le réglé et le confirmé devaient rester, le reste partir')
+      .toEqual(['2026-06-01', '2026-07-01'])
+    const { data: c } = await admin().from('charge').select('archive_le').eq('id', id).single()
+    expect(c!.archive_le, 'la charge qui garde des lignes n’est pas archivée').not.toBeNull()
+  })
+
+  it('ne retire rien chez un autre foyer', async () => {
+    const id = await poseCharge({ libelle: 'Pas à toi', cents: 3_000,
+                                  periodicite: 'mensuel', participants: [moi.userId] })
+    await moi.client.rpc('ouvre_le_mois', { le_mois: '2026-08-01' })
+    const { error } = await voisin.client.rpc('retire_charge', { p_charge: id })
+    expect(error, 'un voisin a retiré une charge qui n’est pas la sienne').not.toBeNull()
+    expect((await lignes('Pas à toi')).length).toBe(1)
+    const { data: c } = await admin().from('charge').select('archive_le').eq('id', id).single()
+    expect(c!.archive_le).toBeNull()
+  })
+})
+
 describe('la clé propre à une charge', () => {
   it('l’emporte sur celle du foyer (« Netflix à 50/50 »)', async () => {
     /* ⚠️ Ce test n'existait pas, et la colonne `charge.cle` n'était JAMAIS lue :
@@ -666,11 +733,14 @@ describe('la régularisation annuelle (D62)', () => {
      */
     const id = await poseCharge({ libelle: 'Foncier tardif ouvert', cents: 120_000,
                                   periodicite: 'annuel', participants: [moi.userId] })
-    /* UN SEUL mois ouvert sur une année déjà bien avancée. */
-    await moi.client.rpc('ouvre_le_mois', { le_mois: '2026-09-01' })
+    /* UN SEUL mois ouvert : le mois COURANT.
+       ⚠️ Il était écrit en dur, « 2026-09-01 », alors que l'assertion compte
+          les mois restants depuis la date du jour : le 1er octobre, octobre
+          n'était pas ouvert et comptait comme « à venir ». */
+    await moi.client.rpc('ouvre_le_mois', { le_mois: moisCourant() })
 
     const { data: aVenir } = await moi.client.rpc('provisions_a_venir',
-      { la_charge: id, annee: 2026 })
+      { la_charge: id, annee: new Date().getFullYear() })
     /* Ce qui reste à provisionner, ce sont les mois À VENIR de l'année — pas
        les huit mois révolus que personne n'ouvrira jamais. */
     /* ⚠️ Une ÉGALITÉ, pas un « au plus » : une fonction qui rendrait zéro
