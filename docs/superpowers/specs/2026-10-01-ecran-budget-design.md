@@ -298,7 +298,7 @@ La feuille contient :
   « Prévu pour 2026, depuis septembre : 166,68 € ». Dessous, la liste des factures (date, montant, corbeille). S'il n'y en a
   pas : « Aucune facture cette année pour l'instant. »
   - Une facture d'origine `releve` s'y lit « Relevé 2026 — total de l'année », sans
-    date. La copropriété y montre ainsi 1 200 €, le total annuel saisi en septembre, et
+    date et sans corbeille. La copropriété y montre ainsi 1 200 €, le total annuel saisi en septembre, et
     non l'appel d'un trimestre.
   - Sur une année soldée, la carte commence par « 2026 est soldée. » ;
 - « Montant de la facture » : un champ, puis « Payée : Aujourd'hui / Autre jour ». L'année
@@ -317,9 +317,12 @@ La feuille contient :
 Une facture se saisit toujours au présent : la feuille est la même sur un mois
 clôturé. Son ajustement tombe sur le mois en cours, qui n'est jamais clôturé (D78).
 
-Retirer une facture demande une confirmation. Pour un relevé : « Retirer le relevé de
-2026 ? L'année redevient ouverte : ce qui n'aura pas servi reviendra à la clôture de
-décembre. »
+Retirer une facture demande une confirmation. **Un relevé ne se retire pas, il se
+corrige** : sa ligne propose « Corriger le montant », et l'aperçu dit l'effet (« 10 € de
+plus que le relevé : ils s'ajoutent à octobre. »). L'année reste soldée, avec son prévu
+figé. Retirer le relevé de taxe foncière la rouvrait sur les seuls mois suivis
+(483,32 €) : le ressaisir ajoutait 966,68 € à octobre, et 800 € pour la copropriété.
+Kamil l'a choisi le 1er octobre 2026.
 
 **Une charge retirée garde sa feuille** jusqu'au 31 décembre de l'année qui suit son
 retrait : la facture d'une maison vendue arrive souvent après, parfois l'année
@@ -602,7 +605,7 @@ create index facture_charge_annee_idx on public.facture (charge_id, annee);
 ```
 
 - **RLS.** Lecture dans son foyer. Aucune écriture directe : seules
-  `paie_une_facture` et `retire_une_facture` écrivent.
+  `paie_une_facture`, `retire_une_facture` et `corrige_le_releve` écrivent.
 - **`charge_id` en `restrict`**, comme pour `depense` (0053) : une charge qui a des
   factures ne se supprime pas. « Retirer » l'archive, et la clôture solde ses années
   ouvertes. En cascade, retirer l'entretien après une facture de 320 € effaçait la
@@ -623,8 +626,9 @@ create index facture_charge_annee_idx on public.facture (charge_id, annee);
 - **Plus aucune écriture directe sur `releve_annuel`.** On supprime ses policies
   d'insertion, de modification et de suppression (0078). Aujourd'hui, un client peut
   geler ou dégeler une année sans passer par le solde. Seules deux fonctions y
-  écrivent : `solde_l_annee`, qui l'insère, et `retire_une_facture`, qui le retire avec
-  une facture d'origine `releve`. `corrige_la_charge` n'y touche plus.
+  écrivent : `solde_l_annee`, qui l'insère, et `corrige_le_releve`, qui met à jour son
+  `reel_cents` et son `ecart_cents`, jamais son `prevu_cents`. Rien ne le supprime, hors
+  cascade. `corrige_la_charge` n'y touche plus.
 - **L'invariant.** Pour toute charge mise de côté et toute année, le total payé `B`
   est la somme des `facture.montant_cents`. Aucune autre source.
 
@@ -739,6 +743,7 @@ et elles ne refuseraient jamais rien.
 prennent en tête :
 
 - `cloture_le_mois`, `rouvre_le_mois`, `paie_une_facture`, `retire_une_facture`,
+  `corrige_le_releve`,
   `corrige_la_charge` et `retire_charge` ;
 - `confirme_la_depense`, `ouvre_le_mois`, `ouvre_la_charge` et `rattrape_les_mois` ;
 - les deux refiges des parts : `refige_pour`, que lancent les triggers de `revenu` et de
@@ -798,10 +803,14 @@ D'où le trigger d'instruction : il passe avant que la ligne visée soit verroui
 - **`retire_une_facture(la_facture uuid) → void`**
   - Elle supprime la facture, puis appelle `recale_l_annee`. Le contre-ajustement tombe
     sur le mois en cours : on ne réécrit pas un mois passé.
-  - Une facture d'origine `releve` emporte le relevé de son année, qui redevient
-    ouverte. Un relevé solde toujours son année : le laisser derrière garderait soldée
-    une année où plus rien n'est payé. C'est ce qui a été fait à la main pour
-    l'Entretien, le 01/10 (§ 5).
+  - Elle refuse une facture d'origine `releve` : « Un relevé se corrige, il ne se retire
+    pas. » (§ 3.4).
+- **`corrige_le_releve(la_facture uuid, montant_cents integer) → void`** — verrou pris,
+  foyer revérifié. Pour une facture d'origine `releve` seulement, avec un montant entre
+  0 et 1 000 000 €. Elle change le montant de la facture, met à jour `reel_cents` et
+  `ecart_cents` du relevé (`prevu_cents` ne bouge pas), puis appelle `recale_l_annee`
+  sans mois cible. Taxe foncière 1 450 € corrigée à 1 460 € : cible +10,04, posé +0,04,
+  +10 € sur le mois en cours.
 - **`solde_l_annee(la_charge uuid, annee integer, mois_cible date) → void`** — interne.
   - Si l'année est déjà soldée, elle ne fait rien.
   - Sinon, elle matérialise les mois suivis de l'année, avec la boucle et les bornes de
@@ -1319,7 +1328,7 @@ La couleur n'est jamais seule : la légende et les cartes portent le nom.
 | Une charge mise de côté devient mensuelle | refusé si elle a des factures ou un mois clôturé : on la retire (ses factures et ses années soldées restent, une année ouverte se solde à la clôture) et on ajoute la nouvelle |
 | Une garde refuse le solde d'une année à la clôture | l'année reste ouverte, la clôture passe, la page le dit ; la clôture suivante réessaie |
 | Le relevé de copropriété, 1 200 € pour toute l'année | il s'affiche « Relevé 2026 — total de l'année », et la carte dit « 2026 est soldée. » : un appel du trimestre saisi ensuite s'ajouterait en entier, et l'aperçu le dit avant |
-| Retrait d'une facture d'origine `releve` | le relevé part avec elle, et l'année redevient ouverte |
+| Corriger un relevé (taxe foncière 1 450 € → 1 460 €) | l'année reste soldée, son prévu figé ne bouge pas : +10 € sur le mois en cours ; « Retirer » n'est pas proposé, et la base le refuse |
 | Mois de janvier à août 2026 (provisions rattrapées, pas de revenu) | pas de bandeau, et pas de clôture (« Ajoute ton revenu d'août pour clôturer août ») ; ouverts à la main, ils affichent « Ajoute ton revenu… » |
 | Revenu posé après la clôture | `reste_cents` reste celui du jour de la clôture ; rouvrir puis reclôturer le recalcule |
 | L'ancien paquet (service worker) au premier chargement | lecture : fonctionne ; « Le relevé est arrivé ? » : refusé (« Recharge la page ») ; une charge créée par l'ancien « Mes charges » reçoit sa façon et sa catégorie par trigger (§ 4.1) ; confirmer une ligne au fil du mois est refusé (« Recharge la page ») ; « Marquer ce mois comme réglé » sur un mois clôturé est refusé par le gel, avec la même phrase ; le chargement suivant sert le nouveau paquet |
@@ -1385,8 +1394,8 @@ Les habitudes du dépôt s'appliquent :
   - les lignes du tableau du § 4.4, sur les données de prod reproduites ;
   - le retrait pose un contre-ajustement ;
   - deux appels parallèles donnent le bon total, et une seule ligne par delta ;
-  - le retrait d'une facture d'origine `releve` emporte le relevé, et l'année se recale
-    comme une année ouverte ;
+  - le retrait d'une facture d'origine `releve` est refusé ; `corrige_le_releve` à
+    1 460 € pose +10 € et laisse `prevu_cents` à 1 449,96 € ;
   - un second appel avec le même `la_facture` ne crée rien ;
   - une facture payée pendant la clôture du mois précédent : son ajustement attend, puis
     tombe sur le mois en cours ;
