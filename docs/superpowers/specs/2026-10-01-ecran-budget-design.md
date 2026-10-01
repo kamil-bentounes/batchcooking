@@ -727,7 +727,7 @@ prise du verrou du foyer.
   fermé.
 
 **Les fonctions internes** (`confirme_la_ligne`, `recale_l_annee`, `solde_l_annee`,
-`cible_de`) sont
+`recale_la_charge`, `cible_de`) sont
 fermées par `revoke execute … from public, anon, authenticated`, comme en 0061 et 0064.
 Sur Supabase, les droits par défaut accordent toute nouvelle fonction à `anon` et à
 `authenticated`, et `revoke … from public` ne les leur retire pas : `retire_charge`
@@ -750,8 +750,8 @@ prennent en tête :
   `regle_partage` (0065), et `refige_le_mois` ;
 - `delete_my_account`, qui écrit désormais dans `cloture_choix` et `facture` : sans
   le verrou, un départ pendant un « Revenir dessus » s'interbloquait ;
-- toute écriture du client sur `saisie`, `depense`, `depense_part`, `charge` et
-  `charge_participant`, par un trigger
+- toute écriture du client sur `saisie`, `depense`, `depense_part`, `charge`,
+  `charge_participant`, `revenu` et `regle_partage`, par un trigger
   `before insert or update or delete for each statement`, `security invoker`. Il prend
   le verrou du foyer de l'appelant (`current_household()`) quand `current_user =
   'authenticated'` : une écriture directe, ou faite par un trigger invoker, comme
@@ -759,7 +759,14 @@ prennent en tête :
   propriétaire, il ne fait rien : une fonction `security definer` tient déjà le verrou,
   et une action de clé étrangère qui l'attendrait en tenant sa ligne parente
   s'interbloquerait. Supprimer un compte met ainsi à null le `compte_id` de ses lignes
-  sans attendre personne ;
+  sans attendre personne. Pour `revenu` et `regle_partage`, `refige_pour` venait trop
+  tard : il prend le verrou dans un trigger `after`, la ligne déjà écrite. Un revenu
+  posé pendant le départ de son compte tenait sa ligne et attendait le verrou, que
+  `delete_my_account` tenait en attendant de supprimer cette ligne. Le nouveau paquet
+  pose revenu et règle par un `upsert` sur leur unicité (`user_profile_id, valid_from`
+  et `household_id, valid_from`), en une instruction : le `delete` puis `insert` de
+  `usePoseRevenu` et `usePoseRegle` (`budget.ts:462`, `budget.ts:680`) en faisait
+  deux transactions ;
 - l'arrivée d'un membre, `tg_membre_rejoint_les_communes` (0079), sur
   `new.household_id`.
 
@@ -807,8 +814,9 @@ D'où le trigger d'instruction : il passe avant que la ligne visée soit verroui
     pas. » (§ 3.4).
 - **`corrige_le_releve(la_facture uuid, montant_cents integer) → void`** — verrou pris,
   foyer revérifié. Pour une facture d'origine `releve` seulement, avec un montant entre
-  0 et 1 000 000 €. Elle change le montant de la facture, met à jour `reel_cents` et
-  `ecart_cents` du relevé (`prevu_cents` ne bouge pas), puis appelle `recale_l_annee`
+  0 et 1 000 000 €. Elle change le montant de la facture, puis remet au relevé
+  `reel_cents` = Σ des factures de l'année et `ecart_cents` = `reel_cents −
+  prevu_cents` (`prevu_cents` ne bouge pas), et appelle `recale_l_annee`
   sans mois cible. Taxe foncière 1 450 € corrigée à 1 460 € : cible +10,04, posé +0,04,
   +10 € sur le mois en cours.
 - **`solde_l_annee(la_charge uuid, annee integer, mois_cible date) → void`** — interne.
@@ -918,11 +926,11 @@ D'où le trigger d'instruction : il passe avant que la ligne visée soit verroui
   premier_mois_suivi }`, par `cible_de`. La feuille « Facture mise de côté », la liste
   « Retirées, encore à régler » et la borne de « Autre jour » la lisent. `useProvisionsDe`
   disparaît : elle comptait les douze mois et ignorait `prevu_cents`.
-- **`recale_la_charge(la_charge uuid) → void`** — accordée à `authenticated`, verrou
-  pris, foyer revérifié. Elle appelle `recale_l_annee` sur chaque année ouverte de la
-  charge. Recaler est idempotent : l'exposer n'ouvre pas la porte que fermer
-  `solde_l_annee` a fermée. L'écran de clôture l'ajoute
-  à X (§ 3.5), et ne refait pas ce calcul lui-même.
+- **`recale_la_charge(la_charge uuid) → void`** — interne, appelée par `retire_charge`
+  sous son verrou. Elle appelle `recale_l_annee` sans mois cible sur chaque année
+  ouverte de la charge. Aucun écran ne l'appelle : l'aperçu de la clôture vient de
+  `apercu_des_soldes`, qui n'écrit rien, alors que `recale_la_charge` écrit sur le mois
+  en cours.
 - **`rouvre_le_mois(le_mois date) → void`**
   - Elle supprime les versements liés aux choix de cette clôture, puis la clôture (les
     choix partent en cascade). Le versement d'un membre parti reste : l'argent est dans
@@ -1131,7 +1139,14 @@ La migration, dans une seule transaction :
      « Gaz » du catalogue (ici Électricité).
 
    Enfin, chaque ligne `modele` existante reçoit `depense.facon` = le `mode` de sa
-   charge, tous mois confondus. Les ajustements gardent `facon` à null.
+   charge, tous mois confondus. Les ajustements gardent `facon` à null. C'est juste
+   pour une ligne ni réglée ni confirmée : `corrige_la_charge` (0067) refait toujours
+   ces lignes-là avec la charge. Une ligne réglée ou confirmée garde la façon de sa
+   naissance, que rien n'a gardée : l'assurance à 100 € par mois confirmée en
+   septembre, passée ensuite à 1 200 € par an, recevrait `mis_de_cote`, et décembre
+   rendrait 100 € déjà payés. La migration **s'arrête donc** si une ligne `modele`
+   réglée ou confirmée appartient à une charge non mensuelle. En prod, le 01/10 : 0
+   ligne sur 36 (les 3 lignes confirmées sont mensuelles).
 3. **`categorie`.** Elle suit la section du catalogue :
 
    | Section | Catégorie |
@@ -1276,8 +1291,8 @@ La couleur n'est jamais seule : la légende et les cartes portent le nom.
     `useEnveloppesPosees`, `useSuggestionsEnveloppe`, `useRangeEnveloppe` et
     `useProvisionsDe` ; `useRattacheCharge` ne garde que `compte_id`, que `virements()`
     lira au lot 4 ;
-  - `useEtatDeLAnnee(chargeId, annee)` et `useRecaleLaCharge`, appelée par « Retirer »
-    d'une charge mise de côté ;
+  - `useEtatDeLAnnee(chargeId, annee)` ; « Retirer » n'a rien à recaler lui-même,
+    `retire_charge` le fait ;
   - `useRevenus` rend tout l'historique, et `mois.ts` prend le revenu en vigueur à la
     fin du mois affiché, comme la base. Ne garder que le dernier faisait afficher
     décembre « sur 4 500 € » si le revenu changeait en janvier ;
@@ -1401,8 +1416,10 @@ Les habitudes du dépôt s'appliquent :
     tombe sur le mois en cours ;
   - `regularise_annuel` refuse tout, avec « Recharge la page », et n'écrit rien ;
   - une charge qui a des factures ne se supprime pas : « Retirer » l'archive. Entretien,
-    septembre et octobre clôturés, facture de 320 € le 10/11, retrait le 15/11 : la
-    clôture de décembre pose +83,34 €, et l'année compte 320 € en tout ;
+    septembre et octobre clôturés, facture de 320 € le 10/11, retrait le 15/11 : le
+    retrait pose +83,34 € sur novembre tout de suite, la clôture de décembre ne pose
+    rien, et l'année compte 320 € en tout ;
+  - ouvrir l'écran de clôture n'écrit aucune `depense` ;
   - « Retirer » le 20/01/2027 garde l'ajustement « — solde 2026 » de 60 € posé sur
     janvier 2027 ;
   - Pl ne compte que les lignes `mis_de_cote` des mois suivis : l'assurance à 100 € par
@@ -1495,7 +1512,7 @@ Les habitudes du dépôt s'appliquent :
 - **Les interblocages, encore** : un compte supprimé pendant un « Revenir dessus » ne
   s'interbloque pas.
 - **Les droits** : ni `anon` ni `authenticated` n'appellent `confirme_la_ligne`, `cible_de`,
-  `recale_l_annee` ou `solde_l_annee` ; chaque garde qui regarde `current_user` refuse
+  `recale_l_annee`, `recale_la_charge` ou `solde_l_annee` ; chaque garde qui regarde `current_user` refuse
   bien un appel direct du client.
 - **Le verrou** : l'arrivée d'un membre par la clé de service verrouille bien son foyer ;
   un compte supprimé pendant une ouverture du mois ne s'interbloque pas ; une facture qui
@@ -1523,7 +1540,9 @@ Les habitudes du dépôt s'appliquent :
   `clock_timestamp()`, ou le réglage `popote.maintenant` s'il est posé. Seule une
   connexion directe peut le poser : les tests de base, et l'e2e de la clôture par
   `alter database … set popote.maintenant` sur la base locale, retiré après le banc.
-  `page.clock` seul ne change que l'heure du navigateur.
+  Ce réglage ne vaut que pour les connexions qui s'ouvrent après lui : le banc ferme
+  donc celles de PostgREST (`pg_terminate_backend`), qui les rouvre, après chaque
+  changement d'heure. `page.clock` seul ne change que l'heure du navigateur.
 
 ### E2E
 
@@ -1534,7 +1553,8 @@ Les habitudes du dépôt s'appliquent :
   - Facture du mois : « C'est ça », et aucune trace sur l'écran du mois (D79).
   - Facture mise de côté : l'aperçu, puis la ligne d'ajustement dans le mois.
 - **La clôture.**
-  - On joue un 1er novembre avec `page.clock`, et un 27 octobre pour le rappel.
+  - On joue un 1er novembre, et un 27 octobre pour le rappel : `page.clock` pour le
+    navigateur, `popote.maintenant` pour la base.
   - Le parcours complet : les trois étapes, l'épargne augmente, et le mois s'affiche
     clôturé.
   - On revient dessus : l'épargne revient à son niveau.
