@@ -1,0 +1,212 @@
+[
+ {
+  "id": "c9a6cb66-cbfb-4d6b-8ffc-bd959e89e63a",
+  "title": "Chili con carne traditionnel : la recette facile",
+  "yield_servings": 4,
+  "active_time_min": "10",
+  "total_time_min": "20",
+  "appliances": [
+   "plaques"
+  ],
+  "freezable": null,
+  "site": "cuisine.journaldesfemmes.fr",
+  "source_url": "https://cuisine.journaldesfemmes.fr/recette/343544-chili-con-carne",
+  "kcal": "773",
+  "prot": "73.4",
+  "km": "9",
+  "pm": "0.4",
+  "fib": "18.1",
+  "coverage": "1",
+  "ordre": 0
+ },
+ {
+  "id": "2d6cefbe-ee61-49fa-bcf9-7f6c07448d97",
+  "title": "Bœuf sauté aux oignons et gingembre",
+  "yield_servings": 2,
+  "active_time_min": "10.5",
+  "total_time_min": "25",
+  "appliances": [
+   "plaques"
+  ],
+  "freezable": null,
+  "site": "recetteproteine.fr",
+  "source_url": "https://recetteproteine.fr/repas/boeuf-saute-oignons-gingembre/",
+  "kcal": "472",
+  "prot": "49.9",
+  "km": "0",
+  "pm": "0.0",
+  "fib": "4.8",
+  "coverage": "1",
+  "ordre": 1
+ },
+ {
+  "id": "08efc085-c585-4cb3-beeb-0a4a99d3bc07",
+  "title": "Fajitas de poulet protéinées",
+  "yield_servings": 4,
+  "active_time_min": "23.5",
+  "total_time_min": "27",
+  "appliances": [
+   "micro_ondes",
+   "plaques"
+  ],
+  "freezable": null,
+  "site": "recetteproteine.fr",
+  "source_url": "https://recetteproteine.fr/repas/fajitas-poulet-proteinees/",
+  "kcal": "448",
+  "prot": "37.5",
+  "km": "7",
+  "pm": "0.2",
+  "fib": "6.0",
+  "coverage": "0.9",
+  "ordre": 2
+ },
+ {
+  "id": "abee1c9b-9220-4dbd-9f5c-41a31a3bbcb0",
+  "title": "Blancs de poulet au persil et à l'ail : la meilleure recette",
+  "yield_servings": 6,
+  "active_time_min": "12",
+  "total_time_min": "45",
+  "appliances": [
+   "blender",
+   "plaques"
+  ],
+  "freezable": null,
+  "site": "marmiton.org",
+  "source_url": "https://www.marmiton.org/recettes/recette_blancs-de-poulet-au-persil-et-a-l-ail_307763.aspx",
+  "kcal": "426",
+  "prot": "50.1",
+  "km": "1",
+  "pm": "0.0",
+  "fib": "3.5",
+  "coverage": "1",
+  "ordre": 3
+ },
+ {
+  "id": "458569d9-132e-463f-a60f-fbcab5ca57a5",
+  "title": "Pizza protéinée pâte au thon",
+  "yield_servings": 2,
+  "active_time_min": "12",
+  "total_time_min": "25",
+  "appliances": [
+   "four",
+   "plaques"
+  ],
+  "freezable": null,
+  "site": "recetteproteine.fr",
+  "source_url": "https://recetteproteine.fr/repas/pizza-proteinee-pate-thon/",
+  "kcal": "522",
+  "prot": "52.4",
+  "km": "8",
+  "pm": "0.1",
+  "fib": "2.2",
+  "coverage": "1",
+  "ordre": 4
+ },
+ {
+  "id": "c65a907a-7688-4cf0-910d-cdb9bdb0ba35",
+  "title": "Joue de bœuf façon grand-mère : la meilleure recette",
+  "yield_servings": 10,
+  "active_time_min": "10",
+  "total_time_min": "120",
+  "appliances": [
+   "autocuiseur",
+   "plaques"
+  ],
+  "freezable": null,
+  "site": "cuisine.journaldesfemmes.fr",
+  "source_url": "https://cuisine.journaldesfemmes.fr/recette/306153-daube-a-la-joue-de-boeuf",
+  "kcal": "506",
+  "prot": "49.9",
+  "km": "9",
+  "pm": "0.0",
+  "fib": "4.8",
+  "coverage": "0.91",
+  "ordre": 5
+ },
+ {
+  "id": "343fdbb0-6fee-4f45-8106-ca5aadf856f0",
+  "title": "Poulet mariné a l'indienne",
+  "yield_servings": 4,
+  "active_time_min": "28",
+  "total_time_min": "25",
+  "appliances": [
+   "four",
+   "micro_ondes",
+   "plaques"
+  ],
+  "freezable": null,
+  "site": "cuisine.journaldesfemmes.fr",
+  "source_url": "https://cuisine.journaldesfemmes.fr/recette/3100295-poulet-marine-a-l-indienne",
+  "kcal": "608",
+  "prot": "56.4",
+  "km": "2",
+  "pm": "0.1",
+  "fib": "7.7",
+  "coverage": "0.94",
+  "ordre": 6
+ },
+ {
+  "id": "820c014d-9e6c-47ef-bde9-dbd6cd5b5ad0",
+  "title": "Rougail de truite",
+  "yield_servings": 4,
+  "active_time_min": "33.5",
+  "total_time_min": "46",
+  "appliances": [
+   "four",
+   "plaques"
+  ],
+  "freezable": null,
+  "site": "ptitchef.com",
+  "source_url": "https://www.ptitchef.com/recettes/plat/rougail-de-truite-fid-338530",
+  "kcal": "444",
+  "prot": "37.2",
+  "km": "3",
+  "pm": "0.1",
+  "fib": "3.4",
+  "coverage": "0.94",
+  "ordre": 7
+ },
+ {
+  "id": "78e803bd-8f51-44a3-9c50-0bf5a9acb547",
+  "title": "Hachis parmentier : la meilleure recette",
+  "yield_servings": 6,
+  "active_time_min": "19",
+  "total_time_min": "10",
+  "appliances": [
+   "four",
+   "plaques"
+  ],
+  "freezable": null,
+  "site": "cuisine.journaldesfemmes.fr",
+  "source_url": "https://cuisine.journaldesfemmes.fr/recette/304981-hachis-parmentier",
+  "kcal": "557",
+  "prot": "25.7",
+  "km": "0",
+  "pm": "0.0",
+  "fib": "4.1",
+  "coverage": "1",
+  "ordre": 8
+ },
+ {
+  "id": "8c680a66-08b1-4ab3-b8ba-43df3dee2df8",
+  "title": "Butternut & saucisses rôties - Cookeo",
+  "yield_servings": 1,
+  "active_time_min": "20",
+  "total_time_min": "37",
+  "appliances": [
+   "autocuiseur",
+   "four",
+   "plaques"
+  ],
+  "freezable": null,
+  "site": "jow.fr",
+  "source_url": "https://jow.fr/recipes/butternut-et-saucisses-roties-8edwj93rl5iq2lmq0vib",
+  "kcal": "433",
+  "prot": "24.1",
+  "km": "0",
+  "pm": "0.0",
+  "fib": "10.3",
+  "coverage": "1",
+  "ordre": 9
+ }
+]
