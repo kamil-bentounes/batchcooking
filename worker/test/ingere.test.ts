@@ -55,6 +55,7 @@ function brute(p: Partial<RecetteBrute> = {}): RecetteBrute {
       'Bon appétit !',
     ],
     licence: null,
+    image: null,
     ...p,
   }
 }

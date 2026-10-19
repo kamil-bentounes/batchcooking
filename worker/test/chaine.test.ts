@@ -56,6 +56,7 @@ function brutes(): RecetteBrute[] {
     ingredients: lireIngredients(r.recipeIngredient),
     etapes: lireEtapes(r.recipeInstructions),
     licence: null,
+    image: null,
   }))
 }
 

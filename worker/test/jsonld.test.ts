@@ -6,8 +6,11 @@
  * « 4 personnes ». Un extracteur qui ne gère que la forme canonique rate la
  * moitié du web.
  */
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { blocsJsonLd, dureeIso, etapes, extraire, ingredients, parts } from '../src/jsonld.ts'
+import {
+  blocsJsonLd, dureeIso, etapes, extraire, ingredients, parts, photo,
+} from '../src/jsonld.ts'
 
 const page = (json: unknown, autour = '') => `<!doctype html><html><head>
   ${autour}
@@ -240,5 +243,104 @@ describe('le nombre de parts', () => {
     expect(parts('1 kg')).toBe(1)          // faute de mieux, mais borné
     expect(parts('environ 500 g')).toBeNull()
     expect(parts(null)).toBeNull()
+  })
+})
+
+describe('la photo (R3)', () => {
+  const P = 'https://www.exemple.fr/recettes/poulet-42'
+
+  it('lit une adresse seule', () => {
+    expect(photo('https://img.exemple.fr/p.jpg', P)).toBe('https://img.exemple.fr/p.jpg')
+  })
+
+  it('prend la première d’une liste : celle que le site met en avant', () => {
+    expect(photo(['https://a.fr/1.jpg', 'https://a.fr/2.jpg'], P)).toBe('https://a.fr/1.jpg')
+  })
+
+  it('lit un ImageObject, par url puis par contentUrl', () => {
+    expect(photo({ '@type': 'ImageObject', url: 'https://a.fr/o.webp', width: 1200 }, P))
+      .toBe('https://a.fr/o.webp')
+    expect(photo({ '@type': 'ImageObject', contentUrl: 'https://a.fr/c.webp' }, P))
+      .toBe('https://a.fr/c.webp')
+  })
+
+  it('lit une liste d’ImageObject', () => {
+    expect(photo([{ url: 'https://a.fr/1x1.jpg' }, { url: 'https://a.fr/16x9.jpg' }], P))
+      .toBe('https://a.fr/1x1.jpg')
+  })
+
+  it('suit un renvoi @id dans le graphe de la page', () => {
+    const html = page({ '@context': 'https://schema.org', '@graph': [
+      { '@type': 'ImageObject', '@id': 'https://www.exemple.fr/#img',
+        url: 'https://www.exemple.fr/wp/poulet.jpg' },
+      { ...RECETTE, image: { '@id': 'https://www.exemple.fr/#img' } },
+    ] })
+    expect(extraire(html, P)!.image).toBe('https://www.exemple.fr/wp/poulet.jpg')
+  })
+
+  it('suit le renvoi même quand une autre page y renvoie avant la photo', () => {
+    // Le graphe Yoast : l'Article renvoie à l'image AVANT que l'ImageObject arrive.
+    const html = page({ '@context': 'https://schema.org', '@graph': [
+      { '@type': 'Article', '@id': 'https://www.exemple.fr/#article',
+        image: { '@id': 'https://www.exemple.fr/#primaryimage' } },
+      { ...RECETTE, image: { '@id': 'https://www.exemple.fr/#primaryimage' } },
+      { '@type': 'ImageObject', '@id': 'https://www.exemple.fr/#primaryimage',
+        url: 'https://www.exemple.fr/wp/poulet.jpg' },
+    ] })
+    expect(extraire(html, P)!.image).toBe('https://www.exemple.fr/wp/poulet.jpg')
+  })
+
+  it('ne prend pas l’ancre d’une page pour une photo', () => {
+    expect(photo({ '@id': 'https://www.exemple.fr/#primaryimage' }, P)).toBeNull()
+  })
+
+  it('résout une adresse relative contre la page', () => {
+    expect(photo('/img/poulet.jpg', P)).toBe('https://www.exemple.fr/img/poulet.jpg')
+  })
+
+  it('passe http en https : le site est servi en https', () => {
+    expect(photo('http://a.fr/p.jpg', P)).toBe('https://a.fr/p.jpg')
+  })
+
+  it('refuse ce qui n’est pas une adresse web', () => {
+    expect(photo('data:image/png;base64,AAAA', P)).toBeNull()
+    expect(photo('javascript:alert(1)', P)).toBeNull()
+  })
+
+  it('décode les entités de l’adresse', () => {
+    expect(photo('https://a.fr/i.jpg?w=400&amp;h=300', P)).toBe('https://a.fr/i.jpg?w=400&h=300')
+  })
+
+  it('rend null quand la page n’en donne pas', () => {
+    expect(photo(undefined, P)).toBeNull()
+    expect(photo([], P)).toBeNull()
+  })
+
+  it('arrive jusqu’à la recette extraite', () => {
+    expect(extraire(page({ ...RECETTE, image: 'https://a.fr/p.jpg' }), P)!.image)
+      .toBe('https://a.fr/p.jpg')
+  })
+
+  it('lit la photo des trois pages réelles des fixtures', () => {
+    const fixtures: { url: string; recette: Record<string, unknown> }[] = JSON.parse(
+      readFileSync(new URL('./fixtures/recettes.json', import.meta.url), 'utf8'))
+    for (const f of fixtures) {
+      expect(photo(f.recette.image, f.url))
+        .toMatch(/^https:\/\/www\.ptitchef\.com\/imgupl\/recipe\/.+\.webp$/)
+    }
+  })
+})
+
+describe('les entités, à l’extraction', () => {
+  it('décode le titre, les ingrédients et les étapes', () => {
+    const r = extraire(page({
+      ...RECETTE,
+      name: 'Fish &amp; chips',
+      recipeIngredient: ['200 g d&#039;huile', '1 kg de poisson'],
+      recipeInstructions: ['Faites chauffer l&#039;huile.', 'Plongez le poisson.'],
+    }), 'https://x/r')!
+    expect(r.titre).toBe('Fish & chips')
+    expect(r.ingredients[0]).toBe('200 g d\'huile')
+    expect(r.etapes[0]).toBe('Faites chauffer l\'huile.')
   })
 })

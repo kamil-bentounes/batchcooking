@@ -9,6 +9,8 @@
  * Mesuré : 98 % de pages exploitables sur le corpus.
  */
 
+import { decodeEntites } from '../../src/lib/recettes/texte.ts'
+
 export interface RecetteBrute {
   url: string
   titre: string | null
@@ -20,6 +22,8 @@ export interface RecetteBrute {
   ingredients: string[]
   etapes: string[]
   licence: string | null
+  /** La photo du site, en LIEN : rien n'est copié chez nous (R3). */
+  image: string | null
 }
 
 /** Parcourt un JSON quelconque et rend tous les objets de type `Recipe`. */
@@ -97,7 +101,7 @@ export function parts(v: unknown): number | null {
 }
 
 function texte(v: unknown): string | null {
-  if (typeof v === 'string') return v.trim() || null
+  if (typeof v === 'string') return decodeEntites(v).trim() || null
   if (Array.isArray(v)) return texte(v[0])
   if (v && typeof v === 'object') {
     const o = v as Record<string, unknown>
@@ -109,8 +113,9 @@ function texte(v: unknown): string | null {
 /** `recipeInstructions` : chaîne, liste de chaînes, HowToStep, HowToSection. */
 export function etapes(v: unknown): string[] {
   const sorties: string[] = []
-  const pousse = (s: string | null) => {
-    if (!s) return
+  const pousse = (brut: string | null) => {
+    if (!brut) return
+    const s = decodeEntites(brut)
     // Une seule chaîne contenant toute la recette : on la découpe aux phrases
     // numérotées ou aux retours à la ligne, jamais au point (« 180 °C. »).
     const morceaux = s.includes('\n')
@@ -143,6 +148,78 @@ export function ingredients(v: unknown): string[] {
 }
 
 /**
+ * Les nœuds du bloc qui portent un `@id`, pour suivre les renvois.
+ *
+ * ⚠️ Un objet qui ne porte QUE son `@id` est un renvoi, pas un nœud. Dans un graphe
+ *    Yoast, l'`Article` et la `WebPage` renvoient à `…#primaryimage` avant que
+ *    l'`ImageObject` complet n'arrive : ranger le premier vu gardait le renvoi
+ *    vide, et la photo devenait introuvable.
+ */
+function noeuds(o: unknown, sortie = new Map<string, Record<string, unknown>>()) {
+  if (Array.isArray(o)) {
+    for (const v of o) noeuds(v, sortie)
+  } else if (o && typeof o === 'object') {
+    const r = o as Record<string, unknown>
+    const id = r['@id']
+    const plein = Object.keys(r).some(k => k !== '@id')
+    if (typeof id === 'string' && plein && !sortie.has(id)) sortie.set(id, r)
+    for (const v of Object.values(r)) noeuds(v, sortie)
+  }
+  return sortie
+}
+
+const RESSEMBLE_A_UNE_IMAGE = /\.(?:jpe?g|png|webp|avif|gif)(?:[?#]|$)/i
+
+/**
+ * La photo de la recette, en LIEN : rien n'est copié chez nous (R3).
+ *
+ * `image` s'écrit de quatre façons — une adresse, une liste d'adresses, un
+ * `ImageObject` (`url`, puis `contentUrl`), une liste d'`ImageObject`. On prend
+ * la PREMIÈRE adresse utilisable : celle que le site met en avant.
+ *
+ * Un objet qui ne porte qu'un `@id` renvoie ailleurs dans le graphe : on l'y
+ * cherche. Introuvable, on ne le garde que s'il finit comme une image — sinon
+ * c'est l'ancre d'une page (`…/#primaryimage`), pas une photo.
+ *
+ * L'adresse est décodée, résolue contre la page, passée en https (le navigateur
+ * le ferait de toute façon, l'appli étant servie en https), et refusée au-delà
+ * de 2 048 caractères — la limite de la colonne.
+ */
+export function photo(
+  v: unknown, page: string, graphe = new Map<string, Record<string, unknown>>(),
+): string | null {
+  const candidates: string[] = []
+  const visite = (x: unknown, profondeur: number): void => {
+    if (profondeur > 3) return
+    if (typeof x === 'string') { candidates.push(x); return }
+    if (Array.isArray(x)) { for (const e of x) visite(e, profondeur + 1); return }
+    if (!x || typeof x !== 'object') return
+    const o = x as Record<string, unknown>
+    const directe = typeof o.url === 'string' ? o.url
+      : typeof o.contentUrl === 'string' ? o.contentUrl : null
+    if (directe) { candidates.push(directe); return }
+    const id = typeof o['@id'] === 'string' ? o['@id'] : null
+    if (!id) return
+    const renvoi = graphe.get(id)
+    if (renvoi && renvoi !== o) { visite(renvoi, profondeur + 1); return }
+    if (RESSEMBLE_A_UNE_IMAGE.test(id)) candidates.push(id)
+  }
+  visite(v, 0)
+
+  for (const c of candidates) {
+    const brut = decodeEntites(c.trim())
+    if (!brut) continue
+    let u: URL
+    try { u = new URL(brut, page) } catch { continue }
+    if (u.protocol === 'http:') u.protocol = 'https:'
+    if (u.protocol !== 'https:') continue
+    const adresse = u.toString()
+    if (adresse.length <= 2048) return adresse
+  }
+  return null
+}
+
+/**
  * Le nom du SITE, pour l'attribution : TOUJOURS le domaine.
  *
  * `publisher` existe, mais il n'est pas fiable — relevé sur 225 pages réelles :
@@ -170,6 +247,7 @@ function editeur(url: string): string | null {
  */
 export function extraire(html: string, url: string): RecetteBrute | null {
   for (const bloc of blocsJsonLd(html)) {
+    const graphe = noeuds(bloc)
     for (const r of recettesDans(bloc)) {
       const etapesLues = etapes(r.recipeInstructions)
       const ingredientsLus = ingredients(r.recipeIngredient ?? r.ingredients)
@@ -188,6 +266,7 @@ export function extraire(html: string, url: string): RecetteBrute | null {
         ingredients: ingredientsLus,
         etapes: etapesLues,
         licence: texte(r.license),
+        image: photo(r.image, url, graphe),
       }
     }
   }
