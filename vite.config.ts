@@ -41,6 +41,14 @@ export default defineConfig({
       : []),
     VitePWA({
       registerType: 'autoUpdate',
+      /* ⚠️ Le bundle INSTRUMENTÉ pèse plus de 2 Mo, la limite par défaut de ce
+         que le service worker met en cache : la construction échouait, et
+         `npm run couverture` ne mesurait plus rien sans que personne ne le
+         voie. On ne relève la limite que pour lui ; celui qui part en
+         production reste sous la limite d'origine. */
+      ...(process.env.COUVERTURE
+        ? { workbox: { maximumFileSizeToCacheInBytes: 8 * 1024 * 1024 } }
+        : {}),
       manifest: {
         name: 'Popote',
         short_name: 'Popote',
