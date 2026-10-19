@@ -57,11 +57,35 @@ export const fn = (name: string) =>
 export async function callFunction<T = unknown>(name: string, body: unknown): Promise<T> {
   const { data } = await supabase.auth.getSession()
   if (!data.session) throw new Error('Connecte-toi d’abord.')
+  return appelle<T>(name, body, data.session.access_token)
+}
+
+/**
+ * Appelle une Edge Function SANS session : la seule qui l'accepte est
+ * `accept-invite`, quand l'invitée crée son compte depuis son lien.
+ */
+export function callFunctionPublique<T = unknown>(name: string, body: unknown): Promise<T> {
+  return appelle<T>(name, body, import.meta.env.VITE_SUPABASE_ANON_KEY)
+}
+
+/** Une erreur de fonction, avec son code quand elle en porte un. */
+export class ErreurDeFonction extends Error {
+  readonly code: string | null
+  readonly statut: number
+  constructor(message: string, code: string | null, statut: number) {
+    super(message)
+    this.code = code
+    this.statut = statut
+  }
+}
+
+async function appelle<T>(name: string, body: unknown, jeton: string): Promise<T> {
   const res = await fetch(fn(name), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${data.session.access_token}`,
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${jeton}`,
     },
     body: JSON.stringify(body),
   })
@@ -71,11 +95,13 @@ export async function callFunction<T = unknown>(name: string, body: unknown): Pr
        On en sort la phrase, et on garde le texte brut quand il n'y en a pas. */
     const brut = await res.text()
     let message = brut
+    let code: string | null = null
     try {
-      const parsed = JSON.parse(brut) as { erreur?: string; message?: string; error?: string }
+      const parsed = JSON.parse(brut) as { erreur?: string; message?: string; error?: string; code?: string }
       message = parsed.erreur ?? parsed.message ?? parsed.error ?? brut
+      code = parsed.code ?? null
     } catch { /* pas du JSON : on garde le texte */ }
-    throw new Error(message)
+    throw new ErreurDeFonction(message, code, res.status)
   }
   return res.json()
 }

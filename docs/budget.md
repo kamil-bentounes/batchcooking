@@ -235,19 +235,22 @@ communes. C'est au-dessus de lui que se pose la question de D65.
 
 ## 4 · Le parcours d'invitation
 
-Le SMTP applicatif est en place (Gmail, 30 mails/heure), donc :
+Le lien suffit (décision du 19/10/2026) :
 
-1. Kamil saisit l'adresse de Thauba dans les réglages.
-2. La fonction `invite`, qui tourne déjà en rôle de service, appelle
-   `auth.admin.inviteUserByEmail()` avec `data.invite_par` et un `redirectTo`
-   qui porte le jeton du foyer. Le gabarit du mail est versionné dans
-   `supabase/templates/invitation.html` et se colle dans le tableau de bord.
-3. Thauba clique. Elle **arrive authentifiée** : plus d'inscription séparée,
-   donc plus de jeton à faire survivre à un aller-retour par mail.
-4. Elle choisit son mot de passe, puis complète son profil.
+1. Kamil saisit l'adresse de Thauba dans les réglages. La fonction `invite`
+   rend le lien `/invite/<jeton>` — trente jours, usage unique — sans envoyer
+   de mail ni créer de compte. Il le lui envoie lui-même (« Partager »).
+2. Thauba l'ouvre, sans compte. L'écran `Rejoindre` lit, par
+   `invitation_par_jeton`, qui l'invite et pour quelle adresse.
+3. Elle choisit son mot de passe. `accept-invite` crée son compte (adresse de
+   l'invitation, tenue pour confirmée), consomme le jeton et la rattache au
+   foyer ; l'écran la connecte avec ce mot de passe.
+4. Elle complète son profil : prénom, revenu, date d'arrivée.
 
-Si l'adresse a déjà un compte, l'appel échoue et on retombe sur le lien simple
-d'aujourd'hui.
+Un compte sans profil (celui que laissait l'ancien mail) reçoit le mot de
+passe. Un compte déjà membre d'un foyer garde le sien : « Cette adresse a déjà
+un compte Popote ». Le mail d'avant mourait au bout d'une heure, et cinq
+invitées n'ont jamais dépassé la création de compte.
 
 ### D69 — on ne détecte pas si un compte existe
 

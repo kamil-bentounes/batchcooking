@@ -73,36 +73,22 @@ Deno.serve(async (req) => {
   const link = `${base}/invite/${inv.token}`
 
   /*
-   * L'invitation part par le SMTP de l'application, pas par un service tiers.
+   * ⚠️ PLUS DE MAIL, et plus de compte créé à l'envoi (décision du 19/10/2026).
    *
-   * `inviteUserByEmail` envoie le gabarit « Invite user » du tableau de bord —
-   * celui qu'on a écrit, avec la cocotte et le nom — et surtout : la personne
-   * ARRIVE AUTHENTIFIÉE. Il n'y a donc plus d'inscription séparée, donc plus de
-   * jeton à faire survivre à un aller-retour par mail, qui était exactement le
-   * trou : `AcceptInvite` exigeait une session que l'invitée n'avait pas encore,
-   * et le jeton se perdait dès qu'elle partait créer son compte.
+   *    `inviteUserByEmail` créait le compte de l'invitée et lui envoyait un lien
+   *    de connexion Supabase : mort au bout d'UNE heure, consommé par les
+   *    antivirus de messagerie, parti par un serveur limité à deux mails par
+   *    heure et souvent rangé en indésirables. Cinq invitées n'ont jamais
+   *    dépassé la création de compte ; le 30 septembre, l'une a ouvert un mail
+   *    vieux de huit jours.
    *
-   * `data.invite_par` alimente `{{ .Data.invite_par }}` dans le gabarit, et
-   * `redirectTo` ramène sur le lien qui porte le jeton du foyer.
+   *    Le lien `/invite/<jeton>` suffit désormais : trente jours, usage unique.
+   *    L'invitée y choisit son mot de passe et `accept-invite` crée son compte.
+   *    L'hôte le lui transmet lui-même — un message arrive, lui.
    *
-   * ⚠️ `redirectTo` est IGNORÉ EN SILENCE tant que l'URL n'est pas dans la
-   *    liste d'autorisation du projet. Si l'invitée atterrit sur l'accueil sans
-   *    rejoindre le foyer, c'est là qu'il faut regarder.
+   *    `envoye` et `dejaUnCompte` restent, à faux, pour l'ancien paquet que sert
+   *    le service worker au premier chargement : il affiche alors « Invitation
+   *    créée… Envoie-lui le lien ci-dessous », ce qui est exactement vrai.
    */
-  const { data: prenom } = await admin
-    .from('user_profile').select('display_name').eq('id', userRes.user.id).maybeSingle()
-
-  const { error: envoi } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: link,
-    data: { invite_par: prenom?.display_name ?? 'Quelqu’un' },
-  })
-
-  /* Une adresse qui a déjà un compte fait échouer l'appel, et c'est le seul cas
-     où l'on retombe sur le lien à transmettre soi-même. Ce n'est PAS de
-     l'énumération de comptes : on n'apprend rien qu'on ne sache déjà, puisque
-     c'est nous qui avons saisi l'adresse et décidé de l'inviter. */
-  const compteExistant = !!envoi
-
-  return reply({ token: inv.token, link, envoye: !compteExistant,
-                 dejaUnCompte: compteExistant })
+  return reply({ token: inv.token, link, envoye: false, dejaUnCompte: false })
 })

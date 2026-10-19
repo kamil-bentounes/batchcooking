@@ -71,6 +71,6 @@ Codex n'y a pas accès : le DNS est coupé dans son bac à sable. Les agents Cla
   pourrait le corriger plus tôt, mais seulement avec son accord.
 - **Côté Kamil.**
   - Thauba doit rejoindre le foyer elle-même.
-  - Coller `supabase/templates/invitation.html` dans le tableau de bord Supabase.
-  - Une question est restée sans réponse : réserver le lien d'invitation à l'adresse
-    invitée ?
+  - (Le gabarit de mail d'invitation et la question du lien réservé à l'adresse
+    invitée sont tombés le 19/10 : le lien suffit, et le compte naît pour
+    l'adresse de l'invitation.)

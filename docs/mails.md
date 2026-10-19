@@ -4,7 +4,7 @@
 
 | Chemin | État |
 |---|---|
-| **Invitation** | `RESEND_API_KEY` n'est pas posée. La fonction `invite` ne tente aucun envoi et rend le **lien**, à transmettre soi-même. C'est le chemin qui marche. |
+| **Invitation** | **Aucun mail, exprès** (décision du 19/10/2026). La fonction `invite` rend le **lien** `/invite/<jeton>` — trente jours, usage unique —, que l'hôte envoie lui-même (SMS, WhatsApp, mail). L'invitée y choisit son mot de passe et son compte naît sur place (`accept-invite`). |
 | **Lien magique** (première connexion, mot de passe oublié) | Passe par le SMTP **intégré** de Supabase : **2 mails par heure**, expéditeur `noreply@mail.app.supabase.io`, classé en indésirable une fois sur deux. |
 
 Deux personnes s'en accommodent. Une troisième, non.
@@ -72,8 +72,15 @@ plus personne ne pourrait se connecter.
 
 `supabase config diff` est en lecture seule et reste sans danger.
 
-## Si un jour l'invitation doit partir toute seule
+## Pourquoi l'invitation n'envoie plus de mail
 
-`RESEND_API_KEY` et `APP_BASE_URL` en secrets de fonction, et
-`supabase/functions/invite/index.ts` fait le reste — le code est déjà écrit.
-Ce n'est pas nécessaire tant qu'on transmet le lien à la main.
+Elle passait par `inviteUserByEmail` : le mail portait un lien de connexion
+Supabase, mort au bout d'**une heure** (`mailer_otp_exp`), consommé par les
+antivirus de messagerie qui l'ouvrent avant la personne, et parti par le SMTP
+intégré (deux mails par heure, souvent en indésirables). Cinq invitées réelles
+n'ont jamais dépassé la création de compte ; le 30 septembre, l'une a ouvert un
+mail vieux de huit jours.
+
+Le lien de l'application, lui, vaut trente jours et ne dépend d'aucun mail.
+`APP_BASE_URL` reste un secret de la fonction `invite` : il fait le lien qu'elle
+rend à l'ancien paquet.

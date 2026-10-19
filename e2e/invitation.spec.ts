@@ -9,15 +9,17 @@
  *
  * Ce fichier suit donc les deux personnes, dans l'ordre réel :
  *
- *   Kamil crée l'invitation → le mail part → Thauba l'ouvre, arrive
- *   AUTHENTIFIÉE, pose son mot de passe, remplit son profil → elle est dans le
- *   foyer, et dans les charges communes qu'il avait posées sans elle.
+ *   Kamil crée l'invitation → il lui envoie le lien → Thauba l'ouvre sur son
+ *   téléphone, SANS compte, choisit son mot de passe → son compte naît, elle
+ *   remplit son profil → elle est dans le foyer, et dans les charges communes
+ *   qu'il avait posées sans elle.
  *
- * Le mail est lu dans la vraie boîte : Supabase local le dépose dans Mailpit,
- * et c'est le seul moyen de vérifier qu'il PART, qu'il porte le bon lien, et
- * que ce lien mène quelque part.
+ * ⚠️ AUCUN MAIL (décision du 19/10/2026). Le mail d'invitation de Supabase
+ *    portait un lien de connexion mort au bout d'une heure : cinq invitées
+ *    réelles n'ont jamais dépassé la création de compte. On vérifie donc
+ *    aussi, dans la vraie boîte (Mailpit), qu'aucun mail ne part.
  */
-import { expect, test } from '@playwright/test'
+import { devices, expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { MOT_DE_PASSE, amorce, efface, db, remetLeMotDePasse } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
@@ -82,7 +84,7 @@ async function dernierMail(page: Page, pour: string): Promise<{ sujet: string; h
 }
 
 test.describe('inviter quelqu’un dans le foyer', () => {
-  test('du bouton de Kamil jusqu’au profil de Thauba', async ({ page }) => {
+  test('du bouton de Kamil jusqu’au hub de Thauba, sans aucun mail', async ({ page, browser }) => {
     test.setTimeout(120_000)
 
     /* ── 1 · Kamil pose une charge COMMUNE alors qu'il est encore seul ───── */
@@ -97,103 +99,106 @@ test.describe('inviter quelqu’un dans le foyer', () => {
       charge_id: commune!.id, user_profile_id: foyer.userId, household_id: foyer.householdId,
     })
 
-    /* ── 2 · Il crée l'invitation depuis les réglages ────────────────────── */
+    /* ── 2 · Il crée l'invitation depuis les réglages, et obtient le LIEN ── */
     await page.goto('/reglages')
     await page.getByLabel(/son e-?mail/i).fill(INVITEE)
     await prend(page, '01-invitation-saisie')
     await page.getByRole('button', { name: /créer l’invitation/i }).click()
 
-    // L'écran DIT ce qui s'est passé. Il a longtemps affiché le lien sans un mot.
-    await expect(page.getByText(/le mail est parti/i)).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/invitation créée pour/i)).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/le mail est parti/i), 'l’écran promet un mail qui ne part plus')
+      .toHaveCount(0)
     const lien = await page.getByText(/https?:\/\/\S*\/invite\/\S+/).first().innerText()
-    expect(lien, 'le lien affiché ne mène pas à une invitation').toMatch(/\/invite\/[0-9a-f-]{36}/)
+    expect(lien, 'le lien affiché ne mène pas à une invitation').toMatch(/\/invite\/[0-9a-f-]{36}$/)
+    await expect(page.getByRole('button', { name: /copier le lien/i })).toBeVisible()
     await prend(page, '02-invitation-creee')
 
-    /* ── 3 · Le mail part VRAIMENT, et porte le bon texte ────────────────── */
-    const mail = await dernierMail(page, INVITEE)
-
-    /* ⚠️ On n'asserte PAS le texte du mail.
-     *
-     *    Le sujet et le gabarit — la cocotte, le nom, la phrase de Kamil — sont
-     *    posés dans le tableau de bord du projet hébergé. En local, Supabase
-     *    sert son modèle par défaut : exiger ici le texte de production
-     *    reviendrait à tester une configuration absente, et le test échouerait
-     *    pour une raison qui n'est pas un défaut.
-     *
-     *    Ce qui se vérifie en local, et qui est l'essentiel : le mail PART, il
-     *    part à la bonne adresse, et il porte un lien qui mène à l'application. */
-    expect(mail.sujet, 'le mail n’a pas de sujet').not.toBe('')
-    expect(mail.html, 'le mail ne porte aucun lien').toMatch(/href="[^"]+"/)
-
-    /* ── 4 · Thauba ouvre le lien : elle arrive AUTHENTIFIÉE ─────────────── */
-    const brut = mail.html.match(/href="([^"]*(?:verify|invite)[^"]*)"/)?.[1]
-      ?.replace(/&amp;/g, '&')
-    expect(brut, 'aucun lien exploitable dans le mail').toBeTruthy()
-
-    /* Le `redirect_to` du mail pointe vers le serveur de développement — c'est
-       `APP_BASE_URL` qui le décide, et il vaut autre chose ici que sur le
-       serveur de test. On le récrit vers ce dernier : ce qu'on éprouve, c'est
-       la CHAÎNE — le lien vérifie le jeton, ouvre une session, et dépose sur le
-       chemin d'invitation, qui doit charger l'application. C'est précisément ce
-       chemin-là qui répondait 404 en production. */
-    const verif = new URL(brut!)
-    const dest = new URL(verif.searchParams.get('redirect_to') ?? '/')
-    verif.searchParams.set('redirect_to', `http://127.0.0.1:4173${dest.pathname}`)
-    const cible = verif.toString()
-    // Sur le CHEMIN, pas sur l'URL entière : `searchParams` encode les barres.
-    expect(dest.pathname, 'le lien du mail ne mène pas à une invitation')
-      .toMatch(/\/invite\/[0-9a-f-]{36}/)
+    /* ── 3 · Et AUCUN mail ne part : c'est lui qui envoie le lien ────────── */
+    await page.waitForTimeout(2_000)
+    const boite = await (await page.request.get(
+      `${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:${INVITEE}`)}`)).json()
+    expect(boite.messages_count ?? boite.messages?.length ?? 0,
+      'un mail est parti : son lien de connexion mourrait au bout d’une heure').toBe(0)
 
     const avant = (await db.from('user_profile')
       .select('id').eq('household_id', foyer.householdId)).data ?? []
 
-    const elle = await page.context().browser()!.newContext()
+    /* ── 4 · Thauba l'ouvre sur SON téléphone, sans compte ───────────────── */
+    const elle = await browser.newContext({
+      ...devices['Pixel 7'], locale: 'fr-FR', timezoneId: 'Europe/Paris' })
     const sonEcran = await elle.newPage()
-    await sonEcran.goto(cible!)
-    await sonEcran.waitForTimeout(2_500)
+    const erreurs: string[] = []
+    sonEcran.on('pageerror', e => erreurs.push(e.message))
+    sonEcran.on('console', m => { if (m.type() === 'error') erreurs.push(m.text()) })
+    /* Le lien TEL QU'IL EST AFFICHÉ, sans rien récrire : c'est celui qu'il
+       recopie dans son message. */
+    await sonEcran.goto(lien)
+    expect(await sonEcran.title(), 'le lien ne charge pas l’application').toMatch(/Popote/)
+
+    await expect(sonEcran.getByRole('heading', { name: /kamil t’invite/i }),
+      'elle ne lit pas qui l’invite').toBeVisible({ timeout: 15_000 })
+    const champMail = sonEcran.getByLabel(/ton e-?mail/i)
+    await expect(champMail).toHaveValue(INVITEE)
+    await expect(champMail, 'elle pourrait changer l’adresse de l’invitation')
+      .toHaveAttribute('readonly', '')
+    const creer = sonEcran.getByRole('button', { name: /créer mon compte/i })
+    await expect(creer).toBeDisabled()
     await sonEcran.screenshot({ path: '.shots/invitation/03-elle-arrive.png' })
     await releve(sonEcran)
 
-    /* Le lien doit charger l'APPLICATION, pas une page d'erreur : c'est
-       exactement ce qui manquait quand tous les sous-chemins répondaient 404. */
-    expect(await sonEcran.title(), 'le lien du mail ne charge pas l’application')
-      .toMatch(/Popote/)
+    /* ── 5 · Elle choisit son mot de passe : son compte naît ─────────────── */
+    await sonEcran.getByLabel(/choisis ton mot de passe/i).fill('court')
+    await expect(sonEcran.getByText(/il en faut au moins 8/i)).toBeVisible()
+    await sonEcran.getByLabel(/choisis ton mot de passe/i).fill('thauba-choisit-12')
+    await expect(creer).toBeEnabled()
+    await sonEcran.screenshot({ path: '.shots/invitation/04-mot-de-passe.png' })
+    await creer.click()
 
-    /* ── 5 · Elle rejoint, et entre dans les charges communes ────────────── */
-    const rejoindre = sonEcran.getByRole('button', { name: /rejoindre le foyer/i })
-    await expect(rejoindre, 'l’écran d’invitation n’offre pas de rejoindre')
-      .toBeVisible({ timeout: 15_000 })
-    await sonEcran.screenshot({ path: '.shots/invitation/04-on-t-attend.png' })
-    await releve(sonEcran)
-    await rejoindre.click()
-    await sonEcran.waitForTimeout(3_000)
-    await sonEcran.screenshot({ path: '.shots/invitation/05-elle-est-entree.png' })
-    await releve(sonEcran)
-
-    /* Le mot de passe, puis SON écran à elle. On ne fabrique plus de prénom
-       depuis son adresse — `thauba-1790147184836` finissait pré-rempli, validé
-       sans regarder, puis lu sur chaque ligne de charge — et l'application la
-       mène donc au profil avant tout le reste : sa date d'entrée et son revenu
-       décident de tout le partage, et le hub ne lui en parle jamais. */
-    const mdp = sonEcran.getByLabel(/mot de passe/i)
-    if (await mdp.count()) {
-      await mdp.fill(MOT_DE_PASSE)
-      await sonEcran.getByRole('button', { name: /enregistrer/i }).click()
-      await sonEcran.waitForTimeout(2_500)
-    }
+    /* Pas d'écran « Ton mot de passe » : elle vient de le choisir. Elle arrive
+       sur SON profil — sa date d'entrée et son revenu décident du partage. */
     await expect(sonEcran.getByLabel(/ton prénom/i),
-      'elle n’est pas menée à son profil, où tout se décide')
-      .toBeVisible({ timeout: 15_000 })
+      'elle n’est pas menée à son profil, où tout se décide').toBeVisible({ timeout: 20_000 })
+    await expect(sonEcran.getByRole('heading', { name: /ton mot de passe/i })).toHaveCount(0)
     await expect(sonEcran.getByLabel(/ton prénom/i),
       'un prénom a été fabriqué depuis son adresse').toHaveValue('')
-    await sonEcran.screenshot({ path: '.shots/invitation/07-son-profil.png' })
+    expect(new URL(sonEcran.url()).pathname, 'elle est restée sur le lien d’invitation')
+      .not.toMatch(/\/invite\//)
+    await sonEcran.screenshot({ path: '.shots/invitation/05-son-profil.png' })
     await releve(sonEcran)
+
+    /* ── 6 · Son profil, puis le hub ─────────────────────────────────────── */
+    await sonEcran.getByLabel(/ton prénom/i).fill('Thauba')
+    await sonEcran.getByLabel(/ton revenu net mensuel/i).fill('2500')
+    await sonEcran.getByRole('button', { name: /^enregistrer$/i }).click()
+    await expect(sonEcran.getByRole('heading', { name: 'Popote' }),
+      'son profil enregistré ne mène pas au hub').toBeVisible({ timeout: 20_000 })
+    /* Le hub la connaît TOUT DE SUITE : il gardait le foyer de l'arrivée en
+       cache cinq minutes, et lui disait « Complète ton profil » sous un avatar
+       vide, une seconde après qu'elle l'avait complété. */
+    await expect(sonEcran.getByRole('button', { name: 'Mon profil' }),
+      'son avatar ne porte pas son initiale').toHaveText('T')
+    await expect(sonEcran.getByText(/complète ton profil/i),
+      'le hub lui réclame le profil qu’elle vient de remplir').toHaveCount(0)
+    await sonEcran.screenshot({ path: '.shots/invitation/06-son-hub.png' })
+    await releve(sonEcran)
+
+    /* ── 7 · Le lien a servi : rouvert ailleurs, il le dit ───────────────── */
+    const ailleurs = await browser.newContext({ ...devices['Pixel 7'], locale: 'fr-FR' })
+    const autreEcran = await ailleurs.newPage()
+    await autreEcran.goto(lien)
+    await expect(autreEcran.getByRole('heading', { name: /ce lien a déjà servi/i }))
+      .toBeVisible({ timeout: 15_000 })
+    await ailleurs.close()
+
+    expect(erreurs.filter(e => !/ServiceWorker|MIME|favicon/i.test(e)),
+      'des erreurs sont tombées dans la console de son téléphone').toEqual([])
     await elle.close()
 
     const apres = (await db.from('user_profile')
       .select('id, display_name').eq('household_id', foyer.householdId)).data ?? []
     expect(apres.length, 'personne n’est entrée dans le foyer').toBe(avant.length + 1)
     const nouvelle = apres.find(p => !avant.some(a => a.id === p.id))!
+    expect(nouvelle.display_name).toBe('Thauba')
 
     /* Le cœur de ce qui vient d'être écrit : une charge COMMUNE posée pendant
        qu'on était seul doit l'accueillir toute seule. Sans `charge.commun`, il
@@ -204,11 +209,11 @@ test.describe('inviter quelqu’un dans le foyer', () => {
       'elle n’est pas entrée dans les charges communes posées avant son arrivée')
       .toContain(nouvelle.id)
 
-    /* ── 6 · Et Kamil la voit dans son budget ────────────────────────────── */
+    /* ── 8 · Et Kamil la voit dans son budget ────────────────────────────── */
     await page.goto('/charges')
     await page.reload()
     await expect(page.getByText('Internet du foyer').first()).toBeVisible({ timeout: 15_000 })
-    await prend(page, '06-charges-avec-elle')
+    await prend(page, '07-charges-avec-elle')
   })
 })
 
@@ -268,30 +273,26 @@ test.describe('un lien expiré ne condamne pas les suivants', () => {
    * NEUF, et récrit l'adresse de retour à partir du seul chemin. Ici, rien
    * n'est récrit — on suit le lien du mail tel qu'il arrive.
    */
-  test('l’invitée redemande un lien, et le nouveau lui ouvre le foyer', async ({ page }) => {
+  test('un ancien mail expiré mène au formulaire, et le compte qu’il avait créé sert', async ({ page }) => {
+    /* Les mails partis AVANT le 19/10 portent un lien de connexion : ouvert
+       trop tard, il dépose `/invite/<jeton>#error=…otp_expired…`, et l'ancien
+       mail avait déjà créé un compte, jamais confirmé, sans mot de passe. Le
+       formulaire doit suffire, effacer le fragment, et ce compte-là servir. */
     test.setTimeout(90_000)
     const email = `invitee-expire-${Date.now()}@fumee.test`
     INVITEES.push(email)
     const jeton = await invitation(email)
-    // Comme en production : un compte créé par l'invitation, jamais confirmé.
     await db.auth.admin.inviteUserByEmail(email, {
       redirectTo: `http://127.0.0.1:4173/invite/${jeton}` })
-    await videLaBoite(page, email)
 
     await page.goto(`/invite/${jeton}${EXPIRE}`)
-    await page.getByRole('button', { name: /première connexion/i }).click()
-    await page.getByLabel(/e-?mail/i).fill(email)
-    await page.getByRole('button', { name: /recevoir le lien/i }).click()
-    await expect(page.getByText(/lien envoyé/i)).toBeVisible({ timeout: 10_000 })
-
-    await page.goto(await lienDuMail(page, email))
-    const rejoindre = page.getByRole('button', { name: /rejoindre le foyer/i })
-    await expect(rejoindre,
-      'le nouveau lien n’a pas ouvert de session : l’erreur de l’ancien l’a empoisonné')
-      .toBeVisible({ timeout: 15_000 })
-    await rejoindre.click()
-    await expect(page.getByRole('heading', { name: /ton mot de passe/i }),
-      'rejoindre le foyer ne mène pas au mot de passe').toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('heading', { name: /t’invite/i })).toBeVisible({ timeout: 15_000 })
+    await expect.poll(() => new URL(page.url()).hash,
+      'le fragment d’erreur reste dans la barre d’adresse').toBe('')
+    await page.getByLabel(/choisis ton mot de passe/i).fill('ancienne-invitee-1')
+    await page.getByRole('button', { name: /créer mon compte/i }).click()
+    await expect(page.getByLabel(/ton prénom/i),
+      'le compte laissé par l’ancien mail ne l’a pas fait entrer').toBeVisible({ timeout: 20_000 })
   })
 
   test('« mot de passe oublié » mène au mot de passe, même après un lien mort', async ({ page }) => {
@@ -322,7 +323,9 @@ test.describe('un lien expiré ne condamne pas les suivants', () => {
   })
 
   test('l’écran de connexion DIT que le lien a expiré', async ({ page }) => {
-    await page.goto(`/invite/00000000-0000-0000-0000-000000000000${EXPIRE}`)
+    /* À la racine : sur un lien d'invitation, c'est le formulaire qui répond
+       désormais (le test d'au-dessus). */
+    await page.goto(`/${EXPIRE}`)
     await expect(page.getByText(/ce lien a expiré/i)).toBeVisible({ timeout: 15_000 })
     // Et il l'efface de la barre d'adresse : un fragment d'erreur qui traîne
     // est exactement ce qui empoisonnait les liens suivants.
@@ -362,7 +365,9 @@ test.describe('un lien expiré ne condamne pas les suivants', () => {
     expect(new URL((await sortie).url()).searchParams.get('scope'),
       'se déconnecter ici fermait la session de l’hôte partout').toBe('local')
     await recharge
-    await expect(page.getByRole('button', { name: 'Se connecter', exact: true }))
+    /* Sans session, le lien d'invitation montre le formulaire de l'invitée :
+       c'est elle qui lit, sur l'appareil de l'hôte. */
+    await expect(page.getByRole('button', { name: /créer mon compte/i }))
       .toBeVisible({ timeout: 15_000 })
     expect(new URL(page.url()).pathname, 'on a quitté le lien d’invitation')
       .toBe(`/invite/${jeton}`)
@@ -380,6 +385,7 @@ test.describe('un lien expiré ne condamne pas les suivants', () => {
       await r.continue()
     })
     await page.goto(`/invite/${jeton}`)
+    await page.getByRole('button', { name: /j’ai déjà un compte/i }).click()
     await page.getByLabel(/e-?mail/i).fill(foyer.email)
     await page.getByLabel(/mot de passe/i).fill(MOT_DE_PASSE)
     const jeton_ = page.waitForResponse(r => r.url().includes('/auth/v1/token'))

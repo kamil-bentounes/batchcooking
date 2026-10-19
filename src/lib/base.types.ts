@@ -3085,6 +3085,13 @@ export type Database = {
         Returns: boolean
       }
       arc_sien: { Args: { apres: string; avant: string }; Returns: boolean }
+      compte_pour_invitation: {
+        Args: { adresse: string }
+        Returns: {
+          a_un_profil: boolean
+          id: string
+        }[]
+      }
       confirme_la_depense: {
         Args: { la_depense: string; reel_cents: number }
         Returns: undefined
@@ -3113,6 +3120,15 @@ export type Database = {
       export_my_data: { Args: never; Returns: Json }
       export_my_data_base: { Args: never; Returns: Json }
       foyers_amis: { Args: never; Returns: string[] }
+      invitation_par_jeton: {
+        Args: { jeton: string }
+        Returns: {
+          email: string
+          etat: string
+          expire_le: string
+          invite_par: string
+        }[]
+      }
       invitations_de_session: {
         Args: never
         Returns: {

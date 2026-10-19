@@ -8,6 +8,7 @@ import { Onboarding } from './pages/Onboarding'
 import { Targets } from './pages/Targets'
 import { Settings } from './pages/Settings'
 import { AcceptInvite } from './pages/AcceptInvite'
+import { Rejoindre } from './pages/Rejoindre'
 import { Hub } from './pages/Hub.tsx'
 import { Budget } from './pages/Budget.tsx'
 import { Charges } from './pages/Charges.tsx'
@@ -43,6 +44,8 @@ export default function App() {
   const [prenomRemis, setPrenomRemis] = useState(false)
   const [mdpPose, setMdpPose] = useState(true)
   const [pret, setPret] = useState(false)
+  /** Sur un lien d'invitation : elle a dit avoir déjà un compte. */
+  const [connexionDemandee, setConnexionDemandee] = useState(false)
   const { ici, va, retour } = useRoute()
 
   /* Le numéro de la DERNIÈRE relecture : une plus ancienne qui répond après
@@ -123,7 +126,15 @@ export default function App() {
      et supabase-js, qui lit le premier, y trouvait l'erreur et refusait la
      session. Un seul lien mort condamnait tous les suivants : le 30 septembre,
      trois connexions acceptées par Supabase, trois sessions jetées ici. */
-  if (!session) return <SignIn redirectTo={lienDeploye(ici)} />
+  /* ⚠️ Sans compte, un lien d'invitation SUFFIT (décision du 19/10/2026) :
+     elle y choisit son mot de passe, et son compte naît. L'écran de connexion
+     la renvoyait chercher un lien par mail, mort au bout d'une heure — cinq
+     invitées n'ont jamais dépassé cette étape. */
+  if (!session) {
+    return invitation && !connexionDemandee
+      ? <Rejoindre token={invitation[1]} connexion={() => setConnexionDemandee(true)} />
+      : <SignIn redirectTo={lienDeploye(ici)} />
+  }
   if (invitation) {
     return <AcceptInvite token={invitation[1]} dejaChezToi={!!foyer} va={va}
                          compte={session.user.email ?? ''} />

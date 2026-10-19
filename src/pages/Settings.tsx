@@ -50,25 +50,17 @@ export function Settings({ va }: { va: (v: string) => void }) {
 
   async function inviter() {
     try {
-      const r = await callFunction<{ token: string; envoye: boolean; dejaUnCompte: boolean }>(
-        'invite', { email: invite })
+      const r = await callFunction<{ token: string }>('invite', { email: invite })
 
-      /* L'écran DIT ce qui s'est passé. Il affichait le lien quoi qu'il arrive,
-         du temps où aucun mail ne partait — si bien qu'une invitation bel et
-         bien envoyée avait l'air de n'avoir rien fait, et qu'on cherchait le
-         problème là où il n'était pas.
-
-         Le lien reste affiché dans les deux cas : c'est le recours quand le
-         mail tombe en indésirable, et il marche de toute façon.
+      /* ⚠️ Aucun mail ne part (décision du 19/10/2026) : c'est TOI qui envoies
+         le lien. Le mail de Supabase portait un lien mort au bout d'une heure,
+         et cinq invitées n'ont jamais dépassé la création de compte. Un
+         message qu'on envoie soi-même arrive, lui.
 
          ⚠️ `origin` seul perd le préfixe de déploiement : sur GitHub Pages le
             site est servi sous un sous-chemin, et le lien tombait sur une 404. */
       setLien(lienDeploye(`/invite/${r.token}`))
-      dire(r.envoye
-        ? `Le mail est parti à ${invite}. S’il n’arrive pas, regarde ses indésirables — ou envoie-lui le lien ci-dessous.`
-        : r.dejaUnCompte
-          ? `${invite} a déjà un compte : aucun mail n’est parti. Envoie-lui le lien ci-dessous.`
-          : `Invitation créée pour ${invite}. Envoie-lui le lien ci-dessous.`)
+      dire(`Invitation créée pour ${invite}. Envoie-lui ce lien.`)
     }
     catch (e) { dire(String((e as Error).message), true) }
   }
@@ -134,9 +126,9 @@ export function Settings({ va }: { va: (v: string) => void }) {
       <section className="mt-12">
         <h2 className="titre text-xl text-herbe">Inviter</h2>
         <p className="mt-1 text-doux text-[15px]">
-          Elle reçoit un mail et arrive déjà connectée. Tu obtiens aussi un lien,
-          au cas où il tomberait en indésirable. Elle rejoint le foyer et garde
-          ses propres objectifs.
+          Tu obtiens un lien à lui envoyer, par SMS, WhatsApp ou mail. Il vaut
+          trente jours et sert une fois : elle y choisit son mot de passe et
+          rejoint le foyer, avec ses propres objectifs.
         </p>
         <div className="mt-4 space-y-4">
           <Champ label="Son e-mail" type="email" value={invite} placeholder="elle@exemple.fr"
@@ -146,11 +138,22 @@ export function Settings({ va }: { va: (v: string) => void }) {
             <div className="rounded-xl border border-brume bg-surface p-4">
               <p className="text-doux text-[15px]">Son lien, valable 30 jours :</p>
               <p className="mt-2 break-all text-[15px] text-encre">{lien}</p>
-              <button
-                onClick={() => { navigator.clipboard.writeText(lien); dire('Lien copié.') }}
-                className="mt-3 text-herbe underline underline-offset-4">
-                Copier le lien
-              </button>
+              <div className="mt-3 flex gap-5">
+                {/* Le partage du téléphone : SMS, WhatsApp, mail, en un geste. */}
+                {typeof navigator.share === 'function' && (
+                  <button
+                    onClick={() => navigator.share({ title: 'Popote',
+                      text: 'Rejoins notre foyer sur Popote :', url: lien }).catch(() => {})}
+                    className="text-herbe underline underline-offset-4">
+                    Partager
+                  </button>
+                )}
+                <button
+                  onClick={() => { navigator.clipboard.writeText(lien); dire('Lien copié.') }}
+                  className="text-herbe underline underline-offset-4">
+                  Copier le lien
+                </button>
+              </div>
             </div>
           )}
         </div>
