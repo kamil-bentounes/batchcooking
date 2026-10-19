@@ -11,6 +11,8 @@ import { Page, Bouton, Champ, Message } from '../ui/kit'
  * `password_set` déjà vrai, donc sans aucun moyen d'en poser un nouveau.
  * Condamné au lien par mail à vie.
  */
+const PAS_ENREGISTRE = 'Ton mot de passe n’a pas pu être enregistré. Vérifie ta connexion, puis réessaie.'
+
 export function Password({ userId, onDone }: { userId: string; onDone: () => void }) {
   const [mdp, setMdp] = useState('')
   const [msg, setMsg] = useState('')
@@ -19,10 +21,19 @@ export function Password({ userId, onDone }: { userId: string; onDone: () => voi
 
   async function enregistrer() {
     const { error } = await supabase.auth.updateUser({ password: mdp })
-    if (error) return setMsg(error.message)
+    /* Le message de Supabase est en ANGLAIS. Le cas le plus courant n'a rien
+       d'une panne : après « mot de passe oublié », on retape souvent l'ancien,
+       qu'on croyait perdu. */
+    if (error) {
+      return setMsg(error.code === 'same_password'
+        ? 'C’est déjà ton mot de passe : choisis-en un autre.'
+        : error.code === 'weak_password'
+          ? 'Ce mot de passe est trop facile à deviner : allonge-le, ou mélange lettres et chiffres.'
+          : PAS_ENREGISTRE)
+    }
     const { error: e2 } = await supabase.from('user_profile')
       .update({ password_set: true }).eq('id', userId)
-    if (e2) return setMsg(e2.message)
+    if (e2) return setMsg(PAS_ENREGISTRE)
     onDone()
   }
 
@@ -35,8 +46,7 @@ export function Password({ userId, onDone }: { userId: string; onDone: () => voi
      *    au-dessus de la phrase qui dit qu'on ne peut pas la sauter.
      */
     <Page centre marque titre="Ton mot de passe"
-          chapeau="Tant qu’il n’est pas posé, on n’entre pas — c’est ce qui évite
-                   de repartir sur un lien par e-mail à chaque fois.">
+          chapeau="Choisis-le : c’est lui qui te fera entrer ensuite, sur tous tes appareils.">
       <div className="space-y-5">
         <Champ label="Mot de passe" type="password" value={mdp} autoComplete="new-password"
                placeholder="8 caractères au moins"
