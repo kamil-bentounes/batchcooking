@@ -12,9 +12,10 @@
  * qu'on partage.
  */
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Champ, Bouton, Message } from '../ui/kit.tsx'
 import { supabase, ou } from '../lib/supabase.ts'
-import { useFoyer } from '../lib/donnees/foyer.ts'
+import { CLE, useFoyer } from '../lib/donnees/foyer.ts'
 import { usePoseRevenu, useRevenus, enCentimes, euros } from '../lib/donnees/budget.ts'
 
 /** Aujourd'hui en heure LOCALE : `toISOString()` recule d'un jour avant 2 h. */
@@ -29,6 +30,7 @@ export function Profil({ userId, onFini, retour }: {
 }) {
   const { data: foyer } = useFoyer()
   const poseRevenu = usePoseRevenu()
+  const qc = useQueryClient()
   const moi = foyer?.membres.find(m => m.id === userId)
 
   /* ⚠️ `useState` ne lit son argument QU'AU PREMIER RENDU, et `useFoyer` n'a
@@ -78,6 +80,11 @@ export function Profil({ userId, onFini, retour }: {
         .update({ display_name: prenom.trim(), entre_le: entree })
         .eq('id', userId).select())
       await poseRevenu.mutateAsync({ foyerId: foyer!.id, userId, cents: cents! })
+      /* ⚠️ Le foyer se RELIT avant de partir. Il vit cinq minutes en cache, et
+         l'écran suivant le lisait tel qu'à l'arrivée : l'invitée qui venait
+         de remplir son profil retrouvait le hub sous un avatar vide, avec
+         « Complète ton profil » — le prénom n'y était pas encore. */
+      await qc.invalidateQueries({ queryKey: CLE.foyer })
       onFini()
     } catch (e) { setMsg(String((e as Error).message)) } finally { setEnvoi(false) }
   }
