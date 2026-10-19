@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
+import { createClient } from '@supabase/supabase-js'
 import { makeActor, admin, type Actor } from './helpers/db'
 
 let alice: Actor
@@ -103,5 +104,62 @@ describe('RGPD', () => {
     const { data: prof } = await admin().from('user_profile')
       .select('id').eq('id', victim.userId)
     expect(prof, 'le profil doit avoir disparu').toHaveLength(0)
+  })
+})
+
+describe('supprimer son compte quand on a un compte en banque perso', () => {
+  /*
+   * Trouvé le 01/10/2026 en relisant la spec du Budget, vrai en prod : un
+   * compte `perso` exige un titulaire (`compte_titulaire_coherent`, 0051), et
+   * supprimer le profil met `titulaire_id` à null (`on delete set null`). Le
+   * droit à l'effacement échouait donc pour tout membre qui avait déclaré son
+   * compte — Kamil en a deux, dont un archivé. Aucun test n'en créait.
+   */
+  it('passe, seul au foyer, avec un compte actif et un archivé', async () => {
+    const victim = await makeActor('victime-comptes')
+    const { error: ce } = await admin().from('compte').insert([
+      { household_id: victim.householdId, nom: 'Mon CA', genre: 'perso', titulaire_id: victim.userId },
+      { household_id: victim.householdId, nom: 'Ancien CA', genre: 'perso', titulaire_id: victim.userId,
+        archive_le: new Date().toISOString() },
+    ])
+    expect(ce, `l'amorce a échoué : ${ce?.message}`).toBeNull()
+
+    const { error } = await victim.client.rpc('delete_my_account')
+    expect(error, `suppression refusée : ${error?.message}`).toBeNull()
+    const { data: u } = await admin().auth.admin.getUserById(victim.userId)
+    expect(u.user, 'le compte d’authentification a survécu').toBeNull()
+  })
+
+  it('à deux, son compte part et les charges qui y étaient payées restent', async () => {
+    const hote = await makeActor('hote-comptes')
+    const a = admin()
+    const email = `partante-${Date.now()}@test.local`
+    const { data: cree } = await a.auth.admin.createUser(
+      { email, password: 'test-password-12345', email_confirm: true })
+    const partante = cree.user!.id
+    await a.from('user_profile').insert({ id: partante, household_id: hote.householdId,
+                                          display_name: 'Partante' })
+    const client = createClient(process.env.VITE_SUPABASE_URL!,
+      process.env.VITE_SUPABASE_ANON_KEY!, { auth: { persistSession: false } })
+    await client.auth.signInWithPassword({ email, password: 'test-password-12345' })
+
+    const { data: sien } = await a.from('compte').insert({ household_id: hote.householdId,
+      nom: 'Son CA', genre: 'perso', titulaire_id: partante }).select().single()
+    const { data: celuiDeLHote } = await a.from('compte').insert({ household_id: hote.householdId,
+      nom: 'CA hôte', genre: 'perso', titulaire_id: hote.userId }).select().single()
+    const { data: charge } = await a.from('charge').insert({
+      household_id: hote.householdId, libelle: 'Forfait', montant_cents: 1_000,
+      periodicite: 'mensuel', debut: '2026-01-01', compte_id: sien!.id,
+    }).select().single()
+
+    const { error } = await client.rpc('delete_my_account')
+    expect(error, `suppression refusée : ${error?.message}`).toBeNull()
+
+    const { data: reste } = await a.from('compte').select('id').eq('household_id', hote.householdId)
+    expect(reste!.map(c => c.id), 'le compte de l’hôte est parti avec elle')
+      .toEqual([celuiDeLHote!.id])
+    const { data: c } = await a.from('charge').select('compte_id').eq('id', charge!.id).single()
+    expect(c, 'la charge est partie avec son compte').not.toBeNull()
+    expect(c!.compte_id).toBeNull()
   })
 })
