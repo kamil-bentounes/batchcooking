@@ -74,7 +74,9 @@ export default defineConfig({
     // Les tests de FUMÉE en navigateur appartiennent à Playwright, qui a son
     // propre lanceur. Les laisser ici les ferait échouer au chargement — et
     // faire cohabiter deux lanceurs sur le même fichier n'a aucun sens.
-    exclude: ['node_modules/**', 'dist/**', 'e2e/**'],
+    // `.claude/` porte les worktrees des agents : des copies du dépôt, dont
+    // les bancs de base tourneraient en double sur la même base locale.
+    exclude: ['node_modules/**', 'dist/**', 'e2e/**', '.claude/**'],
     /* ⚠️ Les 5 s par défaut de Vitest sont faites pour des tests PURS.
        La moitié de ce dépôt parle à un Postgres local : un seul `it` peut
        créer trois comptes `auth`, poser une charge, ouvrir douze mois et
