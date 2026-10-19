@@ -58,11 +58,15 @@ sinon les tests d'invitation échouent.
 
 ## Ensuite, dans l'ordre, chacun fermé comme le chantier 1
 
-1. **Recettes** (migration 0092) : spec et plan en cours d'écriture
-   (`docs/superpowers/specs/2026-10-19-recettes-design.md`,
-   `docs/superpowers/plans/2026-10-19-recettes.md`) ; puis worker `image_url`, titres,
-   temps actif ; écran Choisir liste B paginée, fiche (i), pictos ; relecture des 1 426
-   pages en prod ; déploiement.
+1. **Recettes** (migration 0092) : spec et plan ÉCRITS le 19/10, pas encore relus ni
+   committés (`docs/superpowers/specs/2026-10-19-recettes-design.md`,
+   `docs/superpowers/plans/2026-10-19-recettes.md`, 25 tâches TDD). Choix du rédacteur,
+   annoncés à Kamil : temps actif compté sur toutes les étapes (les temps montent,
+   19 → 33 min) ; une recette à 0 min dit « Gestes non comptés » et passe en fin de tri ;
+   l'en-tête garde « ← Accueil » ; « Avec ce que j'ai » cherche dans tout le catalogue.
+   Point ouvert, non bloquant : « Au four 30 minutes » (sans verbe) compte encore comme
+   du travail. La relecture des 1 426 pages en prod écrit `image_url`, que seul le rôle
+   de service peut écrire. Ensuite : relire le plan, coder, fermer comme le chantier 1.
 2. **Budget** (migrations à partir de 0093) : plan en cours d'écriture
    (`docs/superpowers/plans/2026-10-19-budget.md`, spec
    `docs/superpowers/specs/2026-10-01-ecran-budget-design.md`). Lots 1 et 2, puis 3
