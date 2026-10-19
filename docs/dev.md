@@ -55,12 +55,14 @@ npx supabase secrets set RESEND_API_KEY=<clé> APP_BASE_URL=<url>
 npx supabase secrets set LLM_API_KEY=<clé>            # « Envie spéciale »
 ```
 
-⚠️ **À faire une fois vos deux comptes créés** — refermer la création de foyer, sinon
-toute personne qui s'inscrit peut s'en créer un :
+La création de foyer **se referme d'elle-même** dès que le premier foyer existe
+(migration 0070) : la personne suivante entre par un lien d'invitation, et
+quiconque s'inscrirait sans lien lit « Il te faut une invitation ». Pour la
+rouvrir exceptionnellement :
 
 ```sql
 update public.instance_setting
-set value = '{"enabled": false}'::jsonb
+set value = '{"enabled": true}'::jsonb
 where key = 'allow_household_creation';
 ```
 

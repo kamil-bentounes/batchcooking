@@ -56,7 +56,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         <Bouton onClick={creer} disabled={!nom.trim()}>Créer le foyer</Bouton>
       </div>
       <p className="mt-6 text-doux text-[15px]">
-        Si quelqu’un t’a déjà invité·e, ouvre plutôt le lien reçu par e-mail.
+        Si quelqu’un t’a déjà invité·e, ouvre plutôt le lien qu’on t’a envoyé.
       </p>
       <Message texte={msg} erreur />
     </Page>
