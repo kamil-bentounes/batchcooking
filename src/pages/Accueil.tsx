@@ -12,7 +12,7 @@
 import { useMemo } from 'react'
 import { Chiffre, Ecran, Principal, Secondaire, Vide, dateLongue, duree, Marque } from '../ui/coque.tsx'
 import { GESTE, useCycle, useOuvreCycle } from '../lib/donnees/cycle.ts'
-import { useFoyer } from '../lib/donnees/foyer.ts'
+import { useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
 import {
   NOM_REPAS, bilanDuJour, jour, useBarquettes, useMange, useSemaine,
 } from '../lib/donnees/barquettes.ts'
@@ -73,7 +73,7 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
                 className="w-11 h-11 -mr-2 grid place-items-center">
           <span className="w-[34px] h-[34px] rounded-full bg-herbe text-fond text-[13px]
                            grid place-items-center">
-            {(moi?.display_name ?? '?').slice(0, 1).toUpperCase()}
+            {initialeDe(moi?.display_name)}
           </span>
         </button>
       </div>

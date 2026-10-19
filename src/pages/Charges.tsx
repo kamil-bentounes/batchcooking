@@ -131,7 +131,7 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
                         className={`px-4 min-h-11 inline-flex items-center rounded-full
                                     text-[14px] transition-colors
                           ${dedans ? 'bg-herbe text-fond' : 'bg-brume/50 text-encre'}`}>
-                  {m.display_name}
+                  {prenomDe(m.display_name)}
                 </button>
               )
             })}
@@ -689,7 +689,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                                   className={`px-3.5 min-h-11 inline-flex items-center rounded-full
                                               text-[14px] transition-colors
                                     ${dedans ? 'bg-herbe text-fond' : 'bg-brume/50 text-encre'}`}>
-                            {m.display_name}
+                            {prenomDe(m.display_name)}
                           </button>
                         )
                       })}

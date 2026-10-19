@@ -12,7 +12,7 @@
 import { useMemo, useState } from 'react'
 import { Attente, Chiffre, Erreur, Passage, Vide } from '../ui/coque.tsx'
 import { useChangeEtat, useCycle } from '../lib/donnees/cycle.ts'
-import { useFoyer, objectifDe } from '../lib/donnees/foyer.ts'
+import { useFoyer, objectifDe, prenomDe } from '../lib/donnees/foyer.ts'
 import { useRecettesMesurees } from '../lib/donnees/recettes.ts'
 import type { RecetteMesuree } from '../lib/donnees/recettes.ts'
 import { useDresse, useDistribue, repartitionAuto, jour } from '../lib/donnees/barquettes.ts'
@@ -157,7 +157,10 @@ export function Dressage({ va, retour }: { va: (v: string) => void; retour: () =
       <div className="mt-9 space-y-8">
         {decoupes.map(({ recette, repartition }) => (
           <Lot key={recette.recipeId} recette={recette} repartition={repartition}
-               nomDe={id => foyer?.membres.find(m => m.id === id)?.display_name ?? 'indifférent'} />
+               nomDe={id => {
+                 const m = foyer?.membres.find(x => x.id === id)
+                 return m ? prenomDe(m.display_name) : 'indifférent'
+               }} />
         ))}
       </div>
 

@@ -17,7 +17,7 @@ import { useState } from 'react'
 import { useRoute } from '../lib/route.ts'
 import { Surface, Erreur, Attente } from '../ui/coque.tsx'
 import { Champ } from '../ui/kit.tsx'
-import { useFoyer } from '../lib/donnees/foyer.ts'
+import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
   useRevenus, usePoseRevenu, useComptes, usePoseCompte, useRegle, usePoseRegle, useRangeCompte, useRangeEnveloppe,
   useEnveloppesPosees, usePoseEnveloppe, useSuggestionsEnveloppe, euros, enCentimes,
@@ -101,6 +101,7 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
 
   const foyerId = foyer?.id ?? ''
   const membres = foyer?.membres ?? []
+  const prenoms = new Map(membres.map(m => [m.id, prenomDe(m.display_name)]))
   const parPersonne = new Map((revenus.data ?? []).map(r => [r.user_profile_id, r]))
   const manquants = membres.filter(m => !parPersonne.has(m.id))
 
@@ -143,7 +144,7 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
                 <div key={m.id}
                      className={`py-3.5 flex items-baseline justify-between
                                  ${i < membres.length - 1 ? 'border-b border-brume' : ''}`}>
-                  <span className="text-[16px]">{m.display_name}</span>
+                  <span className="text-[16px]">{prenomDe(m.display_name)}</span>
                   <span className="text-[15px]"
                         style={{ color: r ? undefined : 'var(--color-ocre)' }}>
                     {r ? `${euros(r.net_mensuel_cents)} / mois` : 'pas encore renseigné'}
@@ -219,7 +220,7 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
                       <span className="text-[15px] text-doux">
                         {c.genre === 'commun' ? 'commun'
                           : c.genre === 'epargne' ? 'épargne'
-                          : membres.find(m => m.id === c.titulaire_id)?.display_name ?? 'perso'}
+                          : prenoms.get(c.titulaire_id ?? '') ?? 'perso'}
                       </span>
                       {/* On pouvait ajouter, jamais retirer : « Compte commn »
                           restait pour toujours, dans la liste ET dans le menu

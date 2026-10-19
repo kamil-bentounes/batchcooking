@@ -10,7 +10,7 @@
  */
 import { useMemo, useState } from 'react'
 import { Attente, Ecran, Erreur, Surface, Vide, dateLongue, jourCourt } from '../ui/coque.tsx'
-import { useFoyer } from '../lib/donnees/foyer.ts'
+import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
   NOM_REPAS, REPAS, jour, useAjouteExtra, useBarquettes, useDistribue, useFrequents,
   useMange, useSaute, useSemaine, useSupprimeExtra,
@@ -45,6 +45,7 @@ export function Semaine({ userId, va }: { userId: string; va: (v: string) => voi
   }), [debut])
 
   const membres = foyer?.membres ?? []
+  const prenoms = new Map(membres.map(m => [m.id, prenomDe(m.display_name)]))
   const placees = new Set(cases.map(c => c.portion_id).filter(Boolean))
   const disponibles = libres.filter(b => !placees.has(b.id))
 
@@ -66,7 +67,7 @@ export function Semaine({ userId, va }: { userId: string; va: (v: string) => voi
         <Puce actif={qui === 'tous'} surClic={() => setQui('tous')}>Tout le monde</Puce>
         {membres.map(m => (
           <Puce key={m.id} actif={qui === m.id} surClic={() => setQui(m.id)}>
-            {m.display_name}
+            {prenomDe(m.display_name)}
           </Puce>
         ))}
       </div>
@@ -107,7 +108,7 @@ export function Semaine({ userId, va }: { userId: string; va: (v: string) => voi
                   {duJour.map(c => (
                     <Ligne key={c.id} cas={c}
                            qui={qui === 'tous'
-                             ? membres.find(m => m.id === c.user_profile_id)?.display_name ?? null
+                             ? prenoms.get(c.user_profile_id ?? '') ?? null
                              : null}
                            ouvert={caseOuverte === c.id}
                            disponibles={disponibles}

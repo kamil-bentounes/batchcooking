@@ -20,7 +20,7 @@
 import { useEffect, useState } from 'react'
 import { Attente, Erreur, Vide, duree } from '../ui/coque.tsx'
 import { useChangeEtat, useCycle, useCycleParId } from '../lib/donnees/cycle.ts'
-import { useFoyer } from '../lib/donnees/foyer.ts'
+import { useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
 import {
   useConvives, usePrenoms, useQuitteSession, useRetireConvive,
 } from '../lib/donnees/convives.ts'
@@ -124,7 +124,7 @@ export function Cuisine({ userId, va, cycleId }:
                   className="w-[30px] h-[30px] rounded-full text-[12px] grid place-items-center
                              border-2 border-encre text-fond"
                   style={{ background: i === 0 ? '#2F5D45' : '#B8791A' }}>
-              {m.display_name.slice(0, 1).toUpperCase()}
+              {initialeDe(m.display_name)}
             </span>
           ))}
         </span>

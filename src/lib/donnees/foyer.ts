@@ -125,3 +125,8 @@ export function prenomDe(nom: string | null | undefined): string {
   const n = (nom ?? '').trim()
   return n === '' ? 'Sans prénom' : n
 }
+
+/** L'initiale de l'avatar : `?` tant que le prénom est vide, jamais un rond vide. */
+export function initialeDe(nom: string | null | undefined): string {
+  return ((nom ?? '').trim().slice(0, 1) || '?').toUpperCase()
+}
