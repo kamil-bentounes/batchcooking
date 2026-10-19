@@ -175,3 +175,29 @@ export function pour100De(nutriments: unknown): Pour100 | null {
 export function affichable(a: Agregat): boolean {
   return a.couverture >= COUVERTURE_MINIMALE
 }
+
+/**
+ * Une part qui ne peut pas exister (R7).
+ *
+ * Les bornes visent les ERREURS — un nombre de parts mal lu, un poids faux —, pas
+ * les petites parts : une truffe protéinée de 20 g est une vraie part.
+ *
+ *  · plus de 900 kcal pour 100 g : plus gras que l'huile ;
+ *  · plus de 1,5 kg : c'est le plat entier, pas une part ;
+ *  · moins de 20 ou plus de 2 000 kcal : un verre d'eau, ou une journée entière.
+ *
+ * Hors de ces bornes, on ne garde PAS de macros : une valeur fausse sert à
+ * filtrer, et elle est pire qu'aucune (D18).
+ */
+export const PART_PLAUSIBLE = {
+  kcalMin: 20, kcalMax: 2000, grammesMax: 1500, densiteMax: 900,
+} as const
+
+export function plausible(n: { grams: number; kcal: number }): boolean {
+  const g = Number(n.grams)
+  const k = Number(n.kcal)
+  if (!(g > 0) || !Number.isFinite(k)) return false
+  if (k < PART_PLAUSIBLE.kcalMin || k > PART_PLAUSIBLE.kcalMax) return false
+  if (g > PART_PLAUSIBLE.grammesMax) return false
+  return (k / g) * 100 <= PART_PLAUSIBLE.densiteMax
+}
