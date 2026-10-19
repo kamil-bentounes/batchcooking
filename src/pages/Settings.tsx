@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { supabase, callFunction } from '../lib/supabase'
+import { supabase, callFunction, deconnecte } from '../lib/supabase'
 import { lienDeploye } from '../lib/route.ts'
 import { useCreeMagasin, useFoyer, useMagasins, useSupprimeMagasin } from '../lib/donnees/foyer.ts'
 import { useAmis, useInviteAmi, useRompAmitie } from '../lib/donnees/amis.ts'
 import { Attente, Erreur } from '../ui/coque.tsx'
 import { Page, Groupe, Bouton, Champ, Message } from '../ui/kit'
+
+/** La section sous laquelle le dernier message s'affiche. */
+type Zone = 'plafond' | 'courses' | 'inviter' | 'deconnexion' | 'donnees'
 
 export function Settings({ va }: { va: (v: string) => void }) {
   const [plafond, setPlafond] = useState(5)
@@ -14,6 +17,8 @@ export function Settings({ va }: { va: (v: string) => void }) {
   const [invite, setInvite] = useState('')
   const [lien, setLien] = useState('')
   const [msg, setMsg] = useState(''); const [err, setErr] = useState(false)
+  const [zone, setZone] = useState<Zone>('plafond')
+  const [sortie, setSortie] = useState(false)
 
   async function charger() {
     const { data: h } = await supabase.from('household')
@@ -27,24 +32,29 @@ export function Settings({ va }: { va: (v: string) => void }) {
   }
   useEffect(() => { charger() }, [])
 
-  const dire = (t: string, e = false) => { setErr(e); setMsg(t) }
+  /* ⚠️ Le message s'affiche SOUS la section qui l'a fait naître.
+     Il tombait tout en bas de la page, sous « Supprimer mon compte » : sur un
+     téléphone, « Invitation créée » — ou l'erreur qui disait pourquoi elle ne
+     l'était pas — restait hors de l'écran, et le bouton semblait sans effet. */
+  const dire = (z: Zone, t: string, e = false) => { setZone(z); setErr(e); setMsg(t) }
+  const ici = (z: Zone) => (zone === z ? <Message texte={msg} erreur={err} /> : null)
 
   async function enregistrerPlafond() {
     const { data: hh } = await supabase.rpc('current_household')
-    if (!hh) return dire('Aucun foyer.', true)
+    if (!hh) return dire('plafond', 'Aucun foyer.', true)
     const { error } = await supabase.from('household')
       .update({ llm_monthly_cap_eur: plafond }).eq('id', hh)
-    dire(error ? error.message : 'Plafond enregistré.', !!error)
+    dire('plafond', error ? error.message : 'Plafond enregistré.', !!error)
     if (!error) charger()
   }
 
   async function enregistrerCourses() {
     const { data: hh } = await supabase.rpc('current_household')
-    if (!hh) return dire('Aucun foyer.', true)
+    if (!hh) return dire('courses', 'Aucun foyer.', true)
     const v = courses.trim() === '' ? null : Number(courses.replace(',', '.'))
-    if (v !== null && !(v > 0)) return dire('Un budget se compte en euros, au-dessus de zéro.', true)
+    if (v !== null && !(v > 0)) return dire('courses', 'Un budget se compte en euros, au-dessus de zéro.', true)
     const { error } = await supabase.from('household').update({ food_budget_eur: v }).eq('id', hh)
-    dire(error ? error.message : v === null ? 'Budget retiré.' : 'Budget enregistré.', !!error)
+    dire('courses', error ? error.message : v === null ? 'Budget retiré.' : 'Budget enregistré.', !!error)
     if (!error) charger()
   }
 
@@ -60,23 +70,31 @@ export function Settings({ va }: { va: (v: string) => void }) {
          ⚠️ `origin` seul perd le préfixe de déploiement : sur GitHub Pages le
             site est servi sous un sous-chemin, et le lien tombait sur une 404. */
       setLien(lienDeploye(`/invite/${r.token}`))
-      dire(`Invitation créée pour ${invite}. Envoie-lui ce lien.`)
+      dire('inviter', `Invitation créée pour ${invite}. Envoie-lui ce lien.`)
     }
-    catch (e) { dire(String((e as Error).message), true) }
+    catch (e) { dire('inviter', String((e as Error).message), true) }
   }
 
   async function exporter() {
     const { data, error } = await supabase.rpc('export_my_data')
-    if (error) return dire(error.message, true)
+    if (error) return dire('donnees', error.message, true)
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
     a.download = 'mes-donnees.json'; a.click()
   }
 
+  /* Sans réseau, supabase-js réessaie trente secondes avant de rendre la
+     main : le bouton le montre, sinon on croit qu'il ne fait rien. */
+  async function deconnecter() {
+    setSortie(true)
+    const echec = await deconnecte()
+    if (echec) { setSortie(false); dire('deconnexion', echec, true) }
+  }
+
   async function supprimer() {
     if (!confirm('Supprimer ton compte et tes données ? C’est définitif.')) return
     const { error } = await supabase.rpc('delete_my_account')
-    if (error) return dire(error.message, true)
+    if (error) return dire('donnees', error.message, true)
     /* `BASE_URL` et pas `'/'` : sous un sous-chemin, la racine du domaine est
        une 404. Même défaut que celui corrigé dans `AcceptInvite`. */
     await supabase.auth.signOut(); window.location.href = import.meta.env.BASE_URL
@@ -105,6 +123,7 @@ export function Settings({ va }: { va: (v: string) => void }) {
             <Bouton variante="discret" onClick={enregistrerPlafond}>Enregistrer le plafond</Bouton>
           </div>
         </Groupe></div>
+        {ici('plafond')}
       </section>
 
       <section className="mt-12">
@@ -121,6 +140,7 @@ export function Settings({ va }: { va: (v: string) => void }) {
             Enregistrer le budget
           </Bouton>
         </div>
+        {ici('courses')}
       </section>
 
       <section className="mt-12">
@@ -134,6 +154,7 @@ export function Settings({ va }: { va: (v: string) => void }) {
           <Champ label="Son e-mail" type="email" value={invite} placeholder="elle@exemple.fr"
                  onChange={e => setInvite(e.target.value)} />
           <Bouton onClick={inviter} disabled={!invite}>Créer l’invitation</Bouton>
+          {ici('inviter')}
           {lien && (
             <div className="rounded-xl border border-brume bg-surface p-4">
               <p className="text-doux text-[15px]">Son lien, valable 30 jours :</p>
@@ -149,7 +170,7 @@ export function Settings({ va }: { va: (v: string) => void }) {
                   </button>
                 )}
                 <button
-                  onClick={() => { navigator.clipboard.writeText(lien); dire('Lien copié.') }}
+                  onClick={() => { navigator.clipboard.writeText(lien); dire('inviter', 'Lien copié.') }}
                   className="text-herbe underline underline-offset-4">
                   Copier le lien
                 </button>
@@ -189,6 +210,22 @@ export function Settings({ va }: { va: (v: string) => void }) {
         </div>
       </section>
 
+      {/* On ne pouvait PAS se déconnecter : aucun bouton, nulle part, une fois
+          dans un foyer. Qui s'était connecté sur le téléphone de l'autre y
+          restait. */}
+      <section className="mt-12">
+        <h2 className="titre text-xl text-herbe">Te déconnecter</h2>
+        <p className="mt-1 text-doux text-[15px]">
+          Sur cet appareil seulement. Tu reviens avec ton e-mail et ton mot de passe.
+        </p>
+        <div className="mt-4">
+          <Bouton variante="discret" onClick={deconnecter} disabled={sortie}>
+            {sortie ? 'Un instant…' : 'Me déconnecter'}
+          </Bouton>
+        </div>
+        {ici('deconnexion')}
+      </section>
+
       <section className="mt-12">
         <h2 className="titre text-xl text-herbe">Tes données</h2>
         <p className="mt-1 text-doux text-[15px]">
@@ -198,9 +235,9 @@ export function Settings({ va }: { va: (v: string) => void }) {
           <Bouton variante="discret" onClick={exporter}>Exporter mes données</Bouton>
           <Bouton variante="danger" onClick={supprimer}>Supprimer mon compte</Bouton>
         </div>
+        {ici('donnees')}
       </section>
 
-      <Message texte={msg} erreur={err} />
     </Page>
   )
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { callFunction, supabase } from '../lib/supabase'
+import { callFunction, deconnecte } from '../lib/supabase'
 import { Page, Bouton, Message } from '../ui/kit'
 
 export function AcceptInvite({ token, dejaChezToi, va, compte }: {
@@ -38,13 +38,11 @@ export function AcceptInvite({ token, dejaChezToi, va, compte }: {
         <p className="mt-6 text-[15px] text-doux">
           Compte ouvert ici : <span className="text-encre">{compte}</span>
         </p>
-        <button onClick={async () => {
-                  await supabase.auth.signOut({ scope: 'local' })
-                  window.location.reload()
-                }}
+        <button onClick={async () => setMsg(await deconnecte(window.location.href) ?? '')}
                 className="mt-2 text-herbe underline underline-offset-4 text-[15px]">
           Ce n’est pas moi
         </button>
+        <Message texte={msg} erreur />
       </Page>
     )
   }

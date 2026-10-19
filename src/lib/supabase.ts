@@ -54,6 +54,32 @@ export const fn = (name: string) =>
   `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`
 
 /** Appelle une Edge Function avec le jeton de la session courante. */
+/**
+ * Se déconnecter sur CET appareil, puis repartir de zéro.
+ *
+ * ⚠️ `signOut` rend une erreur dans deux cas qui ne se ressemblent pas.
+ *    Si c'est la requête de déconnexion qui échoue, la session est QUAND MÊME
+ *    effacée de l'appareil : pour nous, c'est réussi. Mais si le jeton a expiré
+ *    et que le réseau manque pour le rafraîchir, l'erreur part AVANT que rien
+ *    ne soit effacé : la session reste, et rouvrait le compte au retour du
+ *    réseau — pour la personne suivante, sur un téléphone partagé. Seul
+ *    l'événement `SIGNED_OUT` dit lequel des deux on vit ; dans le second,
+ *    l'écran le dit.
+ *
+ * `local` : cet appareil seulement, les autres restent connectés. Et la page
+ * se RECHARGE : la mémoire de l'application — charges, revenus — ne reste pas
+ * pour la personne suivante.
+ */
+export async function deconnecte(vers: string = import.meta.env.BASE_URL): Promise<string | null> {
+  let effacee = false
+  const { data: ecoute } = supabase.auth.onAuthStateChange(e => { if (e === 'SIGNED_OUT') effacee = true })
+  const { error } = await supabase.auth.signOut({ scope: 'local' })
+  ecoute.subscription.unsubscribe()
+  if (error && !effacee) return 'La déconnexion n’a pas abouti : vérifie ta connexion, puis réessaie.'
+  window.location.href = vers
+  return null
+}
+
 export async function callFunction<T = unknown>(name: string, body: unknown): Promise<T> {
   const { data } = await supabase.auth.getSession()
   if (!data.session) throw new Error('Connecte-toi d’abord.')

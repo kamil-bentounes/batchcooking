@@ -14,7 +14,7 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Champ, Bouton, Message } from '../ui/kit.tsx'
-import { supabase, ou } from '../lib/supabase.ts'
+import { supabase, ou, deconnecte } from '../lib/supabase.ts'
 import { CLE, useFoyer } from '../lib/donnees/foyer.ts'
 import { usePoseRevenu, useRevenus, enCentimes, euros } from '../lib/donnees/budget.ts'
 
@@ -46,6 +46,8 @@ export function Profil({ userId, onFini, retour }: {
   const [entreeSaisie, setEntreeSaisie] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
   const [envoi, setEnvoi] = useState(false)
+  const [sortie, setSortie] = useState(false)
+  const [msgSortie, setMsgSortie] = useState('')
 
   const prenom = prenomSaisi ?? moi?.display_name ?? ''
   const entree = entreeSaisie ?? moi?.entre_le ?? aujourdhui()
@@ -157,6 +159,24 @@ export function Profil({ userId, onFini, retour }: {
           {envoi ? 'J’enregistre…' : 'Enregistrer'}
         </Bouton>
         </div>
+
+        {/* L'avatar du hub mène ici, côté Cuisine comme côté Budget : c'est là
+            qu'on cherche à sortir. Pas à l'arrivée — deux choses, et c'est fini. */}
+        {dejaPose && (
+          <div className="mt-10">
+            <button disabled={sortie}
+                    onClick={async () => {
+                      setSortie(true); setMsgSortie('')
+                      const echec = await deconnecte()
+                      if (echec) { setSortie(false); setMsgSortie(echec) }
+                    }}
+                    className="inline-flex items-center min-h-11 text-herbe underline
+                               underline-offset-4 text-[15px]">
+              {sortie ? 'Un instant…' : 'Me déconnecter'}
+            </button>
+            <Message texte={msgSortie} erreur />
+          </div>
+        )}
       </div>
     </main>
   )
