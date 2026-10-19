@@ -29,6 +29,8 @@ export interface EtapeAnalysee {
   dureeBaseMin: number | null
   /** Grammes cités dans l'étape elle-même, s'il y en a. */
   quantiteG: number | null
+  /** Minutes de gestes que l'étape conjugue, quel que soit son verbe retenu (R6). */
+  gestesMin: number | null
   /** 1 quand tout est écrit dans le texte, moins quand on a comblé. */
   confiance: number
 }
@@ -229,6 +231,140 @@ function enTete(plie: string, motif: RegExp): boolean {
   return motif.test(debut)
 }
 
+/**
+ * Les formes d'un geste DEMANDÉ, en trois familles selon où elles valent (R6).
+ *
+ *  · `partout` — l'infinitif et l'impératif en « vous » : « verser », « versez ».
+ *    Ils ne décrivent jamais un ingrédient.
+ *  · `enTete` — l'impératif en « tu » (Jow) : « verse », « garnis ». C'est aussi
+ *    la forme d'un NOM : « le beurre », « du mélange », « de poivre ». On ne la
+ *    croit qu'en tête de proposition, ou après « et », « puis »…
+ *  · `apresEn` — le gérondif : « en remuant ». Sans « en » devant, c'est un
+ *    adjectif : « un couteau bien tranchant ».
+ *
+ * Le participe passé n'est dans aucune : « les poivrons coupés » décrit des
+ * poivrons, « l'eau salée » de l'eau.
+ */
+function formesDeGeste(infinitif: string) {
+  if (infinitif.endsWith('er')) return { partout: 'er|ez', enTete: 'e', apresEn: 'ant|eant' }
+  // couvrir : couvrir, couvrez, couvre, couvrant
+  if (/[vf]rir$/.test(infinitif)) return { partout: 'ir|ez', enTete: 'e', apresEn: 'ant' }
+  // garnir (radical « garni ») : garnir, garnissez, garnis, garnissant
+  if (infinitif.endsWith('ir')) return { partout: 'r|ssez', enTete: 's', apresEn: 'ssant' }
+  // battre (radical « batt ») : battre, battez, battant
+  return { partout: 're|ez|sez', enTete: 's', apresEn: 'ant|sant' }
+}
+
+/** Les mots après lesquels un impératif en « tu » ouvre encore une proposition. */
+const LIANTS = new Set(['et', 'puis', 'ensuite', 'enfin', 'alors', 'ou'])
+
+type Formes = { partout: RegExp; enTete: RegExp; apresEn: RegExp }
+type Geste = { canonique: string; ligne: LigneDuree; formes: Formes | null; phrase: RegExp | null }
+
+/**
+ * Les verbes de MAIN du référentiel : ceux qui n'occupent aucun appareil et ne
+ * sont pas passifs. « mixer » n'en est pas un — le blender travaille seul —,
+ * mais « verser » le lait dans le blender, si.
+ */
+function indexGestes(ref: Referentiel): Geste[] {
+  const mains = new Map<string, LigneDuree>()
+  for (const d of ref.durees) {
+    if (d.appliance_type === null && d.load_type !== 'passif' && !mains.has(d.verb)) {
+      mains.set(d.verb, d)
+    }
+  }
+  const verbes = new Set<string>([...ref.durees.map(d => d.verb), ...Object.keys(ref.alias)])
+  const gestes: Geste[] = []
+  for (const verbe of verbes) {
+    const canonique = ref.alias[verbe] ?? verbe
+    const ligne = mains.get(canonique)
+    if (!ligne) continue
+    const infinitif = pliure(verbe)
+    if (infinitif.includes(' ')) {
+      // « séparer les blancs », « retirer du feu » : on cherche la phrase entière.
+      gestes.push({ canonique, ligne, formes: null, phrase: motifDe(verbe) })
+      continue
+    }
+    const tete = radical(verbe)
+    const f = formesDeGeste(infinitif)
+    gestes.push({
+      canonique, ligne, phrase: null,
+      formes: {
+        partout: new RegExp(`^${tete}(?:${f.partout})$`),
+        enTete: new RegExp(`^${tete}(?:${f.enTete})$`),
+        apresEn: new RegExp(`^${tete}(?:${f.apresEn})$`),
+      },
+    })
+  }
+  return gestes
+}
+
+/** Les pronoms qu'on enjambe pour lire ce qui précède un verbe : « sans LES éplucher ». */
+const PRONOMS = new Set(['le', 'la', 'les', 'l', 'en', 'y', 'lui', 'leur', 'se', 's'])
+
+/**
+ * Le verbe est-il CONJUGUÉ dans le texte, sous une forme qui demande le geste ?
+ *
+ * Un infinitif nié ou remis à plus tard ne le demande pas ici : « sans les
+ * éplucher », « laissez refroidir avant de démouler » — le démoulage a son étape.
+ */
+function conjugue(texte: string, f: Formes): boolean {
+  for (const proposition of texte.split(/[.,;:!?()]+/)) {
+    const mots = proposition.split(/[^\p{L}]+/u).filter(Boolean)
+    for (let i = 0; i < mots.length; i++) {
+      const mot = pliure(mots[i])
+      const avant = i > 0 ? pliure(mots[i - 1]) : null
+      let k = i - 1
+      while (k >= 0 && PRONOMS.has(pliure(mots[k]))) k--
+      const precedent = k >= 0 ? pliure(mots[k]) : null
+      const ecarte = precedent === 'sans'
+        || ((precedent === 'de' || precedent === 'd') && k >= 1 && pliure(mots[k - 1]) === 'avant')
+      if (f.partout.test(mot) && !ecarte) return true
+      // « émincé » se plie en « emince », comme l'impératif « émince » : seul
+      // l'accent du texte d'origine les distingue.
+      if (f.enTete.test(mot) && !/é$/iu.test(mots[i])
+          && (avant === null || LIANTS.has(avant))) return true
+      if (f.apresEn.test(mot) && avant === 'en') return true
+    }
+  }
+  return false
+}
+
+let cacheRefGestes: Referentiel | null = null
+let cacheGestes: Geste[] = []
+
+/**
+ * Les minutes de MAIN qu'une étape demande, verbe par verbe (R6).
+ *
+ * Le verbe retenu ne suffit pas à le dire : « Dans un mixeur, versez le lait, la
+ * banane et les flocons. Mixez. » retient « mixer », parce que le verbe qui
+ * mobilise un appareil gagne — et « mixer » est passif. Toutes les étapes d'un
+ * smoothie étaient ainsi : zéro minute de travail, et la recette en tête du tri.
+ *
+ * On additionne donc la durée de référence de chaque verbe de main conjugué dans
+ * l'étape, une fois chacun, mise à l'échelle comme l'étape. `null` quand il n'y
+ * en a aucun : « Préchauffez le four » ne demande rien.
+ */
+export function gestesMin(brut: string, ref: Referentiel): number | null {
+  if (cacheRefGestes !== ref) { cacheRefGestes = ref; cacheGestes = indexGestes(ref) }
+  const texte = brut.normalize('NFC').trim()
+  if (!texte) return null
+  const plie = pliure(texte)
+  const quantite = quantiteEcrite(texte)
+  const minutes = new Map<string, number>()
+  for (const g of cacheGestes) {
+    if (minutes.has(g.canonique)) continue
+    const demande = g.phrase ? g.phrase.test(plie) : conjugue(texte, g.formes!)
+    if (!demande) continue
+    const facteur = g.ligne.scaling === 'lineaire_plafonne' && quantite
+      ? Math.min(3, Math.max(1, quantite / 250))
+      : 1
+    minutes.set(g.canonique, Number(g.ligne.base_minutes) * facteur)
+  }
+  if (minutes.size === 0) return null
+  return Math.round([...minutes.values()].reduce((s, m) => s + m, 0) * 10) / 10
+}
+
 let cacheRef: Referentiel | null = null
 let cacheIndex: { verbe: string; motif: RegExp }[] = []
 
@@ -239,7 +375,8 @@ export function analyserEtape(brut: string, ref: Referentiel): EtapeAnalysee {
     brut, estAction: false, verbe: null, appareil: null,
     dureeMin: null, sourceDuree: null,
     temperatureC: null, sourceTemperature: null,
-    charge: null, echelle: null, dureeBaseMin: null, quantiteG: null, confiance: 0,
+    charge: null, echelle: null, dureeBaseMin: null, quantiteG: null, gestesMin: null,
+    confiance: 0,
   }
 
   const texte = brut.trim()
@@ -342,6 +479,7 @@ export function analyserEtape(brut: string, ref: Referentiel): EtapeAnalysee {
     echelle: ligne?.scaling ?? null,
     dureeBaseMin: ligne?.base_minutes ?? null,
     quantiteG: estAction ? quantite : null,
+    gestesMin: estAction ? gestesMin(texte, ref) : null,
     // Tout écrit : 1. Verbe reconnu mais durée déduite : 0,7. Durée seule : 0,5.
     confiance: !estAction ? 0
       : sourceDuree === 'declaree' && verbe ? 1

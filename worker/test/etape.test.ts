@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { analyserEtape, dependances, pliure } from '../src/etape.ts'
+import { analyserEtape, dependances, gestesMin, pliure } from '../src/etape.ts'
 import type { Referentiel } from '../src/etape.ts'
 
 const seed = JSON.parse(
@@ -449,5 +449,85 @@ describe('les verbes de cuisson', () => {
     // « cui » en préfixe ouvert attraperait « cuillère » : c'est la borne de
     // fin de mot qui l'en empêche, et elle doit rester.
     expect(a('Ajoutez une cuillère de moutarde.').verbe).not.toBe('cuire')
+  })
+})
+
+describe('les gestes d’une étape (R6)', () => {
+  /*
+   * « Dans un mixeur, versez… Mixez. » retenait « mixer », passif : zéro minute
+   * de travail. 73 recettes affichaient « 0 min actives » et passaient en tête
+   * du tri. Une étape compte désormais au moins les gestes qu'elle demande.
+   */
+  const g = (t: string) => gestesMin(t, REF)
+
+  it('compte le geste d’une étape passive : le smoothie ne se fait pas seul', () => {
+    const t = 'Dans un mixeur, versez le lait, la banane et les flocons. Mixez.'
+    expect(a(t).charge, 'le constat de départ a changé').toBe('passif')
+    expect(g(t)).toBe(1)
+    expect(a(t).gestesMin).toBe(1)
+  })
+
+  it('additionne les gestes d’une même étape', () => {
+    expect(g('Épluchez et émincez les oignons.')).toBe(7)
+  })
+
+  it('compte chaque verbe une fois', () => {
+    expect(g('Mélangez, puis mélangez encore.')).toBe(1)
+  })
+
+  it('lit l’infinitif comme l’impératif', () => {
+    expect(g('Éplucher et émincer les oignons.')).toBe(7)
+  })
+
+  it('ne compte pas un participe : il décrit un ingrédient', () => {
+    expect(g('Ajoutez les poivrons coupés en lanières.')).toBe(1)
+    expect(g('Faites cuire les pâtes 10 min dans l’eau bouillante salée.')).toBeNull()
+  })
+
+  it('reconnaît le participe à son accent, même en tête de proposition', () => {
+    // « émincé » se plie comme l'impératif « émince » : seul l'accent les sépare.
+    expect(g('Ajoutez le poulet, émincé finement.')).toBe(1)
+    expect(g('Haché menu, ajoutez le persil.')).toBe(1)
+  })
+
+  it('ne compte pas un nom qui a la forme d’un verbe', () => {
+    expect(g('Faites fondre le beurre.')).toBeNull()
+    expect(g('Versez la moitié du mélange dans le moule.')).toBe(1)
+    expect(g('Assaisonnez de sel et de poivre.')).toBe(1)
+  })
+
+  it('lit le tutoiement en tête de proposition', () => {
+    expect(g('Coupe les oignons et ajoute-les.')).toBe(4)
+    expect(g('Émince l’oignon, puis ajoute-le dans la poêle.')).toBe(4)
+  })
+
+  it('lit le gérondif après « en », pas l’adjectif', () => {
+    expect(g('Laissez mijoter en remuant de temps en temps.')).toBe(1)
+    expect(g('Avec un couteau bien tranchant, coupez la viande.')).toBe(3)
+  })
+
+  it('ne compte pas un geste nié ou remis à plus tard', () => {
+    expect(g('Laissez refroidir avant de démouler.')).toBeNull()
+    expect(g('Faites cuire les pommes de terre sans les éplucher.')).toBeNull()
+    expect(g('Faites cuire 10 min, puis égouttez avant de servir.')).toBe(2)
+  })
+
+  it('lit les gestes de plusieurs mots', () => {
+    expect(g('Séparez les blancs des jaunes.')).toBe(2)
+  })
+
+  it('met les gestes à l’échelle des grammes écrits', () => {
+    // Éplucher 4 min et couper 3 min, chacun ×3 pour un kilo (plafond).
+    expect(g('Épluchez et coupez 1 kg de pommes de terre.')).toBe(21)
+  })
+
+  it('rend null quand l’étape ne demande pas les mains', () => {
+    expect(g('Préchauffez le four à 180 °C.')).toBeNull()
+    expect(g('Laissez reposer 1 h.')).toBeNull()
+    expect(g('Enfournez 30 minutes.')).toBeNull()
+  })
+
+  it('ne compte rien pour une phrase qui n’est pas une action', () => {
+    expect(a('Bon appétit !').gestesMin).toBeNull()
   })
 })
