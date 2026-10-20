@@ -8,6 +8,7 @@
  * serveur qui plafonne à mille lignes et qu'on modifie entre deux requêtes.
  */
 import { describe, expect, it, vi } from 'vitest'
+import { QueryClient, QueryObserver } from '@tanstack/react-query'
 
 type Ligne = Record<string, unknown> & { id: string }
 type Banc = {
@@ -75,13 +76,14 @@ vi.mock('@tanstack/react-query', async (orig) => ({
   useQuery: (o: unknown) => o,
 }))
 
-const { useCatalogue: optionsCatalogue, useFaisables: optionsFaisables, useDejaFaites: optionsDejaFaites } = await import('./catalogue.ts')
+const { useCatalogue: optionsCatalogue, useFaisables: optionsFaisables, useDejaFaites: optionsDejaFaites, useManques: optionsManques } = await import('./catalogue.ts')
 
 // Les hooks sont remplacés par leurs options (`useQuery` les rend telles quelles) : on les type à la main.
 type Options = {
   queryKey: unknown[]
   enabled?: boolean
   queryFn: () => Promise<any>
+  placeholderData?: any
 }
 const options = (o: unknown) => o as Options
 
@@ -192,5 +194,44 @@ describe('le déjà-fait', () => {
   it('REJETTE si la deuxième tranche échoue', async () => {
     nouveauBanc({ lignes: faites(1500), echecA: 2 })
     await expect(options(optionsDejaFaites(true, 'A')).queryFn()).rejects.toThrow('boom')
+  })
+})
+
+describe('les manques', () => {
+  /** Un observateur réel : c'est lui qui décide ce que l'écran voit. */
+  const observe = (o: Options, valeur: string) => new QueryObserver(new QueryClient(), {
+    queryKey: o.queryKey, enabled: o.enabled, queryFn: async () => valeur,
+    placeholderData: o.placeholderData,
+  })
+
+  it('ne montrent rien quand le placard se vide, pas l’ancien « il manque »', async () => {
+    const obs = observe(options(optionsManques(['r1'], new Set(['x']))), 'ANCIEN')
+    const fin = obs.subscribe(() => {})
+    await new Promise(r => setTimeout(r, 20))
+    expect(obs.getCurrentResult().data).toBe('ANCIEN')
+
+    const vide = options(optionsManques(['r1'], new Set()))
+    expect(vide.enabled).toBe(false)
+    obs.setOptions({
+      queryKey: vide.queryKey, enabled: vide.enabled, queryFn: async () => 'NOUVEAU',
+      placeholderData: vide.placeholderData,
+    })
+    expect(obs.getCurrentResult().data).toBeUndefined()
+    fin()
+  })
+
+  it('garde l’ancien résultat pendant un changement de page (pas de clignotement)', async () => {
+    const obs = observe(options(optionsManques(['r1'], new Set(['x']))), 'ANCIEN')
+    const fin = obs.subscribe(() => {})
+    await new Promise(r => setTimeout(r, 20))
+
+    const suite = options(optionsManques(['r2'], new Set(['x'])))
+    obs.setOptions({
+      queryKey: suite.queryKey, enabled: suite.enabled,
+      queryFn: () => new Promise(() => {}), placeholderData: suite.placeholderData,
+    })
+    expect(obs.getCurrentResult().data).toBe('ANCIEN')
+    expect(obs.getCurrentResult().isPlaceholderData).toBe(true)
+    fin()
   })
 })

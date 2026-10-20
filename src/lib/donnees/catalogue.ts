@@ -312,8 +312,11 @@ export function useManques(ids: string[], placard: Set<string>) {
     enabled: ids.length > 0 && placard.size > 0,
     staleTime: 60_000,
     // Sans cela, les « il manque… » clignotent à chaque frappe et à chaque page :
-    // la clé change, et la requête repartirait de rien.
-    placeholderData: keepPreviousData,
+    // la clé change, et la requête repartirait de rien. Mais un placard VIDE n'a
+    // rien qui manque : la requête est éteinte, et garder l'ancien résultat
+    // afficherait les manques de l'ancien placard.
+    placeholderData: (precedent: Map<string, string[]> | undefined) =>
+      placard.size > 0 ? keepPreviousData(precedent) : undefined,
     queryFn: async () => manquesDe(ou(await supabase.from('recipe_ingredient')
       .select('recipe_id, food_id, raw_text').in('recipe_id', ids)), placard),
   })
