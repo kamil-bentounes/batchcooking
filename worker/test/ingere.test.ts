@@ -63,7 +63,7 @@ function brute(p: Partial<RecetteBrute> = {}): RecetteBrute {
 const etape = (p: Partial<EtapePrete> = {}): EtapePrete => ({
   ordinal: 1, text: 'x', verb: 'émincer', quantity_g: null,
   duration_min: 5, duration_source: 'defaut', appliance_type: null,
-  temperature_c: null, temperature_source: null, load_type: 'actif', confidence: 0.7,
+  temperature_c: null, temperature_source: null, load_type: 'actif', gesture_min: null, confidence: 0.7,
   ...p,
 })
 
@@ -211,5 +211,44 @@ describe('l’attribution', () => {
   it('cite au moins l’adresse quand la source est muette', () => {
     const r = preparer(brute({ source: null }), CTX)
     expect(r.recipe.license_note).toContain('https://exemple.fr/r/1')
+  })
+})
+
+describe('la photo, le titre et les gestes (0092)', () => {
+  it('écrit la photo lue sur la page', () => {
+    const r = preparer(brute({ image: 'https://a.fr/p.jpg' }), CTX)
+    expect(r.recipe.image_url).toBe('https://a.fr/p.jpg')
+  })
+
+  it('nettoie le titre avant de l’écrire', () => {
+    const r = preparer(brute({ titre: 'Poulet basquaise : la meilleure recette' }), CTX)
+    expect(r.recipe.title).toBe('Poulet basquaise')
+  })
+
+  it('écrit les gestes de chaque étape', () => {
+    const r = preparer(brute({ etapes: [
+      'Épluchez et émincez les oignons.',
+      'Versez la pâte dans le moule et enfournez 35 min.',
+    ] }), CTX)
+    expect(r.etapes.map(e => e.gesture_min)).toEqual([7, 1])
+  })
+})
+
+describe('les macros invraisemblables (R7)', () => {
+  const AVEC_MACROS: Contexte = {
+    ...CTX,
+    nutriments: new Map(ciqual.map((a: { code: string; nutriments: unknown }) =>
+      [a.code, a.nutriments])),
+  }
+
+  it('garde les macros d’une part ordinaire', () => {
+    const r = preparer(brute({ parts: 2, ingredients: ['500 g de carotte'] }), AVEC_MACROS)
+    expect(r.nutrition, 'la part ordinaire a perdu ses macros').not.toBeNull()
+  })
+
+  it('écarte les macros d’une part de dix kilos, et dit pourquoi', () => {
+    const r = preparer(brute({ parts: 1, ingredients: ['10 kg de carotte'] }), AVEC_MACROS)
+    expect(r.nutrition).toBeNull()
+    expect(r.motifs.join(' ')).toMatch(/macros écartées/)
   })
 })
