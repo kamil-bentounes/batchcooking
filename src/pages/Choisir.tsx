@@ -36,6 +36,9 @@ import {
 } from '../lib/donnees/catalogue.ts'
 import type { Candidate, Filtres } from '../lib/donnees/catalogue.ts'
 import { bornesDeLaPage, nombreDePages, tranche } from '../lib/recettes/pages.ts'
+import { messageEchec } from '../lib/recettes/echecs.ts'
+import type { Geste } from '../lib/recettes/echecs.ts'
+import { PARTS_MAX_CYCLE, PARTS_MAX_RECETTE, lireParts } from '../lib/recettes/parts.ts'
 import { Vignette } from '../ui/recettes/Vignette.tsx'
 import { Pagination } from '../ui/recettes/Pagination.tsx'
 import { FicheRecette } from '../ui/recettes/FicheRecette.tsx'
@@ -82,6 +85,18 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
   const majCycle = useMajCycle()
   const genere = useGenereListe()
   const change = useChangeEtat()
+  /* Les parts d'une recette déjà retenue ont leur propre mutation : son erreur ne
+     se confond pas avec celle du « + ». */
+  const regle = useChoisitRecette()
+
+  /* Ce qui a raté, dit en français près du geste : « + », « Retirer » et les parts
+     échouaient sans un mot (hors ligne, RLS, 4xx). Un succès efface le message. */
+  const [echecAjout, setEchecAjout] = useState<string | null>(null)
+  const [echecCarte, setEchecCarte] = useState<string | null>(null)
+  const issue = (geste: Geste, dit: (m: string | null) => void) => ({
+    onSuccess: () => dit(null),
+    onError: (e: unknown) => dit(messageEchec(geste, e)),
+  })
 
   const prises = useMemo(() => new Map(choisies.map(c => [c.recipe_id, c.servings])), [choisies])
   const partsPrises = choisies.reduce((s, c) => s + c.servings, 0)
@@ -106,7 +121,22 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
     choisit.mutate({
       cycleId: cycle.id, recipeId: r.id,
       parts: partsAProposer(cible, partsPrises, r.yield_servings),
-    })
+    }, issue('retenir', setEchecAjout))
+  }
+
+  /* Des entiers, dans les bornes : un « 2.5 » n'ira jamais jusqu'à la colonne `int`. */
+  function reglePartsDeLaCible(parts: number) {
+    if (!cycle) return
+    const l = lireParts(String(parts), PARTS_MAX_CYCLE)
+    if (l.etat === 'refus') return setEchecCarte(l.message)
+    majCycle.mutate({ id: cycle.id, servings_target: parts }, issue('cible', setEchecCarte))
+  }
+
+  function reglePartsDeLaRecette(recipeId: string, parts: number) {
+    if (!cycle) return
+    const l = lireParts(String(parts), PARTS_MAX_RECETTE)
+    if (l.etat === 'refus') return setEchecCarte(l.message)
+    regle.mutate({ cycleId: cycle.id, recipeId, parts }, issue('parts', setEchecCarte))
   }
 
   async function versLesCourses() {
@@ -170,10 +200,9 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
       </p>
       <h1 className="titre-fort text-[46px] mt-1">Choisir</h1>
 
-      <Retenues cible={cible} choisies={choisies}
-                surCible={parts => majCycle.mutate({ id: cycle.id, servings_target: parts })}
-                surParts={(recipeId, parts) => choisit.mutate({ cycleId: cycle.id, recipeId, parts })}
-                surRetire={id => retire.mutate(id)} />
+      <Retenues cible={cible} choisies={choisies} erreur={echecCarte}
+                surCible={reglePartsDeLaCible} surParts={reglePartsDeLaRecette}
+                surRetire={id => retire.mutate(id, issue('retirer', setEchecCarte))} />
 
       {/* ── Le catalogue, d'abord. L'IA est à côté, jamais à la place. ────── */}
       <section aria-label="Catalogue">
@@ -199,6 +228,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
           </button>
         )}
         <Erreur de={error ?? erreurFaisables ?? erreurDejaFaites} />
+        <Erreur de={echecAjout} />
 
         {enAttente ? <Attente /> : filtrees.length === 0 ? (error ? null : (
           <Vide titre="Rien ne correspond"
@@ -243,7 +273,8 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
                       retenue={prises.has(ficheDe.id)}
                       parts={prises.get(ficheDe.id)
                         ?? partsAProposer(cible, partsPrises, ficheDe.yield_servings)}
-                      ajoute={() => ajoute(ficheDe)} enCours={choisit.isPending} />
+                      ajoute={() => ajoute(ficheDe)} enCours={choisit.isPending}
+                      erreur={echecAjout} />
       )}
     </Passage>
   )

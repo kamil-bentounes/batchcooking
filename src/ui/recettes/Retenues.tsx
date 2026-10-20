@@ -9,14 +9,17 @@
 import { useState } from 'react'
 import type { RecetteChoisie } from '../../lib/donnees/cycle.ts'
 import { parts } from '../../lib/recettes/parts.ts'
+import { Erreur } from '../coque.tsx'
 import { Photo } from './Photo.tsx'
 
 /** « 6 parts » en grand : l'espace insécable garde le chiffre et le mot sur une ligne. */
 const enGrand = (texte: string) => texte.replace(' ', ' ')
 
-export function Retenues({ cible, choisies, surCible, surParts, surRetire }: {
+export function Retenues({ cible, choisies, erreur, surCible, surParts, surRetire }: {
   cible: number
   choisies: RecetteChoisie[]
+  /** Ce qui a raté (retirer, parts, cible), dit en français ; `null` après un succès. */
+  erreur?: string | null
   surCible: (parts: number) => void
   surParts: (recipeId: string, parts: number) => void
   surRetire: (id: string) => void
@@ -109,6 +112,7 @@ export function Retenues({ cible, choisies, surCible, surParts, surRetire }: {
           )))}
         </ul>
       )}
+      <Erreur de={erreur} />
     </section>
   )
 }

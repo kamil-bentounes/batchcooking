@@ -33,7 +33,7 @@ const INSECABLE = ' '
 const lienWeb = (url: string | null | undefined): string | null =>
   url && /^https?:\/\//i.test(url) ? url : null
 
-export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCours }: {
+export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCours, erreur }: {
   recette: Candidate
   /** Appelée quand le `<dialog>` s'est fermé (croix, voile, Échap) : le parent la démonte. */
   fermer: () => void
@@ -42,6 +42,8 @@ export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCou
   retenue: boolean
   ajoute: () => void
   enCours: boolean
+  /** Ce qui a raté quand « Ajouter » a échoué, dit en français ; `null` sinon. */
+  erreur?: string | null
 }) {
   const boite = useRef<HTMLDialogElement>(null)
   const { data: fiche, error, isPending } = useFiche(r.id)
@@ -203,6 +205,7 @@ export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCou
 
         <div className="shrink-0 px-4 pt-3 pb-[max(18px,env(safe-area-inset-bottom))]
                         bg-linear-to-t from-fond from-70% to-fond/0">
+          <div className="-mt-2 mb-2"><Erreur de={erreur} /></div>
           {retenue ? (
             <p className="min-h-14 rounded-[18px] bg-herbe/10 text-herbe text-[16px] font-semibold
                           grid place-items-center">

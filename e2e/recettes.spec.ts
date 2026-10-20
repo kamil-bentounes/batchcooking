@@ -17,6 +17,7 @@
  *   7. La fiche (i) : étapes, macros, ingrédients, lien web, Échap et voile.
  *   8. L’image neutre : sans photo, photo qui ne charge pas.
  *   9. Une recette collée : l’import (réponse du modèle simulée), puis la base.
+ *  10. Les cas limites : gestes qui échouent, champs de parts, mots sans espace.
  *
  * Chaque écran est photographié dans `.shots/recettes/<dev|build>/<n>-<nom>/`,
  * dans l'ordre, et `journal.json` relie chaque capture à ce que la base disait
@@ -44,7 +45,7 @@ const LOCAL = /127\.0\.0\.1|localhost/.test(process.env.VITE_SUPABASE_URL ?? '')
 
 const PARCOURS: Record<number, string> = {
   1: 'arrivee', 2: 'recherche', 3: 'filtres', 4: 'avec-ce-que-jai', 5: 'pagination',
-  6: 'ajouts', 7: 'fiche', 8: 'image-neutre', 9: 'recette-collee',
+  6: 'ajouts', 7: 'fiche', 8: 'image-neutre', 9: 'recette-collee', 10: 'cas-limites',
 }
 
 type Entree = { parcours: string; titre: string; capture?: string; base?: unknown }
@@ -1148,6 +1149,99 @@ test.describe.serial('les recettes, de bout en bout', () => {
     await page.getByRole('button', { name: '≥ 30 g de protéines' }).click()
     await expect(carte(page, TITRE_GEANTE)).toBeVisible()
     await photo(page, 'sans-macros', 'Aucune macro écrite : « Macros inconnues »')
+    expect(erreurs, 'des erreurs sont tombées dans la console').toEqual([])
+  })
+
+  /*
+   * Ce que la revue adverse de clôture a trouvé : des gestes qui échouent sans un
+   * mot, des champs qu'on ne peut pas vider, des mots sans espace qui élargissent
+   * la page. Une recette à elle, créée ici et retirée ici.
+   */
+  test('10 · Les cas limites de l’écran', async ({ page }) => {
+    test.setTimeout(180_000)
+    const erreurs = surveille(page)
+    const TITRE_LONG = `Banc recettes 93 · ${'x'.repeat(200)}`
+    const alerte = (texte: RegExp) => page.getByRole('alert').filter({ hasText: texte })
+
+    const recette = ou(await db.from('recipe').insert({
+      title: TITRE_LONG, yield_servings: 4, origin: 'importee', plannable: true,
+      total_time_min: 60, source_name: 'exemple.fr',
+    }).select('id').single())
+
+    try {
+      await arrive(page)
+      await isole(page, 'banc recettes 93')
+      await expect(page.getByRole('article')).toHaveCount(1, { timeout: 15_000 })
+      const c = carte(page, TITRE_LONG)
+      const ajouter = c.getByRole('button', { name: `Ajouter ${TITRE_LONG}` })
+      const champ = page.getByLabel(`Parts de ${TITRE_LONG}`)
+      const partsEnBase = async () => (await retenues()).map(r => r.parts)
+      /* Un refus du réseau sur UNE méthode : l'écriture rate, la lecture continue. */
+      const casse = (motif: RegExp, methode: string) => page.route(motif, r =>
+        r.request().method() === methode ? r.abort('failed') : r.continue())
+      const REST_RETENUES = /\/rest\/v1\/cycle_recipe/
+      const REST_CYCLE = /\/rest\/v1\/cycle\?/
+
+      // ── 1 · Un geste qui rate le dit, et le dit près de lui ───────────────
+      await casse(REST_RETENUES, 'POST')
+      await ajouter.click()
+      await expect(alerte(/Je n’ai pas pu retenir cette recette/).first(),
+        'un « + » qui échoue ne dit rien').toBeVisible({ timeout: 10_000 })
+      expect(await retenues(), 'le « + » raté a écrit quand même').toEqual([])
+      await expect(c.getByLabel('Retenue', { exact: true })).toHaveCount(0)
+      await photo(page, 'ajout-rate', 'Un « + » qui échoue : le message, la ligne reste à ajouter')
+      await page.unroute(REST_RETENUES)
+      await ajouter.click()
+      await expect(c.getByLabel('Retenue', { exact: true })).toBeVisible({ timeout: 10_000 })
+      await expect(alerte(/Je n’ai pas pu retenir/), 'le message reste après un succès').toHaveCount(0)
+      expect(await partsEnBase()).toEqual([4])
+
+      await page.evaluate(() => window.scrollTo(0, 0))
+      // Les parts : un décimal et un nombre trop grand sont refusés sans rien écrire.
+      await champ.fill('2.5')
+      await expect(alerte(/nombres entiers/)).toBeVisible()
+      await champ.fill('21')
+      await expect(alerte(/Pas plus de 20 parts\./)).toBeVisible()
+      await page.waitForTimeout(600)
+      expect(await partsEnBase(), 'un refus du champ a quand même écrit').toEqual([4])
+      // Les parts, quand le réseau lâche.
+      await casse(REST_RETENUES, 'POST')
+      await champ.fill('7')
+      await expect(alerte(/Je n’ai pas pu changer les parts\./)).toBeVisible({ timeout: 10_000 })
+      expect(await partsEnBase()).toEqual([4])
+      await page.unroute(REST_RETENUES)
+      await champ.fill('8')
+      await expect.poll(partsEnBase, { timeout: 10_000 }).toEqual([8])
+      await expect(alerte(/Je n’ai pas pu changer les parts/)).toHaveCount(0)
+
+      // Les parts visées : refus du plafond, puis réseau qui lâche.
+      await page.getByRole('button', { name: '10 repas à couvrir' }).click()
+      const cible = page.getByLabel('Parts visées cette semaine')
+      await cible.fill('41')
+      await expect(alerte(/Pas plus de 40 parts\./)).toBeVisible()
+      await casse(REST_CYCLE, 'PATCH')
+      await cible.fill('9')
+      await expect(alerte(/Je n’ai pas pu changer les parts visées\./)).toBeVisible({ timeout: 10_000 })
+      await page.unroute(REST_CYCLE)
+      await cible.fill('11')
+      await expect.poll(async () => (await db.from('cycle').select('servings_target')
+        .eq('id', cycleId).single()).data?.servings_target, { timeout: 10_000 }).toBe(11)
+
+      // « Retirer » qui rate : la recette reste retenue, et on le dit.
+      await casse(REST_RETENUES, 'DELETE')
+      await encre(page).getByRole('button', { name: 'Retirer' }).click()
+      await expect(alerte(/Je n’ai pas pu retirer cette recette/)).toBeVisible({ timeout: 10_000 })
+      expect(await partsEnBase(), 'le « Retirer » raté a retiré quand même').toEqual([8])
+      await photo(page, 'retrait-rate', 'Un « Retirer » qui échoue : le message dans la carte encre')
+      await page.unroute(REST_RETENUES)
+      await encre(page).getByRole('button', { name: 'Retirer' }).click()
+      await expect.poll(retenues, { timeout: 10_000 }).toEqual([])
+      await expect(alerte(/Je n’ai pas pu retirer/)).toHaveCount(0)
+    } finally {
+      await db.from('cycle_recipe').delete().eq('cycle_id', cycleId)
+      await db.from('cycle').update({ servings_target: 10 }).eq('id', cycleId)
+      await db.from('recipe').delete().eq('id', recette.id)
+    }
     expect(erreurs, 'des erreurs sont tombées dans la console').toEqual([])
   })
 })
