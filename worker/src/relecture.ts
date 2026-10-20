@@ -177,39 +177,162 @@ export async function lireBorne(res: Response, max = MAX_OCTETS): Promise<string
 /** Au plus trois redirections suivies pour une page. */
 export const MAX_REDIRECTIONS = 3
 
-const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
+/** Les plages IPv4 où l'on ne frappe jamais : [base, bits, nom]. */
+const PLAGES_V4: ReadonlyArray<readonly [number, number, string]> = [
+  [0x00000000, 8, 'réseau « ce réseau » 0.0.0.0/8'],
+  [0x0a000000, 8, 'réseau privé 10.0.0.0/8'],
+  [0x64400000, 10, 'CGNAT 100.64.0.0/10'],
+  [0x7f000000, 8, 'bouclage 127.0.0.0/8'],
+  [0xa9fe0000, 16, 'lien local et métadonnées 169.254.0.0/16'],
+  [0xac100000, 12, 'réseau privé 172.16.0.0/12'],
+  [0xc0000000, 24, 'réservé IETF 192.0.0.0/24'],
+  [0xc0a80000, 16, 'réseau privé 192.168.0.0/16'],
+  [0xc6120000, 15, 'banc d’essai 198.18.0.0/15'],
+  [0xe0000000, 3, 'multicast et réservé 224.0.0.0/3'],
+]
 
-function ipv4Privee(h: string): boolean {
-  const m = h.match(IPV4)
-  if (!m) return false
-  const [a, b] = [Number(m[1]), Number(m[2])]
-  return (
-    a === 0 || a === 10 || a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127)
-  )
+const nomPlageV4 = (n: number): string | null => {
+  for (const [base, bits, nom] of PLAGES_V4) {
+    const masque = (0xffffffff << (32 - bits)) >>> 0
+    if (((n & masque) >>> 0) === base) return nom
+  }
+  return null
+}
+
+/** Un morceau d'adresse IPv4 : décimal, octal (`0177`) ou hexadécimal (`0x7f`). Les mêmes que `inet_aton`. */
+const MORCEAU_NUMERIQUE = /^(0x[0-9a-f]*|\d+)$/i
+
+function morceau(m: string): number | null {
+  if (/^0x/i.test(m)) return m.length === 2 ? 0 : parseInt(m.slice(2), 16)
+  if (m.length > 1 && m.startsWith('0')) return /^[0-7]+$/.test(m) ? parseInt(m, 8) : null
+  return Number(m)
 }
 
 /**
- * Cet hôte (sans le port) est-il une adresse de la maison — bouclage, réseau
- * privé, lien local, métadonnées du nuage — ou un nom qui n'existe que chez nous ?
+ * Une adresse IPv4 écrite à la manière de `inet_aton` — `127.0.0.1`, mais aussi
+ * `2130706433`, `0x7f.1`, `0177.0.0.1`, `127.1` — en entier de 32 bits. `null` si
+ * elle ne se lit pas. Un navigateur ou un résolveur les acceptent toutes : le
+ * filtre doit les lire pareil, sans quoi `http://2130706433/` passe pour un nom.
  */
-export function estPrive(hostname: string): boolean {
-  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '')
-  if (h === 'localhost' || /\.(localhost|local|internal|lan)$/.test(h)) return true
-  if (ipv4Privee(h)) return true
-  if (!h.includes(':')) return false
-  // IPv6 : `::`, `::1`, unique-local fc00::/7, lien local fe80::/10.
-  if (h === '::' || h === '::1' || /^f[cd]/.test(h) || /^fe[89ab]/.test(h)) return true
-  // IPv4 inscrite en IPv6 : `::ffff:7f00:1` (l'URL normalise `::ffff:127.0.0.1` ainsi).
-  const m = h.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/)
-  if (m) {
-    const [x, y] = [parseInt(m[1], 16), parseInt(m[2], 16)]
-    return ipv4Privee(`${x >> 8}.${x & 255}.${y >> 8}.${y & 255}`)
+function ipv4De(h: string): number | null {
+  const morceaux = h.split('.')
+  if (morceaux.length > 4 || !morceaux.every(m => MORCEAU_NUMERIQUE.test(m))) return null
+  const n = morceaux.map(morceau)
+  if (n.some(v => v === null || !Number.isFinite(v))) return null
+  const v = n as number[]
+  const dernier = v[v.length - 1]
+  if (v.slice(0, -1).some(x => x > 255) || dernier >= 256 ** (5 - v.length)) return null
+  return v.slice(0, -1).reduce((acc, x, i) => acc + x * 256 ** (3 - i), 0) + dernier
+}
+
+/** Une adresse IPv6 en huit groupes de 16 bits ; `null` si elle ne se lit pas. */
+function ipv6De(h: string): number[] | null {
+  let t = h.replace(/%.*$/, '')
+  if (t.includes('.')) {
+    // IPv4 inscrite en fin d'adresse : `::ffff:10.0.0.1`.
+    const deux = t.lastIndexOf(':')
+    const v4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(t.slice(deux + 1)) ? ipv4De(t.slice(deux + 1)) : null
+    if (v4 === null) return null
+    t = `${t.slice(0, deux + 1)}${(v4 >>> 16).toString(16)}:${(v4 & 0xffff).toString(16)}`
   }
-  return false
+  const moities = t.split('::')
+  if (moities.length > 2) return null
+  const groupes = (x: string) => (x === '' ? [] : x.split(':'))
+  const tete = groupes(moities[0])
+  const queue = moities.length === 2 ? groupes(moities[1]) : []
+  if (moities.length === 1 ? tete.length !== 8 : tete.length + queue.length > 7) return null
+  const plein = [...tete, ...Array<string>(8 - tete.length - queue.length).fill('0'), ...queue]
+  if (!plein.every(g => /^[0-9a-f]{1,4}$/i.test(g))) return null
+  return plein.map(g => parseInt(g, 16))
+}
+
+const v4Des = (haut: number, bas: number) => ((haut << 16) | bas) >>> 0
+
+/** Pourquoi cette adresse IPv6 est de chez nous, ou `null`. */
+function nomPlageV6(g: number[]): string | null {
+  const [a, b, c, d, e, f, x, y] = g
+  const v4 = nomPlageV4(v4Des(x, y))
+  if (g.every(v => v === 0)) return 'adresse indéfinie ::'
+  if (g.slice(0, 7).every(v => v === 0) && y === 1) return 'bouclage ::1'
+  if ((a & 0xfe00) === 0xfc00) return 'unique-local fc00::/7'
+  if ((a & 0xffc0) === 0xfe80) return 'lien local fe80::/10'
+  if ((a & 0xffc0) === 0xfec0) return 'site-local fec0::/10'
+  if ((a & 0xff00) === 0xff00) return 'multicast ff00::/8'
+  if (a === 0x2001 && b === 0xdb8) return 'documentation 2001:db8::/32'
+  // IPv4 inscrite en IPv6 : mappée (::ffff:a.b.c.d), compatible (::a.b.c.d), NAT64, 6to4.
+  if ([a, b, c, d, e].every(v => v === 0) && f === 0xffff) return v4 && `IPv4 mappée, ${v4}`
+  if ([a, b, c, d, e, f].every(v => v === 0)) return v4 && `IPv4 compatible, ${v4}`
+  if (a === 0x64 && b === 0xff9b && [c, d, e, f].every(v => v === 0)) return v4 && `NAT64, ${v4}`
+  if (a === 0x2002) { const r = nomPlageV4(v4Des(b, c)); return r && `6to4, ${r}` }
+  return null
+}
+
+/**
+ * Pourquoi cet hôte est de chez nous — bouclage, réseau privé, lien local,
+ * unique-local, CGNAT, métadonnées du nuage, nom qui n'existe que sur le réseau
+ * local —, ou `null` s'il est public. `host` est un nom ou une adresse, sans port
+ * (les crochets d'une IPv6 sont tolérés) ; `adresses` sont celles où le nom se
+ * RÉSOUT (`dns.lookup`, toutes) : un nom public qui pointe vers 10.0.0.5 est refusé.
+ *
+ * `source_url` est réécrivable par un foyer : sans ce contrôle, la machine de
+ * Kamil irait lire `http://169.254.169.254/` pour qui le demande.
+ */
+export function hoteInterdit(host: string, adresses: readonly string[] = []): string | null {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
+  if (h === '') return 'hôte vide'
+  if (h === 'localhost' || /\.(localhost|local|internal|lan)$/.test(h)) {
+    return `${host} : nom du réseau local`
+  }
+  if (h.includes(':')) {
+    const g = ipv6De(h)
+    if (g === null) return `${host} : adresse IPv6 illisible`
+    const nom = nomPlageV6(g)
+    return nom && `${host} : ${nom}`
+  }
+  // Le dernier morceau est un nombre : le nom est une adresse IPv4 (à la `inet_aton`),
+  // jamais un nom de domaine — un nom ne se termine pas par un nombre.
+  const dernier = h.split('.').at(-1) as string
+  if (MORCEAU_NUMERIQUE.test(dernier)) {
+    const n = ipv4De(h)
+    if (n === null) return `${host} : adresse IPv4 illisible`
+    const nom = nomPlageV4(n)
+    if (nom) return `${host} : ${nom}`
+  }
+  for (const adresse of adresses) {
+    // Une adresse résolue que l'on ne sait pas lire est refusée aussi : dans le doute, on ne frappe pas.
+    const lisible = adresse.includes(':') || (/^[\d.]+$/.test(adresse) && ipv4De(adresse) !== null)
+    const raison = lisible ? hoteInterdit(adresse) : `${adresse} n'est pas une adresse`
+    if (raison) return `${host} se résout vers ${adresse} : ${raison}`
+  }
+  return null
+}
+
+/**
+ * Cet hôte (sans le port) est-il une adresse de la maison ? Voir `hoteInterdit`.
+ */
+export const estPrive = (hostname: string): boolean => hoteInterdit(hostname) !== null
+
+/**
+ * Peut-on seulement demander cette adresse ? `null` si oui ; sinon, pourquoi non :
+ * ni autre schéma que http(s), ni identité dans l'adresse, ni hôte de chez nous.
+ * C'est le garde de la PREMIÈRE requête à un hôte ; la résolution DNS s'y ajoute
+ * (`hoteInterdit(hôte, adresses)`).
+ */
+export function urlRefusee(url: string): string | null {
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return 'adresse illisible'
+  }
+  return formeRefusee(u) ?? hoteInterdit(u.hostname)
+}
+
+/** Le schéma et l'identité d'une adresse : http(s) seulement, et rien devant l'hôte. */
+export function formeRefusee(u: URL): string | null {
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return `schéma ${u.protocol} refusé`
+  if (u.username || u.password) return 'identité dans l’adresse'
+  return null
 }
 
 /**
@@ -312,4 +435,14 @@ export function lireArguments(argv: string[]): Arguments | { erreur: string } {
     }
   }
   return r
+}
+
+/**
+ * Le seul cas où un hôte de chez nous est permis : un essai LOCAL (`--domaine
+ * 127.0.0.1:8787`, `--domaine localhost:9101`), sur le site que l'on désigne soi-même
+ * contre un serveur de test. Jamais avec `--prod` : la production ne frappe que le
+ * web public, quoi que dise la ligne de commande.
+ */
+export function exempteLocal(prod: boolean, domaines: readonly string[], host: string): boolean {
+  return !prod && domaines.some(d => cleSite(d) === cleSite(host))
 }

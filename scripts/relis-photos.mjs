@@ -27,6 +27,13 @@
  *        au `www.` près), trois fois au plus, après la pause de SON hôte et
  *        après le `robots.txt` de cet hôte. Vers un autre site, une adresse
  *        privée ou un autre schéma : la page compte pour une erreur.
+ *      - `recipe.source_url` n'est pas de confiance (un foyer peut la réécrire) : AVANT
+ *        la première requête à un hôte — `robots.txt` compris —, un schéma autre que
+ *        http(s), une identité dans l'adresse, `localhost`, une IP littérale privée
+ *        (bouclage, lien local, métadonnées du nuage, CGNAT, unique-local…, sous toutes
+ *        ses écritures) ou un nom qui se RÉSOUT vers l'une d'elles sont refusés : issue
+ *        `erreur`, domaine laissé. Seul un essai local sur le `--domaine` désigné y
+ *        échappe ; avec `--prod`, jamais.
  *    Kamil a accordé cette relecture pour la prod le 19/10/2026.
  *
  *   npm run relis-photos -- --domaine 127.0.0.1:8787             (local)
@@ -48,14 +55,15 @@
  * fichier (`rm .relis-photos.etat.json`). `--sec` lit l'état et ne l'écrit jamais.
  */
 import { readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { lookup } from 'node:dns/promises'
 import { fileURLToPath } from 'node:url'
 import { config } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import { extraire } from '../worker/src/jsonld.ts'
 import { AGENT, autorise, cheminDe, lireRobots } from '../worker/src/sitemap.ts'
 import {
-  abandonne, cleSite, estUnDefi, etatInvalide, hopSuivi, ISSUES_REGLEES, issueDe, lireArguments,
-  lireBorne, MAX_REDIRECTIONS,
+  abandonne, cleSite, estUnDefi, etatInvalide, exempteLocal, formeRefusee, hoteInterdit, hopSuivi,
+  ISSUES_REGLEES, issueDe, lireArguments, lireBorne, MAX_REDIRECTIONS,
   PAUSE_MS, pauseDe, robotsDe,
 } from '../worker/src/relecture.ts'
 
@@ -141,6 +149,52 @@ const attends = h => {
 
 const REDIRECTIONS = new Set([301, 302, 303, 307, 308])
 
+/*
+ * Le garde de la PREMIÈRE requête à un hôte. `recipe.source_url` est réécrivable par
+ * un foyer (la RLS laisse un `authenticated` la changer sur une ligne du catalogue) :
+ * rien de ce qu'elle désigne n'est de confiance. Avant la moindre requête — robots.txt
+ * compris —, on refuse un schéma autre que http(s), une identité dans l'adresse, un hôte
+ * de chez nous (`localhost`, IP littérale privée, bouclage, lien local, CGNAT,
+ * métadonnées du nuage, quelle que soit son écriture), et un nom qui se RÉSOUT vers
+ * l'une de ces adresses (`dns.lookup`, toutes). Le verdict est gardé par hôte, pour
+ * le passage entier. Seule exception : un essai local sur le domaine qu'on désigne
+ * (`exempteLocal`), jamais avec `--prod`.
+ *
+ * Reste — et on ne peut pas le fermer d'ici : `fetch` résout le nom une seconde fois ;
+ * un DNS qui change de réponse entre les deux passerait. Pour le fermer, il faudrait
+ * un `dispatcher` undici qui épingle l'adresse vérifiée.
+ */
+const verdictsHote = new Map()
+
+// Pour les bancs : `RELIS_SANS_EXEMPTION=1` retire l'exception locale — le garde ne fait alors
+// que se resserrer (jamais l'inverse), et l'on voit un refus contre un serveur de test.
+const SANS_EXEMPTION = process.env.RELIS_SANS_EXEMPTION === '1'
+
+async function verdictDe(u) {
+  if (!SANS_EXEMPTION && exempteLocal(PROD, DOMAINES, u.host)) return null
+  const nu = u.hostname.replace(/^\[|\]$/g, '')
+  const direct = hoteInterdit(nu)
+  if (direct) return direct
+  let adresses
+  try {
+    adresses = (await lookup(nu, { all: true, verbatim: true })).map(a => a.address)
+  } catch (e) {
+    return `${nu} : ne se résout pas (${e.code ?? e.message})`
+  }
+  if (adresses.length === 0) return `${nu} : aucune adresse`
+  return hoteInterdit(nu, adresses)
+}
+
+/** Pourquoi on ne demandera pas cette adresse, ou `null`. */
+function hoteRefuse(url) {
+  let u
+  try { u = new URL(url) } catch { return Promise.resolve('adresse illisible') }
+  const forme = formeRefusee(u)
+  if (forme) return Promise.resolve(forme)
+  if (!verdictsHote.has(u.host)) verdictsHote.set(u.host, verdictDe(u))
+  return verdictsHote.get(u.host)
+}
+
 /**
  * UNE requête, avec NOTRE agent, sans suivre de redirection. Rend le statut (0 :
  * réseau ou délai dépassé), l'adresse de renvoi, et le corps (borné) d'un succès.
@@ -183,6 +237,13 @@ const reglesDeHote = new Map()
 async function reglesDe(url) {
   const h = new URL(url).host
   if (reglesDeHote.has(h)) return reglesDeHote.get(h)
+  // Avant même robots.txt : un hôte de chez nous n'est pas interrogé, ni pour ses règles ni pour sa page.
+  const refus = await hoteRefuse(url)
+  if (refus) {
+    const e = { voie: 'laisser', robots: lireRobots(null), statut: 0, raison: `hôte refusé, ${refus}`, refuse: true }
+    reglesDeHote.set(h, e)
+    return e
+  }
   const rob = await suis(`${new URL(url).origin}/robots.txt`, { controle: false, timeoutMs: 15000 })
   let voie = robotsDe(rob.statut)
   let raison = voie === 'laisser' ? `robots.txt en ${rob.statut || (rob.raison ?? 'erreur réseau')}` : ''
@@ -209,6 +270,9 @@ async function reglesDe(url) {
 async function suis(url, { controle, timeoutMs }) {
   let courante = url
   for (let etape = 0; ; etape++) {
+    // Chaque étape — robots.txt, page, redirection vers le `www.` — passe le garde de son hôte.
+    const refus = await hoteRefuse(courante)
+    if (refus) return { statut: 0, finale: courante, raison: `hôte refusé, ${refus}` }
     if (controle) {
       const e = await reglesDe(courante)
       if (e.voie === 'laisser') return { statut: 0, finale: courante, raison: `${hote(courante)} : ${e.raison}` }
@@ -284,7 +348,9 @@ for (const [domaine, liste] of parDomaine) {
   const e = await reglesDe(liste[0].source_url)
   b.robots = e.statut
   if (e.voie === 'laisser') {
-    b.abandonnees = liste.length
+    // Un hôte refusé est une erreur (rien n'est noté dans l'état : la ligne est relue le jour où l'adresse est corrigée).
+    if (e.refuse) b.erreur = liste.length
+    else b.abandonnees = liste.length
     b.durée = duree(Date.now() - debutDomaine)
     console.log(`[${domaine}] ${e.raison} : domaine laissé pour ce passage.`)
     bilan.push(b)
