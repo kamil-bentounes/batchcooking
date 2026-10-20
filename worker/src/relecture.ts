@@ -150,13 +150,18 @@ export function estPrive(hostname: string): boolean {
   return false
 }
 
-const sansWww = (host: string) => host.toLowerCase().replace(/^www\./, '')
+/**
+ * La clé d'un site : son hôte (port compris), sans `www.`. C'est elle qui compte
+ * le rythme — `a.fr` et `www.a.fr` sont presque toujours le même serveur, et lui
+ * parler deux fois à 10 ms d'écart parce que le nom change serait impoli.
+ */
+export const cleSite = (host: string) => host.toLowerCase().replace(/^www\./, '')
 
 /**
  * Le même site : le même hôte (port compris), ou le même au `www.` près. On s'en
  * tient là — pas de liste des suffixes publics : `img.a.fr` n'est pas `a.fr`.
  */
-export const memeSite = (a: string, b: string) => sansWww(a) === sansWww(b)
+export const memeSite = (a: string, b: string) => cleSite(a) === cleSite(b)
 
 /**
  * Une redirection est suivie seulement si elle reste dans le site de la page :
@@ -181,11 +186,11 @@ export function hopSuivi(
     return { ok: false, raison: `schéma ${vers.protocol} refusé` }
   }
   if (vers.username || vers.password) return { ok: false, raison: 'identité dans l’adresse' }
-  if (vers.host.toLowerCase() !== origine.host.toLowerCase() && estPrive(vers.hostname)) {
-    return { ok: false, raison: `adresse privée ${vers.host}` }
-  }
   if (!memeSite(vers.host, origine.host)) {
-    return { ok: false, raison: `autre site : ${vers.host}` }
+    return {
+      ok: false,
+      raison: estPrive(vers.hostname) ? `adresse privée ${vers.host}` : `autre site : ${vers.host}`,
+    }
   }
   vers.hash = ''
   return { ok: true, url: vers.toString() }
@@ -212,6 +217,8 @@ export function lireArguments(argv: string[]): Arguments | { erreur: string } {
   const r: Arguments = { prod: false, sec: false, tout: false, limite: null, domaines: [] }
   for (let i = 0; i < argv.length; i++) {
     const brut = argv[i]
+    // Le `--` que npm laisse passer : rien à lire.
+    if (brut === '--') continue
     if (!brut.startsWith('--')) return { erreur: `argument inattendu : ${brut}` }
     const egal = brut.indexOf('=')
     const cle = egal >= 0 ? brut.slice(0, egal) : brut

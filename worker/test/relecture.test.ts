@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  abandonne, DELAI_MAX_S, hopSuivi, issueDe, lireArguments, lireBorne, MAX_OCTETS,
+  abandonne, cleSite, DELAI_MAX_S, hopSuivi, issueDe, lireArguments, lireBorne, MAX_OCTETS,
   pauseDe, PAUSE_MS, robotsDe,
 } from '../src/relecture.ts'
 
@@ -196,6 +196,10 @@ describe('suivre une redirection : seulement dans le même site', () => {
     expect(url(suit('http://127.0.0.1:8787/a', '/b'))).toBe('http://127.0.0.1:8787/b')
   })
 
+  it('un site local désigné fait aussi l’alternance `www.`', () => {
+    expect(url(suit('http://localhost:8787/a', 'http://www.localhost:8787/b'))).toBe('http://www.localhost:8787/b')
+  })
+
   it('un site local ne mène pas à un autre port, ni à localhost', () => {
     expect(suit('http://127.0.0.1:8787/a', 'http://127.0.0.1:9999/b').ok).toBe(false)
     expect(suit('http://127.0.0.1:8787/a', 'http://localhost:8787/b').ok).toBe(false)
@@ -214,11 +218,24 @@ describe('suivre une redirection : seulement dans le même site', () => {
   })
 })
 
+describe('la clé du rythme : le site, pas le nom', () => {
+  it('`a.fr` et `www.a.fr` comptent pour un seul site, le port et le reste non', () => {
+    expect(cleSite('www.A.fr')).toBe('a.fr')
+    expect(cleSite('a.fr')).toBe(cleSite('www.a.fr'))
+    expect(cleSite('a.fr:8787')).not.toBe(cleSite('a.fr'))
+    expect(cleSite('img.a.fr')).not.toBe(cleSite('a.fr'))
+  })
+})
+
 describe('les arguments de la ligne de commande', () => {
   const lis = (...a: string[]) => lireArguments(a)
 
   it('sans rien : local, pas à sec, sans limite, sans domaine', () => {
     expect(lis()).toEqual({ prod: false, sec: false, tout: false, limite: null, domaines: [] })
+  })
+
+  it('un `--` seul, que npm laisse parfois passer, est ignoré', () => {
+    expect(lis('--', '--limite', '3')).toMatchObject({ limite: 3 })
   })
 
   it('les drapeaux', () => {
