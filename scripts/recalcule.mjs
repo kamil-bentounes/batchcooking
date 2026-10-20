@@ -34,24 +34,40 @@
  *   npm run recalcule -- --prod
  *   npm run recalcule -- --prod --limite 20      (pour regarder avant)
  *   npm run recalcule -- --recette <uuid>        (une seule recette)
+ *
+ * Les options sont strictes (`--cle valeur` ou `--cle=valeur`) : une option
+ * inconnue, sans valeur ou illisible arrête le script avant tout appel réseau.
  */
 import { config } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import { agrege, parPart, plausible, pour100De } from '../src/lib/nutrition/macros.ts'
+import { entierPositif, lireOptions, uuid } from '../src/lib/recettes/options.ts'
 import { decodeEntites, titrePropre } from '../src/lib/recettes/texte.ts'
 import { minutesDeMains } from '../src/lib/recettes/temps.ts'
 import { indexer, rattacher } from '../worker/src/aliment.ts'
 import { gestesMin, pliure } from '../worker/src/etape.ts'
 import { analyser } from '../worker/src/ingredient.ts'
 
-const args = process.argv.slice(2)
-const opt = n => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : null }
-const PROD = args.includes('--prod')
-const LIMITE = opt('--limite') ? Number(opt('--limite')) : null
-const SEC = args.includes('--sec')
+// Les options se lisent AVANT tout appel réseau, et sans rien deviner : une option
+// mal écrite arrête le script. `--limite` sans valeur ou à 0 rendait « pas de limite »,
+// donc tout le catalogue ; `--dry-run` à côté de `--prod` écrivait en prod.
+const lues = lireOptions(process.argv.slice(2), {
+  '--prod': 'drapeau', '--sec': 'drapeau', '--sans-rattachement': 'drapeau',
+  '--limite': entierPositif, '--recette': uuid,
+})
+if (!lues.ok) {
+  console.error(`${lues.erreur}\nUsage : npm run recalcule -- [--prod] [--sec] [--sans-rattachement] `
+    + '[--limite <entier>] [--recette <uuid>]')
+  process.exit(2)
+}
+const o = lues.options
+const PROD = o['--prod'] === true
+const LIMITE = o['--limite'] ?? null
+const SEC = o['--sec'] === true
+const SANS_RATTACHEMENT = o['--sans-rattachement'] === true
 // Une seule recette : pour regarder de près, ou pour éprouver le script sans
 // recalculer toute une base.
-const RECETTE = opt('--recette')
+const RECETTE = o['--recette'] ?? null
 
 // ⚠️ `override` : sans lui, `.env` gagne et on écrirait en LOCAL avec la clé de
 //    PROD — une heure perdue à comprendre pourquoi rien ne changeait.
@@ -130,6 +146,7 @@ console.log(`  ${aliments.length} aliments · ${poidsUnitaires.size} poids unita
 let recettes = await tout('recipe',
   'id, title, yield_servings, origin, owner_household_id, total_time_min, active_time_min')
 if (RECETTE) recettes = recettes.filter(r => r.id === RECETTE)
+if (RECETTE && recettes.length === 0) { console.error(`Aucune recette ${RECETTE} sur cette cible.`); process.exit(2) }
 if (LIMITE) recettes = recettes.slice(0, LIMITE)
 const ids = new Set(recettes.map(r => r.id))
 console.log(`${recettes.length} recettes à reprendre.\n`)
@@ -174,7 +191,7 @@ for (const i of ingredients) {
 // ligne corrigée à la main par un foyer porte `resolution_source` différent.
 const index = indexer(aliments.map(a => ({ id: a.id, name: a.name, state: a.state ?? 'cru' })))
 const rattachements = []
-if (!args.includes('--sans-rattachement')) {
+if (!SANS_RATTACHEMENT) {
   for (const i of ingredients) {
     if (!ids.has(i.recipe_id)) continue
     if (i.resolution_source !== 'reference' && i.resolution_source !== 'aucune') continue
