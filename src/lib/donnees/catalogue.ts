@@ -214,9 +214,37 @@ type LigneBrute = Omit<Candidate, 'nutrition' | 'ajoutePar' | 'dUnAmi'> & {
 const PAGE_DE_LA_BASE = 1000
 
 /**
- * Lit par tranches de mille jusqu'à une tranche courte. L'ordre doit être stable
- * côté base (`order by id`), sinon deux tranches se chevaucheraient ou se
- * laisseraient un trou.
+ * Lit par tranches de mille, PAR CLÉ : chaque tranche reprend après le dernier
+ * `id` vu (`order by id`, puis `id > dernier`), jusqu'à une tranche courte.
+ *
+ * Pas par décalage (`.range`) : une recette ajoutée entre deux tranches décalait
+ * tout d'un cran et la dernière ligne de la première revenait en tête de la
+ * seconde — 1 501 lignes pour 1 500 recettes, une clé React en double ; une
+ * recette supprimée en faisait sauter une. La clé ne bouge pas quand la table
+ * bouge.
+ *
+ * Une tranche qui échoue lève : jamais un catalogue tronqué rendu comme entier.
+ */
+async function parClef<T extends { id: string }>(
+  lit: (apresId: string | null) => Promise<T[]>,
+): Promise<T[]> {
+  const tout: T[] = []
+  let apresId: string | null = null
+  for (;;) {
+    const tranche: T[] = await lit(apresId)
+    tout.push(...tranche)
+    if (tranche.length < PAGE_DE_LA_BASE) return tout
+    const dernier: string = tranche[tranche.length - 1].id
+    // Une base qui ignorerait le filtre rendrait la même tranche à l'infini.
+    if (dernier === apresId) throw new Error('La lecture du catalogue ne progresse pas.')
+    apresId = dernier
+  }
+}
+
+/**
+ * Le décalage, pour ce qui n'a pas de clé à filtrer : le résultat d'une RPC
+ * (`setof uuid`) n'accepte pas `.gt`. L'appelant dédoublonne — une insertion
+ * entre deux tranches fait revenir une ligne.
  */
 async function parTranches<T>(lit: (de: number, a: number) => Promise<T[]>): Promise<T[]> {
   const tout: T[] = []
@@ -237,12 +265,13 @@ export function useCatalogue() {
     queryKey: ['catalogue-leger'],
     staleTime: 10 * 60_000,
     queryFn: async (): Promise<Candidate[]> => {
-      const lignes = await parTranches(async (de, a) => ou(
-        await supabase.from('recipe').select(COLONNES)
+      const lignes = await parClef(async apresId => {
+        const q = supabase.from('recipe').select(COLONNES)
           .not('title', 'is', null)
           .eq('plannable', true)
-          .order('id')
-          .range(de, a)) as unknown as LigneBrute[])
+        return ou(await (apresId ? q.gt('id', apresId) : q)
+          .order('id').limit(PAGE_DE_LA_BASE)) as unknown as LigneBrute[]
+      })
 
       /*
        * La provenance, quand la recette vient d'un foyer.
@@ -293,6 +322,9 @@ export function useManques(ids: string[], placard: Set<string>) {
 /**
  * Les recettes faisables avec le placard, sur TOUT le catalogue : c'est la base
  * qui répond (0092). La clé porte le placard : il change, la réponse aussi.
+ *
+ * Le résultat d'une RPC n'a pas de `.gt` : on lit par décalage, et le `Set`
+ * dédoublonne ce qu'une insertion entre deux tranches ferait revenir.
  */
 export function useFaisables(actif: boolean, placard: Set<string>) {
   return useQuery({
@@ -316,9 +348,11 @@ export function useDejaFaites(actif: boolean, cycleId: string | undefined) {
     queryKey: ['deja-faites', cycleId],
     enabled: actif,
     queryFn: async () => {
-      const lignes = await parTranches(async (de, a) => {
-        const q = supabase.from('cycle_recipe').select('recipe_id').order('id')
-        return ou(await (cycleId ? q.neq('cycle_id', cycleId) : q).range(de, a))
+      const lignes = await parClef(async apresId => {
+        const q = supabase.from('cycle_recipe').select('id, recipe_id')
+        const autres = cycleId ? q.neq('cycle_id', cycleId) : q
+        return ou(await (apresId ? autres.gt('id', apresId) : autres)
+          .order('id').limit(PAGE_DE_LA_BASE))
       })
       return new Set(lignes.map(r => r.recipe_id))
     },
