@@ -7,6 +7,8 @@
  * d'un foyer ne doit pas rendre faisable la recette d'un autre.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { readdirSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
 import { admin, makeActor, type Actor } from './helpers/db'
 import { tempsActif } from '../src/lib/recettes/temps.ts'
@@ -15,11 +17,11 @@ let alice: Actor
 let bob: Actor
 const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-/** Une recette du catalogue, propre au banc. */
-async function recette() {
+/** Une recette du catalogue, propre au banc (`surcharge` : de quoi la faire autre). */
+async function recette(surcharge: Record<string, unknown> = {}) {
   const { data, error } = await admin().from('recipe').insert({
     title: `Banc 0092 ${unique()}`, origin: 'importee', yield_servings: 4,
-    plannable: true, source_url: `https://exemple.test/${unique()}`,
+    plannable: true, source_url: `https://exemple.test/${unique()}`, ...surcharge,
   }).select().single()
   expect(error, "l'amorce a échoué : le test serait vert à vide").toBeNull()
   return data!
@@ -35,12 +37,21 @@ beforeAll(async () => {
   bob = await makeActor('recettes-0092-bob')
 })
 
-/** Le banc partage la base locale : il rend ce qu'il a semé (étapes et lignes
-    partent avec leur recette, en cascade ; le placard a son foyer, pas la recette). */
+/** Le banc partage la base locale : il rend TOUT ce qu'il a semé. Étapes et lignes
+    partent avec leur recette (cascade) ; le placard a son foyer, pas la recette ;
+    le compte emporte son profil, et le foyer ne se supprime qu'une fois vidé de
+    ses recettes et de son placard. Une erreur ici fait échouer le banc : un
+    nettoyage qui se tait laisse huit foyers par passage. */
 afterAll(async () => {
-  await admin().from('stock_item').delete()
-    .in('household_id', [alice.householdId, bob.householdId])
-  await admin().from('recipe').delete().like('title', 'Banc 0092 %')
+  const foyers = [alice.householdId, bob.householdId]
+  const rendre = (quoi: string, error: { message: string } | null) => {
+    if (error) throw new Error(`le banc n’a pas rendu ${quoi} : ${error.message}`)
+  }
+  rendre('le placard', (await admin().from('stock_item').delete().in('household_id', foyers)).error)
+  rendre('les recettes', (await admin().from('recipe').delete().like('title', 'Banc 0092 %')).error)
+  for (const a of [alice, bob])
+    rendre(`le compte ${a.email}`, (await admin().auth.admin.deleteUser(a.userId)).error)
+  rendre('les foyers', (await admin().from('household').delete().in('id', foyers)).error)
 })
 
 describe('la photo (R3)', () => {
@@ -203,6 +214,10 @@ describe('« avec ce que j’ai » (recettes_faisables)', () => {
     expect((await faisables(alice)).has(id), 'le placard de Bob a servi à Alice').toBe(false)
   })
 
+  // Ce test ne protège rien tout seul : le plan par défaut rend déjà les
+  // identifiants triés, avec ou sans `order by`. Seul un plan forcé (jointures par
+  // fusion/boucle, balayages d'index coupés) les désordonne, et PostgREST ne laisse
+  // pas poser ces options depuis un client. La garde est le test de la source, plus bas.
   it('rend ses identifiants triés, que le client lit par tranches', async () => {
     await auPlacard(alice, a1)
     for (let i = 0; i < 3; i++) await avecIngredients([a1])
@@ -211,6 +226,46 @@ describe('« avec ce que j’ai » (recettes_faisables)', () => {
     const ids = data as string[]
     expect(ids.length).toBeGreaterThan(1)
     expect(ids, 'les tranches du client se chevaucheraient').toEqual([...ids].sort())
+  })
+
+  it('trie sa réponse par une clause, pas par la chance du plan (source de la fonction)', () => {
+    // La définition en vigueur : la dernière migration qui (re)crée la fonction.
+    const dossier = fileURLToPath(new URL('../supabase/migrations/', import.meta.url))
+    const definitions = readdirSync(dossier).filter(f => f.endsWith('.sql')).sort()
+      .map(f => readFileSync(dossier + f, 'utf8'))
+      .flatMap(sql => [...sql.matchAll(
+        /create\s+(?:or\s+replace\s+)?function\s+public\.recettes_faisables\s*\(\)[^$]*\$\$([\s\S]*?)\$\$/gi)])
+    expect(definitions.length, 'la définition de la fonction est introuvable').toBeGreaterThan(0)
+    const corps = definitions.at(-1)![1].replace(/--.*$/gm, '').trim()
+    expect(corps, 'sans `order by` en queue, les tranches du client se chevauchent selon le plan')
+      .toMatch(/order\s+by\s+r\.id$/i)
+  })
+
+  it('ne rend pas une recette non planifiable, même si tout est au placard', async () => {
+    const r = await recette({ plannable: false })
+    const { error } = await admin().from('recipe_ingredient').insert(
+      { recipe_id: r.id, ordinal: 1, raw_text: 'ingrédient', food_id: a1 })
+    expect(error).toBeNull()
+    await auPlacard(alice, a1)
+    expect((await faisables(alice)).has(r.id), 'une recette hors planning a été promise').toBe(false)
+  })
+
+  it('ne montre à un foyer que ce que sa RLS lui laisse lire (security invoker)', async () => {
+    const privee = (foyer: Actor) => recette({
+      owner_household_id: foyer.householdId, visibility: 'privee', origin: 'manuelle', source_url: null,
+    })
+    const [chezBob, chezAlice, catalogue] = [await privee(bob), await privee(alice), await recette()]
+    const { error } = await admin().from('recipe_ingredient').insert(
+      [chezBob, chezAlice, catalogue].map(r => ({ recipe_id: r.id, ordinal: 1, raw_text: 'x', food_id: a1 })))
+    expect(error).toBeNull()
+    await auPlacard(alice, a1)
+    await auPlacard(bob, a1)
+
+    const vuesParAlice = await faisables(alice)
+    expect(vuesParAlice.has(chezAlice.id), 'Alice ne voit plus sa propre recette').toBe(true)
+    expect(vuesParAlice.has(catalogue.id), 'Alice ne voit plus le catalogue').toBe(true)
+    expect(vuesParAlice.has(chezBob.id), 'la recette privée de Bob est sortie chez Alice').toBe(false)
+    expect((await faisables(bob)).has(chezBob.id), 'Bob ne voit plus sa propre recette').toBe(true)
   })
 
   it('est fermée aux visiteurs anonymes', async () => {
