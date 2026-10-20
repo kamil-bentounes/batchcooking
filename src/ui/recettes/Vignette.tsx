@@ -76,7 +76,7 @@ export function Vignette({ recette: r, prise, manques, surInfo, surAjoute }: {
         )}
 
         {r.appliances.length > 0 && (
-          <div className="mt-1.5 flex gap-1">
+          <div className="mt-1.5 flex flex-wrap gap-1">
             {r.appliances.map(a => (
               <Picto key={a} code={a} taille={15} className="size-[26px] bg-piste text-herbe" />
             ))}

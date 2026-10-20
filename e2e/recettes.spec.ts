@@ -1282,6 +1282,20 @@ test.describe.serial('les recettes, de bout en bout', () => {
       await tient(c, 'la vignette')
       await tient(encre(page), 'la carte encre')
       await photo(page, 'mot-long-liste', 'Un titre de 200 caractères sans espace : la liste ne déborde pas')
+
+      // ── 5 · Sept pictos d'appareil : la rangée passe à la ligne, elle ne sort pas de la colonne ──
+      const colonne = await c.getByRole('heading').boundingBox()
+      const pictos = c.locator('span[role="img"][title]')
+      await expect(pictos).toHaveCount(CODES.length)
+      for (const p of await pictos.all()) {
+        const b = (await p.boundingBox())!
+        expect(b.x + b.width, `un picto d'appareil sort de la vignette (${await p.getAttribute('title')})`)
+          .toBeLessThanOrEqual(colonne!.x + colonne!.width + 1)
+      }
+      const lignesDePictos = new Set(await pictos.evaluateAll(
+        (l: HTMLElement[]) => l.map(e => Math.round(e.getBoundingClientRect().top))))
+      expect(lignesDePictos.size, 'sept pictos tiennent sur une ligne : la rangée ne passe donc pas à la ligne')
+        .toBeGreaterThan(1)
       await page.getByRole('button', { name: `${TITRE_LONG}, la recette en détail` }).click()
       const fiche = page.getByRole('dialog', { name: TITRE_LONG })
       await expect(fiche.getByText(URL_LONGUE, { exact: false }).first()).toBeVisible({ timeout: 10_000 })
