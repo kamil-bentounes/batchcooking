@@ -560,6 +560,27 @@ test.describe('l’écran des recettes (spec du 19/10/2026)', () => {
       .toHaveAttribute('aria-current', 'page')
   })
 
+  test('« Tout effacer » ramène en page 1', async ({ page }) => {
+    await connecte(page)
+    await page.goto('/choisir')
+    await page.getByPlaceholder(/chercher une recette/i).fill(NOM)
+    await expect(page.getByText(/^12, de 1 à 10$/)).toBeVisible({ timeout: 10_000 })
+    // Un filtre qui garde les douze (1 à 12 minutes actives) : la liste a toujours deux pages.
+    await page.getByRole('button', { name: '≤ 20 min actives' }).click()
+    await expect(page.getByText(/^12, de 1 à 10$/)).toBeVisible({ timeout: 10_000 })
+
+    const pages = page.getByRole('navigation', { name: 'Pages de recettes' })
+    await pages.getByRole('button', { name: /les 2 suivantes/i }).click()
+    await expect(page.getByRole('article')).toHaveCount(2)
+
+    // Effacer les filtres rend la liste entière, et on la reprend par son début.
+    await page.getByRole('button', { name: 'Tout effacer' }).click()
+    await expect(page.getByText(/^12, de 1 à 10$/)).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('article')).toHaveCount(10)
+    await expect(pages.getByRole('button', { name: 'Page 1' }))
+      .toHaveAttribute('aria-current', 'page')
+  })
+
   test('la fiche (i) dit les étapes, les ingrédients et les macros', async ({ page }) => {
     /* Une recette à elle : la base locale garde des dizaines de « Dahl » laissés
        par les passages précédents, et rien ne dit que le premier de la liste ait
