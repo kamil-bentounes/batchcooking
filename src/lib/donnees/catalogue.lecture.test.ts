@@ -185,6 +185,34 @@ describe('le déjà-fait', () => {
     expect(filtresVus).toContain('neq:cycle_id')
   })
 
+  it('sans cycle ouvert (null), lit tous les cycles', async () => {
+    nouveauBanc({ lignes: [
+      { id: '1', recipe_id: 'ancienne', cycle_id: 'B' },
+      { id: '2', recipe_id: 'autre', cycle_id: 'A' },
+    ] })
+    const s = await options(optionsDejaFaites(true, null)).queryFn()
+    expect([...s].sort()).toEqual(['ancienne', 'autre'])
+    expect(filtresVus).not.toContain('neq:cycle_id')
+  })
+
+  it('attend le cycle tant qu’il se charge (undefined) : requête éteinte', () => {
+    // Sans cela, « Jamais essayée » cacherait un instant des recettes retenues
+    // dans le cycle en cours, faute de pouvoir l'exclure.
+    expect(options(optionsDejaFaites(true, undefined)).enabled).toBe(false)
+  })
+
+  it('s’allume dès que le cycle est connu, ouvert ou non', () => {
+    expect(options(optionsDejaFaites(true, 'A')).enabled).toBe(true)
+    expect(options(optionsDejaFaites(true, null)).enabled).toBe(true)
+    expect(options(optionsDejaFaites(false, 'A')).enabled).toBe(false)
+  })
+
+  it('donne trois clés distinctes aux trois états', () => {
+    const cles = [undefined, null, 'A'].map(c =>
+      JSON.stringify(options(optionsDejaFaites(true, c)).queryKey))
+    expect(new Set(cles).size).toBe(3)
+  })
+
   it.each([[0], [1000], [1001], [2000]])('lit %i lignes sans doublon ni trou', async (n) => {
     nouveauBanc({ lignes: faites(n) })
     const s = await options(optionsDejaFaites(true, 'A')).queryFn()

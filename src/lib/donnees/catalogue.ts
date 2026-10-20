@@ -345,11 +345,19 @@ export function useFaisables(actif: boolean, placard: Set<string>) {
  * Le cycle EN COURS ne compte pas : une recette qu'on vient de retenir ne doit
  * pas disparaître de la liste, elle y passe à « Retenue » (spec § 8). On ne lit
  * donc que les `cycle_recipe` des AUTRES cycles.
+ *
+ * `cycleId` a trois états, et ils ne se confondent pas :
+ *  · `undefined` — le cycle SE CHARGE : la requête est éteinte. Partir sans
+ *    savoir quel cycle exclure cacherait un instant, sous « Jamais essayée »,
+ *    des recettes pourtant retenues ;
+ *  · `null` — il n'y a PAS de cycle ouvert : rien à exclure, on lit tous les
+ *    cycles ;
+ *  · un identifiant — on lit tous les cycles SAUF celui-là.
  */
-export function useDejaFaites(actif: boolean, cycleId: string | undefined) {
+export function useDejaFaites(actif: boolean, cycleId: string | null | undefined) {
   return useQuery({
-    queryKey: ['deja-faites', cycleId],
-    enabled: actif,
+    queryKey: ['deja-faites', cycleId === null ? 'tous' : cycleId],
+    enabled: actif && cycleId !== undefined,
     queryFn: async () => {
       const lignes = await parClef(async apresId => {
         const q = supabase.from('cycle_recipe').select('id, recipe_id')
