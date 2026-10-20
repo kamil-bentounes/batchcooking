@@ -1777,6 +1777,7 @@ export type Database = {
           edited_by_household_id: string | null
           freezable: boolean | null
           id: string
+          image_url: string | null
           import_note: string | null
           license_note: string | null
           origin: string
@@ -1801,6 +1802,7 @@ export type Database = {
           edited_by_household_id?: string | null
           freezable?: boolean | null
           id?: string
+          image_url?: string | null
           import_note?: string | null
           license_note?: string | null
           origin?: string
@@ -1825,6 +1827,7 @@ export type Database = {
           edited_by_household_id?: string | null
           freezable?: boolean | null
           id?: string
+          image_url?: string | null
           import_note?: string | null
           license_note?: string | null
           origin?: string
@@ -1973,6 +1976,7 @@ export type Database = {
           duration_source: string | null
           edited_at: string | null
           edited_by_household_id: string | null
+          gesture_min: number | null
           id: string
           load_type: string | null
           ordinal: number
@@ -1990,6 +1994,7 @@ export type Database = {
           duration_source?: string | null
           edited_at?: string | null
           edited_by_household_id?: string | null
+          gesture_min?: number | null
           id?: string
           load_type?: string | null
           ordinal: number
@@ -2007,6 +2012,7 @@ export type Database = {
           duration_source?: string | null
           edited_at?: string | null
           edited_by_household_id?: string | null
+          gesture_min?: number | null
           id?: string
           load_type?: string | null
           ordinal?: number
@@ -3202,6 +3208,7 @@ export type Database = {
         Returns: undefined
       }
       rattrape_les_mois: { Args: never; Returns: number }
+      recettes_faisables: { Args: never; Returns: string[] }
       recettes_partagees: { Args: never; Returns: string[] }
       refige_le_mois: { Args: { le_mois: string }; Returns: number }
       refige_pour: {
