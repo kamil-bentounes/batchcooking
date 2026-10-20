@@ -116,6 +116,13 @@ describe('la recherche', () => {
       .toBe(true)
   })
 
+  it('trouve « d’agneau » en tapant l’apostrophe du clavier, et inversement', () => {
+    const tajine = recette({ title: 'Tajine d’agneau' })
+    expect(retient(tajine, filtres({ texte: 'd\'agneau' }), RIEN)).toBe(true)
+    expect(retient(recette({ title: 'Tajine d\'agneau' }), filtres({ texte: 'd’agneau' }), RIEN))
+      .toBe(true)
+  })
+
   it('écarte ce qui ne contient pas le texte', () => {
     expect(retient(recette({ title: 'Dahl' }), filtres({ texte: 'poulet' }), RIEN)).toBe(false)
   })

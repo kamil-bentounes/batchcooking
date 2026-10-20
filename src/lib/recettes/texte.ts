@@ -44,10 +44,15 @@ export function decodeEntites(s: string): string {
   return t
 }
 
-/** Minuscules, sans accents : on compare des mots, pas des orthographes. */
+/**
+ * Minuscules, sans accents, une seule apostrophe : on compare des mots, pas des
+ * orthographes. Les sites écrivent « d’agneau » (’ ‘ ` ´), le clavier tape
+ * « d'agneau » : la recherche doit trouver l'un avec l'autre.
+ */
 export function plie(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/œ/g, 'oe').replace(/æ/g, 'ae')
+    .replace(/[’‘`´]/g, '\'')
 }
 
 /** Ce qui sépare le nom du plat de ce que le site y a collé. Le tiret doit être

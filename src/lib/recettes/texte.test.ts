@@ -39,6 +39,14 @@ describe('la pliure', () => {
     expect(plie('Pâtes CRÉMEUSES')).toBe('pates cremeuses')
     expect(plie('Œufs')).toBe('oeufs')
   })
+
+  it('ramène les apostrophes typographiques à l’apostrophe du clavier', () => {
+    // Les titres des sites portent « ’ » ; le clavier tape « ' ».
+    expect(plie('Tajine d’agneau')).toBe('tajine d\'agneau')
+    expect(plie('d‘agneau')).toBe('d\'agneau')
+    expect(plie('d`agneau')).toBe('d\'agneau')
+    expect(plie('d´agneau')).toBe('d\'agneau')
+  })
 })
 
 describe('le titre', () => {
