@@ -123,6 +123,9 @@ export function useChangeEtat() {
 export function useMajCycle() {
   const qc = useQueryClient()
   return useMutation({
+    // Les écritures du cycle se suivent : « 1 » puis « 12 » tapés dans le champ des parts visées
+    // partaient ensemble, et celle qui arrivait la dernière gagnait, pas la dernière tapée.
+    scope: { id: 'cycle' },
     mutationFn: async ({ id, ...champs }: { id: string } & Partial<Cycle>) =>
       ou(await supabase.from('cycle').update(champs).eq('id', id).select().single()),
     onSuccess: () => qc.invalidateQueries({ queryKey: CLE.cycle }),
@@ -157,6 +160,10 @@ export function useRecettesDuCycle(cycleId: string | undefined) {
 export function useChoisitRecette() {
   const qc = useQueryClient()
   return useMutation({
+    // Les écritures des parts se suivent (même `scope` = file d'attente) : « 1 » puis « 12 »
+    // tapés dans le champ partaient ensemble, et celle qui arrivait la dernière gagnait,
+    // pas la dernière tapée. La base gardait « 1 » : le champ montrait 12.
+    scope: { id: 'cycle_recipe' },
     mutationFn: async ({ cycleId, recipeId, parts }:
       { cycleId: string; recipeId: string; parts: number }) => {
       const foyer = ou(await supabase.rpc('current_household'))

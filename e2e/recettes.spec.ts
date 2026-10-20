@@ -1263,9 +1263,20 @@ test.describe.serial('les recettes, de bout en bout', () => {
       await page.waitForTimeout(600)
       await expect(champ, 'le champ vide est revenu à une valeur').toHaveValue('')
       expect(await partsEnBase(), 'un champ vide a écrit quelque chose').toEqual([8])
+      // Le réseau est lent pour le PREMIER envoi (« 1 ») seulement : s'il part sans attendre
+      // et arrive après « 12 », la base garde « 1 ». Les écritures doivent se suivre dans l'ordre.
+      let envois = 0
+      await page.route(REST_RETENUES, async r => {
+        if (r.request().method() === 'POST' && ++envois === 1) await new Promise(f => setTimeout(f, 2_000))
+        await r.continue()
+      })
       await page.keyboard.type('12')
       await expect(champ, '« effacer puis 12 » donne autre chose que 12').toHaveValue('12')
-      await expect.poll(partsEnBase, { timeout: 10_000 }).toEqual([12])
+      await expect.poll(partsEnBase, { timeout: 15_000, message: 'la base ne finit pas sur 12 : « 1 » est arrivé après « 12 »' })
+        .toEqual([12])
+      await page.waitForTimeout(2_500)
+      expect(await partsEnBase(), 'une écriture en retard a écrasé « 12 »').toEqual([12])
+      await page.unroute(REST_RETENUES)
       // Sorti vide, le champ reprend la valeur de la base ; Entrée valide et le quitte.
       await page.keyboard.press('Control+A')
       await page.keyboard.press('Backspace')
