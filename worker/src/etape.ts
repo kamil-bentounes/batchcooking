@@ -96,8 +96,11 @@ function radical(verbe: string): string {
   // Verbes composés : on ne garde que le premier mot pour le radical, la suite
   // devient une contrainte de proximité (voir `motifDe`).
   const premier = v.split(/\s+/)[0]
+  // ⚠️ Premier groupe : on s'arrête là. Les remplacements suivants se
+  //    chaînent, et « retirer » → « retir » → « reti » ne reconnaissait plus
+  //    « retirez » : un geste de main passait pour muet.
+  if (premier.endsWith('er')) return premier.slice(0, -2)   // éplucher → épluch
   return premier
-    .replace(/er$/, '')      // éplucher → épluch
     // ⚠️ Les verbes en -vrir et -frir ne gardent pas le « i » : « couvrir » se
     //    conjugue « couvrez », pas « couvrissez ». Le radical « couvri » ne
     //    reconnaissait donc aucune forme réelle, et l'étape passait pour muette.
@@ -258,8 +261,19 @@ function formesDeGeste(infinitif: string) {
 /** Les mots après lesquels un impératif en « tu » ouvre encore une proposition. */
 const LIANTS = new Set(['et', 'puis', 'ensuite', 'enfin', 'alors', 'ou'])
 
+/**
+ * Ce qui suit un impératif en « tu » qui ne s'écrit pas en tête de phrase : un
+ * article ou un pronom (« ajoute le sel », « ajoute-le »). Sans lui, « beurre »
+ * dans « farine, sucre, beurre, œufs » serait un verbe.
+ */
+const DETERMINANTS = new Set([
+  'le', 'la', 'les', 'l', 'un', 'une', 'des', 'du', 'de', 'd', 'ce', 'cet', 'cette', 'ces',
+  'y', 'lui', 'leur',
+])
+
 type Formes = { partout: RegExp; enTete: RegExp; apresEn: RegExp }
-type Geste = { canonique: string; ligne: LigneDuree; formes: Formes | null; phrase: RegExp | null }
+/** `suite` : les mots qui suivent le verbe d'un geste de plusieurs mots, pliés et sans « er ». */
+type Geste = { canonique: string; ligne: LigneDuree; tete: string; formes: Formes; suite: string[] }
 
 /**
  * Les verbes de MAIN du référentiel : ceux qui n'occupent aucun appareil et ne
@@ -279,16 +293,14 @@ function indexGestes(ref: Referentiel): Geste[] {
     const canonique = ref.alias[verbe] ?? verbe
     const ligne = mains.get(canonique)
     if (!ligne) continue
-    const infinitif = pliure(verbe)
-    if (infinitif.includes(' ')) {
-      // « séparer les blancs », « retirer du feu » : on cherche la phrase entière.
-      gestes.push({ canonique, ligne, formes: null, phrase: motifDe(verbe) })
-      continue
-    }
+    // « séparer les blancs », « retirer du feu » : le premier mot se conjugue
+    // comme les autres verbes, les suivants le suivent de près.
+    const [premier, ...suite] = pliure(verbe).split(/\s+/)
     const tete = radical(verbe)
-    const f = formesDeGeste(infinitif)
+    const f = formesDeGeste(premier)
     gestes.push({
-      canonique, ligne, phrase: null,
+      canonique, ligne, tete,
+      suite: suite.map(m => m.replace(/er$/, '')),
       formes: {
         partout: new RegExp(`^${tete}(?:${f.partout})$`),
         enTete: new RegExp(`^${tete}(?:${f.enTete})$`),
@@ -300,7 +312,85 @@ function indexGestes(ref: Referentiel): Geste[] {
 }
 
 /** Les pronoms qu'on enjambe pour lire ce qui précède un verbe : « sans LES éplucher ». */
-const PRONOMS = new Set(['le', 'la', 'les', 'l', 'en', 'y', 'lui', 'leur', 'se', 's'])
+const PRONOMS = new Set(['le', 'la', 'les', 'l', 'y', 'lui', 'leur', 'se', 's'])
+/** Les adverbes qu'on enjambe aussi : « sans TROP remuer ». */
+const ADVERBES = new Set(['trop', 'bien', 'surtout'])
+/** Un de ces mots devant le verbe le nie, où qu'il soit parmi ceux qu'on enjambe. */
+const NEGATIONS = new Set(['pas', 'plus', 'jamais'])
+
+type Mot = { brut: string; plie: string }
+/** Une proposition : `debut` si elle ouvre la phrase, `seule` si elle est toute la phrase. */
+type Proposition = { mots: Mot[]; debut: boolean; seule: boolean }
+
+/** Le texte découpé et plié UNE fois, pour tous les verbes. */
+function propositionsDe(texte: string): Proposition[] {
+  const rendu: Proposition[] = []
+  for (const phrase of texte.split(/[.;:!?\n]+/)) {
+    const parties = phrase.split(/[,()]+/)
+      .map(p => (p.match(/\p{L}+/gu) ?? []).map(brut => ({ brut, plie: pliure(brut) })))
+      .filter(mots => mots.length > 0)
+    parties.forEach((mots, n) => rendu.push({ mots, debut: n === 0, seule: parties.length === 1 }))
+  }
+  return rendu
+}
+
+/**
+ * Le geste est-il écarté par ce qui précède son verbe ? « Ne pas mélanger »,
+ * « sans trop remuer », « sans les éplucher », « avant de démouler » : il est
+ * nié, ou remis à une autre étape qui a la sienne.
+ */
+function ecarte(mots: Mot[], i: number): boolean {
+  let k = i - 1
+  while (k >= 0) {
+    const m = mots[k].plie
+    if (NEGATIONS.has(m)) return true
+    if (!PRONOMS.has(m) && !ADVERBES.has(m) && m !== 'en') break
+    k--
+  }
+  const precedent = k >= 0 ? mots[k].plie : null
+  return precedent === 'sans' || precedent === 'ne' || precedent === 'n'
+    || ((precedent === 'de' || precedent === 'd') && k >= 1 && mots[k - 1].plie === 'avant')
+}
+
+/** Le mot `i` est-il, sous une forme qui DEMANDE le geste, le verbe de `f` ? */
+function formeDemandee(p: Proposition, i: number, f: Formes): boolean {
+  const { mots } = p
+  const mot = mots[i].plie
+  if (f.partout.test(mot) && !ecarte(mots, i)) return true
+  if (f.enTete.test(mot)) {
+    // « émincé » se plie en « emince », comme l'impératif « émince » : seul
+    // l'accent du texte d'origine les distingue.
+    if (/é$/iu.test(mots[i].brut)) return false
+    const suivant = i + 1 < mots.length ? mots[i + 1].plie : null
+    const apresDeterminant = suivant !== null && DETERMINANTS.has(suivant)
+    if (i === 0) {
+      // En tête de phrase, le tutoiement ne fait pas doute : « Beurre le moule ».
+      // Après une virgule il lui faut son article, et il n'est jamais seul dans
+      // une liste : « farine, sucre, beurre, œufs ».
+      if (p.debut ? suivant !== null || p.seule : apresDeterminant) return true
+    } else if (LIANTS.has(mots[i - 1].plie) && apresDeterminant) {
+      return true
+    }
+  }
+  if (f.apresEn.test(mot)) {
+    // « en remuant », « en LES remuant » ; sans « en », c'est un adjectif.
+    let k = i - 1
+    while (k >= 0 && PRONOMS.has(mots[k].plie)) k--
+    if (k >= 0 && mots[k].plie === 'en') return true
+  }
+  return false
+}
+
+/** Les mots d'un geste de plusieurs mots suivent son verbe, à deux mots d'écart au plus. */
+function suiteLue(mots: Mot[], depuis: number, suite: string[]): boolean {
+  if (suite.length === 0) return true
+  for (let ecart = 0; ecart <= 2; ecart++) {
+    const debut = depuis + ecart
+    if (debut + suite.length > mots.length) break
+    if (suite.every((s, n) => mots[debut + n].plie.startsWith(s))) return true
+  }
+  return false
+}
 
 /**
  * Le verbe est-il CONJUGUÉ dans le texte, sous une forme qui demande le geste ?
@@ -308,23 +398,10 @@ const PRONOMS = new Set(['le', 'la', 'les', 'l', 'en', 'y', 'lui', 'leur', 'se',
  * Un infinitif nié ou remis à plus tard ne le demande pas ici : « sans les
  * éplucher », « laissez refroidir avant de démouler » — le démoulage a son étape.
  */
-function conjugue(texte: string, f: Formes): boolean {
-  for (const proposition of texte.split(/[.,;:!?()]+/)) {
-    const mots = proposition.split(/[^\p{L}]+/u).filter(Boolean)
-    for (let i = 0; i < mots.length; i++) {
-      const mot = pliure(mots[i])
-      const avant = i > 0 ? pliure(mots[i - 1]) : null
-      let k = i - 1
-      while (k >= 0 && PRONOMS.has(pliure(mots[k]))) k--
-      const precedent = k >= 0 ? pliure(mots[k]) : null
-      const ecarte = precedent === 'sans'
-        || ((precedent === 'de' || precedent === 'd') && k >= 1 && pliure(mots[k - 1]) === 'avant')
-      if (f.partout.test(mot) && !ecarte) return true
-      // « émincé » se plie en « emince », comme l'impératif « émince » : seul
-      // l'accent du texte d'origine les distingue.
-      if (f.enTete.test(mot) && !/é$/iu.test(mots[i])
-          && (avant === null || LIANTS.has(avant))) return true
-      if (f.apresEn.test(mot) && avant === 'en') return true
+function conjugue(propositions: Proposition[], g: Geste): boolean {
+  for (const p of propositions) {
+    for (let i = 0; i < p.mots.length; i++) {
+      if (formeDemandee(p, i, g.formes) && suiteLue(p.mots, i + 1, g.suite)) return true
     }
   }
   return false
@@ -344,18 +421,21 @@ let cacheGestes: Geste[] = []
  * On additionne donc la durée de référence de chaque verbe de main conjugué dans
  * l'étape, une fois chacun, mise à l'échelle comme l'étape. `null` quand il n'y
  * en a aucun : « Préchauffez le four » ne demande rien.
+ *
+ * Le texte est découpé et plié une seule fois, pas une fois par verbe : à ~47
+ * verbes, c'était 2,6 ms par étape contre 0,05 pour toute l'analyse.
  */
 export function gestesMin(brut: string, ref: Referentiel): number | null {
   if (cacheRefGestes !== ref) { cacheRefGestes = ref; cacheGestes = indexGestes(ref) }
   const texte = brut.normalize('NFC').trim()
   if (!texte) return null
+  const propositions = propositionsDe(texte)
   const plie = pliure(texte)
   const quantite = quantiteEcrite(texte)
   const minutes = new Map<string, number>()
   for (const g of cacheGestes) {
-    if (minutes.has(g.canonique)) continue
-    const demande = g.phrase ? g.phrase.test(plie) : conjugue(texte, g.formes!)
-    if (!demande) continue
+    // Le radical n'est pas dans le texte : inutile de lire mot à mot.
+    if (minutes.has(g.canonique) || !plie.includes(g.tete) || !conjugue(propositions, g)) continue
     const facteur = g.ligne.scaling === 'lineaire_plafonne' && quantite
       ? Math.min(3, Math.max(1, quantite / 250))
       : 1

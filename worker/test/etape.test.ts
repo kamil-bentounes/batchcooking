@@ -530,4 +530,56 @@ describe('les gestes d’une étape (R6)', () => {
   it('ne compte rien pour une phrase qui n’est pas une action', () => {
     expect(a('Bon appétit !').gestesMin).toBeNull()
   })
+
+  it('ne prend pas une liste de noms pour des verbes au tutoiement', () => {
+    // « beurre » est aussi l'impératif de « beurrer » : sans article, c'est un nom.
+    expect(g('Mélangez farine, sucre, beurre, œufs.')).toBe(1)
+    expect(g('Mélangez la farine et beurre.')).toBe(1)
+    // Avec son article, le tutoiement reste lu après la virgule et après « et ».
+    expect(g('Dans la poêle, ajoute les oignons.')).toBe(1)
+    expect(g('Coupe et beurre le moule.')).toBe(5)
+  })
+
+  it('écarte un verbe nié', () => {
+    expect(g('Ne pas mélanger.')).toBeNull()
+    expect(g('Ne remuez pas.')).toBeNull()
+    expect(g('Ne jamais remuer.')).toBeNull()
+    expect(g('Ne plus remuer.')).toBeNull()
+    expect(g('Faites cuire sans trop remuer.')).toBeNull()
+    expect(g('Faites cuire sans jamais remuer.')).toBeNull()
+    expect(g('Ne pas trop remuer.')).toBeNull()
+    // Une négation d'un verbe n'écarte pas le suivant.
+    expect(g('Ne pas remuer, mélangez.')).toBe(1)
+  })
+
+  it('lit le gérondif même avec un pronom entre « en » et le verbe', () => {
+    expect(g('Laissez mijoter en les remuant.')).toBe(1)
+    expect(g('Laissez mijoter en y remuant la sauce.')).toBe(1)
+  })
+
+  it('applique la même grammaire aux gestes de plusieurs mots', () => {
+    // Participe : « retirée du feu » décrit la casserole.
+    expect(g('La casserole retirée du feu, ajoutez la crème.')).toBe(1)
+    expect(g('Les blancs séparés des jaunes, ajoutez le sucre.')).toBe(1)
+    // « sans » et « avant de » écartent le geste.
+    expect(g('Sans retirer du feu, remuez.')).toBe(1)
+    expect(g('Avant de retirer du feu, ajoutez le sel.')).toBe(1)
+    expect(g('Sans séparer les blancs des jaunes, battez.')).toBe(3)
+    expect(g('Ne pas retirer du feu, remuez.')).toBe(1)
+    // Conjugué, il compte.
+    expect(g('Retirez du feu, ajoutez la crème.')).toBe(2)
+    expect(g('Retire du feu et ajoute-la.')).toBe(2)
+  })
+
+  it('reste rapide : le texte n’est découpé qu’une fois par appel', () => {
+    // Avant : le texte était redécoupé et replié pour chacun des ~47 verbes,
+    // 2,6 ms par étape contre 0,05 pour l'analyse. La borne est très large : elle
+    // ne sert qu'à voir revenir un coût par verbe, pas à mesurer.
+    const t = 'Dans un grand saladier, mélangez la farine, le sucre et les œufs, puis ajoutez le beurre fondu en remuant. Laissez reposer.'
+    g(t)
+    const debut = performance.now()
+    for (let i = 0; i < 200; i++) g(t)
+    const parEtape = (performance.now() - debut) / 200
+    expect(parEtape, 'gestesMin est redevenu lent').toBeLessThan(1)
+  })
 })
