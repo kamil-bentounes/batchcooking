@@ -5,7 +5,7 @@
  * trouvées sans aucun modèle. Un test qui passerait sur des phrases inventées
  * ne prouverait rien — celles-ci sont calquées sur le corpus.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { analyserEtape, dependances, gestesMin, pliure } from '../src/etape.ts'
 import type { Referentiel } from '../src/etape.ts'
@@ -603,15 +603,24 @@ describe('les gestes d’une étape (R6)', () => {
     expect(g('Retire du feu et ajoute-la.')).toBe(2)
   })
 
-  it('reste rapide : le texte n’est découpé qu’une fois par appel', () => {
+  it('ne plie le texte qu’une fois par appel, quel que soit le nombre de verbes', () => {
     // Avant : le texte était redécoupé et replié pour chacun des ~47 verbes,
-    // 2,6 ms par étape contre 0,05 pour l'analyse. La borne est très large : elle
-    // ne sert qu'à voir revenir un coût par verbe, pas à mesurer.
-    const t = 'Dans un grand saladier, mélangez la farine, le sucre et les œufs, puis ajoutez le beurre fondu en remuant. Laissez reposer.'
-    g(t)
-    const debut = performance.now()
-    for (let i = 0; i < 200; i++) g(t)
-    const parEtape = (performance.now() - debut) / 200
-    expect(parEtape, 'gestesMin est redevenu lent').toBeLessThan(1)
+    // 2,6 ms par étape contre 0,05 pour l'analyse. Un chronomètre est trop
+    // sensible à la charge de la machine ; on compte plutôt les pliures, qui
+    // passent toutes par `normalize` : une pour le texte (NFC), une pour la forme
+    // pliée, jamais une de plus — ni par verbe, ni par mot.
+    const courte = 'Dans un grand saladier, mélangez la farine, le sucre et les œufs, puis ajoutez le beurre fondu en remuant. Laissez reposer.'
+    const longue = Array(20).fill(courte).join(' ')
+    const normalize = vi.spyOn(String.prototype, 'normalize')
+    try {
+      for (const t of [courte, longue]) {
+        g(t)                       // l'index des verbes se construit au premier appel
+        normalize.mockClear()
+        g(t)
+        expect(normalize.mock.calls.length, 'le texte est replié plus de deux fois').toBeLessThanOrEqual(2)
+      }
+    } finally {
+      normalize.mockRestore()
+    }
   })
 })

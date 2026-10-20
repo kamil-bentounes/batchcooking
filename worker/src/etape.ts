@@ -202,8 +202,8 @@ function temperatureEcrite(texte: string): number | null {
 }
 
 /** Les grammes cités dans l'étape, s'il y en a. Sert à la mise à l'échelle. */
-function quantiteEcrite(texte: string): number | null {
-  const t = pliure(texte)
+function quantiteEcrite(texte: string, plie?: string): number | null {
+  const t = plie ?? pliure(texte)
   let total = 0
   let vu = false
   for (const m of t.matchAll(/(\d+(?:[.,]\d+)?)\s*(kg|kilos?|g|gr|grammes?)\b/g)) {
@@ -341,16 +341,36 @@ type Mot = { brut: string; plie: string }
 /** Une proposition : `debut` si elle ouvre la phrase, `seule` si elle est toute la phrase. */
 type Proposition = { mots: Mot[]; debut: boolean; seule: boolean }
 
-/** Le texte découpé et plié UNE fois, pour tous les verbes. */
-function propositionsDe(texte: string): Proposition[] {
-  const rendu: Proposition[] = []
+/** Les mots d'un texte, par proposition : on coupe aux ponctuations fortes, puis aux virgules. */
+function decouper(texte: string): { mots: string[]; debut: boolean; seule: boolean }[] {
+  const rendu: { mots: string[]; debut: boolean; seule: boolean }[] = []
   for (const phrase of texte.split(/[.;:!?\n]+/)) {
     const parties = phrase.split(/[,()]+/)
-      .map(p => (p.match(/\p{L}+/gu) ?? []).map(brut => ({ brut, plie: pliure(brut) })))
+      .map(p => p.match(/\p{L}+/gu) ?? [])
       .filter(mots => mots.length > 0)
     parties.forEach((mots, n) => rendu.push({ mots, debut: n === 0, seule: parties.length === 1 }))
   }
   return rendu
+}
+
+/**
+ * Le texte découpé UNE fois, pour tous les verbes, avec sa forme pliée.
+ *
+ * `plie` est le texte entier déjà plié : on le découpe comme l'original et on
+ * apparie les mots un à un, au lieu de plier chaque mot (un `normalize` par mot,
+ * et par verbe avant cela). Si les deux découpes ne tombent pas pareil — une
+ * lettre rare qui se plie en autre chose qu'une lettre —, on replie mot à mot.
+ */
+function propositionsDe(texte: string, plie: string): Proposition[] {
+  const brutes = decouper(texte)
+  const pliees = decouper(plie)
+  const alignees = brutes.length === pliees.length
+    && brutes.every((b, n) => b.mots.length === pliees[n].mots.length)
+  return brutes.map((b, n) => ({
+    mots: b.mots.map((brut, k) => ({ brut, plie: alignees ? pliees[n].mots[k] : pliure(brut) })),
+    debut: b.debut,
+    seule: b.seule,
+  }))
 }
 
 /**
@@ -462,9 +482,10 @@ export function gestesMin(brut: string, ref: Referentiel): number | null {
   if (cacheRefGestes !== ref) { cacheRefGestes = ref; cacheGestes = indexGestes(ref) }
   const texte = brut.normalize('NFC').trim()
   if (!texte) return null
-  const propositions = propositionsDe(texte)
+  // Le seul pliage du texte : tout le reste (mots, quantités) en découle.
   const plie = pliure(texte)
-  const quantite = quantiteEcrite(texte)
+  const propositions = propositionsDe(texte, plie)
+  const quantite = quantiteEcrite(texte, plie)
   const minutes = new Map<string, number>()
   for (const g of cacheGestes) {
     // Le radical n'est pas dans le texte : inutile de lire mot à mot.
