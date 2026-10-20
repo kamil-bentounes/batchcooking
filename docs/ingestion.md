@@ -71,6 +71,77 @@ Une ré-ingestion réécrit `image_url` avec ce que la page publie ce jour-là.
 La recette **collée** (`importer`, voir [`api.md`](api.md)) suit les mêmes règles : ses
 étapes portent `gesture_min`, et ses macros ne sont écrites que si la part est plausible.
 
+## Rattraper les recettes déjà en base
+
+Un trigger ne rattrape pas le passé : deux scripts, dans cet ordre. Le premier ne
+retélécharge rien (tout est déjà en base), le second relit les pages des sites.
+
+```bash
+npm run recalcule -- --prod --sec      # lire le relevé : titres, 0 min, hausses, macros écartées
+npm run recalcule -- --prod
+npm run relis-photos -- --prod --sec --limite 20
+npm run relis-photos -- --prod         # 35 à 50 min, reprend où il s'arrête
+```
+
+Sans `--prod`, les deux visent la base locale (`.env`) ; `--prod` lit `.env.production`.
+Ils refusent une option inconnue, sans valeur ou illisible **avant** tout appel réseau, et
+acceptent `--clé valeur` comme `--clé=valeur`.
+
+### `scripts/recalcule.mjs`
+
+| Option | Effet |
+|---|---|
+| `--prod` | Cible la production |
+| `--sec` | N'écrit rien et dit tout : chaque titre qui change, les recettes à 0 min avant et après, celles dont le total passe sous le temps actif (nommées, avant et après), les dix plus fortes hausses, les macros écartées, les lignes de macros périmées |
+| `--limite N` | Les N premières recettes seulement, pour regarder avant |
+| `--recette <uuid>` | Une seule recette |
+| `--sans-rattachement` | Saute la passe 0 |
+
+Les passes, dans cet ordre parce qu'elles dépendent l'une de l'autre :
+
+| Passe | Ce qu'elle refait |
+|---|---|
+| **T** | Les titres du catalogue **ingéré** (`titrePropre`). Un titre de foyer, quelqu'un l'a écrit |
+| **0** | Le rattachement à CIQUAL, sur les lignes que l'ingestion a rattachées ou laissées (jamais une correction de foyer) |
+| **1** | Les grammes des lignes au compte (« 2 oignons »), depuis les poids unitaires |
+| **2** | Les macros par part ; efface celles d'une recette devenue trop incomplète ou impossible |
+| **G** | `gesture_min` de chaque étape, à partir de son texte décodé. Une durée **confirmée** ou corrigée par un foyer fait foi : son `gesture_min` reste `null`, pas de plancher par-dessus |
+| **3** | Les agrégats (`active_time_min`, appareils, nombre d'étapes), en réécrivant une étape par recette pour rejouer `tg_recipe_agrege` |
+
+La passe 3 reste après la G : la G réécrit les étapes par paquets de deux cents en
+parallèle, et deux étapes d'une même recette réécrites en même temps peuvent laisser un
+`active_time_min` périmé. Après le recalcul, la requête de cohérence de
+[`schema.md`](schema.md) doit rendre 0.
+
+### `scripts/relis-photos.mjs`
+
+Relit **une fois** la page de chaque recette importée sans photo (`image_url is null`, sans
+foyer propriétaire, avec une `source_url`) et n'écrit que `image_url` — ni titre, ni étapes,
+ni l'image elle-même. Elle ne remplace jamais une photo déjà posée.
+
+| Option | Effet |
+|---|---|
+| `--prod` | Cible la production |
+| `--sec` | N'écrit rien, ni en base ni dans l'état. **Les pages sont quand même demandées** : à sec ne veut pas dire hors réseau, d'où `--limite` |
+| `--limite N` | Les N premières pages, après l'état et le filtre de domaine |
+| `--domaine <hôte>` | Se limite à cet hôte (`www.a.fr`, `127.0.0.1:8787`) ; répétable. **Obligatoire en local** : les adresses de la base locale sont des adresses de test, les relire serait frapper chez des inconnus |
+| `--tout` | Relit aussi ce que l'état dit réglé |
+
+**Durée.** 1 426 pages à 1,1 s font 26 min d'attente pure ; avec la latence de chaque site
+(0,3 à 1,5 s par page), compter **35 à 50 minutes**.
+
+**Reprise.** `.relis-photos.etat.json` (à la racine, hors git) note les recettes réglées —
+`photo`, `sans-photo`, `disparue` (404, 410), `interdite` (par `robots.txt`) — avec leur
+issue et leur date, par base cible (les identifiants du local ne sont pas ceux de la prod).
+Relancer les saute ; une page en refus ou en erreur n'y est pas, elle sera relue. Pour tout
+relire : `--tout`, ou `rm .relis-photos.etat.json`. Un fichier illisible ou d'une autre
+forme arrête le script avant tout réseau : le jeter en silence, ce serait tout relire chez
+des tiers. L'ordre des pages est mélangé à chaque passage, pour qu'une page morte en tête
+d'un site ne le fasse pas abandonner à chaque relance.
+
+À la fin, un bilan par domaine : statut de `robots.txt`, pages lues, issues, pages laissées,
+durée.
+
 ## Quels sites — mesuré, pas supposé
 
 `npm run sonde` interroge un site sans rien écrire : publie-t-il du
