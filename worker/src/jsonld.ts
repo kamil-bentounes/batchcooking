@@ -148,7 +148,7 @@ export function ingredients(v: unknown): string[] {
 }
 
 /**
- * Les nœuds du bloc qui portent un `@id`, pour suivre les renvois.
+ * Les nœuds de la page (tous ses blocs) qui portent un `@id`, pour suivre les renvois.
  *
  * ⚠️ Un objet qui ne porte QUE son `@id` est un renvoi, pas un nœud. Dans un graphe
  *    Yoast, l'`Article` et la `WebPage` renvoient à `…#primaryimage` avant que
@@ -246,8 +246,11 @@ function editeur(url: string): string | null {
  * JSON-LD n'est pas un échec d'extraction, c'est un site qui n'en publie pas.
  */
 export function extraire(html: string, url: string): RecetteBrute | null {
-  for (const bloc of blocsJsonLd(html)) {
-    const graphe = noeuds(bloc)
+  const blocs = blocsJsonLd(html)
+  // Le renvoi `@id` se résout dans le graphe de la PAGE : un site peut publier
+  // l'`ImageObject` dans un bloc et la `Recipe` dans un autre.
+  const graphe = noeuds(blocs)
+  for (const bloc of blocs) {
     for (const r of recettesDans(bloc)) {
       const etapesLues = etapes(r.recipeInstructions)
       const ingredientsLus = ingredients(r.recipeIngredient ?? r.ingredients)

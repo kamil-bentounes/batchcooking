@@ -290,6 +290,19 @@ describe('la photo (R3)', () => {
     expect(extraire(html, P)!.image).toBe('https://www.exemple.fr/wp/poulet.jpg')
   })
 
+  it('suit un renvoi @id vers un autre bloc ld+json de la page', () => {
+    const html = page({ '@type': 'ImageObject', '@id': '#i', url: 'https://a.fr/x.jpg' })
+      + page({ ...RECETTE, image: { '@id': '#i' } })
+    expect(extraire(html, P)!.image).toBe('https://a.fr/x.jpg')
+  })
+
+  it('garde le nœud complet d’un autre bloc, pas le renvoi vide du premier', () => {
+    const html = page({ '@type': 'Article', image: { '@id': '#i' } })
+      + page({ '@type': 'ImageObject', '@id': '#i', url: 'https://a.fr/x.jpg' })
+      + page({ ...RECETTE, image: { '@id': '#i' } })
+    expect(extraire(html, P)!.image).toBe('https://a.fr/x.jpg')
+  })
+
   it('ne prend pas l’ancre d’une page pour une photo', () => {
     expect(photo({ '@id': 'https://www.exemple.fr/#primaryimage' }, P)).toBeNull()
   })
