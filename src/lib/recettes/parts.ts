@@ -30,3 +30,17 @@ export function lireParts(texte: string, max: number): LectureParts {
   if (n > max) return { etat: 'refus', message: `Pas plus de ${max} parts.` }
   return { etat: 'ok', valeur: n }
 }
+
+/**
+ * Ce qu'une frappe doit faire : écrire (`commit`), refuser (`refus`), ou rien du
+ * tout. Un champ vide ne fait RIEN : la personne efface pour réécrire, et le
+ * ramener à « 1 » sous ses doigts donnait « 112 » quand elle tapait « 12 ».
+ */
+export function lireSaisie(
+  texte: string, max: number, courant: number,
+): { commit: number | null; refus: string | null } {
+  const l = lireParts(texte, max)
+  if (l.etat === 'refus') return { commit: null, refus: l.message }
+  if (l.etat === 'vide' || l.valeur === courant) return { commit: null, refus: null }
+  return { commit: l.valeur, refus: null }
+}

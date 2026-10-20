@@ -8,18 +8,25 @@
  */
 import { useState } from 'react'
 import type { RecetteChoisie } from '../../lib/donnees/cycle.ts'
-import { parts } from '../../lib/recettes/parts.ts'
+import { PARTS_MAX_CYCLE, PARTS_MAX_RECETTE, parts } from '../../lib/recettes/parts.ts'
 import { Erreur } from '../coque.tsx'
+import { ChampParts } from './ChampParts.tsx'
 import { Photo } from './Photo.tsx'
 
 /** « 6 parts » en grand : l'espace insécable garde le chiffre et le mot sur une ligne. */
 const enGrand = (texte: string) => texte.replace(' ', ' ')
 
-export function Retenues({ cible, choisies, erreur, surCible, surParts, surRetire }: {
+export function Retenues({
+  cible, choisies, erreur, reprise = 0, surRefus, surCible, surParts, surRetire,
+}: {
   cible: number
   choisies: RecetteChoisie[]
   /** Ce qui a raté (retirer, parts, cible), dit en français ; `null` après un succès. */
   erreur?: string | null
+  /** Change quand un réglage a raté : les champs repartent de la base. */
+  reprise?: number
+  /** Le motif d'un refus de saisie (« 2.5 », « 21 »), ou `null` quand elle est valide. */
+  surRefus: (message: string | null) => void
   surCible: (parts: number) => void
   surParts: (recipeId: string, parts: number) => void
   surRetire: (id: string) => void
@@ -56,10 +63,10 @@ export function Retenues({ cible, choisies, erreur, surCible, surParts, surRetir
       {regle && (
         <label className="mt-3.5 flex items-center justify-between gap-3 text-[14px] text-brume">
           Parts visées cette semaine
-          <input type="number" min={1} max={40} value={cible}
-                 onChange={e => surCible(Math.max(1, Number(e.target.value) || 1))}
-                 className="w-20 h-11 rounded-[14px] bg-fond/10 px-3 text-right text-fond
-                            outline-none focus:bg-fond/15" />
+          <ChampParts key={reprise} valeur={cible} max={PARTS_MAX_CYCLE}
+                      surValeur={surCible} surRefus={surRefus}
+                      className="w-20 h-11 rounded-[14px] bg-fond/10 px-3 text-right text-fond
+                                 outline-none focus:bg-fond/15" />
         </label>
       )}
 
@@ -99,11 +106,14 @@ export function Retenues({ cible, choisies, erreur, surCible, surParts, surRetir
                 </span>
               </div>
               <div className="flex items-center justify-end gap-2.5">
-                <input type="number" min={1} max={20} value={c.servings}
-                       aria-label={`Parts de ${c.recipe.title}`}
-                       onChange={e => surParts(c.recipe_id, Math.max(1, Number(e.target.value) || 1))}
-                       className="w-12 h-9 rounded-[10px] bg-fond/10 px-1.5 text-right text-fond
-                                  outline-none focus:bg-fond/15" />
+                {/* 44 px de cible, 36 de dessin : 4 px de bordure transparente, et le fond
+                    ne couvre que la zone de padding (`bg-clip-padding`). */}
+                <ChampParts key={reprise} valeur={c.servings} max={PARTS_MAX_RECETTE}
+                            libelle={`Parts de ${c.recipe.title}`}
+                            surValeur={n => surParts(c.recipe_id, n)} surRefus={surRefus}
+                            className="w-12 h-11 border-y-4 border-transparent bg-clip-padding
+                                       rounded-[12px] bg-fond/10 px-1.5 text-right text-fond
+                                       outline-none focus:bg-fond/15" />
                 <span className="text-[13px] text-fond/70">{c.servings > 1 ? 'parts' : 'part'}</span>
                 <button type="button" onClick={() => surRetire(c.id)}
                         className="min-h-11 px-2 text-[13px] text-fond/70">Retirer</button>

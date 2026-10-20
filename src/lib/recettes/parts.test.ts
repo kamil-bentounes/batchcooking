@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PARTS_MAX_CYCLE, PARTS_MAX_RECETTE, lireParts, parts } from './parts.ts'
+import { PARTS_MAX_CYCLE, PARTS_MAX_RECETTE, lireParts, lireSaisie, parts } from './parts.ts'
 
 describe('parts', () => {
   it('écrit le singulier jusqu’à 1, le pluriel au-delà', () => {
@@ -48,5 +48,29 @@ describe('lireParts', () => {
   it('garde les maxima que les champs annonçaient', () => {
     expect(PARTS_MAX_RECETTE).toBe(20)
     expect(PARTS_MAX_CYCLE).toBe(40)
+  })
+})
+
+describe('lireSaisie', () => {
+  it('ne change rien tant que le champ est vide : on réécrit, on ne revient pas à « 1 »', () => {
+    expect(lireSaisie('', 20, 4)).toEqual({ commit: null, refus: null })
+    expect(lireSaisie('  ', 20, 4)).toEqual({ commit: null, refus: null })
+  })
+
+  it('« effacer puis 12 » donne 12, pas 112', () => {
+    // Le champ affiche ce qu'on a tapé : « 1 », puis « 12 ». Seule la valeur lue compte.
+    expect(lireSaisie('1', 20, 4)).toEqual({ commit: 1, refus: null })
+    expect(lireSaisie('12', 20, 1)).toEqual({ commit: 12, refus: null })
+  })
+
+  it('n’écrit pas deux fois la valeur déjà en place', () => {
+    expect(lireSaisie('4', 20, 4)).toEqual({ commit: null, refus: null })
+  })
+
+  it('refuse sans écrire, et dit pourquoi', () => {
+    expect(lireSaisie('2.5', 20, 4)).toEqual({
+      commit: null, refus: 'Les parts se comptent en nombres entiers.' })
+    expect(lireSaisie('21', 20, 4)).toEqual({ commit: null, refus: 'Pas plus de 20 parts.' })
+    expect(lireSaisie('0', 20, 4)).toEqual({ commit: null, refus: 'Il faut au moins 1 part.' })
   })
 })

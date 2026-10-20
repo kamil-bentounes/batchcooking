@@ -38,7 +38,6 @@ import type { Candidate, Filtres } from '../lib/donnees/catalogue.ts'
 import { bornesDeLaPage, nombreDePages, tranche } from '../lib/recettes/pages.ts'
 import { messageEchec } from '../lib/recettes/echecs.ts'
 import type { Geste } from '../lib/recettes/echecs.ts'
-import { PARTS_MAX_CYCLE, PARTS_MAX_RECETTE, lireParts } from '../lib/recettes/parts.ts'
 import { Vignette } from '../ui/recettes/Vignette.tsx'
 import { Pagination } from '../ui/recettes/Pagination.tsx'
 import { FicheRecette } from '../ui/recettes/FicheRecette.tsx'
@@ -93,10 +92,13 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
      échouaient sans un mot (hors ligne, RLS, 4xx). Un succès efface le message. */
   const [echecAjout, setEchecAjout] = useState<string | null>(null)
   const [echecCarte, setEchecCarte] = useState<string | null>(null)
-  const issue = (geste: Geste, dit: (m: string | null) => void) => ({
+  const [reprise, setReprise] = useState(0)
+  const issue = (geste: Geste, dit: (m: string | null) => void, aussi?: () => void) => ({
     onSuccess: () => dit(null),
-    onError: (e: unknown) => dit(messageEchec(geste, e)),
+    onError: (e: unknown) => { dit(messageEchec(geste, e)); aussi?.() },
   })
+  // Un réglage de parts raté : les champs reprennent la valeur de la base.
+  const reprend = () => setReprise(n => n + 1)
 
   const prises = useMemo(() => new Map(choisies.map(c => [c.recipe_id, c.servings])), [choisies])
   const partsPrises = choisies.reduce((s, c) => s + c.servings, 0)
@@ -124,19 +126,17 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
     }, issue('retenir', setEchecAjout))
   }
 
-  /* Des entiers, dans les bornes : un « 2.5 » n'ira jamais jusqu'à la colonne `int`. */
+  /* Les champs ne rendent que des entiers dans les bornes (`ChampParts`) : un « 2.5 »
+     n'atteint plus la colonne `int`, un refus s'y dit par `setEchecCarte`. */
   function reglePartsDeLaCible(parts: number) {
     if (!cycle) return
-    const l = lireParts(String(parts), PARTS_MAX_CYCLE)
-    if (l.etat === 'refus') return setEchecCarte(l.message)
-    majCycle.mutate({ id: cycle.id, servings_target: parts }, issue('cible', setEchecCarte))
+    majCycle.mutate({ id: cycle.id, servings_target: parts },
+      issue('cible', setEchecCarte, reprend))
   }
 
   function reglePartsDeLaRecette(recipeId: string, parts: number) {
     if (!cycle) return
-    const l = lireParts(String(parts), PARTS_MAX_RECETTE)
-    if (l.etat === 'refus') return setEchecCarte(l.message)
-    regle.mutate({ cycleId: cycle.id, recipeId, parts }, issue('parts', setEchecCarte))
+    regle.mutate({ cycleId: cycle.id, recipeId, parts }, issue('parts', setEchecCarte, reprend))
   }
 
   async function versLesCourses() {
@@ -201,6 +201,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
       <h1 className="titre-fort text-[46px] mt-1">Choisir</h1>
 
       <Retenues cible={cible} choisies={choisies} erreur={echecCarte}
+                reprise={reprise} surRefus={setEchecCarte}
                 surCible={reglePartsDeLaCible} surParts={reglePartsDeLaRecette}
                 surRetire={id => retire.mutate(id, issue('retirer', setEchecCarte))} />
 
