@@ -17,7 +17,16 @@ describe('l’issue d’une page relue', () => {
     [429, false, null, 'refusee'],
     [503, false, null, 'refusee'],
     [500, false, null, 'erreur'],
+    [502, false, null, 'erreur'],
     [0, false, null, 'erreur'],
+    // Les bornes : 2xx est une réponse, tout le reste hors listes est une erreur.
+    [199, false, null, 'erreur'],
+    [204, true, null, 'sans-photo'],
+    [299, false, null, 'sans-recette'],
+    [300, false, null, 'erreur'],
+    [301, false, null, 'erreur'],
+    [400, false, null, 'erreur'],
+    [499, false, null, 'erreur'],
   ] as const)('statut %i, recette %s, photo %s → %s', (statut, recette, photo, attendu) => {
     expect(issueDe(statut, recette, photo)).toBe(attendu)
   })
@@ -64,6 +73,14 @@ describe('le robots.txt d’un domaine (RFC 9309)', () => {
     [404, 'tout-permis'],
     [410, 'tout-permis'],
     [403, 'tout-permis'],
+    [429, 'tout-permis'],
+    [499, 'tout-permis'],
+    [400, 'tout-permis'],
+    [204, 'lire'],
+    [299, 'lire'],
+    [300, 'laisser'],
+    [301, 'laisser'],
+    [304, 'laisser'],
     [500, 'laisser'],
     [503, 'laisser'],
     [0, 'laisser'],

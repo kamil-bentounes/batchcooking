@@ -42,14 +42,14 @@ export function abandonne(dernieres: Issue[]): boolean {
   )
 }
 
-export type Robots = 'lire' | 'tout-permis' | 'laisser'
+export type VoieRobots = 'lire' | 'tout-permis' | 'laisser'
 
 /**
  * Que dire d'un domaine d'après la réponse de son `robots.txt` (RFC 9309) :
  * 2xx, on le lit ; 4xx, rien n'est interdit ; 5xx ou injoignable (0), le domaine
  * est laissé pour ce passage.
  */
-export function robotsDe(statut: number): Robots {
+export function robotsDe(statut: number): VoieRobots {
   if (statut >= 200 && statut < 300) return 'lire'
   if (statut >= 400 && statut < 500) return 'tout-permis'
   return 'laisser'
