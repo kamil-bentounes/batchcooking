@@ -100,8 +100,8 @@ export interface RecettePrete {
     license_note: string | null
     plannable: boolean
     freezable: boolean | null
-    /** La photo du site, en lien (R3). */
-    image_url: string | null
+    /** La photo du site, en lien (R3). Absente quand la page n'en a pas : voir `preparer`. */
+    image_url?: string
   }
   ingredients: IngredientPret[]
   /** Étapes ordonnançables seulement : les « bon appétit » sont écartés ici. */
@@ -397,7 +397,10 @@ export function preparer(brute: RecetteBrute, ctx: Contexte): RecettePrete {
       license_note: brute.licence
         ?? (brute.source ? `Recette importée depuis ${brute.source} — ${brute.url}` : brute.url),
       plannable: oui,
-      image_url: brute.image,
+      // Sans photo lue, la clé n'est PAS envoyée : l'upsert ne met à jour que les
+      // colonnes reçues, et une page qui n'expose plus son image n'efface pas
+      // celle que `relis-photos` ou un passage précédent a posée.
+      ...(brute.image ? { image_url: brute.image } : {}),
     },
     ingredients,
     etapes,

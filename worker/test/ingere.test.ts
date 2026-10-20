@@ -220,6 +220,14 @@ describe('la photo, le titre et les gestes (0092)', () => {
     expect(r.recipe.image_url).toBe('https://a.fr/p.jpg')
   })
 
+  // L'upsert de PostgREST ne met à jour que les colonnes ENVOYÉES : une réingestion
+  // d'une page qui n'expose plus sa photo ne doit pas remettre `image_url` à null.
+  it.each([null, ''])('sans photo (%j) sur la page, la clé image_url n’est pas envoyée', image => {
+    const r = preparer(brute({ image }), CTX)
+    expect('image_url' in r.recipe).toBe(false)
+    expect(Object.keys(r.recipe)).not.toContain('image_url')
+  })
+
   it('nettoie le titre avant de l’écrire', () => {
     const r = preparer(brute({ titre: 'Poulet basquaise : la meilleure recette' }), CTX)
     expect(r.recipe.title).toBe('Poulet basquaise')
