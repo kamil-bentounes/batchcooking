@@ -78,8 +78,8 @@ export function Ecran({ actif, va, children }:
  * Elle existe pour les écrans dont la liste est longue : sur « Choisir », il
  * fallait descendre sous quatre-vingts recettes pour valider, et le compteur de
  * parts — la seule chose qui décide du choix — disparaissait dès la deuxième
- * carte. Paginer aurait été pire : on choisit EN FONCTION de ce compteur, et
- * changer de page le ferait perdre.
+ * carte. La liste se lit désormais par dix (spec du 19/10/2026) : le compteur,
+ * lui, reste ici, et changer de page ne le fait pas perdre.
  *
  * Elle laisse passer le fond derrière elle, pour qu'on voie qu'il reste du
  * contenu dessous.

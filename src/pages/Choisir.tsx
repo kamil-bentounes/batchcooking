@@ -1,5 +1,6 @@
 /**
- * Choisir les recettes (D52, lot 4).
+ * Choisir les recettes (D52, lot 4) — refait le 19/10/2026
+ * (`docs/superpowers/specs/2026-10-19-recettes-design.md`).
  *
  * On choisit le mercredi ce qu'on cuisinera le dimanche : c'est ce décalage qui
  * permet de faire les courses samedi. L'écran ne demande donc pas « qu'est-ce
@@ -12,37 +13,69 @@
  *
  * Deux règles de lecture qui ne se négocient pas :
  *
- *  · le temps affiché est le temps ACTIF (D30). « 50 min » sur une recette qui
- *    demande 10 min de gestes et 40 de four est un mensonge utile à personne.
+ *  · le temps affiché est le temps ACTIF (D30) ;
  *  · les macros s'affichent en FOURCHETTE (D18), et les filtres portent sur la
  *    borne défavorable.
+ *
+ * Et une forme nouvelle (R1) : le catalogue entier est chargé en léger, on le lit
+ * dix recettes à la fois, la photo à gauche, et (i) ouvre la fiche.
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
-  Attente, BarreAction, Chiffre, Erreur, Passage, Surface, Vide, duree,
+  Attente, BarreAction, Chiffre, Erreur, Passage, Vide, dateLongue,
 } from '../ui/coque.tsx'
 import {
-  useChangeEtat, useChoisitRecette, useCycle, useMajCycle, useRecettesDuCycle, useRetireRecette,
+  dimancheDe, useChangeEtat, useChoisitRecette, useCycle, useMajCycle, useRecettesDuCycle,
+  useRetireRecette,
 } from '../lib/donnees/cycle.ts'
-import { useAppareils, useFoyer } from '../lib/donnees/foyer.ts'
 import { useGenereListe } from '../lib/donnees/courses.ts'
+import { useStock } from '../lib/donnees/barquettes.ts'
 import {
-  FILTRES_VIDES, bornes, nombreDeFiltres, useCatalogue, useTailleCatalogue,
+  FILTRES_VIDES, nombreDeFiltres, partsAProposer, retient, useCatalogue, useDejaFaites,
+  useFaisables, useManques,
 } from '../lib/donnees/catalogue.ts'
 import type { Candidate, Filtres } from '../lib/donnees/catalogue.ts'
-import { useStock } from '../lib/donnees/barquettes.ts'
+import { bornesDeLaPage, nombreDePages, tranche } from '../lib/recettes/pages.ts'
+import { Vignette } from '../ui/recettes/Vignette.tsx'
+import { Pagination } from '../ui/recettes/Pagination.tsx'
+import { FicheRecette } from '../ui/recettes/FicheRecette.tsx'
+import { PanneauFiltres, Puces, Recherche } from '../ui/recettes/Filtres.tsx'
+import { Retenues } from '../ui/recettes/Retenues.tsx'
+
+const AUCUNE = new Set<string>()
+const fr = (n: number) => n.toLocaleString('fr-FR')
 
 export function Choisir({ retour, va }: { retour: () => void; va: (v: string) => void }) {
   const [filtres, setFiltres] = useState<Filtres>(FILTRES_VIDES)
+  const [page, setPage] = useState(1)
   const [affine, setAffine] = useState(false)
+  const [ficheDe, setFicheDe] = useState<Candidate | null>(null)
+  const hautDeListe = useRef<HTMLHeadingElement>(null)
 
-  const { data: cycle } = useCycle()
-  const { data: foyer } = useFoyer()
-  const { data: catalogueAppareils = [] } = useAppareils()
+  const cycleRequete = useCycle()
+  const cycle = cycleRequete.data
   const { data: stock = [] } = useStock()
-  const { data: total = 0 } = useTailleCatalogue()
-  const { data: candidates = [], isPending } = useCatalogue(filtres)
+  const { data: catalogue = [], isPending, error } = useCatalogue()
   const { data: choisies = [] } = useRecettesDuCycle(cycle?.id)
+
+  /* Le placard, en aliments reconnus : c'est lui que les manques et « avec ce
+     que j'ai » comparent aux ingrédients. */
+  const placard = useMemo(
+    () => new Set(stock.map(s => s.food_id).filter((x): x is string => !!x)), [stock])
+  const { data: dejaFaites, error: erreurDejaFaites } = useDejaFaites(
+    filtres.jamaisFaites, cycleRequete.isPending ? undefined : (cycle?.id ?? null))
+  const { data: faisables, error: erreurFaisables } = useFaisables(filtres.avecCeQuOnA, placard)
+
+  const filtrees = useMemo(() => catalogue.filter(c => retient(c, filtres, {
+    dejaFaites: dejaFaites ?? AUCUNE,
+    faisables: faisables ?? null,
+  })), [catalogue, filtres, dejaFaites, faisables])
+
+  // La liste a pu rétrécir sous la page courante : on s'en tient à la dernière.
+  const pageSure = Math.min(page, nombreDePages(filtrees.length))
+  const affichees = tranche(filtrees, pageSure)
+  const { de, a } = bornesDeLaPage(pageSure, filtrees.length)
+  const { data: manques } = useManques(affichees.map(r => r.id), placard)
 
   const choisit = useChoisitRecette()
   const retire = useRetireRecette()
@@ -50,12 +83,31 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
   const genere = useGenereListe()
   const change = useChangeEtat()
 
-  const prises = useMemo(() => new Set(choisies.map(c => c.recipe_id)), [choisies])
+  const prises = useMemo(() => new Map(choisies.map(c => [c.recipe_id, c.servings])), [choisies])
   const partsPrises = choisies.reduce((s, c) => s + c.servings, 0)
   const cible = cycle?.servings_target ?? 10
-  const membres = foyer?.membres.length ?? 1
-  const modifie = (p: Partial<Filtres>) => setFiltres(f => ({ ...f, ...p }))
   const actifs = nombreDeFiltres(filtres)
+
+  // Un filtre change la liste : on repart de sa première page.
+  const modifie = (p: Partial<Filtres>) => { setFiltres(f => ({ ...f, ...p })); setPage(1) }
+
+  /* « Les 10 suivantes » remonte en haut de la LISTE, pas de l'écran : la carte
+     des parts et la recherche restent au-dessus. Le focus suit, pour qu'un
+     lecteur d'écran sache où il est. */
+  function vaALaPage(p: number) {
+    setPage(p)
+    const reduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    hautDeListe.current?.scrollIntoView({ behavior: reduit ? 'auto' : 'smooth', block: 'start' })
+    hautDeListe.current?.focus({ preventScroll: true })
+  }
+
+  function ajoute(r: Candidate) {
+    if (!cycle) return
+    choisit.mutate({
+      cycleId: cycle.id, recipeId: r.id,
+      parts: partsAProposer(cible, partsPrises, r.yield_servings),
+    })
+  }
 
   async function versLesCourses() {
     if (!cycle) return
@@ -65,6 +117,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
     va('/magasin')
   }
 
+  if (cycleRequete.isPending) return <Passage retour={retour}><Attente /></Passage>
   if (!cycle) {
     return (
       <Passage retour={retour}>
@@ -73,6 +126,11 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
       </Passage>
     )
   }
+
+  // Une requête en échec n'attend plus rien : son message s'affiche à la place.
+  const enAttente = isPending
+    || (filtres.jamaisFaites && !dejaFaites && !erreurDejaFaites)
+    || (filtres.avecCeQuOnA && placard.size > 0 && !faisables && !erreurFaisables)
 
   return (
     <Passage retour={retour} barre={
@@ -107,121 +165,63 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
         <Erreur de={genere.error ?? change.error} />
       </BarreAction>
     }>
-      <h1 className="titre text-[40px]">Ce qu’on<br />cuisine dimanche</h1>
-      <p className="mt-3.5 text-[15px] text-doux max-w-[34ch]">
-        {membres > 1 ? `À ${membres}, ` : ''}il faut couvrir {cible} parts.
-        On les cuisine dimanche, on les mange la semaine d’après.
+      <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-doux">
+        {dateLongue(dimancheDe(cycle.week_of))}
       </p>
+      <h1 className="titre-fort text-[46px] mt-1">Choisir</h1>
 
-      {/* Le compteur vit maintenant dans la barre du bas, où il reste visible.
-          Ici on ne garde que ce qui se règle une fois : combien de parts viser. */}
-      <Surface className="mt-6 flex items-center gap-4">
-        <p className="grow text-[14px] text-doux">
-          Combien de parts cette semaine ?
-        </p>
-        <label className="text-right">
-          <span className="block text-[13px] text-doux">Parts visées</span>
-          <input type="number" min={1} max={40} value={cible}
-                 onChange={e => majCycle.mutate({
-                   id: cycle.id, servings_target: Math.max(1, Number(e.target.value) || 1),
-                 })}
-                 className="mt-1 w-20 rounded-xl border border-brume bg-fond px-3 py-1.5
-                            text-right text-encre outline-none focus:border-herbe" />
-        </label>
-      </Surface>
-
-      {choisies.length > 0 && (
-        <section className="mt-8" aria-label="Recettes choisies">
-          <h2 className="text-[13px] text-doux uppercase tracking-[0.04em]">Retenues</h2>
-          <ul className="mt-3.5 space-y-3">
-            {choisies.map(c => (c.recipe === null ? (
-              /*
-               * La recette d'un ami, retenue puis devenue illisible — amitié
-               * rompue, ou partage retiré. La ligne du cycle survit ; sans ce
-               * cas, elle s'affichait « Recette » et la liste de courses
-               * perdait ses ingrédients en silence.
-               */
-              <li key={c.id} className="flex items-center gap-3">
-                <span className="grow text-[15px] text-doux">
-                  Recette devenue inaccessible
-                  <span className="block text-[13px]">
-                    Son foyer ne la partage plus. Elle n’apporte plus rien aux courses.
-                  </span>
-                </span>
-                {/* Le MÊME mot doit avoir la MÊME couleur. « Retirer » était en
-                    groseille ici et en gris sur les charges, pour le même geste
-                    — et c'est ici qu'il est le plus anodin : la recette sort de
-                    la sélection, rien ne se perd. Le rouge est réservé à ce
-                    qui ne se défait pas. */}
-                <button onClick={() => retire.mutate(c.id)} aria-label="Retirer"
-                        className="text-doux text-[14px] px-2 min-h-11">Retirer</button>
-              </li>
-            ) : (
-              <li key={c.id} className="flex items-center gap-3">
-                <span className="grow text-[15px]">{c.recipe.title}</span>
-                <label className="flex items-center gap-1.5">
-                  <input type="number" min={1} max={20} value={c.servings}
-                         aria-label={`Parts de ${c.recipe.title}`}
-                         onChange={e => choisit.mutate({
-                           cycleId: cycle.id, recipeId: c.recipe_id,
-                           parts: Math.max(1, Number(e.target.value) || 1),
-                         })}
-                         className="w-14 rounded-lg border border-brume bg-fond px-2 py-1
-                                    text-right outline-none focus:border-herbe" />
-                  <span className="text-[13px] text-doux">parts</span>
-                </label>
-                <button onClick={() => retire.mutate(c.id)} aria-label="Retirer"
-                        className="text-doux text-[14px] px-2 min-h-11">Retirer</button>
-              </li>
-            )))}
-          </ul>
-        </section>
-      )}
+      <Retenues cible={cible} choisies={choisies}
+                surCible={parts => majCycle.mutate({ id: cycle.id, servings_target: parts })}
+                surParts={(recipeId, parts) => choisit.mutate({ cycleId: cycle.id, recipeId, parts })}
+                surRetire={id => retire.mutate(id)} />
 
       {/* ── Le catalogue, d'abord. L'IA est à côté, jamais à la place. ────── */}
-      <section className="mt-9" aria-label="Catalogue">
-        <input type="search" value={filtres.texte}
-               onChange={e => modifie({ texte: e.target.value })}
-               placeholder={`Chercher parmi ${total} recettes`}
-               className="w-full rounded-xl border border-brume bg-surface px-4 py-3
-                          placeholder:text-doux/60 outline-none focus:border-herbe" />
+      <section aria-label="Catalogue">
+        <Recherche texte={filtres.texte} surTexte={t => modifie({ texte: t })}
+                   ouvert={affine} basculer={() => setAffine(o => !o)} actifs={actifs} />
+        <Puces filtres={filtres} modifie={modifie} />
+        {affine && <PanneauFiltres filtres={filtres} modifie={modifie} />}
 
-        <div className="mt-3 flex items-center gap-3">
-          <button onClick={() => setAffine(a => !a)}
-                  className="text-[14px] text-herbe inline-flex items-center min-h-11 -my-3">
-            {affine ? 'Masquer les filtres' : 'Affiner'}
-            {actifs > 0 && !affine && ` · ${actifs}`}
-          </button>
-          {actifs > 0 && (
-            <button onClick={() => setFiltres({ ...FILTRES_VIDES, texte: filtres.texte })}
-                    className="text-[14px] text-doux">Tout effacer</button>
-          )}
-          <span className="ml-auto text-[14px] text-doux">
-            {isPending ? '…' : `${candidates.length} résultat${candidates.length > 1 ? 's' : ''}`}
+        <div className="mt-[22px] flex items-baseline justify-between gap-2.5">
+          <h2 ref={hautDeListe} tabIndex={-1}
+              className="titre-fort text-[25px] scroll-mt-4 outline-none">Recettes</h2>
+          <span aria-live="polite" className="text-[14px] text-doux tabular-nums">
+            {isPending ? '…' : filtrees.length === 0 ? '0'
+              : `${fr(filtrees.length)}, de ${fr(de)} à ${fr(a)}`}
           </span>
         </div>
-
-        {affine && (
-          <PanneauFiltres filtres={filtres} modifie={modifie}
-                          appareils={catalogueAppareils} stock={stock.length} />
+        {actifs > 0 && (
+          <button type="button" onClick={() => {
+            setFiltres({ ...FILTRES_VIDES, texte: filtres.texte })
+            setPage(1)
+          }} className="text-[14px] text-doux min-h-11">
+            Tout effacer
+          </button>
         )}
+        <Erreur de={error ?? erreurFaisables ?? erreurDejaFaites} />
 
-        {isPending ? <Attente /> : candidates.length === 0 ? (
+        {enAttente ? <Attente /> : filtrees.length === 0 ? (error ? null : (
           <Vide titre="Rien ne correspond"
-                texte={actifs > 0
-                  ? 'Desserre un filtre, ou invente une recette depuis l’accueil.'
-                  : 'Le catalogue se remplit par l’ingestion.'} />
-        ) : (
-          <ul className="mt-5 divide-y divide-brume">
-            {candidates.map(r => (
-              <Ligne key={r.id} recette={r} prise={prises.has(r.id)}
-                     surAjoute={() => choisit.mutate({
-                       cycleId: cycle.id, recipeId: r.id,
-                       parts: Math.max(1, Math.min(cible - partsPrises || 2, r.yield_servings ?? 2)),
-                     })} />
+                texte={filtres.avecCeQuOnA && placard.size === 0
+                  ? (stock.length === 0
+                    ? 'Tes placards sont vides dans l’app : ce filtre ne rendra rien.'
+                    // Des articles, mais aucun rattaché à un aliment : « vides » mentirait.
+                    : 'Rien dans tes placards n’est reconnu comme un aliment : ce filtre ne rendra rien.')
+                  : actifs > 0 || filtres.texte.trim()
+                    ? 'Desserre un filtre, ou invente une recette depuis l’accueil.'
+                    : 'Le catalogue se remplit par l’ingestion.'} />
+        )) : (
+          <div className="mt-3 flex flex-col gap-2.5">
+            {affichees.map(r => (
+              <Vignette key={r.id} recette={r} prise={prises.has(r.id)}
+                        manques={manques?.get(r.id) ?? []}
+                        surInfo={() => setFicheDe(r)}
+                        surAjoute={() => ajoute(r)} />
             ))}
-          </ul>
+          </div>
         )}
+
+        {!enAttente && !error && <Pagination page={pageSure} total={filtrees.length} surPage={vaALaPage} />}
 
         <button onClick={() => va('/inventer')}
                 className="mt-6 w-full h-[46px] rounded-[16px] bg-brume/50 text-[15px]
@@ -238,197 +238,13 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
         </button>
       </section>
 
+      {ficheDe && (
+        <FicheRecette recette={ficheDe} fermer={() => setFicheDe(null)}
+                      retenue={prises.has(ficheDe.id)}
+                      parts={prises.get(ficheDe.id)
+                        ?? partsAProposer(cible, partsPrises, ficheDe.yield_servings)}
+                      ajoute={() => ajoute(ficheDe)} enCours={choisit.isPending} />
+      )}
     </Passage>
-  )
-}
-
-function PanneauFiltres({ filtres, modifie, appareils, stock }: {
-  filtres: Filtres
-  modifie: (p: Partial<Filtres>) => void
-  appareils: { code: string; label: string }[]
-  stock: number
-}) {
-  return (
-    <Surface className="mt-4 space-y-5">
-      {/* Le filtre le plus utile, et personne ne l'a. */}
-      <div>
-        <p className="text-[13px] text-doux">Temps les mains prises</p>
-        <div className="mt-2 flex gap-2 flex-wrap">
-          {[15, 25, 40, null].map(v => (
-            <Puce key={String(v)} actif={filtres.tempsActifMax === v}
-                  surClic={() => modifie({ tempsActifMax: v })}>
-              {v === null ? 'Peu importe' : `≤ ${v} min`}
-            </Puce>
-          ))}
-        </div>
-        <p className="mt-2 text-[12px] text-doux leading-relaxed">
-          Le temps de gestes, pas le temps total : une cuisson au four n’occupe
-          personne.
-        </p>
-      </div>
-
-      <div className="flex gap-4">
-        <label className="flex-1">
-          <span className="block text-[13px] text-doux">Protéines au moins</span>
-          <div className="flex items-center gap-2 mt-1.5">
-            <input type="number" min={0} max={90} step={5}
-                   value={filtres.proteinesMin ?? ''}
-                   placeholder="—"
-                   onChange={e => modifie({
-                     proteinesMin: e.target.value === '' ? null : Number(e.target.value),
-                   })}
-                   className="w-20 rounded-lg border border-brume bg-fond px-2.5 py-1.5
-                              text-right outline-none focus:border-herbe" />
-            <span className="text-[13px] text-doux">g</span>
-          </div>
-        </label>
-        <label className="flex-1">
-          <span className="block text-[13px] text-doux">Calories au plus</span>
-          <div className="flex items-center gap-2 mt-1.5">
-            <input type="number" min={100} max={1500} step={50}
-                   value={filtres.kcalMax ?? ''}
-                   placeholder="—"
-                   onChange={e => modifie({
-                     kcalMax: e.target.value === '' ? null : Number(e.target.value),
-                   })}
-                   className="w-20 rounded-lg border border-brume bg-fond px-2.5 py-1.5
-                              text-right outline-none focus:border-herbe" />
-            <span className="text-[13px] text-doux">kcal</span>
-          </div>
-        </label>
-      </div>
-      <p className="text-[12px] text-doux leading-relaxed -mt-3">
-        Sur la borne défavorable : « au moins 30 g » écarte une recette annoncée
-        entre 28 et 34.
-      </p>
-
-      <div>
-        <p className="text-[13px] text-doux">Avec seulement</p>
-        <div className="mt-2 flex gap-2 flex-wrap">
-          {appareils.map(a => (
-            <Puce key={a.code} actif={filtres.appareils.includes(a.code)}
-                  surClic={() => modifie({
-                    appareils: filtres.appareils.includes(a.code)
-                      ? filtres.appareils.filter(x => x !== a.code)
-                      : [...filtres.appareils, a.code],
-                  })}>
-              {a.label}
-            </Puce>
-          ))}
-        </div>
-        {filtres.appareils.length > 0 && (
-          <p className="mt-2 text-[12px] text-doux">
-            Écarte toute recette qui exige autre chose — utile le jour où le four
-            est déjà pris.
-          </p>
-        )}
-      </div>
-
-      <div className="flex gap-2 flex-wrap">
-        <Puce actif={filtres.congelable === true}
-              surClic={() => modifie({ congelable: filtres.congelable === true ? null : true })}>
-          Se congèle
-        </Puce>
-        <Puce actif={filtres.jamaisFaites}
-              surClic={() => modifie({ jamaisFaites: !filtres.jamaisFaites })}>
-          Jamais essayée
-        </Puce>
-        <Puce actif={filtres.avecCeQuOnA}
-              surClic={() => modifie({ avecCeQuOnA: !filtres.avecCeQuOnA })}>
-          Avec ce qu’on a
-        </Puce>
-      </div>
-      {filtres.avecCeQuOnA && (
-        <p className="text-[12px] text-doux leading-relaxed -mt-3">
-          {stock === 0
-            ? 'Tes placards sont vides dans l’app : ce filtre ne rendra rien.'
-            : 'Sinon, chaque recette affiche ce qui lui manque — sans rien écarter.'}
-        </p>
-      )}
-    </Surface>
-  )
-}
-
-function Ligne({ recette: r, prise, surAjoute }: {
-  recette: Candidate; prise: boolean; surAjoute: () => void
-}) {
-  const b = bornes(r)
-  return (
-    <li className="py-3.5 flex items-start gap-3">
-      <span className="grow">
-        <span className="block text-[15px]">{r.title}</span>
-
-        <span className="block text-[13px] text-doux mt-1">
-          {/* Le temps ACTIF d'abord : c'est celui qui décide. */}
-          {r.active_time_min !== null && (
-            <strong className="text-encre font-medium">
-              {duree(Number(r.active_time_min))} actives
-            </strong>
-          )}
-          {r.yield_servings && ` · ${r.yield_servings} parts`}
-          {r.freezable === true && ' · se congèle'}
-        </span>
-
-        {/* D'où elle vient. Sans ça, une recette arrivée d'un foyer ami n'a pas
-            de provenance, et « d'où sort celle-là ? » reste sans réponse. */}
-        {r.ajoutePar && (
-          <span className="block text-[13px] mt-0.5"
-                style={{ color: r.dUnAmi ? 'var(--color-ocre)' : undefined }}>
-            {r.dUnAmi ? `Partagée par ${r.ajoutePar}` : `Ajoutée par ${r.ajoutePar}`}
-          </span>
-        )}
-
-        {b && (
-          <span className="block text-[13px] text-doux mt-0.5">
-            {b.proteinesMin === b.proteinesMax
-              ? `${b.proteinesMin} g`
-              : `${b.proteinesMin}–${b.proteinesMax} g`} de protéines ·{' '}
-            {b.kcalMin === b.kcalMax
-              ? `${b.kcalMin}`
-              : `${b.kcalMin}–${b.kcalMax}`} kcal la part
-            {b.sur < 0.9 && (
-              <span style={{ color: 'var(--color-ocre)' }}>
-                {' · '}{Math.round(b.sur * 100)} % des ingrédients connus
-              </span>
-            )}
-          </span>
-        )}
-
-        {r.manques.length > 0 && (
-          <span className="block text-[13px] mt-0.5" style={{ color: 'var(--color-ocre)' }}>
-            il manque {r.manques.length === 1
-              ? r.manques[0]
-              : `${r.manques.length} ingrédients`}
-          </span>
-        )}
-
-        {r.appliances.length > 0 && (
-          <span className="block text-[12px] text-doux mt-0.5">
-            {r.appliances.join(' · ')}
-          </span>
-        )}
-      </span>
-
-      {prise ? (
-        <span className="text-[14px] text-herbe shrink-0 pt-1">Retenue</span>
-      ) : (
-        <button onClick={surAjoute}
-                className="shrink-0 inline-flex items-center rounded-full border border-brume px-3.5 min-h-11 text-[14px]
-                           hover:bg-brume/40 transition-colors">
-          Ajouter
-        </button>
-      )}
-    </li>
-  )
-}
-
-function Puce({ actif, surClic, children }:
-  { actif: boolean; surClic: () => void; children: React.ReactNode }) {
-  return (
-    <button onClick={surClic} aria-pressed={actif}
-            className={`px-3.5 min-h-11 inline-flex items-center rounded-full text-[13px] transition-colors
-              ${actif ? 'bg-encre text-fond' : 'bg-brume/50 hover:bg-brume'}`}>
-      {children}
-    </button>
   )
 }
