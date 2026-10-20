@@ -1,8 +1,8 @@
 # Finaliser Popote : où on en est
 
-Mis à jour le 19/10/2026, vers 15 h. Le travail s'est arrêté là, à la demande de Kamil :
-« Tu peux arrêter tout stp ? Et mettre dans un plan tout ce qui reste ? On finira plus
-tard. »
+Mis à jour le 20/10/2026, vers 17 h. Le code du chantier 2 (Recettes) est fini, relu et
+vérifié sur la branche `feat/recettes`. Il reste sa mise en ligne (tâche 24), qui demande
+l'accès à la prod : voir « Reprendre ici ».
 
 Kamil voulait « finaliser ce projet qui date depuis un MOMMMMMMENT ». Il a pris six
 décisions ce jour-là ; la mémoire les garde sous `decisions-du-19-octobre`.
@@ -28,17 +28,23 @@ high** : c'est sa demande, notée en mémoire sous `agents-en-sonnet-high`.
 
 ## Reprendre ici
 
-1. Le dépôt est sur la branche **`feat/recettes`**, poussée sur `origin`. `main` n'a pas
-   changé depuis le chantier 1.
-2. Pour les bancs :
-   - relancer `npx supabase start`, si la pile locale est arrêtée ;
-   - lancer `npx supabase functions serve` en fond, sans quoi les tests d'invitation
-     échouent.
-3. Chantier 2, dans cet ordre :
-   1. faire les corrections des relectures (liste plus bas) ;
-   2. relancer la relecture de la tâche 2 ;
-   3. reprendre les tâches 6 et 7, mises de côté ;
-   4. puis les tâches 8 à 24.
+1. Le dépôt est sur la branche **`feat/recettes`**, poussée sur `origin`, 90 commits devant
+   `main` (85eb7fb), qui est un ancêtre : le passage de `main` se fait en avance rapide.
+2. **Chantier 2 (Recettes) : code terminé le 20/10.** Vérifié, seul sur la base et sur le port
+   4173 : `npm run build` vert, `npm run lint` sans erreur, 65 fichiers et 1 493 tests (purs et
+   base), 99 bancs navigateur sur l'appli construite, le banc de clôture `e2e/recettes.spec.ts`
+   (10 parcours) aussi sur le serveur de dev. Deux relectures adverses indépendantes, les
+   mutations du code (28, deux trous comblés) et de la base (4, toutes attrapées).
+3. **Reste : la tâche 24, la mise en ligne**, puis la page de compte rendu. Voir plus bas. Elle
+   demande des accès à la prod : le contrôle de sécurité de Claude Code a refusé une lecture de
+   la prod le 20/10 (« Production Reads »). Kamil doit l'autoriser (règle de permission, ou un
+   « go prod » dans la conversation), ou jouer lui-même les étapes.
+4. Pour les bancs : relancer `npx supabase start` si la pile locale est arrêtée, et `npx supabase
+   functions serve` en fond (sans lui, les tests d'invitation échouent : 503).
+5. Ensuite, chantier 3 (Budget) : son plan est prêt.
+6. Deux `git stash` sont devenus inutiles (« wip recettes tâche 6 » et « tâche 7 » : le travail est
+   refait et livré). Les retirer avec `git stash drop` deux fois ; l'effacement a été refusé le 20/10
+   par le contrôle de sécurité, donc à lui de le faire.
 
 ## Chantier 1 · Inscription et invitation — FERMÉ le 19/10
 
@@ -63,134 +69,80 @@ Le compte rendu, avec les captures : https://claude.ai/artifact/JKzrwPqxTw7w8DuJ
 | Réveil quotidien de la base (GitHub Actions, 06:17 UTC) | d4d630a | poussé sur `main` |
 | Fumée de la prod en lecture seule (`node scripts/fumee-prod.mjs`) | cec159e | — |
 
-## Chantier 2 · Recettes — EN COURS sur `feat/recettes`, rien en prod
+## Chantier 2 · Recettes — CODE FINI le 20/10 sur `feat/recettes`, pas encore en prod
 
 La spec est `docs/superpowers/specs/2026-10-19-recettes-design.md`. Le plan, en 25
-tâches, est `docs/superpowers/plans/2026-10-19-recettes.md` ; chaque tâche y a sa section
-`### Tâche N`, avec son code complet.
+tâches, est `docs/superpowers/plans/2026-10-19-recettes.md` (ses amendements, à la fin, priment
+sur le texte des tâches).
 
-Deux relectures adverses du plan ont eu lieu avant le code. Elles n'ont trouvé aucun
-bloquant. Leurs corrections sont **à la fin du plan** (« Amendements… ») et priment sur
-le texte des tâches.
+### Fait (tâches 1 à 23, et la fermeture)
 
-### Fait
+- **Données** : titres sans réclame, entités décodées, photo en lien (JSON-LD), gestes d'une
+  étape, macros impossibles écartées, temps actif qui compte les gestes. Migration **0092**
+  (`recipe.image_url`, `recipe_step.gesture_min`, `tg_recipe_agrege`, `recettes_faisables()`,
+  triggers `recipe_photo` et `recipe_source`).
+- **Scripts** : `scripts/recalcule.mjs` (passes T, 0, 1, 2, G, 3, `--sec`, `--recette`) et
+  `scripts/relis-photos.mjs` (le robot : 1 requête par seconde et par site, `robots.txt`
+  RFC 9309, arrêt au premier 429 ou défi, hôtes privés refusés, reprise par
+  `.relis-photos.etat.json`).
+- **Écran** : « Choisir » refait (liste par dix, fiche (i), photos, 8 pictos, filtres, carte
+  encre), `src/ui/recettes/`.
+- **Tests** : bancs unitaires, bancs de base, bancs navigateur (`e2e/recettes.spec.ts`, 10
+  parcours au clic, capture à chaque écran, base relue, comptes identiques avant et après).
+  Les captures sont dans `.shots/recettes/{build,dev}/` (non versionnées).
+- **Docs** : `docs/ingestion.md`, `schema.md`, `api.md`.
 
-| Tâche | Commit | Relecture |
-|---|---|---|
-| 1 · titres nettoyés, entités décodées (`src/lib/recettes/texte.ts`) | 5718164 | approuvée, 2 retouches mineures |
-| 2 · la photo du JSON-LD (`worker/src/jsonld.ts`) | 86c97f5 | interrompue : à relancer |
-| 3 · les gestes d'une étape (`gestesMin`, `worker/src/etape.ts`) | 1a2e813 | à corriger |
-| 4 · une part plausible (`plausible`, `src/lib/nutrition/macros.ts`) | 0f5c72f | à corriger, un point mineur |
-| 5 · le temps des mains (`src/lib/recettes/temps.ts`) | 1e39299 | à corriger, des tests manquent |
-| Vitest ignore `.claude/`, où vivent les worktrees des agents | 0a2885e | — |
+### Ce que la revue finale a fait changer
 
-Au 19/10, les 1 363 tests purs passent (`npx vitest run --fileParallelism=false src/lib
-worker/test`), et `npm run build` aussi. La base locale est en 0091 : la migration 0092
-n'y est pas appliquée.
+- **La source du catalogue est gelée** pour les foyers (`recipe_source`) : sans cela, un foyer
+  pouvait réécrire `source_url` et faire poser par le rôle de service la photo d'un autre site.
+- **`relis-photos` refuse les hôtes privés** avant la première requête (littéral ou résolu).
+- **Une réingestion n'efface plus une photo.**
+- **Les écrans** : échecs de « + » / « Retirer » / parts dits, anneau de focus lisible sur la
+  carte encre, champ des parts (se vide, 44 px, plafonné, écritures mises à la file : « 12 » ne
+  finit plus à « 1 »), mots longs, pictos qui passent à la ligne, fourchettes sur une ligne.
 
-### Corrections à faire avant de continuer
+### Limites connues, acceptées
 
-Chaque correction commence par un test rouge.
+- **DNS rebinding** : `relis-photos` contrôle l'adresse, puis `fetch` la résout une seconde fois.
+  Peu de risque ici (deux comptes) ; le fermer demande un `dispatcher` undici qui épingle
+  l'adresse contrôlée.
+- **`texteDe`** (`worker/src/sitemap.ts`, ingestion et `sonde`) suit encore les redirections sans
+  limite et lit des corps sans plafond, contrairement à `relis-photos`.
+- **« Avec ce que j'ai »** ignore les lignes d'ingrédient non rattachées (décision de la spec :
+  seule une recette sans aucun ingrédient reconnu est exclue). L'ingestion ne rend planifiable
+  qu'une recette dont plus de la moitié des lignes sont rattachées.
+- **`titrePropre` coupe parfois trop** : « Gâteau, recette de grand-mère » devient « Gâteau »
+  (la règle de la spec retire toute fin qui contient « recette »). **À lire au relevé à sec en
+  prod, avant le vrai passage.**
+- L'en-tête de « Choisir » dit « ‹ Accueil » sans avatar, la maquette « ‹ Popote » et le « K ».
+- Un test lent peut sortir rouge sous charge : `ordonnance.test.ts` (400 ms) a échoué une fois,
+  vert aux autres passages.
 
-- **Tâche 1**
-  - Ne pas décoder une entité numérique de la plage 0xD800–0xDFFF : `&#55357;` et
-    `&#xD83D;` restent tels quels.
-  - Écrire la classe des diacritiques en échappements, `[̀-ͯ]`, et non en
-    caractères invisibles.
-- **Tâche 4.** La borne de densité s'écrit sans division : `k * 100 <=
-  PART_PLAUSIBLE.densiteMax * g`.
-- **Tâche 5**
-  - Tester `enTout` :
-    - total du site égal au temps actif → le total du site ;
-    - total du site à 0 → la somme des étapes ;
-    - étape passive dont les gestes dépassent la durée → la somme compte au moins les
-      gestes ;
-    - l'arrondi au dixième.
-  - Tester `tempsActif([])` → 0.
-  - `nombre()` rend 0 pour NaN.
-  - Ne pas toucher à l'arrondi : durées et gestes sont déjà au dixième à la source
-    (`etape.ts:365` et `440`).
-- **Tâche 3**, `gestesMin`. Voici les cas faux relevés par la relecture et que la § 10
-  de la spec ne couvre pas :
+### Reste : la tâche 24, la mise en ligne (par le contrôleur)
 
-  | Étape | Obtenu | Attendu |
-  |---|---|---|
-  | « Mélangez farine, sucre, beurre, œufs. » | 3 | 1 |
-  | « Ne pas mélanger. » | 1 | rien |
-  | « Faites cuire sans trop remuer. » | 1 | rien |
-  | « Laissez mijoter en les remuant. » | rien | 1 |
-  | « La casserole retirée du feu, ajoutez la crème. » | 2 | 1 |
-  | « Sans retirer du feu, remuez. » | 2 | 1 |
-  | « Avant de retirer du feu, ajoutez le sel. » | 2 | 1,5 |
+À faire dans cet ordre, en disant à Kamil ce qui est parti. Jamais rien au nom de Thauba.
 
-  Les règles à poser :
-  - une négation (« ne pas », « sans trop ») écarte le verbe : enjamber `trop`,
-    `jamais`, `bien` et `surtout`, et écarter après `pas`, `plus`, `jamais` ;
-  - le gérondif compte aussi avec un pronom entre les deux (« en les remuant ») ;
-  - les verbes de plusieurs mots (« retirer du feu ») suivent la même grammaire
-    (participe, « sans », « avant de ») ;
-  - une liste de noms sans article ne fait pas de chaque nom un verbe au « tu » ;
-  - **lenteur** : `analyserEtape` passe de 0,05 à 2,6 ms par étape, parce que le texte
-    est redécoupé pour chacun des ~47 verbes. Découper et plier le texte une seule fois
-    par appel.
-- **Tâche 2.** Relancer sa relecture : graphes imbriqués, `//cdn…`, `data:`, cycles
-  d'`@id`, `&` légitimes dans les ingrédients.
+1. `npx supabase migration list`, puis `db push --dry-run`, puis `db push` (ajouter
+   `--include-all` si la prod a des migrations plus récentes). La prod était à **0091** le 20/10 :
+   1 426 recettes, 8 108 étapes, 1 foyer.
+2. Déployer la fonction `importer`. **La migration d'abord, le site ensuite** : un nouveau client
+   sans la 0092 échoue à chaque import.
+3. **Avant le recalcule, la sauvegarde en lecture seule**, hors de `/tmp` : `recipe` (`id`,
+   `title`, `active_time_min`, `total_time_min`), `recipe_nutrition` entier, `recipe_step`
+   (`id`, `duration_min`) **et `recipe_ingredient` (`id`, `food_id`, `resolution_source`,
+   `confidence`, `grams_reference`)** : les passes 0 et 1 réécrivent ces quatre colonnes (trou
+   trouvé par la revue finale).
+4. `npm run recalcule -- --prod --sec`, le lire (surtout la liste des titres changés), puis le
+   vrai passage, puis la requête de cohérence de l'amendement 24 (doit rendre 0).
+5. Le site : `main` en avance rapide sur `feat/recettes`, puis push.
+6. `npm run relis-photos -- --prod --sec --limite 20` (il demande quand même les pages), le
+   regarder, puis `npm run relis-photos -- --prod` (35 à 50 minutes).
+7. Les comptes, la fumée de la prod en lecture seule (`node scripts/fumee-prod.mjs`), puis la
+   page de compte rendu avec les captures.
 
-### Mis de côté (`git stash list`)
-
-- « wip recettes tâche 6 (ingere) » : le début de la tâche 6.
-- « wip recettes tâche 7 (banc tests/recettes.test.ts) » : le banc de la migration, rouge.
-
-On peut les reprendre (`git stash pop`), ou refaire ces tâches depuis le plan.
-
-### Reste, dans l'ordre
-
-1. **Les tâches 6 à 23 du plan.** Les tâches pures peuvent tourner en parallèle, une seule
-   tâche en base à la fois.
-   1. Tâche 6 : l'ingestion.
-   2. Tâche 7 : la migration 0092. Elle s'applique avec `npx supabase migration up --local
-      --include-all`, jamais `db reset`.
-   3. Tâche 8 : l'import d'une recette collée.
-   4. Tâche 9 : la relecture, côté pur. Un domaine est aussi laissé après cinq erreurs de
-      suite.
-   5. Tâche 10 : le script `relis-photos`.
-   6. Tâche 11 : `recalcule`, avec ses passes T et G.
-   7. Tâche 12 : la pagination et la fiche, côté pur.
-   8. Tâche 15 : les bancs navigateur rouges. Elle passe AVANT la 13.
-   9. Tâche 13 : le catalogue léger.
-   10. Tâche 14 : `useFiche`.
-   11. Tâche 16 : les jetons, les pictos, la photo.
-   12. Tâche 17 : la vignette et la pagination.
-   13. Tâche 18 : la fiche (i).
-   14. Tâche 19 : les filtres et la carte encre.
-   15. Tâche 20 : l'écran Choisir.
-   16. Tâche 21 : tout vert.
-   17. Tâche 22 : la doc.
-   18. Tâche 23 : la revue adverse et les mutations.
-2. **Fermer le chantier comme le chantier 1.**
-   - Écrire un banc `e2e/recettes.spec.ts`, joué au clic, avec une capture à chaque
-     écran et la base relue après chaque geste. Il couvre :
-     - l'ajout depuis la liste et depuis la fiche, les parts, « Retirer » ;
-     - les filtres, la recherche sans accents, la pagination, « Avec ce que j'ai » ;
-     - l'image neutre ;
-     - une recette collée.
-   - Le jouer sur le serveur de dev ET sur l'appli construite.
-   - Comparer les captures à la maquette : `docs/superpowers/maquettes/captures/recettes-*.png`,
-     non versionnées (`node docs/superpowers/maquettes/captures.mjs` les refait).
-   - Publier une page de compte rendu.
-3. **Tâche 24, la mise en ligne** (§ 12 de la spec et amendements) :
-   1. `migration list`, puis `db push --dry-run`, puis `db push` ;
-   2. déployer la fonction `importer` ;
-   3. **avant le recalcule**, une sauvegarde en lecture seule des titres, des temps et
-      des macros, hors de `/tmp` ;
-   4. le recalcule à sec, lu, puis le vrai ;
-   5. la requête de cohérence, qui doit rendre 0 ;
-   6. le site ;
-   7. la relecture des photos à sec sur 20 pages, puis la vraie (35 à 50 min) ;
-   8. les comptes.
-
-   Elle demande la clé de service de la prod, qui n'est pas dans `.env.production` : la
-   lire par l'API de gestion, sans jamais l'afficher.
+La clé de service de la prod n'est pas dans `.env.production` : la lire par l'API de gestion
+(`name === 'service_role'`, sinon `type === 'secret'`), sans jamais l'afficher.
 
 ### Ce qui a marché
 
