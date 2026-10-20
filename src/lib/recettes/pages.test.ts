@@ -27,6 +27,21 @@ describe('les pages', () => {
   })
 })
 
+describe('une page qu\'on ne croit pas', () => {
+  const l = Array.from({ length: 11 }, (_, i) => i + 1)
+  const dix = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+  it.each([0, -3, NaN, 1.5, -Infinity, 1.9999])('« %s » vaut la première page', (page) => {
+    expect(tranche(l, page)).toEqual(dix)
+    expect(bornesDeLaPage(page, 11)).toEqual({ de: 1, a: 10 })
+  })
+
+  it.each([2.5, 2.1, Infinity, 99])('« %s » vaut la dernière page', (page) => {
+    expect(tranche(l, page)).toEqual([11])
+    expect(bornesDeLaPage(page, 11)).toEqual({ de: 11, a: 11 })
+  })
+})
+
 describe('les numéros', () => {
   it.each([
     [1, 139, [1, 2, 3, '…', 139]],

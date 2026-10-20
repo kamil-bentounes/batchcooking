@@ -10,16 +10,25 @@ export const PAR_PAGE = 10
 
 export const nombreDePages = (total: number) => Math.max(1, Math.ceil(total / PAR_PAGE))
 
+/**
+ * Une page qu'on peut montrer : entière, entre la première et la dernière. Elle
+ * viendra d'un état, jamais de confiance — NaN, 0, 1,5 ou 99 ne cassent rien.
+ */
+function pageValide(page: number, total: number): number {
+  const entiere = Number.isNaN(page) ? 1 : Math.trunc(page)
+  return Math.min(Math.max(1, entiere), nombreDePages(total))
+}
+
 /** Les recettes de la page. Une page au-delà de la fin rend la dernière. */
 export function tranche<T>(liste: T[], page: number): T[] {
-  const p = Math.min(Math.max(1, page), nombreDePages(liste.length))
+  const p = pageValide(page, liste.length)
   return liste.slice((p - 1) * PAR_PAGE, p * PAR_PAGE)
 }
 
 /** « Recettes 11 à 20 sur 1 390 ». Liste vide : de 0 à 0. */
 export function bornesDeLaPage(page: number, total: number): { de: number; a: number } {
   if (total === 0) return { de: 0, a: 0 }
-  const p = Math.min(Math.max(1, page), nombreDePages(total))
+  const p = pageValide(page, total)
   return { de: (p - 1) * PAR_PAGE + 1, a: Math.min(p * PAR_PAGE, total) }
 }
 
