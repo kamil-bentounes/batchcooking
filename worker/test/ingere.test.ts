@@ -225,6 +225,18 @@ describe('la photo, le titre et les gestes (0092)', () => {
     expect(r.recipe.title).toBe('Poulet basquaise')
   })
 
+  it('juge la congélation sur le titre nettoyé, pas sur le titre brut', () => {
+    // « salade » n'est que dans le bruit du titre brut : le titre propre est
+    // « Poulet rôti », que rien ne tranche. Les ingrédients par défaut sont
+    // écartés : leur « c. à soupe » ferait lire « soupe », donc « se congèle ».
+    const r = preparer(brute({
+      titre: 'Poulet rôti - Recette salade de saison',
+      ingredients: ['500 g de poulet', '2 poivrons'],
+    }), CTX)
+    expect(r.recipe.title).toBe('Poulet rôti')
+    expect(r.recipe.freezable, 'la congélation a été jugée sur le titre brut').toBeNull()
+  })
+
   it('écrit les gestes de chaque étape', () => {
     const r = preparer(brute({ etapes: [
       'Épluchez et émincez les oignons.',
