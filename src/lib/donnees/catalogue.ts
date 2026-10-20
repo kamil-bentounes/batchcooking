@@ -1,23 +1,28 @@
 /**
- * Chercher une recette (lot 4, §10.0 et §10.1).
+ * Chercher une recette (lot 4, §10.0 et §10.1) — refait pour la liste B (R1).
  *
  * L'ordre du parcours est une exigence, pas une préférence : **le gratuit
  * d'abord, toujours**. On filtre le catalogue — déterministe, instantané — et
  * l'IA n'intervient que sur un bouton explicite, à côté des résultats.
  *
+ * Le catalogue entier tient désormais dans le navigateur : quelque 1 390 recettes
+ * en LÉGER (titre, photo, temps, macros). Filtrer et trier ne coûtent plus de
+ * requête, et la liste n'est plus tronquée aux quatre-vingts premières : « Avec ce
+ * que j'ai » et « Jamais essayée » cherchent enfin dans tout le catalogue. Ce qui
+ * pèse — les ingrédients, les étapes — ne se charge que pour ce qui est affiché.
+ *
  * Deux règles portent tout le reste :
  *
  *  · **Le temps ACTIF, pas le temps total.** Dix minutes de gestes et quarante
- *    de four ne font pas cinquante minutes de travail. C'est le filtre le plus
- *    utile et personne ne l'a, parce qu'il exige de connaître la charge de
- *    chaque étape (D19, D30).
+ *    de four ne font pas cinquante minutes de travail (D19, D30).
  *  · **La borne DÉFAVORABLE, jamais la moyenne** (D18). « Au moins 30 g de
  *    protéines » se lit sur la borne basse, « au plus 600 kcal » sur la borne
- *    haute. Filtrer sur la moyenne ferait passer des recettes qui ne tiennent
- *    pas la promesse.
+ *    haute.
  */
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
+import { plie } from '../recettes/texte.ts'
+import { actifConnu } from '../recettes/temps.ts'
 
 export type Filtres = {
   texte: string
@@ -33,7 +38,7 @@ export type Filtres = {
   congelable: boolean | null
   /**
    * D28 : une BASCULE, pas un filtre imposé. En mode « tout », chaque recette
-   * affiche ses manques ; en mode « ce qu'on a », on ne montre que le faisable.
+   * affiche ses manques ; en mode « ce que j'ai », on ne montre que le faisable.
    */
   avecCeQuOnA: boolean
   /** Écarte les recettes déjà cuisinées par le foyer. */
@@ -51,17 +56,17 @@ export const FILTRES_VIDES: Filtres = {
   jamaisFaites: false,
 }
 
+/** Une recette du catalogue, en léger : ce qu'il faut à la liste et aux filtres. */
 export type Candidate = {
   id: string
   title: string | null
+  /** La photo du site, en lien (R3). */
+  image_url: string | null
   yield_servings: number | null
   total_time_min: number | null
   active_time_min: number | null
   appliances: string[]
   freezable: boolean | null
-  step_count: number
-  source_name: string | null
-  origin: string
   /** Le foyer propriétaire. `null` = le catalogue mutualisé. */
   owner_household_id: string | null
   /** Le prénom de qui l'a ajoutée, quand elle vient d'un foyer. */
@@ -76,9 +81,11 @@ export type Candidate = {
     fiber_g: number
     coverage: number
   } | null
-  /** Ingrédients que le foyer n'a pas. Rempli seulement si l'on sait. */
-  manques: string[]
 }
+
+/** Les huit appareils de l'écran : ceux qu'on coche et qu'on dessine (R4). */
+export const CODES_APPAREILS = ['four', 'plaques', 'air_fryer', 'micro_ondes',
+  'autocuiseur', 'blender', 'batteur', 'robot_cuiseur'] as const
 
 /** Les bornes affichables d'une recette. Jamais la moyenne (D18). */
 export function bornes(c: Candidate) {
@@ -92,31 +99,74 @@ export function bornes(c: Candidate) {
   }
 }
 
+/** Ce que les filtres consultent hors de la recette elle-même. */
+export type Contexte = {
+  /** Les recettes que le foyer a déjà cuisinées. */
+  dejaFaites: Set<string>
+  /** Les recettes faisables avec le placard ; `null` tant qu'on ne sait pas. */
+  faisables: Set<string> | null
+}
+
 /**
- * Le candidat passe-t-il les filtres que la base ne sait pas appliquer ?
+ * Le candidat passe-t-il les filtres ?
  *
  * Extrait pour être éprouvé : c'est ici que vit la règle de la BORNE
  * DÉFAVORABLE, et une inversion de signe y passerait inaperçue — l'écran
  * afficherait simplement quelques recettes de trop.
  */
-export function retient(c: Candidate, f: Filtres, dejaFaites: Set<string>): boolean {
-  if (f.jamaisFaites && dejaFaites.has(c.id)) return false
+export function retient(c: Candidate, f: Filtres, ctx: Contexte): boolean {
+  const texte = plie(f.texte.trim())
+  if (texte && !plie(c.title ?? '').includes(texte)) return false
+
+  // Un temps inconnu ne tient aucune promesse de temps (R6).
+  if (f.tempsActifMax !== null
+      && !(actifConnu(c.active_time_min) && Number(c.active_time_min) <= f.tempsActifMax)) {
+    return false
+  }
+  // « On ne sait pas » n'est pas « oui » : seul `true` se congèle (D27).
+  if (f.congelable === true && c.freezable !== true) return false
+  // Un appareil non coché ne doit apparaître dans AUCUNE étape. Un code que
+  // l'écran ne dessine pas ne compte pas : la base ne le comptait pas non plus.
+  if (f.appareils.length > 0 && c.appliances.some(a =>
+    (CODES_APPAREILS as readonly string[]).includes(a) && !f.appareils.includes(a))) {
+    return false
+  }
+  if (f.jamaisFaites && ctx.dejaFaites.has(c.id)) return false
+  if (f.avecCeQuOnA && !(ctx.faisables?.has(c.id) ?? false)) return false
 
   // Une recette sans macros connues n'est pas écartée par défaut : elle ne
   // l'est que si l'on filtre justement sur ce qu'on ignore.
   if (f.proteinesMin === null && f.kcalMax === null) return true
   const b = bornes(c)
   if (!b) return false
-
-  // Protéines : la borne BASSE doit atteindre le seuil. « Au moins 30 g »
-  // écarte une recette annoncée entre 28 et 34.
+  // Protéines : la borne BASSE doit atteindre le seuil.
   if (f.proteinesMin !== null && b.proteinesMin < f.proteinesMin) return false
   // Calories : la borne HAUTE doit rester sous le plafond.
   if (f.kcalMax !== null && b.kcalMax > f.kcalMax) return false
   return true
 }
 
-/** Combien de filtres sont posés. Sert à dire « Affiner · 3 ». */
+const ORDRE_DES_TITRES = new Intl.Collator('fr')
+
+/**
+ * Le temps actif croissant, l'inconnu à la fin, puis le titre, puis l'id.
+ *
+ * Un ordre TOTAL : sans lui, deux chargements pourraient ranger différemment
+ * deux recettes à 12 minutes, et une recette changerait de page sous les yeux.
+ */
+export function trie(liste: Candidate[]): Candidate[] {
+  return [...liste].sort((a, b) => {
+    const ka = actifConnu(a.active_time_min)
+    const kb = actifConnu(b.active_time_min)
+    if (ka !== kb) return ka ? -1 : 1
+    if (ka && Number(a.active_time_min) !== Number(b.active_time_min)) {
+      return Number(a.active_time_min) - Number(b.active_time_min)
+    }
+    return ORDRE_DES_TITRES.compare(a.title ?? '', b.title ?? '') || a.id.localeCompare(b.id)
+  })
+}
+
+/** Combien de filtres sont posés. Sert à la pastille du bouton des filtres. */
 export function nombreDeFiltres(f: Filtres): number {
   return [f.tempsActifMax, f.proteinesMin, f.kcalMax, f.congelable].filter(x => x !== null).length
     + (f.appareils.length > 0 ? 1 : 0)
@@ -124,69 +174,67 @@ export function nombreDeFiltres(f: Filtres): number {
     + (f.jamaisFaites ? 1 : 0)
 }
 
-type LigneBrute = Omit<Candidate, 'nutrition' | 'manques' | 'ajoutePar' | 'dUnAmi'> & {
+/** Les parts qu'« Ajouter » pose : ce qui manque, borné par le rendement, 2 à défaut. */
+export function partsAProposer(cible: number, prises: number, rendement: number | null): number {
+  return Math.max(1, Math.min(cible - prises || 2, rendement ?? 2))
+}
+
+/**
+ * Les ingrédients reconnus qui ne sont pas au placard, recette par recette.
+ * Une ligne non rattachée ne manque pas : on ne sait pas, on se tait.
+ */
+export function manquesDe(
+  lignes: { recipe_id: string; food_id: string | null; raw_text: string }[],
+  placard: Set<string>,
+): Map<string, string[]> {
+  const parRecette = new Map<string, string[]>()
+  for (const l of lignes) {
+    if (!l.food_id || placard.has(l.food_id)) continue
+    const deja = parRecette.get(l.recipe_id) ?? []
+    deja.push(l.raw_text)
+    parRecette.set(l.recipe_id, deja)
+  }
+  return parRecette
+}
+
+type LigneBrute = Omit<Candidate, 'nutrition' | 'ajoutePar' | 'dUnAmi'> & {
   created_by: string | null
   recipe_nutrition: Candidate['nutrition'] | Candidate['nutrition'][] | null
 }
 
-const LIMITE = 80
+/** PostgREST plafonne une réponse à mille lignes, sans le dire. Une RPC aussi. */
+const PAGE_DE_LA_BASE = 1000
 
-export function useCatalogue(f: Filtres) {
+/**
+ * Lit par tranches de mille jusqu'à une tranche courte. L'ordre doit être stable
+ * côté base (`order by id`), sinon deux tranches se chevaucheraient ou se
+ * laisseraient un trou.
+ */
+async function parTranches<T>(lit: (de: number, a: number) => Promise<T[]>): Promise<T[]> {
+  const tout: T[] = []
+  for (let de = 0; ; de += PAGE_DE_LA_BASE) {
+    const tranche = await lit(de, de + PAGE_DE_LA_BASE - 1)
+    tout.push(...tranche)
+    if (tranche.length < PAGE_DE_LA_BASE) return tout
+  }
+}
+
+const COLONNES = `id, title, image_url, yield_servings, total_time_min, active_time_min,
+  appliances, freezable, owner_household_id, created_by,
+  recipe_nutrition(kcal, protein_g, kcal_margin, protein_g_margin, fiber_g, coverage)`
+
+/** Tout le catalogue planifiable, en léger, trié (R1). */
+export function useCatalogue() {
   return useQuery({
-    queryKey: ['catalogue', f],
-    staleTime: 20_000,
+    queryKey: ['catalogue-leger'],
+    staleTime: 10 * 60_000,
     queryFn: async (): Promise<Candidate[]> => {
-      // ── Ce que le foyer a, et ce qu'il a déjà cuisiné ─────────────────────
-      // On n'interroge que si le filtre le demande : ces deux requêtes ne
-      // servent à rien dans le cas courant, et l'écran se rafraîchit à chaque
-      // frappe dans la recherche.
-      const aliments = new Set<string>()
-      if (f.avecCeQuOnA) {
-        for (const s of ou(await supabase.from('stock_item').select('food_id'))) {
-          if (s.food_id) aliments.add(s.food_id)
-        }
-      }
-      const dejaFaites = new Set<string>()
-      if (f.jamaisFaites) {
-        for (const r of ou(await supabase.from('cycle_recipe').select('recipe_id'))) {
-          dejaFaites.add(r.recipe_id)
-        }
-      }
-
-      // ── La requête, filtrée par la BASE ───────────────────────────────────
-      // Les bornes sont des colonnes générées (migration 0029) : sans cela,
-      // « au moins 30 g de protéines » ne cherchait que parmi les 240 recettes
-      // les plus rapides, et pouvait rendre « rien » alors que des centaines
-      // qualifiaient.
-      const surMacros = f.proteinesMin !== null || f.kcalMax !== null
-      let q = supabase.from('recipe')
-        .select(`id, title, yield_servings, total_time_min, active_time_min,
-                 appliances, freezable, step_count, source_name, origin,
-                 owner_household_id, created_by,
-                 recipe_nutrition${surMacros ? '!inner' : ''}(kcal, protein_g,
-                                  kcal_margin, protein_g_margin, fiber_g, coverage)`)
-        .not('title', 'is', null)
-        .eq('plannable', true)
-
-      // La borne DÉFAVORABLE, jamais la moyenne (D18).
-      if (f.proteinesMin !== null) {
-        q = q.gte('recipe_nutrition.protein_g_min', f.proteinesMin)
-      }
-      if (f.kcalMax !== null) q = q.lte('recipe_nutrition.kcal_max', f.kcalMax)
-
-      if (f.texte.trim()) q = q.ilike('title', `%${f.texte.trim()}%`)
-      if (f.tempsActifMax !== null) q = q.lte('active_time_min', f.tempsActifMax)
-      if (f.congelable === true) q = q.eq('freezable', true)
-      // Un appareil non coché ne doit apparaître dans AUCUNE étape : `contains`
-      // ne sait pas dire cela, `overlaps` avec le complément si.
-      if (f.appareils.length > 0) {
-        const interdits = ['four', 'plaques', 'air_fryer', 'micro_ondes', 'autocuiseur', 'blender', 'batteur', 'robot_cuiseur']
-          .filter(a => !f.appareils.includes(a))
-        if (interdits.length > 0) q = q.not('appliances', 'ov', `{${interdits.join(',')}}`)
-      }
-
-      const lignes = ou(await q.order('active_time_min', { ascending: true, nullsFirst: false })
-        .limit(LIMITE * 3)) as unknown as LigneBrute[]
+      const lignes = await parTranches(async (de, a) => ou(
+        await supabase.from('recipe').select(COLONNES)
+          .not('title', 'is', null)
+          .eq('plannable', true)
+          .order('id')
+          .range(de, a)) as unknown as LigneBrute[])
 
       /*
        * La provenance, quand la recette vient d'un foyer.
@@ -196,74 +244,75 @@ export function useCatalogue(f: Filtres) {
        * l'origine : `prenoms_visibles` ne rend que le prénom, et seulement pour
        * les foyers qu'on a le droit de connaître.
        */
-      const deFoyers = lignes.some(l => l.owner_household_id !== null)
       const prenoms = new Map<string, string>()
       let monFoyer: string | null = null
-      if (deFoyers) {
+      if (lignes.some(l => l.owner_household_id !== null)) {
         monFoyer = ou(await supabase.rpc('current_household'))
         for (const p of ou(await supabase.rpc('prenoms_visibles'))) {
           if (p.id && p.display_name) prenoms.set(p.id, p.display_name)
         }
       }
 
-      // ── Ce que PostgREST ne sait pas filtrer ──────────────────────────────
-      const resultats: Candidate[] = []
-      for (const l of lignes) {
+      return trie(lignes.map(({ created_by, recipe_nutrition, ...l }) => {
         // La jointure rend un objet ou un tableau selon la cardinalité déduite.
-        const n = Array.isArray(l.recipe_nutrition)
-          ? l.recipe_nutrition[0] ?? null
-          : l.recipe_nutrition
-        const c: Candidate = {
+        const n = Array.isArray(recipe_nutrition) ? recipe_nutrition[0] ?? null : recipe_nutrition
+        return {
           ...l,
+          appliances: l.appliances ?? [],
           nutrition: n ?? null,
-          manques: [],
-          ajoutePar: l.created_by ? prenoms.get(l.created_by) ?? null : null,
+          ajoutePar: created_by ? prenoms.get(created_by) ?? null : null,
           dUnAmi: l.owner_household_id !== null && l.owner_household_id !== monFoyer,
         }
-
-        if (!retient(c, f, dejaFaites)) continue
-        resultats.push(c)
-        if (resultats.length >= LIMITE * 2) break
-      }
-
-      // ── Les manques, quand le foyer a un inventaire ───────────────────────
-      if (aliments.size > 0 && resultats.length > 0) {
-        const ing = ou(await supabase.from('recipe_ingredient')
-          .select('recipe_id, food_id, raw_text')
-          .in('recipe_id', resultats.slice(0, LIMITE).map(r => r.id)))
-
-        const parRecette = new Map<string, string[]>()
-        for (const i of ing) {
-          if (i.food_id && aliments.has(i.food_id)) continue
-          if (!i.food_id) continue          // non rattaché : on ne sait pas, on se tait
-          if (!parRecette.has(i.recipe_id)) parRecette.set(i.recipe_id, [])
-          parRecette.get(i.recipe_id)!.push(i.raw_text)
-        }
-        for (const c of resultats) c.manques = parRecette.get(c.id) ?? []
-
-        // D28 : la bascule filtre, elle ne masque pas en mode « tout ».
-        if (f.avecCeQuOnA) {
-          return resultats.filter(c => c.manques.length === 0).slice(0, LIMITE)
-        }
-        // Le plus faisable d'abord : c'est l'ordre utile quand on a un frigo.
-        resultats.sort((a, b) => a.manques.length - b.manques.length)
-      }
-
-      return resultats.slice(0, LIMITE)
+      }))
     },
   })
 }
 
-/** Combien de recettes au total, pour dire « 128 recettes » avant de filtrer. */
-export function useTailleCatalogue() {
+/** Ce qui manque au placard, pour les SEULES recettes affichées (R1, D28). */
+export function useManques(ids: string[], placard: Set<string>) {
   return useQuery({
-    queryKey: ['catalogue-taille'],
-    staleTime: 5 * 60_000,
+    queryKey: ['manques', ids, [...placard].sort()],
+    enabled: ids.length > 0 && placard.size > 0,
+    staleTime: 60_000,
+    // Sans cela, les « il manque… » clignotent à chaque frappe et à chaque page :
+    // la clé change, et la requête repartirait de rien.
+    placeholderData: keepPreviousData,
+    queryFn: async () => manquesDe(ou(await supabase.from('recipe_ingredient')
+      .select('recipe_id, food_id, raw_text').in('recipe_id', ids)), placard),
+  })
+}
+
+/**
+ * Les recettes faisables avec le placard, sur TOUT le catalogue : c'est la base
+ * qui répond (0092). La clé porte le placard : il change, la réponse aussi.
+ */
+export function useFaisables(actif: boolean, placard: Set<string>) {
+  return useQuery({
+    queryKey: ['faisables', [...placard].sort()],
+    enabled: actif && placard.size > 0,
+    staleTime: 60_000,
+    queryFn: async () => new Set(await parTranches(async (de, a) =>
+      ou(await supabase.rpc('recettes_faisables').range(de, a)) as string[])),
+  })
+}
+
+/**
+ * Ce que le foyer a déjà cuisiné, pour « Jamais essayée ».
+ *
+ * Le cycle EN COURS ne compte pas : une recette qu'on vient de retenir ne doit
+ * pas disparaître de la liste, elle y passe à « Retenue » (spec § 8). On ne lit
+ * donc que les `cycle_recipe` des AUTRES cycles.
+ */
+export function useDejaFaites(actif: boolean, cycleId: string | undefined) {
+  return useQuery({
+    queryKey: ['deja-faites', cycleId],
+    enabled: actif,
     queryFn: async () => {
-      const { count, error } = await supabase.from('recipe')
-        .select('id', { count: 'exact', head: true }).eq('plannable', true)
-      if (error) throw new Error(error.message)
-      return count ?? 0
+      const lignes = await parTranches(async (de, a) => {
+        const q = supabase.from('cycle_recipe').select('recipe_id').order('id')
+        return ou(await (cycleId ? q.neq('cycle_id', cycleId) : q).range(de, a))
+      })
+      return new Set(lignes.map(r => r.recipe_id))
     },
   })
 }

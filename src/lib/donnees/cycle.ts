@@ -50,6 +50,24 @@ export function lundiProchain(d = new Date()): string {
   return lundiDe(j)
 }
 
+/**
+ * Le dimanche où l'on cuisine : la veille du lundi que le cycle couvre. « On les
+ * cuisine dimanche, on les mange la semaine d'après. »
+ */
+export function dimancheDe(lundi: string): Date {
+  const [a, m, j] = lundi.split('-').map(Number)
+  return new Date(a, m - 1, j - 1)
+}
+
+/**
+ * Ce qu'un choix de recette doit recharger : tout, sauf le catalogue et les
+ * fiches, qu'il ne change pas. Sans cette exception, chaque « + » rechargeait
+ * les 1 390 recettes de la liste.
+ */
+export function garderLeCatalogue(cle: readonly unknown[]): boolean {
+  return cle[0] !== 'catalogue-leger' && cle[0] !== 'fiche'
+}
+
 export function useCycle() {
   return useQuery({
     queryKey: CLE.cycle,
@@ -122,7 +140,7 @@ export function useMajCycle() {
  */
 export type RecetteChoisie = Ligne<'cycle_recipe'> & {
   recipe: Pick<Ligne<'recipe'>,
-    'id' | 'title' | 'yield_servings' | 'total_time_min' | 'source_name'> | null
+    'id' | 'title' | 'yield_servings' | 'total_time_min' | 'source_name' | 'image_url'> | null
 }
 
 export function useRecettesDuCycle(cycleId: string | undefined) {
@@ -131,7 +149,7 @@ export function useRecettesDuCycle(cycleId: string | undefined) {
     enabled: !!cycleId,
     queryFn: async (): Promise<RecetteChoisie[]> => ou(
       await supabase.from('cycle_recipe')
-        .select('*, recipe:recipe_id(id, title, yield_servings, total_time_min, source_name)')
+        .select('*, recipe:recipe_id(id, title, yield_servings, total_time_min, source_name, image_url)')
         .eq('cycle_id', cycleId!).order('position')) as unknown as RecetteChoisie[],
   })
 }
@@ -147,7 +165,7 @@ export function useChoisitRecette() {
         cycle_id: cycleId, household_id: foyer, recipe_id: recipeId, servings: parts,
       }, { onConflict: 'cycle_id,recipe_id' }).select().single())
     },
-    onSuccess: () => qc.invalidateQueries(),
+    onSuccess: () => qc.invalidateQueries({ predicate: q => garderLeCatalogue(q.queryKey) }),
   })
 }
 
@@ -156,6 +174,6 @@ export function useRetireRecette() {
   return useMutation({
     mutationFn: async (id: string) =>
       ou(await supabase.from('cycle_recipe').delete().eq('id', id).select()),
-    onSuccess: () => qc.invalidateQueries(),
+    onSuccess: () => qc.invalidateQueries({ predicate: q => garderLeCatalogue(q.queryKey) }),
   })
 }
