@@ -107,6 +107,39 @@ export function lireRobots(txt: string | null): Robots {
   }
 }
 
+const SANS_RESERVE = /[A-Za-z0-9\-._~]/
+const octetHex = (o: number) => `%${o.toString(16).toUpperCase().padStart(2, '0')}`
+const encodeur = new TextEncoder()
+
+/**
+ * La forme que l'on compare (RFC 9309 § 2.2.2), pour un motif comme pour un chemin :
+ * un octet échappé que l'URI laisse nu (lettre, chiffre, `-._~`) est décodé ; tout
+ * autre octet échappé garde son échappement, en hexadécimal majuscule — `%2F` n'est
+ * pas `/`, `%2A` n'est pas un joker ; un caractère non ASCII est encodé en UTF-8 ;
+ * un `%` qui n'ouvre pas un échappement est lui-même, donc `%25`.
+ */
+export function normalise(s: string): string {
+  let r = ''
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    if (c === '%') {
+      const hex = s.slice(i + 1, i + 3)
+      if (/^[0-9A-Fa-f]{2}$/.test(hex)) {
+        const o = parseInt(hex, 16)
+        r += SANS_RESERVE.test(String.fromCharCode(o)) ? String.fromCharCode(o) : octetHex(o)
+        i += 2
+      } else r += '%25'
+    } else if (c.charCodeAt(0) < 128) {
+      r += c
+    } else {
+      const cp = String.fromCodePoint(s.codePointAt(i)!)
+      for (const o of encodeur.encode(cp)) r += octetHex(o)
+      i += cp.length - 1
+    }
+  }
+  return r
+}
+
 /** Un motif de robots.txt (`*`, `$` final) en expression, ancrée au début du chemin. */
 function motifEnExpression(motif: string): RegExp {
   const fin = motif.endsWith('$')
@@ -120,14 +153,16 @@ function motifEnExpression(motif: string): RegExp {
  * le plus long gagne ; à longueur égale, `Allow` (RFC 9309 § 2.2.2).
  */
 export function autorise(chemin: string, r: Robots): boolean {
-  let meilleure: Regle | null = null
+  const vu = normalise(chemin)
+  let meilleure: { permis: boolean; motif: string } | null = null
   for (const regle of r.regles) {
-    if (!motifEnExpression(regle.motif).test(chemin)) continue
+    const motif = normalise(regle.motif)
+    if (!motifEnExpression(motif).test(vu)) continue
     if (
       !meilleure ||
-      regle.motif.length > meilleure.motif.length ||
-      (regle.motif.length === meilleure.motif.length && regle.permis)
-    ) meilleure = regle
+      motif.length > meilleure.motif.length ||
+      (motif.length === meilleure.motif.length && regle.permis)
+    ) meilleure = { permis: regle.permis, motif }
   }
   return meilleure ? meilleure.permis : true
 }

@@ -169,3 +169,53 @@ describe('robots.txt : le groupe qui nous vise', () => {
     expect(ok('User-agent: batchcooking-perso-pro\nDisallow: /\n\nUser-agent: *\nDisallow:', '/x')).toBe(true)
   })
 })
+
+describe('robots.txt : motif et chemin normalisés avant comparaison (RFC 9309 § 2.2.2)', () => {
+  it('un motif non ASCII vise le chemin tel que l’URL l’encode', () => {
+    const t = 'User-agent: *\nDisallow: /café'
+    expect(ok(t, '/caf%C3%A9/1')).toBe(false)
+    expect(ok(t, '/café/1')).toBe(false)
+    expect(ok(t, '/cafe/1')).toBe(true)
+  })
+
+  it('une lettre échappée dans le motif vaut la lettre : /a%62c vise /abc', () => {
+    const t = 'User-agent: *\nDisallow: /a%62c'
+    expect(ok(t, '/abc/2')).toBe(false)
+    expect(ok(t, '/a%62c/2')).toBe(false)
+    expect(ok(t, '/abd/2')).toBe(true)
+  })
+
+  it('la casse des chiffres hexadécimaux ne compte pas', () => {
+    expect(ok('User-agent: *\nDisallow: /caf%c3%a9', '/caf%C3%A9/1')).toBe(false)
+    expect(ok('User-agent: *\nDisallow: /caf%C3%A9', '/caf%c3%a9/1')).toBe(false)
+    expect(ok('User-agent: *\nDisallow: /caf%c3%a9', '/café/1')).toBe(false)
+  })
+
+  it('%7E et ~ sont le même caractère', () => {
+    expect(ok('User-agent: *\nDisallow: /%7Esmith', '/~smith/a')).toBe(false)
+    expect(ok('User-agent: *\nDisallow: /~smith', '/%7esmith/a')).toBe(false)
+  })
+
+  it('un caractère réservé échappé reste échappé : %2F n’est pas /, %3F n’est pas ?', () => {
+    expect(ok('User-agent: *\nDisallow: /a%2Fb', '/a/b')).toBe(true)
+    expect(ok('User-agent: *\nDisallow: /a%2fb', '/a%2Fb')).toBe(false)
+    expect(ok('User-agent: *\nDisallow: /a%3Fb', '/a?b')).toBe(true)
+  })
+
+  it('%2A n’est pas un joker et %24 n’est pas la fin du chemin', () => {
+    expect(ok('User-agent: *\nDisallow: /a%2Ab', '/aXb')).toBe(true)
+    expect(ok('User-agent: *\nDisallow: /a%2Ab', '/a%2Ab')).toBe(false)
+    expect(ok('User-agent: *\nDisallow: /a%24', '/a%24/suite')).toBe(false)
+  })
+
+  it('un % isolé reste lui-même', () => {
+    expect(ok('User-agent: *\nDisallow: /100%', '/100%25')).toBe(false)
+    expect(ok('User-agent: *\nDisallow: /100%', '/100%')).toBe(false)
+  })
+
+  it('la longueur d’un motif se compte une fois normalisé : l’Allow plus précis gagne', () => {
+    const t = 'User-agent: *\nDisallow: /caf%C3%A9\nAllow: /café/carte'
+    expect(ok(t, '/caf%C3%A9/carte')).toBe(true)
+    expect(ok(t, '/caf%C3%A9/autre')).toBe(false)
+  })
+})
