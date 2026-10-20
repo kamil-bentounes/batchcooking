@@ -27,6 +27,8 @@ appris de travers ou effacer une pesée fautive doit rester possible sans passer
 par le rôle de service — et le trigger recalcule tout derrière.
 
 ¹ Refusé si `confidence >= 0.8`. Chaque écriture pose `edited_by_household_id` et `edited_at`.
+  `recipe.image_url` n'est jamais écrite par un compte : `PATCH` avec une photo
+  est refusé (`check_violation`, `tg_recipe_photo`) : rôle de service seul.
 ² `id` / `user_profile_id` doit valoir `auth.uid()`. Sur `nutrition_target`, `household_id` est posé par trigger : ne pas l'envoyer.
 
 ## RPC — `POST /rest/v1/rpc/<nom>`
@@ -42,6 +44,7 @@ par le rôle de service — et le trigger recalcule tout derrière.
 | `export_my_data` | — | `jsonb` | authentifié |
 | `delete_my_account` | — | `void` | authentifié |
 | `poids_unitaire` | `p_food_id uuid`, `p_unit text` | `numeric` \| `null` | authentifié |
+| `recettes_faisables` | — | `setof uuid` | authentifié |
 | `llm_consomme` | `p_household uuid`, `p_kind text` | `int` | **rôle de service uniquement** |
 | `tables_de_foyer` | — | `setof text` | **rôle de service uniquement** |
 
@@ -49,6 +52,15 @@ par le rôle de service — et le trigger recalcule tout derrière.
 sans référence), sinon la référence, sinon `null` — **jamais un chiffre
 inventé** : c'est ce qui fait afficher une fourchette au lieu d'une fausse
 précision (D18).
+
+`recettes_faisables` rend les recettes planifiables dont tous les ingrédients reconnus sont
+au placard du foyer, et qui en ont au moins un (`security invoker`) : la RLS s'applique, et
+rien ne se lit qu'on n'aurait pas pu lire soi-même. Les ids sortent **triés** (`order by
+r.id`). PostgREST plafonne une réponse de RPC à 1 000 lignes comme une table : lire par
+tranches (`.range(de, de + 999)`) jusqu'à une tranche courte, l'ordre stable évitant qu'elles
+se chevauchent ou se manquent. Une ligne non rattachée à un aliment ne compte pas — on ne
+sait pas, on se tait —, mais une recette dont aucune ligne n'est rattachée n'est pas
+faisable pour autant.
 
 `llm_consomme` incrémente le quota en **une instruction**, donc atomiquement.
 Le code lisait `calls` puis écrivait `calls + 1` : deux appels simultanés
@@ -68,9 +80,24 @@ demandée a déjà son cycle clos — on n'efface pas un bilan pour recommencer.
 |---|---|---|---|
 | `invite` | `{ email }` | `{ token, link }` | 401 non authentifié · 403 aucun foyer · 400 e-mail manquant · 409 invitation déjà en attente |
 | `accept-invite` | `{ token }` | `{ household_id }` | 401 · 400 token manquant · 404 inconnue · 409 déjà utilisée ou déjà rattaché · 410 expirée |
+| `importer` | `{ texte, precisions? }` | `{ titre, parts, ingredients, etapes, manque, aCompleter, par, ms, restantes, quota }` | 401 · 403 aucun foyer · 400 texte trop court · 413 > 24 000 caractères · 429 quota mensuel atteint · 502 aucun modèle, ou aucun n'a répondu |
 | `inventer` | `{ envie, perimetre, proteinesMin, kcalMax, minutesMax, appareils, parts }` | `{ recette, restantes, quota }` | 401 · 403 aucun foyer · 429 quota mensuel atteint · 502 modèle injoignable ou illisible · 503 aucun modèle configuré |
 | `frigo` | `{ image: "data:image/jpeg;base64,…", lieu }` | `{ articles, lisible, commentaire, par, ms, restantes, quota }` | 401 · 403 · 400 image absente ou mal formée · 413 > 6 Mo · 429 · 502 · 503 |
 | `ticket` | `{ image: "data:image/jpeg;base64,…", enseigne }` | `{ enseigne, date, lignes, total_eur, somme, ecart, remisesDeduites, par, ms, restantes, quota }` | 401 · 403 · 400 · 413 · 429 · 502 · 503 |
+
+`importer` : une recette collée en texte libre. `texte` : 40 caractères au moins, 24 000 au
+plus ; `precisions` (facultatif, 1 200 caractères retenus) complète le texte sans remplacer
+les consignes. **40 imports par foyer et par mois**, vérifiés *avant* l'appel. Le modèle ne
+fait que découper (titre, parts, lignes, étapes) ; le déterministe de l'ingestion fait le
+reste, donc la recette a la même forme qu'une recette ingérée. La réponse porte `titre`,
+`parts`, `ingredients`, `etapes`, `manque`, `aCompleter`, `par`, `ms`, `restantes`, `quota`.
+Rien n'est écrit en base. **Depuis la 0092**, chaque élément de `etapes` porte aussi
+`gesture_min` (`number | null`, les minutes de gestes lues dans le texte de l'étape) : le
+client l'écrit tel quel dans `recipe_step`, sauf quand la personne a tapé la durée à la main
+— sa durée fait foi, `gesture_min` repart à `null`. Un client plus ancien ignore le champ, et
+une fonction plus ancienne ne l'envoie pas : absent se lit `null`, l'étape compte alors sa
+durée seule. Les macros, calculées par le client, ne sont écrites que si la part est
+plausible ([`ingestion.md`](ingestion.md)).
 
 `inventer` : **10 générations par foyer et par mois**, vérifiées *avant* l'appel.
 Le prompt est construit côté serveur — le modèle reçoit des bornes chiffrées
