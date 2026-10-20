@@ -39,7 +39,10 @@ conjugue, quel que soit le verbe retenu ; `NULL` = non mesuré, l'étape compte 
 `tg_recipe_agrege` compte, par étape, le plus grand de sa durée et de ses gestes (active ou
 bloquante), ou ses gestes seuls (passive). `recipe.image_url` (0092, `https://`, 2 048
 caractères au plus) : la photo du site, en lien, écrite par le rôle de service seul
-(`tg_recipe_photo`).
+(`tg_recipe_photo`). La source qui la pilote (`source_url`, `source_name`) est figée de
+même sur les recettes du catalogue (`tg_recipe_source`) : le crawler de photos se fie à
+`source_url`, la changer ferait écrire par le service la photo de la page de son choix.
+Une recette de foyer garde sa source modifiable par son foyer.
 | **C — foyer** | RLS stricte, trois formes de prédicat. | `household`, `user_profile`, `nutrition_target`, `invitation`, `llm_usage`, `foyer_ami`, `session_convive` + les 18 tables du lot 1 et les 6 des lots 0c et 5 (ci-dessous) |
 
 Deux tables ouvrent une brèche *nommée* dans la classe C, et une seule à la fois :
@@ -121,6 +124,7 @@ remettrait `current_household()` à `NULL` et lui permettrait de créer un secon
 | `tables_de_foyer()` | Introspection, rôle de service. Ne liste que des `BASE TABLE` — sinon la vue `price_knowledge` réclamerait un export en plus de la table qu'elle lit. Sert au test qui empêche `export_my_data` de prendre du retard sur le schéma. |
 | `tg_recipe_agrege` | `AFTER INSERT/UPDATE/DELETE` sur `recipe_step` : recalcule temps actif (chaque étape compte au moins ses gestes, 0092), appareils et nombre d'étapes. **Un trigger ne rattrape pas le passé** — `scripts/recalcule.mjs` existe pour cela. |
 | `tg_recipe_photo` | `BEFORE INSERT OR UPDATE OF image_url` sur `recipe` : hors rôle de service, poser ou changer la photo est refusé (`check_violation`). Une adresse posée par un compte ferait charger à tous une image de son choix, et lui dirait qui regarde et quand. Pas `security definer` : `is_service_role()` suffit, et la porte ne disparaît pas en silence le jour où elle le deviendrait. |
+| `tg_recipe_source` | `BEFORE UPDATE OF source_url, source_name` sur `recipe` : hors rôle de service, changer la source d'une recette du catalogue (`owner_household_id is null`) est refusé (`check_violation`) ; le titre, les ingrédients et les étapes restent corrigeables. `scripts/relis-photos.mjs` (rôle de service) se fie à `source_url` : sans cette garde, un foyer la redirigerait et ferait poser sa photo dans le catalogue, au mépris de `tg_recipe_photo`. Les recettes de foyer gardent leur source modifiable. Même porte : `is_service_role()`. |
 | `recettes_faisables()` | `STABLE`, `SECURITY INVOKER`, ids **triés** (`order by r.id`). Les recettes planifiables dont tous les ingrédients reconnus sont au placard du foyer, et qui en ont au moins un. La RLS de `recipe` et de `stock_item` s'applique telle quelle. `authenticated` seul (`revoke … from public, anon`). Voir [`api.md`](api.md) |
 | `tg_receipt_line_apprend` | `AFTER INSERT` sur `receipt_line` : apprend le prix (ramené au kilo ou au litre, **médiane mobile**) et reporte `paid_price_eur`. ⚠️ `SECURITY DEFINER`, donc il **vérifie lui-même** le foyer de l'article et du magasin — la RLS ne le protège pas. |
 | `tg_pesee_apprend` | `AFTER INSERT/UPDATE/DELETE` sur `weighing` : rejette les aberrantes hors `[0,4× ; 2,5×]` la référence, retient la **médiane**, active à 3 observations (5 sans référence). Repart des observations à chaque fois — une médiane incrémentale serait fausse dès la première suppression. |
@@ -177,10 +181,11 @@ chaque écriture d'étape échouerait si la colonne n'existait plus.
    end $$;
    ```
 
-2. `drop trigger recipe_photo on public.recipe;`
-3. `drop function public.tg_recipe_photo();`
-4. `drop function public.recettes_faisables();`
-5. Et seulement alors : `alter table public.recipe drop column image_url;` et
+2. `drop trigger recipe_source on public.recipe;` puis `drop function public.tg_recipe_source();`
+3. `drop trigger recipe_photo on public.recipe;`
+4. `drop function public.tg_recipe_photo();`
+5. `drop function public.recettes_faisables();`
+6. Et seulement alors : `alter table public.recipe drop column image_url;` et
    `alter table public.recipe_step drop column gesture_min;`.
 
 Les `active_time_min` déjà recalculés gardent les gestes jusqu'à la prochaine écriture de

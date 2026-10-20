@@ -117,7 +117,9 @@ parallèle, et deux étapes d'une même recette réécrites en même temps peuve
 
 Relit **une fois** la page de chaque recette importée sans photo (`image_url is null`, sans
 foyer propriétaire, avec une `source_url`) et n'écrit que `image_url` — ni titre, ni étapes,
-ni l'image elle-même. Elle ne remplace jamais une photo déjà posée.
+ni l'image elle-même. Elle ne remplace jamais une photo déjà posée. Elle se fie à `source_url`,
+que `tg_recipe_source` ferme aux foyers sur le catalogue : seul le rôle de service
+l'écrit (voir [`schema.md`](schema.md)).
 
 | Option | Effet |
 |---|---|
