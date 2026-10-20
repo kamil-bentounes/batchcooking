@@ -16,8 +16,11 @@ export type EtapeTemps = {
   gesture_min: number | string | null
 }
 
-const nombre = (v: number | string | null | undefined): number =>
-  v === null || v === undefined || v === '' ? 0 : Number(v)
+const nombre = (v: number | string | null | undefined): number => {
+  if (v === null || v === undefined || v === '') return 0
+  const n = Number(v)
+  return Number.isNaN(n) ? 0 : n
+}
 
 /**
  * Active ou bloquante : sa durée, ou ses gestes s'ils la dépassent.

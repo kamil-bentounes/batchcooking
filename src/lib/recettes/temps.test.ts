@@ -31,9 +31,19 @@ describe('les minutes de mains d’une étape', () => {
   it('accepte les nombres que PostgREST rend en chaîne', () => {
     expect(minutesDeMains({ load_type: 'actif', duration_min: '4', gesture_min: '7' })).toBe(7)
   })
+
+  it('compte zéro pour ce qui n’est pas un nombre', () => {
+    expect(minutesDeMains({ load_type: 'actif', duration_min: 'abc', gesture_min: null })).toBe(0)
+    expect(minutesDeMains({ load_type: 'actif', duration_min: 'abc', gesture_min: '3' })).toBe(3)
+    expect(minutesDeMains({ load_type: 'passif', duration_min: 5, gesture_min: Number.NaN })).toBe(0)
+  })
 })
 
 describe('le temps actif d’une recette', () => {
+  it('vaut zéro sans étape', () => {
+    expect(tempsActif([])).toBe(0)
+  })
+
   it('additionne les mains de chaque étape', () => {
     expect(tempsActif([e('actif', 8, null), e('passif', 25, null)])).toBe(8)
     expect(tempsActif([e('actif', 4, 7), e('passif', 30, 1.5)])).toBe(8.5)
@@ -67,5 +77,27 @@ describe('« en tout » (R7)', () => {
 
   it('rend null quand personne ne sait', () => {
     expect(enTout(null, 0, [])).toBeNull()
+  })
+
+  it('garde le total du site quand il égale le temps actif', () => {
+    expect(enTout(9, 9, etapes)).toBe(9)
+    expect(enTout('9', '9', etapes)).toBe(9)
+  })
+
+  it('prend nos étapes quand le site annonce 0', () => {
+    expect(enTout(0, 9, etapes)).toBe(33)
+  })
+
+  it('compte une étape passive au moins pour ses gestes', () => {
+    expect(enTout(null, 3, [e('passif', 1, 3)])).toBe(3)
+    expect(enTout(2, 3, [e('passif', 1, 3), e('actif', 2, null)])).toBe(5)
+  })
+
+  it('arrondit au dixième', () => {
+    expect(enTout(null, 0.3, [e('actif', 0.1, null), e('actif', 0.2, null)])).toBe(0.3)
+  })
+
+  it('ne se laisse pas tromper par un total illisible', () => {
+    expect(enTout('abc', 9, etapes)).toBe(33)
   })
 })
