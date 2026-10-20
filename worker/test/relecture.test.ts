@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  abandonne, cleSite, DELAI_MAX_S, estUnDefi, hopSuivi, issueDe, lireArguments, lireBorne, MAX_OCTETS,
+  abandonne, cleSite, DELAI_MAX_S, estUnDefi, etatInvalide, hopSuivi, ISSUES_REGLEES, issueDe, lireArguments, lireBorne, MAX_OCTETS,
   pauseDe, PAUSE_MS, robotsDe,
 } from '../src/relecture.ts'
 
@@ -128,6 +128,50 @@ describe('laisser un site tranquille', () => {
   it('ne mélange pas refus et erreurs : deux refus et trois erreurs ne font pas un abandon', () => {
     expect(abandonne(['refusee', 'refusee', 'erreur', 'erreur', 'erreur'])).toBe(false)
     expect(abandonne(['erreur', 'erreur', 'erreur', 'refusee', 'refusee'])).toBe(false)
+  })
+})
+
+describe('le fichier d’état de la reprise', () => {
+  const rec = { issue: 'photo', le: '2026-10-20T10:00:00.000Z' }
+
+  it.each([
+    [{}],
+    [{ 'http://127.0.0.1:54321': {} }],
+    [{ 'http://127.0.0.1:54321': { 'id-1': rec, 'id-2': { issue: 'interdite', le: 'x' } } }],
+    [{ a: { 1: { issue: 'sans-photo' } }, b: {} }],
+  ])('accepte un état bien formé : %j', etat => {
+    expect(etatInvalide(etat)).toBeNull()
+  })
+
+  it.each([
+    ['null', null],
+    ['une chaîne', 'x'],
+    ['un nombre', 3],
+    ['true', true],
+    ['un tableau vide', []],
+    ['un tableau', [{ a: 1 }]],
+    ['une base qui n’est pas un objet', { 'http://x': 'y' }],
+    ['une base nulle', { 'http://x': null }],
+    ['une base en tableau', { 'http://x': [] }],
+    ['une fiche nulle', { 'http://x': { 'id-1': null } }],
+    ['une fiche en chaîne', { 'http://x': { 'id-1': 'photo' } }],
+    ['une fiche en tableau', { 'http://x': { 'id-1': [] } }],
+    ['une fiche sans issue', { 'http://x': { 'id-1': { le: 'x' } } }],
+    ['une issue qui n’est pas une chaîne', { 'http://x': { 'id-1': { issue: 3 } } }],
+    ['une issue qui n’est pas une issue réglée', { 'http://x': { 'id-1': { issue: 'refusee' } } }],
+    ['une date qui n’est pas une chaîne', { 'http://x': { 'id-1': { issue: 'photo', le: 5 } } }],
+  ])('refuse %s, et le dit', (_nom, etat) => {
+    expect(etatInvalide(etat)).toEqual(expect.any(String))
+    expect(etatInvalide(etat)).not.toBe('')
+  })
+
+  it('le message dit où est la faute', () => {
+    expect(etatInvalide({ 'http://x': { 'id-7': { issue: 'refusee' } } })).toContain('id-7')
+    expect(etatInvalide({ 'http://x': 'y' })).toContain('http://x')
+  })
+
+  it('les issues réglées sont celles que la reprise saute', () => {
+    expect([...ISSUES_REGLEES].sort()).toEqual(['disparue', 'interdite', 'photo', 'sans-photo'])
   })
 })
 

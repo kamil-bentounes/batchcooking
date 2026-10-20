@@ -74,6 +74,36 @@ export function abandonne(dernieres: Issue[]): boolean {
   )
 }
 
+/** Les issues que la reprise note et saute : la page est réglée, la relire n'apprendrait rien. */
+export const ISSUES_REGLEES: ReadonlySet<string> =
+  new Set(['photo', 'sans-photo', 'disparue', 'interdite'])
+
+const estObjet = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
+
+/**
+ * Le fichier d'état de la reprise — `{ "<base>": { "<id>": { issue, le } } }` — a-t-il
+ * la bonne forme ? `null` si oui ; sinon, ce qui cloche, pour l'écrire à l'écran.
+ * Un JSON valide d'une autre forme (`null`, `"x"`, `[]`…) ne doit pas être pris pour
+ * un état vide : on s'arrête avant tout appel réseau, comme pour un JSON illisible.
+ */
+export function etatInvalide(etat: unknown): string | null {
+  if (!estObjet(etat)) return 'la racine devrait être un objet { "<base>": { "<id>": { issue, le } } }'
+  for (const [base, fiches] of Object.entries(etat)) {
+    if (!estObjet(fiches)) return `« ${base} » devrait être un objet { "<id>": { issue, le } }`
+    for (const [id, fiche] of Object.entries(fiches)) {
+      if (!estObjet(fiche)) return `« ${base} » / « ${id} » devrait être un objet { issue, le }`
+      if (typeof fiche.issue !== 'string' || !ISSUES_REGLEES.has(fiche.issue)) {
+        return `« ${base} » / « ${id} » : issue illisible (attendu : ${[...ISSUES_REGLEES].join(', ')})`
+      }
+      if (fiche.le !== undefined && typeof fiche.le !== 'string') {
+        return `« ${base} » / « ${id} » : « le » devrait être une date en texte`
+      }
+    }
+  }
+  return null
+}
+
 export type VoieRobots = 'lire' | 'tout-permis' | 'laisser'
 
 /**

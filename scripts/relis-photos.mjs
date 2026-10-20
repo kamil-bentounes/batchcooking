@@ -54,7 +54,8 @@ import { createClient } from '@supabase/supabase-js'
 import { extraire } from '../worker/src/jsonld.ts'
 import { AGENT, autorise, cheminDe, lireRobots } from '../worker/src/sitemap.ts'
 import {
-  abandonne, cleSite, estUnDefi, hopSuivi, issueDe, lireArguments, lireBorne, MAX_REDIRECTIONS,
+  abandonne, cleSite, estUnDefi, etatInvalide, hopSuivi, ISSUES_REGLEES, issueDe, lireArguments,
+  lireBorne, MAX_REDIRECTIONS,
   PAUSE_MS, pauseDe, robotsDe,
 } from '../worker/src/relecture.ts'
 
@@ -94,16 +95,25 @@ const duree = ms => `${Math.floor(ms / 60000)} min ${String(Math.round(ms / 1000
  * on s'arrête : le jeter en silence, ce serait tout relire chez des tiers.
  */
 const FICHIER_ETAT = fileURLToPath(new URL('../.relis-photos.etat.json', import.meta.url))
-const REGLEES = new Set(['photo', 'sans-photo', 'disparue', 'interdite'])
+const REGLEES = ISSUES_REGLEES
+const AIDE_ETAT = 'corrige-le, ou supprime-le pour tout relire.'
 
 function lisEtat() {
+  let lu
   try {
-    return JSON.parse(readFileSync(FICHIER_ETAT, 'utf8'))
+    lu = JSON.parse(readFileSync(FICHIER_ETAT, 'utf8'))
   } catch (e) {
     if (e.code === 'ENOENT') return {}
-    console.error(`.relis-photos.etat.json illisible (${e.message}) : corrige-le, ou supprime-le pour tout relire.`)
+    console.error(`.relis-photos.etat.json illisible (${e.message}) : ${AIDE_ETAT}`)
     process.exit(1)
   }
+  // Un JSON valide d'une autre forme (`null`, `"x"`, `[]`…) : même arrêt, avant tout réseau.
+  const faute = etatInvalide(lu)
+  if (faute) {
+    console.error(`.relis-photos.etat.json n'a pas la forme attendue (${faute}) : ${AIDE_ETAT}`)
+    process.exit(1)
+  }
+  return lu
 }
 const etat = lisEtat()
 etat[URL_BASE] ??= {}

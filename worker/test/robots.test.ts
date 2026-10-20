@@ -40,6 +40,25 @@ describe('robots.txt : les règles simples (comportement d’avant)', () => {
   })
 })
 
+describe('robots.txt : les fins de ligne', () => {
+  it('un `\\r` seul sépare deux lignes (vieux Mac)', () => {
+    const t = 'User-agent: *\rDisallow: /nope\rDisallow: /autre\r'
+    expect(ok(t, '/nope/1')).toBe(false)
+    expect(ok(t, '/autre')).toBe(false)
+    expect(ok(t, '/recette/1')).toBe(true)
+  })
+
+  it('\\r\\n, \\n et \\r se mélangent dans un même fichier', () => {
+    const t = 'User-agent: *\r\nDisallow: /a\nDisallow: /b\rDisallow: /c\r\n\r\nSitemap: https://a.fr/s.xml'
+    for (const p of ['/a', '/b', '/c']) expect(ok(t, p)).toBe(false)
+    expect(lireRobots(t).sitemaps).toEqual(['https://a.fr/s.xml'])
+  })
+
+  it('un BOM en tête n’empêche pas de lire la première ligne', () => {
+    expect(ok('﻿User-agent: *\nDisallow: /a', '/a/x')).toBe(false)
+  })
+})
+
 describe('robots.txt : les jokers', () => {
   it('`*` remplace n’importe quoi : /*/commentaires', () => {
     const t = 'User-agent: *\nDisallow: /*/commentaires'

@@ -65,7 +65,7 @@ export function lireRobots(txt: string | null): Robots {
   // autre genre ferme l'en-tête, et le `User-agent` suivant ouvre un nouveau groupe.
   let enTete = false
 
-  for (const brute of txt.split(/\r?\n/)) {
+  for (const brute of txt.split(/\r\n|\r|\n/)) {
     const l = brute.replace(/#.*$/, '').trim()
     const m = l.match(/^([A-Za-z-]+)\s*:\s*(.*)$/)
     if (!m) continue
