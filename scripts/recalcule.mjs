@@ -200,24 +200,30 @@ if (!SANS_RATTACHEMENT) {
     const corr = rattacher(ligne.aliment, index)
     const nouveau = corr?.foodId ?? null
     if (nouveau === i.food_id) continue
-    rattachements.push({
+    const c = {
       id: i.id, food_id: nouveau,
       resolution_source: corr ? 'reference' : 'aucune',
       confidence: Math.min(1, Math.max(0, corr?.score ?? 0)),
-    })
+    }
     // La suite des passes lit la version corrigée.
     i.food_id = nouveau
-    // Un aliment qui change invalide les grammes déduits d'un poids unitaire.
-    if (i.unit === null && i.qty !== null) i.grams_reference = null
+    // Un aliment qui change invalide les grammes déduits d'un poids unitaire — EN BASE
+    // aussi : sans cela, « 2 saucisses » rattaché à « Saucisse » garderait les 999 g
+    // de l'ancien « Haricot beurre », et la passe 1 (qui ne regarde que les lignes à
+    // grammes vides) ne les recalculerait jamais.
+    if (i.unit === null && i.qty !== null && i.grams_reference !== null) {
+      i.grams_reference = null
+      c.grams_reference = null
+    }
+    rattachements.push(c)
   }
 }
 console.log(`0. Rattachement : ${rattachements.length} lignes changent d'aliment.`)
 if (!SEC) {
   for (let d = 0; d < rattachements.length; d += 200) {
     await Promise.all(rattachements.slice(d, d + 200).map(async c => {
-      const { error } = await db.from('recipe_ingredient').update({
-        food_id: c.food_id, resolution_source: c.resolution_source, confidence: c.confidence,
-      }).eq('id', c.id)
+      const { id, ...champs } = c
+      const { error } = await db.from('recipe_ingredient').update(champs).eq('id', id)
       if (error) throw new Error(`rattachement ${c.id} : ${error.message}`)
     }))
     process.stdout.write(`   ${Math.min(d + 200, rattachements.length)}/${rattachements.length}\r`)
