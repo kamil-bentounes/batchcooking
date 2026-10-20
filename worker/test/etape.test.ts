@@ -574,6 +574,16 @@ describe('les gestes d’une étape (R6)', () => {
     expect(g('Ne pas remuer, mélangez.')).toBe(1)
   })
 
+  it('lit « ni », « évitez de » et « pas besoin de » comme des négations', () => {
+    expect(g('Ne pas mélanger ni remuer, ajoutez le sel.')).toBe(1)
+    expect(g('Évitez de remuer.')).toBeNull()
+    expect(g('Évitez de trop les remuer.')).toBeNull()
+    expect(g('Pas besoin de remuer.')).toBeNull()
+    // La négation s'arrête à sa proposition, et « ne laissez pas » ne vise pas le verbe d'après.
+    expect(g('Ne laissez pas attacher : remuez.')).toBe(1)
+    expect(g('Évitez de remuer, mélangez.')).toBe(1)
+  })
+
   it('lit le gérondif même avec un pronom entre « en » et le verbe', () => {
     expect(g('Laissez mijoter en les remuant.')).toBe(1)
     expect(g('Laissez mijoter en y remuant la sauce.')).toBe(1)

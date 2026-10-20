@@ -354,9 +354,9 @@ function propositionsDe(texte: string): Proposition[] {
 }
 
 /**
- * Le geste est-il écarté par ce qui précède son verbe ? « Ne pas mélanger »,
- * « sans trop remuer », « sans les éplucher », « avant de démouler » : il est
- * nié, ou remis à une autre étape qui a la sienne.
+ * Le geste est-il écarté par ce qui précède son verbe ? « Ne pas mélanger ni
+ * remuer », « sans trop remuer », « sans les éplucher », « avant de démouler »,
+ * « évitez de remuer » : il est nié, ou remis à une autre étape qui a la sienne.
  */
 function ecarte(mots: Mot[], i: number): boolean {
   let k = i - 1
@@ -367,8 +367,15 @@ function ecarte(mots: Mot[], i: number): boolean {
     k--
   }
   const precedent = k >= 0 ? mots[k].plie : null
-  return precedent === 'sans' || precedent === 'ne' || precedent === 'n'
-    || ((precedent === 'de' || precedent === 'd') && k >= 1 && mots[k - 1].plie === 'avant')
+  if (precedent === 'sans' || precedent === 'ne' || precedent === 'n' || precedent === 'ni') return true
+  if ((precedent === 'de' || precedent === 'd') && k >= 1) {
+    const avant = mots[k - 1].plie
+    // « avant de démouler » le remet à plus tard, « évitez de remuer » et « pas
+    // besoin de remuer » ne le demandent pas.
+    if (avant === 'avant' || /^evit/.test(avant)) return true
+    if (avant === 'besoin' && k >= 2 && NEGATIONS.has(mots[k - 2].plie)) return true
+  }
+  return false
 }
 
 /** Le mot `i` est-il, sous une forme qui DEMANDE le geste, le verbe de `f` ? */
