@@ -50,7 +50,10 @@ export function Vignette({ recette: r, prise, manques, surInfo, surAjoute }: {
               {ecrit(Number(n.protein_g), Number(n.protein_g_margin))}{INSECABLE}g
             </strong>
             {' de protéines · '}
-            {ecrit(Number(n.kcal), Number(n.kcal_margin))}{INSECABLE}kcal
+            {/* Comme les protéines : « 390– » puis « 430 kcal » ne se lit pas. */}
+            <span className="whitespace-nowrap">
+              {ecrit(Number(n.kcal), Number(n.kcal_margin))}{INSECABLE}kcal
+            </span>
             {Number(n.coverage) < 0.9 && (
               <span className="text-ocre">
                 {` · ${Math.round(Number(n.coverage) * 100)} % des ingrédients connus`}

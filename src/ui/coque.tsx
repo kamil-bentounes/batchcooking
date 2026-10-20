@@ -86,8 +86,9 @@ export function Ecran({ actif, va, children }:
  */
 export function BarreAction({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-brume/70
-                    bg-fond/92 backdrop-blur-sm
+    /* Opaque : à 92 %, le texte de la liste passait au travers du compteur de parts
+       (« 4 / 10 ») quand on faisait défiler dessous. */
+    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-brume/70 bg-fond
                     pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
       <div className="mx-auto w-full max-w-lg px-6">{children}</div>
     </div>

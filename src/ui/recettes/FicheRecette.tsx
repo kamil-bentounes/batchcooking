@@ -46,12 +46,19 @@ export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCou
   erreur?: string | null
 }) {
   const boite = useRef<HTMLDialogElement>(null)
+  const croix = useRef<HTMLButtonElement>(null)
   const { data: fiche, error, isPending } = useFiche(r.id)
 
   // Ouverte dès qu'elle existe ; la page derrière ne défile plus.
   useEffect(() => {
     const d = boite.current
-    if (d && !d.open) d.showModal()
+    if (d && !d.open) {
+      d.showModal()
+      /* `showModal` donne le focus au premier élément focalisable : le conteneur qui
+         défile, sans nom. On le donne à « Fermer » — le bouton (i) qui l'avait avant
+         le retrouve à la fermeture, c'est `showModal` qui s'en souvient. */
+      croix.current?.focus()
+    }
     const avant = document.documentElement.style.overflow
     document.documentElement.style.overflow = 'hidden'
     return () => { document.documentElement.style.overflow = avant }
@@ -82,7 +89,7 @@ export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCou
             <Photo url={r.image_url} glyphe={72} className="size-full" />
             <span aria-hidden="true"
                   className="absolute top-2 left-1/2 -ml-5 w-10 h-[5px] rounded-full bg-surface/85" />
-            <button type="button" onClick={ferme} aria-label="Fermer"
+            <button type="button" ref={croix} onClick={ferme} aria-label="Fermer"
                     className="absolute top-3.5 right-3.5 size-11 grid place-items-center
                                rounded-full bg-surface/90 text-encre">
               <Icone nom="fermer" taille={22} epaisseur={2.2} />
@@ -128,7 +135,8 @@ export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCou
                     <span className="block mt-0.5 text-[12.5px] text-[#B7C6BC]">de protéines</span>
                   </div>
                   <div>
-                    <span className="chiffre font-semibold block text-fond text-[22px] leading-[1.05]">
+                    <span className="chiffre font-semibold block text-fond text-[22px] leading-[1.05]
+                                     whitespace-nowrap">
                       {ecrit(Number(n.kcal), Number(n.kcal_margin))}
                     </span>
                     <span className="block mt-0.5 text-[12.5px] text-[#B7C6BC]">kcal</span>

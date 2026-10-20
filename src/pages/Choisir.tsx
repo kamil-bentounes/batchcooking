@@ -45,6 +45,7 @@ import { PanneauFiltres, Puces, Recherche } from '../ui/recettes/Filtres.tsx'
 import { Retenues } from '../ui/recettes/Retenues.tsx'
 
 const AUCUNE = new Set<string>()
+const AUCUN_STOCK: never[] = []
 const fr = (n: number) => n.toLocaleString('fr-FR')
 
 export function Choisir({ retour, va }: { retour: () => void; va: (v: string) => void }) {
@@ -56,7 +57,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
 
   const cycleRequete = useCycle()
   const cycle = cycleRequete.data
-  const { data: stock = [] } = useStock()
+  const { data: stock = AUCUN_STOCK, isPending: stockEnCours } = useStock()
   const { data: catalogue = [], isPending, error } = useCatalogue()
   const { data: choisies = [] } = useRecettesDuCycle(cycle?.id)
 
@@ -161,6 +162,8 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
   const enAttente = isPending
     || (filtres.jamaisFaites && !dejaFaites && !erreurDejaFaites)
     || (filtres.avecCeQuOnA && placard.size > 0 && !faisables && !erreurFaisables)
+    // Le placard se lit encore : « tes placards sont vides » serait faux, et s'afficherait.
+    || (filtres.avecCeQuOnA && stockEnCours)
 
   return (
     <Passage retour={retour} barre={
@@ -216,7 +219,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
           <h2 ref={hautDeListe} tabIndex={-1}
               className="titre-fort text-[25px] scroll-mt-4 outline-none">Recettes</h2>
           <span aria-live="polite" className="text-[14px] text-doux tabular-nums">
-            {isPending ? '…' : filtrees.length === 0 ? '0'
+            {enAttente ? '…' : filtrees.length === 0 ? '0'
               : `${fr(filtrees.length)}, de ${fr(de)} à ${fr(a)}`}
           </span>
         </div>

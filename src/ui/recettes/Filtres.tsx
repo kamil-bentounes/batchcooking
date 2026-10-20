@@ -24,7 +24,8 @@ export function Recherche({ texte, surTexte, ouvert, basculer, actifs }: {
       <label className="grow min-w-0 h-[50px] rounded-[18px] bg-surface shadow-carte flex items-center
                         gap-2.5 px-3.5 text-doux focus-within:ring-2 focus-within:ring-herbe">
         <Icone nom="loupe" taille={20} />
-        <input type="search" value={texte} onChange={e => surTexte(e.target.value)}
+        <input type="search" inputMode="search" enterKeyHint="search"
+               value={texte} onChange={e => surTexte(e.target.value)}
                placeholder="Chercher une recette" aria-label="Chercher une recette"
                className="champ-recherche grow min-w-0 bg-transparent text-[15px] text-encre
                           placeholder:text-doux outline-none" />

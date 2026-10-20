@@ -1296,14 +1296,40 @@ test.describe.serial('les recettes, de bout en bout', () => {
         (l: HTMLElement[]) => l.map(e => Math.round(e.getBoundingClientRect().top))))
       expect(lignesDePictos.size, 'sept pictos tiennent sur une ligne : la rangée ne passe donc pas à la ligne')
         .toBeGreaterThan(1)
+
+      // ── 6 · Petits défauts d'écran ──────────────────────────────────────────
+      // (a) Une fourchette ne se coupe pas au tiret : « 385–425 kcal » et « 22–26 g » tiennent sur une ligne.
+      for (const [re, quoi] of [[/^385–425\skcal$/, 'kcal'], [/^22–26\sg$/, 'protéines']] as const) {
+        const fourchette = c.getByText(re)
+        await expect(fourchette, `la fourchette de ${quoi} n’est pas affichée`).toBeVisible()
+        expect(await fourchette.evaluate((e: HTMLElement) => e.getClientRects().length),
+          `la fourchette de ${quoi} passe à la ligne`).toBe(1)
+      }
+      // (c) La barre du bas est opaque : le texte de la liste ne la traverse pas.
+      const barre = page.getByRole('button', { name: 'Faire la liste' })
+        .locator('xpath=ancestor::div[contains(@class, "fixed")][1]')
+      expect(await barre.evaluate(e => getComputedStyle(e).backgroundColor),
+        'la barre du bas est translucide').toBe('rgb(242, 244, 239)')
+      // (d) Le clavier du téléphone dit « Chercher ».
+      await expect(cherche(page)).toHaveAttribute('inputmode', 'search')
+      await expect(cherche(page)).toHaveAttribute('enterkeyhint', 'search')
+
+      // ── 4 (suite) et 6 (b) · La fiche : sans débordement, focus sur « Fermer » ──
       await page.getByRole('button', { name: `${TITRE_LONG}, la recette en détail` }).click()
       const fiche = page.getByRole('dialog', { name: TITRE_LONG })
       await expect(fiche.getByText(URL_LONGUE, { exact: false }).first()).toBeVisible({ timeout: 10_000 })
+      await expect(fiche.getByRole('button', { name: 'Fermer' }),
+        'à l’ouverture, le focus n’est pas sur « Fermer »').toBeFocused()
+      const kcalFiche = await fiche.getByText(/^385–425$/).evaluate((e: HTMLElement) => Math.round(
+        e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)))
+      expect(kcalFiche, 'les kcal de la fiche passent à la ligne').toBe(1)
       await tient(fiche.locator('.overflow-y-auto').first(), 'la fiche (ingrédient de 80 caractères, titre de 200)')
       await tient(page.locator('html'), 'la page derrière la fiche')
       await photo(page, 'mot-long-fiche', 'La fiche : titre de 200 caractères et adresse en guise d’ingrédient')
       await page.keyboard.press('Escape')
       await expect(fiche).toHaveCount(0)
+      await expect(page.getByRole('button', { name: `${TITRE_LONG}, la recette en détail` }),
+        'le focus n’est pas revenu sur le bouton (i)').toBeFocused()
 
       // Les parts visées : refus du plafond, puis réseau qui lâche.
       await page.getByRole('button', { name: '10 repas à couvrir' }).click()
@@ -1328,6 +1354,22 @@ test.describe.serial('les recettes, de bout en bout', () => {
       await encre(page).getByRole('button', { name: 'Retirer' }).click()
       await expect.poll(retenues, { timeout: 10_000 }).toEqual([])
       await expect(alerte(/Je n’ai pas pu retirer/)).toHaveCount(0)
+
+      // ── 6 (e) · « Tes placards sont vides » n'est dit qu'une fois le placard lu ──
+      const REST_PLACARD = /\/rest\/v1\/stock_item/
+      await page.route(REST_PLACARD, async r => {
+        await new Promise(fini => setTimeout(fini, 6_000))
+        await r.continue()
+      })
+      await page.reload()
+      await expect(TITRE_CHOISIR(page)).toBeVisible({ timeout: 20_000 })
+      await expect(page.getByRole('article').first()).toBeVisible({ timeout: 30_000 })
+      await page.getByRole('button', { name: 'Avec ce que j’ai' }).click()
+      expect(await page.getByText(/Tes placards sont vides/).count(),
+        '« placards vides » est dit pendant que le placard se charge').toBe(0)
+      await expect(page.getByText('Rien ne correspond')).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByText(/Tes placards sont vides dans l’app/)).toBeVisible()
+      await page.unroute(REST_PLACARD)
     } finally {
       await db.from('cycle_recipe').delete().eq('cycle_id', cycleId)
       await db.from('cycle').update({ servings_target: 10 }).eq('id', cycleId)
