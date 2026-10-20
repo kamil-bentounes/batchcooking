@@ -562,6 +562,15 @@ describe('les gestes d’une étape (R6)', () => {
     expect(g('Poivre la viande.')).toBe(0.5)
   })
 
+  it('ne lit pas un nom d’ingrédient dans une liste, qu’il l’ouvre ou qu’il la suive', () => {
+    // En tête, mais pas seul : « Poivre, sel, huile » est une liste, pas un « poivre » au tu.
+    expect(g('Poivre, sel, huile d’olive.')).toBeNull()
+    expect(g('Beurre, farine, sucre.')).toBeNull()
+    // Après une virgule, suivi d’autre chose qu’un article : un nom et son adjectif.
+    expect(g('Sel, poivre moulu.')).toBeNull()
+    expect(g('Farine, beurre mou, sucre.')).toBeNull()
+  })
+
   it('écarte un verbe nié', () => {
     expect(g('Ne pas mélanger.')).toBeNull()
     expect(g('Ne remuez pas.')).toBeNull()
