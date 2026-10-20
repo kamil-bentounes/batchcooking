@@ -1197,6 +1197,24 @@ test.describe.serial('les recettes, de bout en bout', () => {
       expect(await partsEnBase()).toEqual([4])
 
       await page.evaluate(() => window.scrollTo(0, 0))
+
+      // ── 2 · L'anneau de focus se voit sur l'encre : `fond`, pas `herbe` (1,9:1) ──
+      const anneau = (l: Locator) => l.evaluate(e => {
+        const s = getComputedStyle(e)
+        return { couleur: s.outlineColor, style: s.outlineStyle, largeur: s.outlineWidth }
+      })
+      const ANNEAU_CLAIR = { couleur: 'rgb(242, 244, 239)', style: 'solid', largeur: '2px' }
+      const retirer = encre(page).getByRole('button', { name: 'Retirer' })
+      await champ.press('Tab') // au clavier : c'est ce qui allume `:focus-visible`
+      await expect(retirer).toBeFocused()
+      expect(await anneau(retirer), '« Retirer » : anneau invisible sur l’encre').toEqual(ANNEAU_CLAIR)
+      await retirer.press('Shift+Tab')
+      await expect(champ).toBeFocused()
+      expect(await anneau(champ), 'le champ des parts : anneau invisible sur l’encre').toEqual(ANNEAU_CLAIR)
+      const pastille = encre(page).getByRole('button', { name: /repas à couvrir/ })
+      await pastille.focus()
+      expect(await anneau(pastille), 'la pastille : anneau invisible sur l’encre').toEqual(ANNEAU_CLAIR)
+      await photo(page, 'anneau-sur-encre', 'Le focus clavier sur la pastille : un anneau clair sur l’encre')
       // Les parts : un décimal et un nombre trop grand sont refusés sans rien écrire.
       await champ.fill('2.5')
       await expect(alerte(/nombres entiers/)).toBeVisible()

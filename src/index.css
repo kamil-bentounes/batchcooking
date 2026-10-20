@@ -106,6 +106,15 @@ body {
 }
 
 /*
+ * Sur la carte encre, l'anneau `herbe` ne fait que 1,9:1 : il disparaît (il en faut 3).
+ * `.sur-encre` en repeint la COULEUR seulement, en `fond` (12:1) — c'est le même et
+ * unique anneau, pas un second. Une classe de plus que `:focus-visible` ci-dessus
+ * suffit à l'emporter, là où `focus-visible:outline-fond` de Tailwind (dans une
+ * couche) perdrait contre cette règle hors couches.
+ */
+.sur-encre :focus-visible { outline-color: var(--color-fond); }
+
+/*
  * Le champ de recherche de « Choisir » : l'anneau de focus est celui de son
  * étiquette (`focus-within`), pas un second autour de la saisie — `:focus-visible`
  * ci-dessus, hors des couches, l'emporte sur `outline-none` de Tailwind. Et la croix

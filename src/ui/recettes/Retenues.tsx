@@ -30,7 +30,7 @@ export function Retenues({ cible, choisies, erreur, surCible, surParts, surRetir
 
   return (
     <section aria-label="Ce qu’on cuisine"
-             className="mt-5 rounded-[28px] bg-encre text-fond px-5 pt-5 pb-[18px]">
+             className="sur-encre mt-5 rounded-[28px] bg-encre text-fond px-5 pt-5 pb-[18px]">
       <div className="flex items-center justify-between gap-2 text-[15px] text-fond/70">
         <span>{manque > 0 ? 'Il manque' : manque === 0 ? 'C’est couvert' : 'Au-delà du prévu'}</span>
         {/* La cible fait 44 px, transparente ; le dessin garde les 28 px de la maquette. */}
