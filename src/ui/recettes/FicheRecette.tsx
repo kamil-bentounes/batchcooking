@@ -113,9 +113,13 @@ export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCou
                 )}
               </div>
               {n ? (
-                <div className="mt-1 grid grid-cols-[1.4fr_1fr_1fr] gap-2.5 items-end">
+                /* Les protéines gardent la place qu'il leur faut, sur UNE ligne : « 22–26 g »
+                   passait à la ligne (« 22– » puis « 26 g ») dès que les kcal avaient trois
+                   chiffres, parce que les colonnes se partageaient la largeur par fractions. */
+                <div className="mt-1 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-4 items-end">
                   <div>
-                    <span className="chiffre font-semibold block text-safran text-[44px] leading-[1.05]">
+                    <span className="chiffre font-semibold block text-safran text-[44px] leading-[1.05]
+                                     whitespace-nowrap">
                       {ecrit(Number(n.protein_g), Number(n.protein_g_margin))}{INSECABLE}g
                     </span>
                     <span className="block mt-0.5 text-[12.5px] text-[#B7C6BC]">de protéines</span>
