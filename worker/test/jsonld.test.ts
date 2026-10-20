@@ -168,6 +168,20 @@ describe('les étapes', () => {
   })
 })
 
+describe('les étapes, décodées une seule fois', () => {
+  it('décode un HowToStep comme une chaîne simple', () => {
+    const brut = 'Mélanger &amp;amp;amp;amp; cuire'
+    expect(etapes([{ '@type': 'HowToStep', text: brut }])).toEqual(etapes([brut]))
+    expect(etapes([brut])).toEqual(['Mélanger &amp;amp; cuire'])
+  })
+
+  it('décode un HowToStep dans une HowToSection comme une chaîne simple', () => {
+    const brut = 'Mélanger &amp;amp;amp;amp; cuire'
+    expect(etapes({ '@type': 'HowToSection', itemListElement: [{ text: brut }] }))
+      .toEqual(etapes(brut))
+  })
+})
+
 describe('les ingrédients', () => {
   it('lit une liste de chaînes', () => {
     expect(ingredients(['500 g de poulet', '2 poivrons'])).toHaveLength(2)

@@ -113,9 +113,11 @@ function texte(v: unknown): string | null {
 /** `recipeInstructions` : chaîne, liste de chaînes, HowToStep, HowToSection. */
 export function etapes(v: unknown): string[] {
   const sorties: string[] = []
-  const pousse = (brut: string | null) => {
-    if (!brut) return
-    const s = decodeEntites(brut)
+  // `s` est DÉJÀ décodé : `texte()` décode ce qu'il rend, et `visite` décode les
+  // chaînes qu'il reçoit. Décoder ici aussi ferait deux passes de plus sur un
+  // `HowToStep` que sur une chaîne simple.
+  const pousse = (s: string | null) => {
+    if (!s) return
     // Une seule chaîne contenant toute la recette : on la découpe aux phrases
     // numérotées ou aux retours à la ligne, jamais au point (« 180 °C. »).
     const morceaux = s.includes('\n')
@@ -128,7 +130,7 @@ export function etapes(v: unknown): string[] {
   }
 
   const visite = (x: unknown): void => {
-    if (typeof x === 'string') return pousse(x)
+    if (typeof x === 'string') return pousse(decodeEntites(x))
     if (Array.isArray(x)) { for (const e of x) visite(e); return }
     if (!x || typeof x !== 'object') return
     const o = x as Record<string, unknown>
