@@ -112,7 +112,8 @@ export type Contexte = {
  *
  * Extrait pour être éprouvé : c'est ici que vit la règle de la BORNE
  * DÉFAVORABLE, et une inversion de signe y passerait inaperçue — l'écran
- * afficherait simplement quelques recettes de trop.
+ * afficherait simplement quelques recettes de trop. Les bornes se comparent
+ * avant tout arrondi : seul l'affichage arrondit.
  */
 export function retient(c: Candidate, f: Filtres, ctx: Contexte): boolean {
   const texte = plie(f.texte.trim())
@@ -137,14 +138,21 @@ export function retient(c: Candidate, f: Filtres, ctx: Contexte): boolean {
   // Une recette sans macros connues n'est pas écartée par défaut : elle ne
   // l'est que si l'on filtre justement sur ce qu'on ignore.
   if (f.proteinesMin === null && f.kcalMax === null) return true
-  const b = bornes(c)
-  if (!b) return false
+  const n = c.nutrition
+  if (!n) return false
+  // On compare les valeurs EXACTES : `bornes()` arrondit pour l'écran, et 29,6 g
+  // affichés « 30 » ne tiennent pas une promesse de 30 g. La tolérance ne couvre
+  // que le flottant (16,4 − 0,4 = 15,999999999999998), pas une vraie différence.
   // Protéines : la borne BASSE doit atteindre le seuil.
-  if (f.proteinesMin !== null && b.proteinesMin < f.proteinesMin) return false
+  if (f.proteinesMin !== null
+      && n.protein_g - n.protein_g_margin < f.proteinesMin - TOLERANCE) return false
   // Calories : la borne HAUTE doit rester sous le plafond.
-  if (f.kcalMax !== null && b.kcalMax > f.kcalMax) return false
+  if (f.kcalMax !== null && n.kcal + n.kcal_margin > f.kcalMax + TOLERANCE) return false
   return true
 }
+
+/** Le bruit d'une soustraction ou d'une addition en flottant, très en deçà du dixième. */
+const TOLERANCE = 1e-9
 
 const ORDRE_DES_TITRES = new Intl.Collator('fr')
 

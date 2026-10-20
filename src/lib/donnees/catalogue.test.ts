@@ -87,6 +87,41 @@ describe('la borne défavorable (D18)', () => {
   })
 })
 
+describe('la borne exacte, pas la borne affichée', () => {
+  const macros = (kcal: number, protein_g: number, kcal_margin = 0, protein_g_margin = 0) =>
+    ({ kcal, protein_g, kcal_margin, protein_g_margin, fiber_g: 1, coverage: 1 })
+
+  it('ne laisse pas un arrondi faire passer 29,6 g sous un seuil de 30', () => {
+    // bornes() affiche 30 ; la borne réelle est 29,6, et c'est elle qu'on promet.
+    const r = recette({ nutrition: macros(500, 29.6) })
+    expect(bornes(r)!.proteinesMin).toBe(30)
+    expect(retient(r, filtres({ proteinesMin: 30 }), RIEN)).toBe(false)
+  })
+
+  it('ne laisse pas un arrondi faire passer 600,4 kcal sous un plafond de 600', () => {
+    const r = recette({ nutrition: macros(600.4, 30) })
+    expect(bornes(r)!.kcalMax).toBe(600)
+    expect(retient(r, filtres({ kcalMax: 600 }), RIEN)).toBe(false)
+  })
+
+  it('applique la marge à la valeur exacte : 29,6 − 0,5 passe 29 mais pas 29,2', () => {
+    const r = recette({ nutrition: macros(500, 29.6, 0, 0.5) })
+    expect(retient(r, filtres({ proteinesMin: 29 }), RIEN)).toBe(true)
+    expect(retient(r, filtres({ proteinesMin: 29.2 }), RIEN)).toBe(false)
+  })
+
+  it('garde une recette pile sur le seuil, malgré les flottants', () => {
+    // 16,4 − 0,4 vaut 15,999999999999998 en flottant : la borne est bien 16.
+    const r = recette({ nutrition: macros(500, 16.4, 0, 0.4) })
+    expect(retient(r, filtres({ proteinesMin: 16 }), RIEN)).toBe(true)
+    expect(retient(r, filtres({ proteinesMin: 16.1 }), RIEN)).toBe(false)
+    // 20,1 + 0,1 vaut 20,200000000000003.
+    const k = recette({ nutrition: macros(20.1, 30, 0.1, 0) })
+    expect(retient(k, filtres({ kcalMax: 20.2 }), RIEN)).toBe(true)
+    expect(retient(k, filtres({ kcalMax: 20.1 }), RIEN)).toBe(false)
+  })
+})
+
 describe('ce qu’on ne sait pas', () => {
   it('ne se fait pas écarter par défaut', () => {
     expect(retient(recette({ nutrition: null }), filtres(), RIEN)).toBe(true)
