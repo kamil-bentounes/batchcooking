@@ -170,6 +170,90 @@ describe('robots.txt : le groupe qui nous vise', () => {
   })
 })
 
+const chrono = <T>(f: () => T): { v: T; ms: number } => {
+  const t = performance.now()
+  const v = f()
+  return { v, ms: performance.now() - t }
+}
+
+describe('robots.txt : un robots.txt hostile ne bloque pas la relecture', () => {
+  it('douze `*a` d’affilée sur 40 caractères : linéaire, pas exponentiel', () => {
+    const t = `User-agent: *\nDisallow: /${'*a'.repeat(12)}*b`
+    const r = lireRobots(t)
+    const { v, ms } = chrono(() => autorise(`/${'a'.repeat(40)}`, r))
+    expect(v).toBe(true)
+    expect(ms).toBeLessThan(50)
+    // Et le même motif trouve bien son `b` quand il y est.
+    expect(autorise(`/${'a'.repeat(40)}b`, r)).toBe(false)
+  })
+
+  it('vingt `*a` sur un chemin de 5 000 caractères : borné aussi', () => {
+    const r = lireRobots(`User-agent: *\nDisallow: /${'*a'.repeat(20)}*b$`)
+    const { v, ms } = chrono(() => autorise(`/${'a'.repeat(5000)}`, r))
+    expect(v).toBe(true)
+    expect(ms).toBeLessThan(200)
+  })
+
+  it('500 Ko de règles (18 000 et plus), 1 400 appels : moins d’une seconde', () => {
+    let gros = 'User-agent: *\n'
+    for (let i = 0; gros.length < 500 * 1024; i++) gros += `Disallow: /rep${i}/*/page$\n`
+    const r = lireRobots(gros)
+    expect(r.regles.length).toBeGreaterThan(18000)
+    const { v, ms } = chrono(() => {
+      let permis = 0
+      for (let k = 0; k < 1400; k++) if (autorise(`/recette/${k}-gratin-dauphinois`, r)) permis++
+      return permis
+    })
+    expect(v).toBe(1400)
+    expect(ms).toBeLessThan(1000)
+    // Les règles se lisent bien : la première interdit, une qui n'existe pas non.
+    expect(autorise('/rep0/x/page', r)).toBe(false)
+    expect(autorise('/rep0/x/page?a=1', r)).toBe(true)
+  })
+
+  it('les mêmes règles donnent les mêmes réponses d’un appel à l’autre', () => {
+    const r = lireRobots('User-agent: *\nDisallow: /a*c*e$\nAllow: /a*c*e/ok')
+    for (let i = 0; i < 3; i++) {
+      expect(autorise('/abcde', r)).toBe(false)
+      expect(autorise('/abcde/ok', r)).toBe(true)
+      expect(autorise('/abcdef', r)).toBe(true)
+    }
+  })
+})
+
+describe('robots.txt : les jokers, cas limites du filtre', () => {
+  it.each([
+    // [motif, chemin, correspond ?]
+    ['/a*b', '/ab', true],
+    ['/a*b', '/aXXb/c', true],
+    ['/a*b', '/aXXc', false],
+    ['/a*b*c', '/abc', true],
+    ['/a*b*c', '/acb', false],
+    ['/a*a*a', '/aa', false],
+    ['/a*a*a', '/aaa', true],
+    ['/**', '/x', true],
+    ['/*', '/', true],
+    ['/a**b', '/ab', true],
+    ['/a*b$', '/aXb', true],
+    ['/a*b$', '/aXbY', false],
+    ['/a*b$', '/aXbb', true],
+    ['/*b*b$', '/b', false],
+    ['/*b*b$', '/bb', true],
+    ['/a*$', '/a?x=1', true],
+    ['/a$', '/a', true],
+    ['/a$', '/ab', false],
+    ['/$', '/', true],
+    ['/$', '/a', false],
+    ['/*.php$', '/x.php', true],
+    ['/*.php$', '/x.php?a=1', false],
+    // Un `$` au milieu n'ancre rien : il se lit tel quel.
+    ['/a$b', '/a$b', true],
+    ['/a$b', '/a', false],
+  ] as const)('%s sur %s → %s', (motif, chemin, attendu) => {
+    expect(autorise(chemin, lireRobots(`User-agent: *\nDisallow: ${motif}`))).toBe(!attendu)
+  })
+})
+
 describe('robots.txt : motif et chemin normalisés avant comparaison (RFC 9309 § 2.2.2)', () => {
   it('un motif non ASCII vise le chemin tel que l’URL l’encode', () => {
     const t = 'User-agent: *\nDisallow: /café'

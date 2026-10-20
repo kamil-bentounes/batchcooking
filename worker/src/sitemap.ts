@@ -140,12 +140,77 @@ export function normalise(s: string): string {
   return r
 }
 
-/** Un motif de robots.txt (`*`, `$` final) en expression, ancrée au début du chemin. */
-function motifEnExpression(motif: string): RegExp {
+/** Une règle prête à servir : son motif normalisé, coupé aux jokers. */
+type Compilee = {
+  permis: boolean
+  /** Longueur du motif normalisé : c'est elle qui départage deux règles. */
+  longueur: number
+  /** Les morceaux entre les `*` (le premier ancré au début du chemin). */
+  morceaux: string[]
+  /** Un `$` final : le dernier morceau doit finir le chemin. */
+  fin: boolean
+}
+
+function compile(regle: Regle): Compilee {
+  const motif = normalise(regle.motif)
   const fin = motif.endsWith('$')
-  const corps = (fin ? motif.slice(0, -1) : motif)
-    .split('*').map(p => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')
-  return new RegExp(`^${corps}${fin ? '$' : ''}`)
+  return {
+    permis: regle.permis,
+    longueur: motif.length,
+    morceaux: (fin ? motif.slice(0, -1) : motif).split('*'),
+    fin,
+  }
+}
+
+/**
+ * Le motif (`*`, `$` final) colle-t-il au début du chemin ? Sans expression
+ * régulière : chaque morceau est cherché au plus tôt après le précédent, et
+ * le plus tôt est toujours le bon choix (il laisse le plus de chemin au reste).
+ * Un seul passage, jamais de retour en arrière — un motif hostile ne coûte
+ * pas plus qu'un autre.
+ */
+function colle({ morceaux, fin }: Compilee, chemin: string): boolean {
+  const premier = morceaux[0]
+  if (morceaux.length === 1) return fin ? chemin === premier : chemin.startsWith(premier)
+  if (!chemin.startsWith(premier)) return false
+  let pos = premier.length
+  for (let i = 1; i < morceaux.length - 1; i++) {
+    const trouve = chemin.indexOf(morceaux[i], pos)
+    if (trouve < 0) return false
+    pos = trouve + morceaux[i].length
+  }
+  const dernier = morceaux[morceaux.length - 1]
+  // Avec `$`, le dernier morceau finit le chemin, après tout ce qui précède ;
+  // sans, il lui suffit d'apparaître.
+  return fin
+    ? chemin.length - dernier.length >= pos && chemin.endsWith(dernier)
+    : chemin.indexOf(dernier, pos) >= 0
+}
+
+/**
+ * Les règles compilées, rangées par leur premier morceau (le préfixe littéral que
+ * le chemin doit porter) : pour un chemin, on ne regarde que les règles dont le
+ * préfixe est un début de ce chemin, pas les dix-huit mille d'un gros fichier.
+ */
+type Jeu = { parPrefixe: Map<string, Compilee[]>; longueurs: number[] }
+
+/** Une fois par robots.txt lu (clé : sa liste de règles). */
+const compilees = new WeakMap<Regle[], Jeu>()
+
+function jeuDe(regles: Regle[]): Jeu {
+  let jeu = compilees.get(regles)
+  if (jeu) return jeu
+  const parPrefixe = new Map<string, Compilee[]>()
+  for (const regle of regles.map(compile)) {
+    const prefixe = regle.morceaux[0]
+    const rang = parPrefixe.get(prefixe)
+    if (rang) rang.push(regle)
+    else parPrefixe.set(prefixe, [regle])
+  }
+  const longueurs = [...new Set([...parPrefixe.keys()].map(p => p.length))].sort((a, b) => a - b)
+  jeu = { parPrefixe, longueurs }
+  compilees.set(regles, jeu)
+  return jeu
 }
 
 /**
@@ -153,16 +218,17 @@ function motifEnExpression(motif: string): RegExp {
  * le plus long gagne ; à longueur égale, `Allow` (RFC 9309 § 2.2.2).
  */
 export function autorise(chemin: string, r: Robots): boolean {
+  const { parPrefixe, longueurs } = jeuDe(r.regles)
   const vu = normalise(chemin)
-  let meilleure: { permis: boolean; motif: string } | null = null
-  for (const regle of r.regles) {
-    const motif = normalise(regle.motif)
-    if (!motifEnExpression(motif).test(vu)) continue
-    if (
-      !meilleure ||
-      motif.length > meilleure.motif.length ||
-      (motif.length === meilleure.motif.length && regle.permis)
-    ) meilleure = { permis: regle.permis, motif }
+  let meilleure: Compilee | null = null
+  for (const n of longueurs) {
+    if (n > vu.length) break
+    for (const regle of parPrefixe.get(vu.slice(0, n)) ?? []) {
+      // Une règle qui ne battrait pas la meilleure trouvée n'a pas à être essayée.
+      if (meilleure && (regle.longueur < meilleure.longueur
+        || (regle.longueur === meilleure.longueur && (meilleure.permis || !regle.permis)))) continue
+      if (colle(regle, vu)) meilleure = regle
+    }
   }
   return meilleure ? meilleure.permis : true
 }
