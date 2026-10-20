@@ -9,8 +9,9 @@
  * ne sait pas ordonnancer les étapes ne doit pas apparaître à la sélection du
  * mercredi, où elle produirait un plan faux.
  */
-import { agrege, parPart, pour100De } from '../../src/lib/nutrition/macros.ts'
+import { agrege, parPart, plausible, pour100De } from '../../src/lib/nutrition/macros.ts'
 import type { Agregat } from '../../src/lib/nutrition/macros.ts'
+import { titrePropre } from '../../src/lib/recettes/texte.ts'
 import { analyser } from './ingredient.ts'
 import { rattacher } from './aliment.ts'
 import type { AlimentIndexe } from './aliment.ts'
@@ -68,6 +69,8 @@ export interface EtapePrete {
   temperature_c: number | null
   temperature_source: 'declaree' | 'defaut' | null
   load_type: 'actif' | 'passif' | 'bloquant' | null
+  /** Minutes de gestes que l'étape conjugue (R6). `null` : aucun geste reconnu. */
+  gesture_min: number | null
   confidence: number
 }
 
@@ -97,6 +100,8 @@ export interface RecettePrete {
     license_note: string | null
     plannable: boolean
     freezable: boolean | null
+    /** La photo du site, en lien (R3). */
+    image_url: string | null
   }
   ingredients: IngredientPret[]
   /** Étapes ordonnançables seulement : les « bon appétit » sont écartés ici. */
@@ -304,6 +309,7 @@ function enEtapePrete(
     temperature_c: e.temperatureC,
     temperature_source: e.sourceTemperature,
     load_type: e.charge,
+    gesture_min: e.gestesMin,
     confidence: e.confiance,
   }
 }
@@ -333,6 +339,7 @@ export function preparer(brute: RecetteBrute, ctx: Contexte): RecettePrete {
 
   // ── Les macros par part, pour les filtres (D18) ──────────────────────────
   let nutrition: NutritionPrete | null = null
+  let invraisemblable: string | null = null
   if (ctx.nutriments) {
     const lignes = ingredients.map(g => ({
       grammes: g.grams_reference,
@@ -348,7 +355,7 @@ export function preparer(brute: RecetteBrute, ctx: Contexte): RecettePrete {
 
     if (a.couverture >= 0.75 && grammesPlat > 0) {
       const p = parPart(a, grammesPlat, grammesPlat / parts)
-      nutrition = {
+      const n: NutritionPrete = {
         grams: Math.round(grammesPlat / parts),
         kcal: p.valeur.kcal,
         protein_g: p.valeur.proteinG,
@@ -359,30 +366,38 @@ export function preparer(brute: RecetteBrute, ctx: Contexte): RecettePrete {
         protein_g_margin: p.marge.proteinG,
         coverage: Math.round(a.couverture * 100) / 100,
       }
+      // Une part impossible trahit un nombre de parts ou un poids faux (R7) :
+      // ses macros serviraient à filtrer, et elles mentiraient.
+      if (plausible(n)) nutrition = n
+      else invraisemblable = `macros écartées : ${n.kcal} kcal pour ${n.grams} g la part`
     }
   }
 
   const { oui, motifs } = estPlanifiable(etapes)
+  if (invraisemblable) motifs.push(invraisemblable)
   const sansAliment = ingredients.filter(g => g.food_id === null).length
   if (sansAliment > ingredients.length / 2) {
     motifs.push(`${sansAliment} ingrédient(s) sur ${ingredients.length} non rattachés`)
   }
+
+  const titre = titrePropre(brute.titre)
 
   return {
     recipe: {
       source_url: brute.url,
       source_name: brute.source,
       origin: 'importee',
-      title: brute.titre,
+      title: titre,
       yield_servings: brute.parts,
       total_time_min: brute.totalMin,
       prep_time_min: brute.prepMin,
       cook_time_min: brute.cuissonMin,
       // L'attribution n'est pas une politesse : on republie le travail d'autrui.
-      freezable: seCongele(brute.titre, ingredients),
+      freezable: seCongele(titre, ingredients),
       license_note: brute.licence
         ?? (brute.source ? `Recette importée depuis ${brute.source} — ${brute.url}` : brute.url),
       plannable: oui,
+      image_url: brute.image,
     },
     ingredients,
     etapes,
