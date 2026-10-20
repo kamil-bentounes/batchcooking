@@ -540,6 +540,18 @@ describe('les gestes d’une étape (R6)', () => {
     expect(g('Coupe et beurre le moule.')).toBe(5)
   })
 
+  it('lit le tutoiement après une virgule ou « et », sans article, si le verbe n’est pas aussi un nom', () => {
+    // Seuls « beurre », « poivre »… sont aussi des noms : « ajoute » n'en est pas un.
+    expect(g('Dans la poêle, ajoute sel et poivre.')).toBe(1)
+    expect(g('Dans la poêle, mélange sel et poivre.')).toBe(1)
+    expect(g('Épluche et remue sans cesse.')).toBe(5)
+    // Les faux négatifs voisins qui ne sont pas des défauts.
+    expect(g('Ajoutez l’ail, le sel et le poivre.')).toBe(1)
+    expect(g('Remuez, puis ajoutez le beurre.')).toBe(2)
+    expect(g('Sel, poivre, huile d’olive.')).toBeNull()
+    expect(g('Ajoutez le sel, poivre et huile.')).toBe(1)
+  })
+
   it('écarte un verbe nié', () => {
     expect(g('Ne pas mélanger.')).toBeNull()
     expect(g('Ne remuez pas.')).toBeNull()

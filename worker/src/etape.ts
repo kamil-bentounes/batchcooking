@@ -271,6 +271,22 @@ const DETERMINANTS = new Set([
   'y', 'lui', 'leur',
 ])
 
+/**
+ * Les verbes dont l'impératif en « tu » s'écrit comme un NOM d'ingrédient, pliés.
+ *
+ * Eux seuls ont besoin de la garde des listes : « ajoute », « mélange », « remue »,
+ * « verse » ne désignent rien qu'on mange, donc au tutoiement ils comptent après
+ * une virgule ou un « et » même sans article (« Dans la poêle, ajoute sel et
+ * poivre »). « beurre » et « poivre » en sont, et « farine, sucre, beurre, œufs »
+ * n'est pas une suite de gestes. Ce sont les tu de beurrer, poivrer, saler, zester,
+ * plier (la plie est un poisson), sabler, napper (une nappe de caramel) et
+ * abaisser (l'abaisse est la pâte étalée). Le référentiel n'a pas d'autre verbe
+ * dont le « tu » soit aussi un aliment ; en ajouter un, c'est l'écrire ici.
+ */
+const HOMOGRAPHES = new Set([
+  'beurre', 'poivre', 'sale', 'zeste', 'plie', 'sable', 'nappe', 'abaisse',
+])
+
 type Formes = { partout: RegExp; enTete: RegExp; apresEn: RegExp }
 /** `suite` : les mots qui suivent le verbe d'un geste de plusieurs mots, pliés et sans « er ». */
 type Geste = { canonique: string; ligne: LigneDuree; tete: string; formes: Formes; suite: string[] }
@@ -363,6 +379,10 @@ function formeDemandee(p: Proposition, i: number, f: Formes): boolean {
     if (/é$/iu.test(mots[i].brut)) return false
     const suivant = i + 1 < mots.length ? mots[i + 1].plie : null
     const apresDeterminant = suivant !== null && DETERMINANTS.has(suivant)
+    // Un verbe qui n'est pas aussi un nom se croit à toute ouverture de
+    // proposition : en tête, après une virgule, après « et » ou « puis ».
+    const ouvre = i === 0 || LIANTS.has(mots[i - 1].plie)
+    if (ouvre && !HOMOGRAPHES.has(mot)) return true
     if (i === 0) {
       // En tête de phrase, le tutoiement ne fait pas doute : « Beurre le moule ».
       // Après une virgule il lui faut son article, et il n'est jamais seul dans
