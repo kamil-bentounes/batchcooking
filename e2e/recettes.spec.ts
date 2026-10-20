@@ -1163,10 +1163,26 @@ test.describe.serial('les recettes, de bout en bout', () => {
     const TITRE_LONG = `Banc recettes 93 · ${'x'.repeat(200)}`
     const alerte = (texte: RegExp) => page.getByRole('alert').filter({ hasText: texte })
 
+    // Sept appareils (la rangée de pictos), un ingrédient dont le « nom » est une adresse de 80 caractères.
+    const CODES = ['four', 'plaques', 'air_fryer', 'micro_ondes', 'autocuiseur', 'blender', 'batteur']
+    const URL_LONGUE = `https://exemple.fr/${'a'.repeat(61)}`
     const recette = ou(await db.from('recipe').insert({
       title: TITRE_LONG, yield_servings: 4, origin: 'importee', plannable: true,
       total_time_min: 60, source_name: 'exemple.fr',
     }).select('id').single())
+    ou(await db.from('recipe_step').insert(CODES.map((a, n) => ({
+      recipe_id: recette.id, ordinal: n + 1, load_type: 'passif', duration_min: 10, gesture_min: 1,
+      appliance_type: a, text: n === 0 ? `Cuire ${'y'.repeat(150)}` : `Cuire (${a})`,
+    }))).select('id'))
+    ou(await db.from('recipe_ingredient').insert([
+      { recipe_id: recette.id, ordinal: 1, raw_text: `1 kg de ${URL_LONGUE}` },
+      { recipe_id: recette.id, ordinal: 2, raw_text: '2 oignons' },
+    ]).select('id'))
+    // Des fourchettes à trois chiffres : « 385–425 kcal » doit tenir sur une ligne.
+    ou(await db.from('recipe_nutrition').insert({
+      recipe_id: recette.id, grams: 340, kcal: 405, protein_g: 24, fiber_g: 6, carb_g: 50, fat_g: 15,
+      kcal_margin: 20, protein_g_margin: 2, coverage: 0.8,
+    }).select('recipe_id'))
 
     try {
       await arrive(page)
@@ -1255,6 +1271,25 @@ test.describe.serial('les recettes, de bout en bout', () => {
       await expect.poll(partsEnBase, { timeout: 10_000 }).toEqual([9])
       await expect(champ, 'Entrée ne quitte pas le champ').not.toBeFocused()
       await expect(champ).toHaveValue('9')
+
+      // ── 4 · Un mot sans espace n'élargit ni la page, ni la carte, ni la fiche ──
+      const largeurs = (l: Locator) => l.evaluate(e => ({ contenu: e.scrollWidth, boite: e.clientWidth }))
+      const tient = async (l: Locator, quoi: string) => {
+        const w = await largeurs(l)
+        expect(w.contenu, `${quoi} déborde (${w.contenu} px pour ${w.boite})`).toBeLessThanOrEqual(w.boite)
+      }
+      await tient(page.locator('html'), 'la page de « Choisir », avec un titre de 200 caractères,')
+      await tient(c, 'la vignette')
+      await tient(encre(page), 'la carte encre')
+      await photo(page, 'mot-long-liste', 'Un titre de 200 caractères sans espace : la liste ne déborde pas')
+      await page.getByRole('button', { name: `${TITRE_LONG}, la recette en détail` }).click()
+      const fiche = page.getByRole('dialog', { name: TITRE_LONG })
+      await expect(fiche.getByText(URL_LONGUE, { exact: false }).first()).toBeVisible({ timeout: 10_000 })
+      await tient(fiche.locator('.overflow-y-auto').first(), 'la fiche (ingrédient de 80 caractères, titre de 200)')
+      await tient(page.locator('html'), 'la page derrière la fiche')
+      await photo(page, 'mot-long-fiche', 'La fiche : titre de 200 caractères et adresse en guise d’ingrédient')
+      await page.keyboard.press('Escape')
+      await expect(fiche).toHaveCount(0)
 
       // Les parts visées : refus du plafond, puis réseau qui lâche.
       await page.getByRole('button', { name: '10 repas à couvrir' }).click()

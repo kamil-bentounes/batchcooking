@@ -30,7 +30,9 @@ export function Vignette({ recette: r, prise, manques, surInfo, surAjoute }: {
       <Photo url={r.image_url} className="size-[88px] rounded-[16px]" />
 
       <div className="grow min-w-0 pt-0.5">
-        <h3 className="text-[15.5px] font-semibold leading-[1.3] line-clamp-2">{titre}</h3>
+        <h3 className="text-[15.5px] font-semibold leading-[1.3] line-clamp-2 [overflow-wrap:anywhere]">
+          {titre}
+        </h3>
 
         {/* Le temps ACTIF d'abord : c'est celui qui décide (D30). */}
         <p className="mt-[3px] text-[13px] leading-[1.4] text-doux">
@@ -62,13 +64,13 @@ export function Vignette({ recette: r, prise, manques, surInfo, surAjoute }: {
         {/* D'où elle vient. Sans ça, une recette arrivée d'un foyer ami n'a pas
             de provenance, et « d'où sort celle-là ? » reste sans réponse. */}
         {r.ajoutePar && (
-          <p className={`mt-[3px] text-[13px] ${r.dUnAmi ? 'text-ocre' : 'text-doux'}`}>
+          <p className={`mt-[3px] text-[13px] [overflow-wrap:anywhere] ${r.dUnAmi ? 'text-ocre' : 'text-doux'}`}>
             {r.dUnAmi ? `Partagée par ${r.ajoutePar}` : `Ajoutée par ${r.ajoutePar}`}
           </p>
         )}
 
         {manques.length > 0 && (
-          <p className="mt-[3px] text-[13px] text-ocre">
+          <p className="mt-[3px] text-[13px] text-ocre [overflow-wrap:anywhere]">
             il manque {manques.length === 1 ? manques[0] : `${manques.length} ingrédients`}
           </p>
         )}

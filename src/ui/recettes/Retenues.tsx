@@ -101,7 +101,8 @@ export function Retenues({
             <li key={c.id} className="p-2 rounded-[16px] bg-fond/7">
               <div className="flex items-center gap-2.5">
                 <Photo url={c.recipe.image_url} glyphe={20} className="size-[38px] rounded-[12px]" />
-                <span className="grow min-w-0 line-clamp-2 text-[14px] leading-[1.3] text-brume">
+                <span className="grow min-w-0 line-clamp-2 text-[14px] leading-[1.3] text-brume
+                                 [overflow-wrap:anywhere]">
                   {c.recipe.title}
                 </span>
               </div>

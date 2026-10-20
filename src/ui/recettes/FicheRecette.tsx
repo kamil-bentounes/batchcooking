@@ -91,11 +91,12 @@ export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCou
 
           <div className="px-4 py-[18px]">
             {provenance && (
-              <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-doux">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-doux
+                            [overflow-wrap:anywhere]">
                 {provenance}
               </p>
             )}
-            <h2 className="titre-fort text-[30px] leading-[1.08] mt-1.5">{titre}</h2>
+            <h2 className="titre-fort text-[30px] leading-[1.08] mt-1.5 [overflow-wrap:anywhere]">{titre}</h2>
 
             <div className="mt-4 grid grid-cols-3 gap-2">
               <Tuile valeur={actif !== null ? duree(actif) : '—'} unite="actives" />
@@ -170,8 +171,8 @@ export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCou
                       <li key={i.ordinal}
                           className="grid grid-cols-[86px_minmax(0,1fr)] gap-2.5 py-[11px] text-[15px]
                                      border-t border-piste first:border-t-0">
-                        <span className="font-semibold tabular-nums">{qte}</span>
-                        <span>{nom}</span>
+                        <span className="font-semibold tabular-nums min-w-0 [overflow-wrap:anywhere]">{qte}</span>
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{nom}</span>
                       </li>
                     )
                   })}
@@ -245,7 +246,7 @@ function Etape({ etape: e }: { etape: EtapeDeFiche }) {
         {e.ordinal}
       </span>
       <div className="min-w-0">
-        <p className="mt-[3px] text-[15px] leading-[1.45]">{decodeEntites(e.text)}</p>
+        <p className="mt-[3px] text-[15px] leading-[1.45] [overflow-wrap:anywhere]">{decodeEntites(e.text)}</p>
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {e.load_type === 'passif' ? (
             <>
