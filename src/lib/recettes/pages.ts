@@ -32,6 +32,14 @@ export function bornesDeLaPage(page: number, total: number): { de: number; a: nu
   return { de: (p - 1) * PAR_PAGE + 1, a: Math.min(p * PAR_PAGE, total) }
 }
 
+/**
+ * Le bouton du bas : « Les 10 suivantes », et « La suivante » quand il n'en
+ * reste qu'une (« Les 1 suivantes » ne se dit pas).
+ */
+export function libelleSuivantes(restantes: number): string {
+  return restantes === 1 ? 'La suivante' : `Les ${Math.min(PAR_PAGE, restantes)} suivantes`
+}
+
 export function numeros(courante: number, total: number): (number | '…')[] {
   if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1)
   const gardees = new Set([1, total, courante - 1, courante, courante + 1])

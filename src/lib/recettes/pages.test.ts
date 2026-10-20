@@ -1,6 +1,6 @@
 /** La liste par dix (R1) : on ne fait que descendre, les boutons sont en bas. */
 import { describe, expect, it } from 'vitest'
-import { bornesDeLaPage, nombreDePages, numeros, tranche } from './pages.ts'
+import { bornesDeLaPage, libelleSuivantes, nombreDePages, numeros, tranche } from './pages.ts'
 
 describe('les pages', () => {
   it('comptent par dix, et une au moins', () => {
@@ -58,5 +58,17 @@ describe('les numéros', () => {
     [3, 6, [1, 2, 3, 4, 5, 6]],
   ] as const)('page %i sur %i', (page, total, attendu) => {
     expect(numeros(page, total)).toEqual(attendu)
+  })
+})
+
+describe('le bouton du bas', () => {
+  it.each([
+    [1, 'La suivante'],
+    [2, 'Les 2 suivantes'],
+    [9, 'Les 9 suivantes'],
+    [10, 'Les 10 suivantes'],
+    [137, 'Les 10 suivantes'],
+  ])('%i restantes : « %s »', (restantes, attendu) => {
+    expect(libelleSuivantes(restantes)).toBe(attendu)
   })
 })

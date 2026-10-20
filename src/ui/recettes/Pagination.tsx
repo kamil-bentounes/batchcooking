@@ -4,7 +4,7 @@
  * `pagination()` dans la maquette. « Les 10 suivantes » est le geste qu'on fait
  * neuf fois sur dix ; les numéros servent à revenir.
  */
-import { PAR_PAGE, bornesDeLaPage, nombreDePages, numeros } from '../../lib/recettes/pages.ts'
+import { PAR_PAGE, bornesDeLaPage, libelleSuivantes, nombreDePages, numeros } from '../../lib/recettes/pages.ts'
 import { Icone } from './pictos.tsx'
 
 const fr = (n: number) => n.toLocaleString('fr-FR')
@@ -23,7 +23,7 @@ export function Pagination({ page, total, surPage }:
         <button type="button" onClick={() => surPage(page + 1)}
                 className="min-h-[54px] rounded-[18px] bg-safran text-encre text-[16px] font-semibold
                            inline-flex items-center justify-center gap-1.5">
-          {restantes === 1 ? 'La suivante' : `Les ${Math.min(PAR_PAGE, restantes)} suivantes`}
+          {libelleSuivantes(restantes)}
           <Icone nom="droite" taille={18} epaisseur={2.4} />
         </button>
       )}
