@@ -1307,8 +1307,11 @@ test.describe.serial('les recettes, de bout en bout', () => {
       for (const [re, quoi] of [[/^385–425\skcal$/, 'kcal'], [/^22–26\sg$/, 'protéines']] as const) {
         const fourchette = c.getByText(re)
         await expect(fourchette, `la fourchette de ${quoi} n’est pas affichée`).toBeVisible()
-        expect(await fourchette.evaluate((e: HTMLElement) => e.getClientRects().length),
-          `la fourchette de ${quoi} passe à la ligne`).toBe(1)
+        // `getClientRects()` d'un élément en ligne rend un rectangle par fragment (« 385–425 »,
+        // l'insécable, « kcal » : 3 sur UNE ligne). La ligne se mesure aux `top` : un seul = une ligne.
+        const hauts = await fourchette.evaluate((e: HTMLElement) =>
+          [...e.getClientRects()].map(r => Math.round(r.top)))
+        expect(new Set(hauts).size, `la fourchette de ${quoi} passe à la ligne (top: ${hauts})`).toBe(1)
       }
       // (c) La barre du bas est opaque : le texte de la liste ne la traverse pas.
       const barre = page.getByRole('button', { name: 'Faire la liste' })
