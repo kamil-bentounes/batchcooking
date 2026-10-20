@@ -24,6 +24,7 @@ describe('les entités', () => {
     expect(decodeEntites('a &#55357; b')).toBe('a &#55357; b')
     expect(decodeEntites('a &#xD83D; b')).toBe('a &#xD83D; b')
     expect(decodeEntites('a &#xdfff; b')).toBe('a &#xdfff; b')
+    expect(decodeEntites('a &#xD800; b')).toBe('a &#xD800; b')
   })
 
   it('décode juste en deçà et au-delà de cette plage', () => {

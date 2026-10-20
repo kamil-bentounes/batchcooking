@@ -86,6 +86,7 @@ describe('« en tout » (R7)', () => {
 
   it('prend nos étapes quand le site annonce 0', () => {
     expect(enTout(0, 9, etapes)).toBe(33)
+    expect(enTout(0, 0, [e('actif', 3, null)])).toBe(3)
   })
 
   it('compte une étape passive au moins pour ses gestes', () => {
