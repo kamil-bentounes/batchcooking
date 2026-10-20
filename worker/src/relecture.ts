@@ -2,20 +2,50 @@
  * Ce qu'une page relue nous dit, et quand laisser un site tranquille (R3).
  *
  * La relecture des pages déjà ingérées ne cherche qu'une chose : la photo. Elle
- * ne force rien. Un site qui refuse — par un statut, ou par une page de défi
- * sans recette, qui répond souvent 200 — est laissé après trois refus DE SUITE.
+ * ne force rien. Un site qui répond 429, ou par un défi anti-robot reconnu (en-tête
+ * `cf-mitigated`, page « Just a moment »), est laissé dès la PREMIÈRE réponse, sans
+ * un second essai. Un autre refus — un statut ordinaire, ou une page de défi sans
+ * recette, qui répond souvent 200 — est laissé après trois refus DE SUITE.
  * Un site en panne (5xx autres que 503, réseau, délai dépassé) l'est après cinq
  * erreurs de suite : on ne le martèle pas. Une page disparue n'est pas un refus :
  * le site répond, la recette n'y est plus.
  */
-export type Issue = 'photo' | 'sans-photo' | 'sans-recette' | 'disparue' | 'refusee' | 'erreur'
+export type Issue =
+  | 'photo' | 'sans-photo' | 'sans-recette' | 'disparue' | 'refusee' | 'bloquee' | 'erreur'
 
 export const REFUS_AVANT_ABANDON = 3
 export const ERREURS_AVANT_ABANDON = 5
 
-export function issueDe(statut: number, aUneRecette: boolean, photo: string | null): Issue {
+/** Ce que porte la page de défi d'un pare-feu anti-robot (Cloudflare et ses proches). */
+const SIGNATURE_DEFI = /just a moment|attention required|cf[-_]chl/i
+
+/**
+ * La réponse est-elle un défi anti-robot ? Seul un refus (401, 403, 503) peut
+ * l'être : l'en-tête `cf-mitigated` suffit ; le corps (déjà borné par l'appelant)
+ * ne compte que sur un 403 ou un 503 — une recette qui parle d'« un moment »
+ * n'est pas un défi.
+ */
+export function estUnDefi(statut: number, cfMitigated: boolean, corps: string | null): boolean {
+  if (statut !== 401 && statut !== 403 && statut !== 503) return false
+  if (cfMitigated) return true
+  return statut !== 401 && corps !== null && SIGNATURE_DEFI.test(corps)
+}
+
+/**
+ * `defi` : la réponse porte la signature d'un défi anti-robot (`estUnDefi`).
+ * Un 429, ou un défi, est « bloquee » : on ne contourne rien, le domaine est laissé
+ * dès la première (voir `abandonne`). Un 401, 403 ou 503 sans signature reste un
+ * refus ordinaire, qui en demande trois.
+ */
+export function issueDe(
+  statut: number,
+  aUneRecette: boolean,
+  photo: string | null,
+  defi = false,
+): Issue {
   if (statut === 404 || statut === 410) return 'disparue'
-  if (statut === 401 || statut === 403 || statut === 429 || statut === 503) return 'refusee'
+  if (statut === 429) return 'bloquee'
+  if (statut === 401 || statut === 403 || statut === 503) return defi ? 'bloquee' : 'refusee'
   // 0 : le réseau, ou le délai de 30 s.
   if (statut < 200 || statut >= 300) return 'erreur'
   if (!aUneRecette) return 'sans-recette'
@@ -32,11 +62,13 @@ const finDe = (dernieres: Issue[], n: number, genre: (i: Issue) => boolean) => {
 }
 
 /**
- * Trois refus de suite, ou cinq erreurs de suite, et on laisse le site pour cette
+ * Une page « bloquee » (429, défi anti-robot) : on laisse le site tout de suite.
+ * Sinon, trois refus de suite, ou cinq erreurs de suite, et on le laisse pour cette
  * fois. Les deux séries ne se mélangent pas.
  */
 export function abandonne(dernieres: Issue[]): boolean {
   return (
+    dernieres.includes('bloquee') ||
     finDe(dernieres, REFUS_AVANT_ABANDON, estUnRefus) ||
     finDe(dernieres, ERREURS_AVANT_ABANDON, estUneErreur)
   )

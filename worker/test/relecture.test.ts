@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  abandonne, cleSite, DELAI_MAX_S, hopSuivi, issueDe, lireArguments, lireBorne, MAX_OCTETS,
+  abandonne, cleSite, DELAI_MAX_S, estUnDefi, hopSuivi, issueDe, lireArguments, lireBorne, MAX_OCTETS,
   pauseDe, PAUSE_MS, robotsDe,
 } from '../src/relecture.ts'
 
@@ -17,7 +17,8 @@ describe('l’issue d’une page relue', () => {
     [410, false, null, 'disparue'],
     [401, false, null, 'refusee'],
     [403, false, null, 'refusee'],
-    [429, false, null, 'refusee'],
+    // Un 429 dit « arrête » : pas trois essais, le domaine est laissé tout de suite.
+    [429, false, null, 'bloquee'],
     [503, false, null, 'refusee'],
     [500, false, null, 'erreur'],
     [502, false, null, 'erreur'],
@@ -32,6 +33,66 @@ describe('l’issue d’une page relue', () => {
     [499, false, null, 'erreur'],
   ] as const)('statut %i, recette %s, photo %s → %s', (statut, recette, photo, attendu) => {
     expect(issueDe(statut, recette, photo)).toBe(attendu)
+  })
+})
+
+describe('un défi anti-robot, on s’arrête à la première réponse', () => {
+  it('un 429 est « bloquee », quoi que dise le corps, même avec un Retry-After : aucun nouvel essai', () => {
+    expect(issueDe(429, false, null)).toBe('bloquee')
+    expect(issueDe(429, false, null, false)).toBe('bloquee')
+    expect(issueDe(429, false, null, true)).toBe('bloquee')
+  })
+
+  it.each([401, 403, 503])('un %i qui porte la signature d’un défi est « bloquee »', statut => {
+    expect(issueDe(statut, false, null, true)).toBe('bloquee')
+  })
+
+  it('sans signature, 401, 403 et 503 restent des refus ordinaires (seuil de trois)', () => {
+    for (const statut of [401, 403, 503]) expect(issueDe(statut, false, null, false)).toBe('refusee')
+    expect(issueDe(403, false, null)).toBe('refusee')
+  })
+
+  it('la signature ne change rien à une page qui répond : 200, 404, 500', () => {
+    expect(issueDe(200, true, 'https://a.fr/p.jpg', true)).toBe('photo')
+    expect(issueDe(404, false, null, true)).toBe('disparue')
+    expect(issueDe(500, false, null, true)).toBe('erreur')
+  })
+
+  describe('estUnDefi : l’en-tête `cf-mitigated`, ou le corps d’un 403/503', () => {
+    it('l’en-tête cf-mitigated suffit sur un refus', () => {
+      expect(estUnDefi(403, true, null)).toBe(true)
+      expect(estUnDefi(503, true, '')).toBe(true)
+      expect(estUnDefi(401, true, null)).toBe(true)
+    })
+
+    it.each([
+      '<title>Just a moment...</title>',
+      '<title>Attention Required! | Cloudflare</title>',
+      '<form id="challenge-form" action="/?__cf_chl_f_tk=abc">',
+      '<script>window._cf_chl_opt={}</script>',
+      'JUST A MOMENT',
+    ])('un 403 dont le corps contient « %s »', corps => {
+      expect(estUnDefi(403, false, corps)).toBe(true)
+      expect(estUnDefi(503, false, corps)).toBe(true)
+    })
+
+    it('un 403 ordinaire n’est pas un défi', () => {
+      expect(estUnDefi(403, false, null)).toBe(false)
+      expect(estUnDefi(403, false, '')).toBe(false)
+      expect(estUnDefi(403, false, '<h1>Forbidden</h1>You do not have access.')).toBe(false)
+    })
+
+    it('le corps d’un statut qui n’est pas un refus ne dit rien : une recette qui parle de défi', () => {
+      expect(estUnDefi(200, false, 'Un moment : just a moment pour la sauce')).toBe(false)
+      expect(estUnDefi(404, false, 'Just a moment')).toBe(false)
+      expect(estUnDefi(200, true, null)).toBe(false)
+    })
+  })
+
+  it('« bloquee » arrête le domaine dès la première, au milieu de pages qui passaient', () => {
+    expect(abandonne(['bloquee'])).toBe(true)
+    expect(abandonne(['photo', 'photo', 'bloquee'])).toBe(true)
+    expect(abandonne(['photo', 'sans-photo'])).toBe(false)
   })
 })
 

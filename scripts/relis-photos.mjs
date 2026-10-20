@@ -10,8 +10,12 @@
  * ⚠️ La même politesse que l'ingestion, et un peu plus : notre agent, `robots.txt`
  *    lu et suivi (RFC 9309), UNE requête par seconde et par hôte — `robots.txt` et
  *    chaque redirection comprises. On ne contourne rien :
- *      - trois refus de suite (statut de refus, ou page de défi sans recette) :
- *        le site est laissé pour ce passage ;
+ *      - un 429, ou un défi anti-robot reconnu (en-tête `cf-mitigated`, ou un 403/503
+ *        dont le début du corps dit « Just a moment », « Attention Required »,
+ *        `cf-chl`) : le site est laissé dès la première réponse, sans un second
+ *        essai, `Retry-After` ou pas ;
+ *      - trois autres refus de suite (401, 403, 503 ordinaires, ou page de défi
+ *        sans recette) : le site est laissé pour ce passage ;
  *      - cinq erreurs de suite (5xx, réseau, délai) : idem, un site en panne
  *        n'est pas martelé ;
  *      - `robots.txt` en 401, 403, 429 (un refus, peut-être un défi), en 5xx ou
@@ -50,7 +54,7 @@ import { createClient } from '@supabase/supabase-js'
 import { extraire } from '../worker/src/jsonld.ts'
 import { AGENT, autorise, cheminDe, lireRobots } from '../worker/src/sitemap.ts'
 import {
-  abandonne, cleSite, hopSuivi, issueDe, lireArguments, lireBorne, MAX_REDIRECTIONS,
+  abandonne, cleSite, estUnDefi, hopSuivi, issueDe, lireArguments, lireBorne, MAX_REDIRECTIONS,
   PAUSE_MS, pauseDe, robotsDe,
 } from '../worker/src/relecture.ts'
 
@@ -144,10 +148,16 @@ async function unGet(url, timeoutMs) {
     })
     const ok = res.status >= 200 && res.status < 300
     const corps = ok ? await lireBorne(res) : null
-    if (!ok) await res.body?.cancel().catch(() => {})
-    return { statut: res.status, location: res.headers.get('location'), corps }
+    // Un 403 ou un 503 peut être la page d'un défi anti-robot : on lit son début
+    // (64 Kio, la signature est dans l'en-tête HTML), jamais plus, pour la
+    // reconnaître. Ce corps n'est pas une page de recette : il ne sert qu'à ça.
+    let refus = null
+    if (!ok && (res.status === 403 || res.status === 503)) refus = await lireBorne(res, 64 * 1024)
+    else if (!ok) await res.body?.cancel().catch(() => {})
+    const defi = estUnDefi(res.status, res.headers.has('cf-mitigated'), refus)
+    return { statut: res.status, location: res.headers.get('location'), corps, defi }
   } catch {
-    return { statut: 0, location: null, corps: null }
+    return { statut: 0, location: null, corps: null, defi: false }
   } finally {
     dernier.set(cleSite(h), Date.now())
   }
@@ -195,7 +205,7 @@ async function suis(url, { controle, timeoutMs }) {
       if (!autorise(cheminDe(courante), e.robots)) return { interdite: true, statut: 0, finale: courante }
     }
     const r = await unGet(courante, timeoutMs)
-    if (!REDIRECTIONS.has(r.statut)) return { statut: r.statut, corps: r.corps, finale: courante }
+    if (!REDIRECTIONS.has(r.statut)) return { statut: r.statut, corps: r.corps, defi: r.defi, finale: courante }
     if (!r.location) return { statut: r.statut, finale: courante, raison: 'redirection sans adresse' }
     if (etape >= MAX_REDIRECTIONS) return { statut: 0, finale: courante, raison: `plus de ${MAX_REDIRECTIONS} redirections` }
     const h = hopSuivi(courante, r.location)
@@ -255,7 +265,7 @@ const bilan = []
 for (const [domaine, liste] of parDomaine) {
   const debutDomaine = Date.now()
   const b = { domaine, robots: '-', lues: 0, photo: 0, 'sans-photo': 0, 'sans-recette': 0,
-    disparue: 0, refusee: 0, erreur: 0, interdites: 0, abandonnees: 0, durée: '' }
+    disparue: 0, refusee: 0, bloquee: 0, erreur: 0, interdites: 0, abandonnees: 0, durée: '' }
   const issues = []
 
   // robots.txt à l'origine de la page elle-même : son protocole, son port. Sa
@@ -274,7 +284,9 @@ for (const [domaine, liste] of parDomaine) {
   for (const [i, r] of liste.entries()) {
     if (abandonne(issues)) {
       b.abandonnees = liste.length - i
-      console.log(`[${domaine}] abandon après ${issues.at(-1)} de suite : ${b.abandonnees} pages laissées.`)
+      console.log(issues.includes('bloquee')
+        ? `[${domaine}] 429 ou défi anti-robot : domaine laissé dès la première réponse, ${b.abandonnees} pages laissées.`
+        : `[${domaine}] abandon après ${issues.at(-1)} de suite : ${b.abandonnees} pages laissées.`)
       break
     }
     const rang = `[${domaine}] ${String(i + 1).padStart(4)}/${liste.length}`
@@ -288,7 +300,7 @@ for (const [domaine, liste] of parDomaine) {
     }
     // L'adresse de la photo se résout contre la page où l'on est ARRIVÉ.
     const brute = res.corps ? extraire(res.corps, res.finale) : null
-    const issue = issueDe(res.statut, brute !== null, brute?.image ?? null)
+    const issue = issueDe(res.statut, brute !== null, brute?.image ?? null, res.defi ?? false)
     issues.push(issue)
     b.lues++
     b[issue]++
