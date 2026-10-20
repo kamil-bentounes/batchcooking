@@ -199,5 +199,6 @@ export function plausible(n: { grams: number; kcal: number }): boolean {
   if (!(g > 0) || !Number.isFinite(k)) return false
   if (k < PART_PLAUSIBLE.kcalMin || k > PART_PLAUSIBLE.kcalMax) return false
   if (g > PART_PLAUSIBLE.grammesMax) return false
-  return k * 100 <= PART_PLAUSIBLE.densiteMax * g
+  // Tolérance relative : le produit en flottants dépasse d'un cheveu une part exactement à la borne.
+  return k * 100 <= PART_PLAUSIBLE.densiteMax * g * (1 + 1e-9)
 }

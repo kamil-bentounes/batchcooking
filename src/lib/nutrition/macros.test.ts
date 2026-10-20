@@ -140,6 +140,14 @@ describe('une part plausible (R7)', () => {
     expect(plausible({ grams: 4.8, kcal: 43.2 })).toBe(true)
   })
 
+  it('tient la borne de densité avec le produit aussi, et écarte une part franchement au-dessus', () => {
+    // 36,9 kcal pour 4,1 g et 73,8 kcal pour 8,2 g : 900 kcal / 100 g exacts, que le produit
+    // en flottants dépasse d'un cheveu.
+    expect(plausible({ grams: 4.1, kcal: 36.9 })).toBe(true)
+    expect(plausible({ grams: 8.2, kcal: 73.8 })).toBe(true)
+    expect(plausible({ grams: 4.1, kcal: 37.2 })).toBe(false)
+  })
+
   it('écarte une part de poids nul', () => {
     expect(plausible({ grams: 0, kcal: 300 })).toBe(false)
   })
