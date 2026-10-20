@@ -65,22 +65,37 @@ test.describe('le cycle, d’un bout à l’autre', () => {
       .toBeVisible({ timeout: 20_000 })
     await prend(page, '01-choisir')
 
-    /* Le catalogue : chercher, affiner, tout effacer, ajouter, régler les
-       parts, retirer. C'est la moitié de l'écran, et rien ne la touchait. */
-    const cherche = page.getByPlaceholder(/chercher parmi/i)
+    /* Le catalogue : chercher, filtrer, la fiche, le bas de la liste, ajouter,
+       régler les parts, retirer. C'est la moitié de l'écran. */
+    const cherche = page.getByPlaceholder(/chercher une recette/i)
     await cherche.fill('poulet')
     await page.waitForTimeout(600)
     await prend(page, '01a-choisir-cherche')
 
-    const affiner = page.getByRole('button', { name: 'Affiner' })
-    if (await affiner.count()) {
-      await affiner.click()
-      await page.waitForTimeout(500)
-      await prend(page, '01b-choisir-filtres')
-      await page.getByRole('button', { name: /masquer les filtres/i }).click()
-    }
+    /* Les filtres s'ouvrent ET se referment par le même bouton. Plus de
+       `if (count)` : un bouton renommé faisait sauter la capture en silence. */
+    // ⚠️ Pas `filtres` : ce nom est déjà pris plus bas, dans le même test.
+    const boutonFiltres = page.getByRole('button', { name: /appareils et filtres/i })
+    await boutonFiltres.click()
+    await expect(page.getByText(/temps les mains prises/i)).toBeVisible()
+    await prend(page, '01b-choisir-filtres')
+    await boutonFiltres.click()
+    await expect(page.getByText(/temps les mains prises/i)).toHaveCount(0)
     await cherche.fill('')
     await page.waitForTimeout(500)
+
+    await page.getByRole('button', { name: /la recette en détail/i }).first().click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await prend(page, '01f-choisir-fiche')
+    await page.getByRole('button', { name: 'Fermer' }).click()
+
+    // Le bas de la liste n'existe qu'au-delà de dix recettes : la base locale en
+    // a, une base neuve peut-être pas. Le banc de fumée, lui, sème les siennes.
+    const bas = page.getByRole('navigation', { name: 'Pages de recettes' })
+    if (await bas.count()) {
+      await bas.scrollIntoViewIfNeeded()
+      await prend(page, '01g-choisir-bas')
+    }
 
     /* Ajouter une recette, changer ses parts, puis la retirer. */
     const ajoute = page.getByRole('button', { name: /ajouter/i }).first()

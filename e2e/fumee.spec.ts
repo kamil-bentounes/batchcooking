@@ -100,6 +100,9 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
   test('le catalogue filtre sur le temps actif, pas sur le temps total', async ({ page }) => {
     await connecte(page)
     await page.goto('/choisir')
+    // On cherche le Dahl : sans la recherche, l'attente dépendrait de l'ordre des
+    // données, et les dix premières recettes de la liste n'en sont pas forcément.
+    await page.getByPlaceholder(/chercher une recette/i).fill('Dahl de lentilles')
     // 8 min actives pour 33 min au total : c'est le chiffre que personne
     // d'autre n'affiche, et il doit être celui qui s'affiche.
     await expect(page.getByText(/8 min/).first()).toBeVisible({ timeout: 10_000 })
@@ -456,6 +459,223 @@ test.describe('les captures de référence', () => {
         path: `.shots/${c === '/' ? 'accueil' : c.slice(1)}.png`,
         fullPage: true,
       })
+    }
+  })
+})
+
+/** Une image d'un pixel, pour servir une « photo » qui charge. */
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+
+/**
+ * Une recette du catalogue avec une photo, posée par le rôle de service — le
+ * seul qui en ait le droit (0092).
+ *
+ * ⚠️ 900 minutes actives : elle se range en DERNIÈRE page. Un banc interrompu
+ *    la laisserait en base, et une photo qui ne charge pas en première page ferait
+ *    tomber, par une erreur de console, tous les bancs qui ouvrent « Choisir ».
+ */
+async function semeAvecPhoto(titre: string, photo: string): Promise<string> {
+  const { data, error } = await db.from('recipe').insert({
+    title: titre, yield_servings: 2, origin: 'importee', plannable: true,
+    source_name: 'exemple.fr', source_url: `https://exemple.fr/banc/${encodeURIComponent(titre)}`,
+    image_url: photo,
+  }).select('id').single()
+  if (error) throw new Error(error.message)
+  const { error: e2 } = await db.from('recipe_step').insert({
+    recipe_id: data.id, ordinal: 1, text: 'Émincer', duration_min: 900, load_type: 'actif',
+  })
+  if (e2) throw new Error(e2.message)
+  return data.id
+}
+
+test.describe('l’écran des recettes (spec du 19/10/2026)', () => {
+  /*
+   * Douze recettes sous un nom que rien d'autre ne porte : la recherche les
+   * isole, et la liste doit alors tenir en deux pages, dix puis deux.
+   */
+  const NOM = `Banc pagination ${Date.now()}`
+  const semees: string[] = []
+
+  test.beforeAll(async () => {
+    for (let i = 1; i <= 12; i++) {
+      const { data, error } = await db.from('recipe').insert({
+        title: `${NOM} ${String(i).padStart(2, '0')}`, yield_servings: 2, origin: 'importee',
+        source_name: 'exemple.fr', source_url: `https://exemple.fr/banc/${NOM}/${i}`,
+        plannable: true,
+      }).select('id').single()
+      if (error) throw new Error(error.message)
+      semees.push(data.id)
+      // i minutes de gestes : la douzième est la plus longue, donc en page 2.
+      const { error: e2 } = await db.from('recipe_step').insert({
+        recipe_id: data.id, ordinal: 1, text: 'Émincer', duration_min: i, load_type: 'actif',
+      })
+      if (e2) throw new Error(e2.message)
+    }
+  })
+
+  test.afterAll(async () => {
+    if (semees.length === 0) return
+    // Le « + » du test de pagination retient une recette : `cycle_recipe.recipe_id`
+    // est en `on delete restrict`, et sans cette ligne retirée la suppression
+    // échouerait en silence et laisserait les douze recettes dans le catalogue.
+    await db.from('cycle_recipe').delete().in('recipe_id', semees)
+    await db.from('recipe').delete().in('id', semees)
+  })
+
+  test('la liste se lit par dix, et les boutons sont tout en bas', async ({ page }) => {
+    await connecte(page)
+    await page.goto('/choisir')
+    await page.getByPlaceholder(/chercher une recette/i).fill(NOM)
+    await expect(page.getByText(/^12, de 1 à 10$/)).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('article')).toHaveCount(10)
+
+    const pages = page.getByRole('navigation', { name: 'Pages de recettes' })
+    await expect(pages.getByText(/Recettes 1 à 10 sur 12/)).toBeVisible()
+    await pages.getByRole('button', { name: /les 2 suivantes/i }).click()
+
+    await expect(page.getByRole('article')).toHaveCount(2)
+    await expect(page.getByRole('heading', { name: `${NOM} 12` })).toBeVisible()
+    await expect(pages.getByRole('button', { name: 'Page 2' }))
+      .toHaveAttribute('aria-current', 'page')
+    // Sur la dernière page, plus rien à suivre.
+    await expect(pages.getByRole('button', { name: /suivantes/i })).toHaveCount(0)
+
+    // Ajouter ne change pas de page : on reste en page 2, et la ligne passe à
+    // « Retenue » (spec § 3.5 et § 8).
+    const carte = page.getByRole('article').filter({ hasText: `${NOM} 12` })
+    await carte.getByRole('button', { name: `Ajouter ${NOM} 12` }).click()
+    await expect(carte.getByLabel('Retenue', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(carte.getByRole('button', { name: /^Ajouter /i })).toHaveCount(0)
+    await expect(page.getByRole('article')).toHaveCount(2)
+    await expect(pages.getByRole('button', { name: 'Page 2' }))
+      .toHaveAttribute('aria-current', 'page')
+
+    // Changer la recherche ramène en page 1. Le nouveau texte (le même, moins son
+    // dernier chiffre) rend toujours les douze : si la page restait la deuxième,
+    // on lirait encore deux recettes, pas dix.
+    await page.getByPlaceholder(/chercher une recette/i).fill(NOM.slice(0, -1))
+    await expect(page.getByText(/^12, de 1 à 10$/)).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('article')).toHaveCount(10)
+    await expect(pages.getByRole('button', { name: 'Page 1' }))
+      .toHaveAttribute('aria-current', 'page')
+  })
+
+  test('la fiche (i) dit les étapes, les ingrédients et les macros', async ({ page }) => {
+    /* Une recette à elle : la base locale garde des dizaines de « Dahl » laissés
+       par les passages précédents, et rien ne dit que le premier de la liste ait
+       encore ses macros. */
+    const titre = `Banc fiche ${Date.now()}`
+    const { data, error } = await db.from('recipe').insert({
+      title: titre, yield_servings: 4, total_time_min: 45, origin: 'importee', plannable: true,
+      source_name: 'exemple.fr', source_url: `https://exemple.fr/banc/${encodeURIComponent(titre)}`,
+    }).select('id').single()
+    if (error) throw new Error(error.message)
+    try {
+      const etapes = await db.from('recipe_step').insert([
+        { recipe_id: data.id, ordinal: 1, text: 'Émincer les oignons', duration_min: 8,
+          load_type: 'actif' },
+        { recipe_id: data.id, ordinal: 2, text: 'Laisser mijoter', duration_min: 25,
+          load_type: 'passif', appliance_type: 'plaques' },
+      ])
+      if (etapes.error) throw new Error(etapes.error.message)
+      const ingredients = await db.from('recipe_ingredient').insert([
+        { recipe_id: data.id, ordinal: 1, raw_text: '2 oignons', qty: 2 },
+        { recipe_id: data.id, ordinal: 2, raw_text: '400 g de lentilles corail', qty: 400,
+          unit: 'g', grams_reference: 400 },
+      ])
+      if (ingredients.error) throw new Error(ingredients.error.message)
+      const macros = await db.from('recipe_nutrition').insert({
+        recipe_id: data.id, grams: 340, kcal: 620, protein_g: 34, fiber_g: 9, carb_g: 60,
+        fat_g: 18, kcal_margin: 30, protein_g_margin: 2, coverage: 0.92,
+      })
+      if (macros.error) throw new Error(macros.error.message)
+
+      await connecte(page)
+      await page.goto('/choisir')
+      await page.getByPlaceholder(/chercher une recette/i).fill(titre)
+      await page.getByRole('button', { name: `${titre}, la recette en détail` }).click()
+
+      const fiche = page.getByRole('dialog', { name: titre })
+      await expect(fiche).toBeVisible()
+      await expect(fiche.getByText('Émincer les oignons', { exact: true }))
+        .toBeVisible({ timeout: 10_000 })
+      await expect(fiche.getByText(/8 min · tes gestes/)).toBeVisible()
+      await expect(fiche.getByText(/25 min · sans toi/)).toBeVisible()
+      await expect(fiche.getByText('Lentilles corail', { exact: true })).toBeVisible()
+      await expect(fiche.getByText(/32–36\sg/)).toBeVisible()
+
+      await fiche.getByRole('button', { name: 'Fermer' }).click()
+      await expect(fiche).toHaveCount(0)
+    } finally {
+      await db.from('recipe').delete().eq('id', data.id)
+    }
+  })
+
+  test('la fiche se ferme par Échap, qui rend le focus au (i), et par le voile', async ({ page }) => {
+    const titre = `Banc fermeture ${Date.now()}`
+    const id = await semeAvecPhoto(titre, 'https://photos.banc.invalid/ferme.jpg')
+    try {
+      await page.route('https://photos.banc.invalid/**', r => r.abort())
+      await connecte(page)
+      await page.goto('/choisir')
+      await page.getByPlaceholder(/chercher une recette/i).fill(titre)
+      const info = page.getByRole('button', { name: `${titre}, la recette en détail` })
+      const fiche = page.getByRole('dialog', { name: titre })
+
+      // Échap : la fiche se ferme, et le focus revient sur le bouton (i) qui l'a ouverte.
+      await info.click()
+      await expect(fiche).toBeVisible({ timeout: 10_000 })
+      await page.keyboard.press('Escape')
+      await expect(fiche).toHaveCount(0)
+      await expect(info, 'le focus n’est pas revenu sur le bouton (i)').toBeFocused()
+
+      // Le voile : un clic dans le coin, hors de la fiche (elle commence à 44 px du
+      // haut), la ferme aussi.
+      await info.click()
+      await expect(fiche).toBeVisible()
+      await page.mouse.click(8, 8)
+      await expect(fiche).toHaveCount(0)
+    } finally {
+      await db.from('recipe').delete().eq('id', id)
+    }
+  })
+
+  test('une photo qui ne charge plus laisse l’image neutre', async ({ page }) => {
+    const titre = `Banc photo cassée ${Date.now()}`
+    const id = await semeAvecPhoto(titre, 'https://photos.banc.invalid/plat.jpg')
+    try {
+      await page.route('https://photos.banc.invalid/**', r => r.abort())
+      await connecte(page)
+      await page.goto('/choisir')
+      await page.getByPlaceholder(/chercher une recette/i).fill(titre)
+      const carte = page.getByRole('article').filter({ hasText: titre })
+      await expect(carte.locator('[data-photo="neutre"]')).toBeVisible({ timeout: 10_000 })
+    } finally {
+      await db.from('recipe').delete().eq('id', id)
+    }
+  })
+
+  test('une photo qui charge s’affiche, sans dire d’où l’on vient', async ({ page }) => {
+    const titre = `Banc photo ${Date.now()}`
+    const id = await semeAvecPhoto(titre, 'https://photos.banc.test/plat.png')
+    try {
+      await page.route('https://photos.banc.test/**', r =>
+        r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from(PNG, 'base64') }))
+      await connecte(page)
+      await page.goto('/choisir')
+      // On attend la REQUÊTE, pas l'élément : un <img> a sa taille avant d'avoir
+      // chargé, et « visible » ne dirait rien de la photo.
+      const demandee = page.waitForRequest(/photos\.banc\.test/)
+      await page.getByPlaceholder(/chercher une recette/i).fill(titre)
+      const requete = await demandee
+      expect(requete.headers()['referer'], 'le site a appris d’où l’on venait').toBeUndefined()
+
+      const photo = page.getByRole('article').filter({ hasText: titre }).locator('img')
+      await expect(photo).toBeVisible({ timeout: 10_000 })
+      // Elle a vraiment chargé : en échec, l'image neutre l'aurait remplacée.
+      await expect.poll(() => photo.evaluate(i => (i as HTMLImageElement).naturalWidth)).toBe(1)
+    } finally {
+      await db.from('recipe').delete().eq('id', id)
     }
   })
 })
