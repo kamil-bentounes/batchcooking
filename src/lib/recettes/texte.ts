@@ -33,7 +33,10 @@ export function decodeEntites(s: string): string {
         const n = code[1] === 'x' || code[1] === 'X'
           ? parseInt(code.slice(2), 16)
           : Number(code.slice(1))
-        return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : tout
+        // Une moitié de paire de substitution (0xD800–0xDFFF) n'est pas un caractère :
+        // on la laisse visible plutôt que d'écrire « � ».
+        const substitut = n >= 0xD800 && n <= 0xDFFF
+        return n > 0 && n < 0x110000 && !substitut ? String.fromCodePoint(n) : tout
       }
       return NOMMEES[code.toLowerCase()] ?? tout
     })
@@ -43,7 +46,7 @@ export function decodeEntites(s: string): string {
 
 /** Minuscules, sans accents : on compare des mots, pas des orthographes. */
 export function plie(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/œ/g, 'oe').replace(/æ/g, 'ae')
 }
 

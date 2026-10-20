@@ -19,6 +19,18 @@ describe('les entités', () => {
   it('laisse une entité inconnue telle quelle', () => {
     expect(decodeEntites('a &zz; b')).toBe('a &zz; b')
   })
+
+  it('ne décode pas une moitié de caractère (plage 0xD800–0xDFFF)', () => {
+    expect(decodeEntites('a &#55357; b')).toBe('a &#55357; b')
+    expect(decodeEntites('a &#xD83D; b')).toBe('a &#xD83D; b')
+    expect(decodeEntites('a &#xdfff; b')).toBe('a &#xdfff; b')
+  })
+
+  it('décode juste en deçà et au-delà de cette plage', () => {
+    expect(decodeEntites('&#xD7FF;')).toBe('\uD7FF')
+    expect(decodeEntites('&#57344;')).toBe('\uE000')
+    expect(decodeEntites('&#128512;')).toBe('😀')
+  })
 })
 
 describe('la pliure', () => {
