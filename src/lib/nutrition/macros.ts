@@ -199,5 +199,5 @@ export function plausible(n: { grams: number; kcal: number }): boolean {
   if (!(g > 0) || !Number.isFinite(k)) return false
   if (k < PART_PLAUSIBLE.kcalMin || k > PART_PLAUSIBLE.kcalMax) return false
   if (g > PART_PLAUSIBLE.grammesMax) return false
-  return (k / g) * 100 <= PART_PLAUSIBLE.densiteMax
+  return k * 100 <= PART_PLAUSIBLE.densiteMax * g
 }

@@ -133,6 +133,13 @@ describe('une part plausible (R7)', () => {
     expect(plausible({ grams: 100, kcal: 900 })).toBe(true)
   })
 
+  it('tient la borne de densité sans que la division l’arrondisse', () => {
+    // 21,6 kcal pour 2,4 g : exactement 900 kcal / 100 g. (21,6 / 2,4) * 100 vaut
+    // 900,0000000000001 en flottants, et la part serait écartée à tort.
+    expect(plausible({ grams: 2.4, kcal: 21.6 })).toBe(true)
+    expect(plausible({ grams: 4.8, kcal: 43.2 })).toBe(true)
+  })
+
   it('écarte une part de poids nul', () => {
     expect(plausible({ grams: 0, kcal: 300 })).toBe(false)
   })
