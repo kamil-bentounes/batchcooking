@@ -53,6 +53,37 @@ end $$;
 create trigger recipe_photo before insert or update of image_url on public.recipe
   for each row execute function public.tg_recipe_photo();
 
+/**
+ * La source d'une recette du catalogue ne se réécrit pas.
+ *
+ * `scripts/relis-photos.mjs` tourne avec le rôle de service et se fie à
+ * `source_url` pour savoir quelle page relire. Si un compte pouvait la changer
+ * sur le catalogue (que tous corrigent, classe B), il ferait écrire par le
+ * service, dans le catalogue partagé, la photo de la page de son choix — et
+ * contournerait `tg_recipe_photo`. La garde de la photo et la source de la
+ * photo sont une seule chaîne de confiance.
+ *
+ * Le titre, les ingrédients et les étapes restent corrigeables par tous ; une
+ * recette DE FOYER garde sa source modifiable par son foyer (l'Importer).
+ *
+ * Même porte que `tg_recipe_photo` : `is_service_role()`, pas `current_user`.
+ */
+create or replace function public.tg_recipe_source()
+returns trigger language plpgsql as $$
+begin
+  if public.is_service_role() then return new; end if;
+  if old.owner_household_id is null
+     and (new.source_url is distinct from old.source_url
+          or new.source_name is distinct from old.source_name) then
+    raise exception 'la source d''une recette du catalogue ne se réécrit pas'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end $$;
+
+create trigger recipe_source before update of source_url, source_name on public.recipe
+  for each row execute function public.tg_recipe_source();
+
 -- ── 2 · Les gestes d'une étape ──────────────────────────────────────────────
 alter table public.recipe_step
   add column gesture_min numeric check (gesture_min >= 0);

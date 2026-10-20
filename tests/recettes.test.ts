@@ -100,6 +100,60 @@ describe('la photo (R3)', () => {
   })
 })
 
+describe('la source du catalogue, qui garde la photo (R3)', () => {
+  it('ne se réécrit pas par un foyer, ni l’adresse ni le nom', async () => {
+    const r = await recette({ source_name: 'Exemple' })
+    for (const champs of [
+      { source_url: 'http://169.254.169.254/latest/meta-data/' },
+      { source_name: 'Un autre site' },
+    ]) {
+      const { data, error } = await alice.client.from('recipe')
+        .update(champs).eq('id', r.id).select('id')
+      expect(error, `un foyer a réécrit la source du catalogue : ${JSON.stringify(champs)}`)
+        .not.toBeNull()
+      expect(error?.code).toBe('23514')
+      expect(data ?? []).toHaveLength(0)
+    }
+    const { data: relue } = await admin().from('recipe')
+      .select('source_url, source_name').eq('id', r.id).single()
+    expect(relue, 'la source du catalogue a bougé malgré le refus')
+      .toEqual({ source_url: r.source_url, source_name: 'Exemple' })
+  })
+
+  it('laisse un foyer corriger le titre, et le rôle de service la source', async () => {
+    const r = await recette({ source_name: 'Exemple' })
+    const { error: e1 } = await alice.client.from('recipe')
+      .update({ title: 'Banc 0092 retitré' }).eq('id', r.id)
+    expect(e1, 'la garde de la source a fermé la correction du titre').toBeNull()
+
+    const nouvelle = `https://exemple.test/${unique()}`
+    const { error: e2 } = await admin().from('recipe')
+      .update({ title: 'Banc 0092 par le service', source_url: nouvelle, source_name: 'Autre' })
+      .eq('id', r.id)
+    expect(e2, 'le rôle de service ne peut plus écrire la source').toBeNull()
+    const { data: relue } = await admin().from('recipe')
+      .select('title, source_url, source_name').eq('id', r.id).single()
+    expect(relue).toEqual({
+      title: 'Banc 0092 par le service', source_url: nouvelle, source_name: 'Autre',
+    })
+  })
+
+  it('laisse un foyer corriger la source de SA recette', async () => {
+    const { data, error } = await alice.client.from('recipe').insert({
+      title: 'Banc 0092 sienne', origin: 'manuelle', owner_household_id: alice.householdId,
+      source_url: `https://exemple.test/${unique()}`, source_name: 'Avant',
+    }).select('id').single()
+    expect(error).toBeNull()
+    const nouvelle = `https://exemple.test/${unique()}`
+    const { error: e2 } = await alice.client.from('recipe')
+      .update({ source_url: nouvelle, source_name: 'Après' }).eq('id', data!.id)
+    expect(e2, 'la garde du catalogue a fermé la source d’une recette de foyer').toBeNull()
+    const { data: relue } = await admin().from('recipe')
+      .select('source_url, source_name').eq('id', data!.id).single()
+    expect(relue).toEqual({ source_url: nouvelle, source_name: 'Après' })
+  })
+})
+
 describe('le temps actif compte au moins les gestes (R6)', () => {
   async function etapes(id: string, lignes: Record<string, unknown>[]) {
     const { error } = await admin().from('recipe_step').insert(lignes.map((l, i) => ({
