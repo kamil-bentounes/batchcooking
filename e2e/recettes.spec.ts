@@ -738,7 +738,10 @@ test.describe.serial('les recettes, de bout en bout', () => {
 
       // « + » en page 2 : on reste en page 2, la ligne passe à « Retenue ».
       const premiere = ordre[14]
-      const parts1 = Math.max(1, Math.min(10 - 0 || 2, premiere.parts))
+      /* Cycle vide, cible de 10 : « + » propose le rendement de la recette (2 à 5), borné
+         par ce qui manque. `10 - 0 || 2` valait toujours 10 : le test ne vérifiait rien. */
+      const parts1 = Math.min(10, premiere.parts)
+      expect(parts1, 'le rendement dépasse la cible : la règle des parts proposées a changé').toBe(premiere.parts)
       const c1 = carte(page, premiere.titre)
       await c1.scrollIntoViewIfNeeded()
       await c1.getByRole('button', { name: `Ajouter ${premiere.titre}` }).click()
@@ -749,6 +752,8 @@ test.describe.serial('les recettes, de bout en bout', () => {
       await expect.poll(retenues, { message: 'le « + » n’a rien écrit en base', timeout: 10_000 })
         .toEqual([{ recette: premiere.titre, parts: parts1 }])
       constate('En base, après le premier « + » (page 2)', await retenues())
+      // Et l'écran compte les mêmes parts que la base (carte encre, en haut de page).
+      await expect(encre(page)).toContainText(`${parts1} déjà retenue`)
       await photo(page, 'retenue', `« ${premiere.titre} » est retenue, on reste en page 2`)
 
       // Un second « + », de l'autre côté de la page.
