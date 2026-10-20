@@ -11,7 +11,7 @@
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
-import { agrege, parPart, pour100De } from '../nutrition/macros.ts'
+import { agrege, parPart, plausible, pour100De } from '../nutrition/macros.ts'
 
 export type IngredientLu = {
   ordinal: number
@@ -33,6 +33,8 @@ export type EtapeLue = {
   appliance_type: string | null
   temperature_c: number | null
   load_type: 'actif' | 'passif' | 'bloquant' | null
+  /** Les minutes de gestes lues par l'analyse (R6). Absent d'une fonction plus ancienne. */
+  gesture_min?: number | null
   confidence: number
 }
 
@@ -82,13 +84,15 @@ async function macros(ingredients: IngredientLu[], parts: number) {
   if (a.couverture < 0.75 || grammesPlat <= 0) return null
 
   const p = parPart(a, grammesPlat, grammesPlat / Math.max(1, parts))
-  return {
+  const n = {
     grams: Math.round(grammesPlat / Math.max(1, parts)),
     kcal: p.valeur.kcal, protein_g: p.valeur.proteinG,
     fiber_g: p.valeur.fiberG, carb_g: p.valeur.carbG, fat_g: p.valeur.fatG,
     kcal_margin: p.marge.kcal, protein_g_margin: p.marge.proteinG,
     coverage: Math.round(a.couverture * 100) / 100,
   }
+  // Une part impossible n'a pas de macros : elles serviraient à filtrer (R7).
+  return plausible(n) ? n : null
 }
 
 export function useEnregistreImport() {
@@ -159,6 +163,7 @@ export function useEnregistreImport() {
           appliance_type: e.appliance_type,
           temperature_c: e.temperature_c,
           load_type: e.load_type ?? 'actif',
+          gesture_min: e.gesture_min ?? null,
           confidence: e.confidence,
         }))).select('id, ordinal'))
 

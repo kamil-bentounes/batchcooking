@@ -236,7 +236,10 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
                        onChange={ev => setEtapes(l => l.map((x, k) => k === n
                          ? { ...x, duration_min: ev.target.value === '' ? null
                              : Math.max(0, Number(ev.target.value)),
-                             duration_source: 'confirmee' as never }
+                             duration_source: 'confirmee' as never,
+                             // La durée que la personne a tapée fait foi : pas
+                             // de plancher de gestes par-dessus (spec § 5.3).
+                             gesture_min: null }
                          : x))}
                        className="w-[72px] h-11 rounded-[11px] bg-brume/40 px-2
                                   text-center text-[14px] outline-none focus:bg-brume/60" />

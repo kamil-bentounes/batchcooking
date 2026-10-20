@@ -176,6 +176,7 @@ Deno.serve(async (req) => {
       appliance_type: e.appareil,
       temperature_c: e.temperatureC,
       load_type: e.charge,
+      gesture_min: e.gestesMin,
       confidence: e.confiance,
     }))
 
