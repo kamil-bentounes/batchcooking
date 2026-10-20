@@ -13,9 +13,18 @@
 export const AGENT =
   'batchcooking-perso/1.0 (usage domestique ; contact via github.com/kamil-bentounes)'
 
+/** Notre jeton de produit, celui qu'un robots.txt peut nommer (RFC 9309 § 2.2.1). */
+export const JETON = 'batchcooking-perso'
+
+/** Une règle `Allow` ou `Disallow` : son motif, tel qu'écrit, et ce qu'elle dit. */
+export type Regle = { permis: boolean; motif: string }
+
 export type Robots = {
   present: boolean
+  /** Les motifs `Disallow` du groupe qui nous vise (pour l'affichage). */
   interdits: string[]
+  /** Toutes les règles du groupe qui nous vise : `autorise` tranche dessus. */
+  regles: Regle[]
   sitemaps: string[]
   /** `Crawl-delay` déclaré, en secondes. On le respecte s'il dépasse le nôtre. */
   delai: number | null
@@ -34,33 +43,97 @@ export async function texteDe(url: string, timeoutMs = 25000): Promise<string | 
   }
 }
 
+/** Le jeton d'un `User-agent` : « BatchCooking-Perso/1.0 » → « batchcooking-perso ». */
+const jetonDe = (v: string) => v.trim().split('/')[0].trim().toLowerCase()
+
 /**
- * Lecture de robots.txt. Pas un parseur exhaustif — on cherche à savoir si le
- * site nous dit non, et à s'y tenir.
+ * Lecture de robots.txt selon la RFC 9309.
+ *
+ * Les lignes `User-agent` d'affilée ouvrent UN groupe, que les règles suivantes
+ * remplissent. Si un groupe porte notre jeton (`batchcooking-perso`), on ne lit
+ * que celui-là (les groupes à notre nom se cumulent) ; sinon, ceux de `*`. Les
+ * `Sitemap` valent pour tout le fichier.
  */
 export function lireRobots(txt: string | null): Robots {
-  if (!txt) return { present: false, interdits: [], sitemaps: [], delai: null }
+  if (!txt) return { present: false, interdits: [], regles: [], sitemaps: [], delai: null }
 
-  const sitemaps = [...txt.matchAll(/^\s*sitemap:\s*(\S+)/gim)].map(m => m[1])
-  const interdits: string[] = []
-  let delai: number | null = null
-  let concerne = false
+  type Groupe = { agents: string[]; regles: Regle[]; delai: number | null }
+  const sitemaps: string[] = []
+  const groupes: Groupe[] = []
+  let courant: Groupe | null = null
+  // Vrai tant que les lignes lues sont des `User-agent` : la première ligne d'un
+  // autre genre ferme l'en-tête, et le `User-agent` suivant ouvre un nouveau groupe.
+  let enTete = false
 
-  for (const l of txt.split(/\r?\n/)) {
-    const ua = l.match(/^\s*user-agent:\s*(.+)$/i)
-    if (ua) { concerne = ua[1].trim() === '*'; continue }
-    if (!concerne) continue
-    const d = l.match(/^\s*disallow:\s*(\S*)/i)
-    if (d && d[1]) interdits.push(d[1])
-    const c = l.match(/^\s*crawl-delay:\s*(\d+)/i)
-    if (c) delai = Number(c[1])
+  for (const brute of txt.split(/\r?\n/)) {
+    const l = brute.replace(/#.*$/, '').trim()
+    const m = l.match(/^([A-Za-z-]+)\s*:\s*(.*)$/)
+    if (!m) continue
+    const cle = m[1].toLowerCase()
+    const valeur = m[2].trim()
+
+    if (cle === 'sitemap') { if (valeur) sitemaps.push(valeur); continue }
+    if (cle === 'user-agent') {
+      if (!enTete || !courant) {
+        courant = { agents: [], regles: [], delai: null }
+        groupes.push(courant)
+      }
+      courant.agents.push(jetonDe(valeur))
+      enTete = true
+      continue
+    }
+    enTete = false
+    if (!courant) continue
+    if (cle === 'disallow' || cle === 'allow') {
+      // Un motif vide n'interdit rien, et un `Allow` vide n'autorise rien de plus.
+      if (valeur) courant.regles.push({ permis: cle === 'allow', motif: valeur })
+    } else if (cle === 'crawl-delay') {
+      const d = valeur.match(/^(\d+(?:\.\d+)?)/)
+      if (d) courant.delai = Number(d[1])
+    }
   }
-  return { present: true, interdits, sitemaps, delai }
+
+  const aNous = groupes.filter(g => g.agents.includes(JETON))
+  const retenus = aNous.length > 0 ? aNous : groupes.filter(g => g.agents.includes('*'))
+  const regles = retenus.flatMap(g => g.regles)
+  let delai: number | null = null
+  for (const g of retenus) if (g.delai !== null) delai = g.delai
+  return {
+    present: true,
+    interdits: regles.filter(r => !r.permis).map(r => r.motif),
+    regles,
+    sitemaps,
+    delai,
+  }
 }
 
-export function autorise(chemin: string, r: Robots): boolean {
-  return !r.interdits.some(i => chemin.startsWith(i))
+/** Un motif de robots.txt (`*`, `$` final) en expression, ancrée au début du chemin. */
+function motifEnExpression(motif: string): RegExp {
+  const fin = motif.endsWith('$')
+  const corps = (fin ? motif.slice(0, -1) : motif)
+    .split('*').map(p => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')
+  return new RegExp(`^${corps}${fin ? '$' : ''}`)
 }
+
+/**
+ * Le chemin — avec sa chaîne de requête, `/priv?x=1` — est-il permis ? Le motif
+ * le plus long gagne ; à longueur égale, `Allow` (RFC 9309 § 2.2.2).
+ */
+export function autorise(chemin: string, r: Robots): boolean {
+  let meilleure: Regle | null = null
+  for (const regle of r.regles) {
+    if (!motifEnExpression(regle.motif).test(chemin)) continue
+    if (
+      !meilleure ||
+      regle.motif.length > meilleure.motif.length ||
+      (regle.motif.length === meilleure.motif.length && regle.permis)
+    ) meilleure = regle
+  }
+  return meilleure ? meilleure.permis : true
+}
+
+/** Chemin et chaîne de requête : ce que robots.txt compare. */
+export const cheminDe = (u: string) => { const x = new URL(u); return x.pathname + x.search }
 
 const estXml = (u: string) => /\.xml(\.gz)?$/i.test(u)
 const parleRecette = (u: string) => /recip|recett/i.test(u)
@@ -110,7 +183,7 @@ export async function urlsDeRecettes(
     for (const u of liste) {
       if (estXml(u) || !parleRecette(u)) continue
       try {
-        if (!autorise(new URL(u).pathname, r)) continue
+        if (!autorise(cheminDe(u), r)) continue
       } catch { continue }
       trouvees.push(u)
     }
@@ -133,7 +206,7 @@ export async function urlsDeRecettes(
         // Les pages d'index (« /recettes ») ne portent aucune recette.
         if (/\/(recettes|recipes)\/?$/i.test(u)) continue
         try {
-          if (!autorise(new URL(u).pathname, r)) continue
+          if (!autorise(cheminDe(u), r)) continue
         } catch { continue }
         trouvees.push(u)
       }

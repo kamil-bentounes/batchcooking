@@ -21,7 +21,7 @@ import { extraire } from '../worker/src/jsonld.ts'
 import { preparer } from '../worker/src/ingere.ts'
 import { pliure } from '../worker/src/etape.ts'
 import { indexer } from '../worker/src/aliment.ts'
-import { autorise, decouvrir, texteDe } from '../worker/src/sitemap.ts'
+import { autorise, cheminDe, decouvrir, texteDe } from '../worker/src/sitemap.ts'
 
 const PAUSE_MS = 1100
 const dors = () => new Promise(r => setTimeout(r, PAUSE_MS))
@@ -75,7 +75,7 @@ async function sonder(domaine) {
   }
 
   for (const u of urls) {
-    const chemin = new URL(u).pathname
+    const chemin = cheminDe(u)
     if (!autorise(chemin, r)) continue
     const html = await texte(u)
     await dors()
