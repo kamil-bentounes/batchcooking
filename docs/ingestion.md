@@ -142,6 +142,31 @@ d'un site ne le fasse pas abandonner à chaque relance.
 À la fin, un bilan par domaine : statut de `robots.txt`, pages lues, issues, pages laissées,
 durée.
 
+## Ce que le robot s'interdit
+
+On lit le travail d'autrui, chez lui : la relecture est polie, et elle ne contourne rien.
+L'ingestion et la sonde partagent l'agent et la lecture de `robots.txt` (`worker/src/sitemap.ts`) ;
+`relis-photos` y ajoute les arrêts ci-dessous.
+
+| Règle | Détail |
+|---|---|
+| **Agent** | `batchcooking-perso/1.0 (usage domestique ; contact via github.com/kamil-bentounes)`. Jamais un navigateur imité. Le jeton `batchcooking-perso` est celui qu'un `robots.txt` peut nommer |
+| **Une requête par seconde et par site** | 1,1 s entre deux requêtes au même site, `robots.txt` et chaque redirection comprises. `a.fr` et `www.a.fr` n'en font qu'un |
+| **`robots.txt`, RFC 9309** | Lu **une fois** par hôte. Le groupe à notre nom (les groupes à notre nom se cumulent), sinon celui de `*`. `Allow` et `Disallow`, jokers `*`, `$` final, chaîne de requête comprise ; le motif le plus long gagne, à égalité `Allow`. Échappements `%xx` normalisés (`%2F` n'est pas `/`), UTF-8. Comparé sans expression régulière : un motif hostile ne coûte pas plus qu'un autre. Un chemin interdit n'est jamais demandé |
+| **`robots.txt` en 2xx** | On le suit |
+| **`robots.txt` en 404 et autres 4xx** | Rien n'est interdit |
+| **`robots.txt` en 401, 403, 429, 5xx ou injoignable** | Un refus, peut-être un défi, ou un site en panne : tout permettre, ce serait passer outre. Le domaine est laissé pour ce passage |
+| **`Crawl-delay`** | Respecté s'il dépasse notre pause. Au-delà de 30 s, le domaine est laissé : le site n'a pas voulu qu'on le relise |
+| **Aucun contournement anti-robot** | Un 429, ou un défi reconnu (en-tête `cf-mitigated`, ou un 403 ou 503 dont le début du corps dit « Just a moment », « Attention Required » ou `cf-chl`) : le site est laissé **dès la première réponse**, sans second essai, `Retry-After` ou pas |
+| **Autres refus** | Trois de suite (401, 403, 503 ordinaires, page de défi sans recette) : le site est laissé pour ce passage |
+| **Un site en panne** | Cinq erreurs de suite (5xx autres que 503, réseau, délai de 30 s) : idem, il n'est pas martelé |
+| **Corps plafonné** | 2 Mo par page, le flux est coupé au-delà (une page coupée sans JSON-LD est `sans-recette`). Le début d'un refus (64 Kio) n'est lu que pour reconnaître un défi |
+| **Redirections dans le site** | Trois au plus, seulement vers le même hôte ou le même au `www.` près, après la pause **et** le `robots.txt` de l'hôte d'arrivée. Autre site, adresse privée, autre schéma, identité dans l'adresse : la page compte pour une erreur |
+
+Ce qu'une page laisse comme issue : `photo`, `sans-photo`, `sans-recette`, `disparue`,
+`refusee`, `bloquee`, `erreur`, `interdite`. La photo n'est jamais téléchargée : le navigateur
+de chacun la charge chez le site, c'est pourquoi seul le service peut en écrire l'adresse.
+
 ## Quels sites — mesuré, pas supposé
 
 `npm run sonde` interroge un site sans rien écrire : publie-t-il du
