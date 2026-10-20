@@ -65,6 +65,11 @@ const PARENTHESE_RECETTE = /\s*\([^()]*\brecettes?\b[^()]*\)\s*$/i
 const FIN_MARQUE = new RegExp(`${SEPARATEUR}${MARQUE}\\s*$`, 'i')
 const DEBUT_RECETTE = /^recettes?\s*(?::\s*|de\s+(?:la\s+|l['’]\s*)?|du\s+|des\s+|d['’]\s*)/i
 
+/** Garde-fou des boucles « jusqu'à ce que ça ne bouge plus » : chaque passe retire au
+    moins un caractère, donc ça finit ; le plafond n'est là que pour ne jamais tourner
+    dans le vide si une règle future se mettait à en ajouter. */
+const PASSES_MAX = 10
+
 /** Les étapes 2 à 7, une fois. */
 function nettoyeUnePasse(t: string): string {
   return t
@@ -86,18 +91,27 @@ function nettoyeUnePasse(t: string): string {
  * « Recette de… » en tête ; l'accent que le clavier a perdu (« a l' » → « à l' ») ;
  * la majuscule.
  *
- * Ces étapes se rejouent jusqu'à ce que le titre ne bouge plus (trois passes au
- * plus) : « Lasagnes | Recette | Marmiton » perd sa marque à la première, puis sa
- * réclame à la seconde. Sans quoi un second passage changerait encore le titre.
+ * Ces étapes se rejouent jusqu'à ce que le titre ne bouge plus : « Lasagnes |
+ * Recette | Marmiton » perd sa marque à la première, puis sa réclame à la seconde ;
+ * quatre fins empilées en demandent quatre. Sans quoi un second passage changerait
+ * encore le titre.
  *
  * Prudente : un titre qui ne ressemble à aucun motif passe tel quel, et un
  * nettoyage qui ne laisserait pas trois caractères rend le titre d'origine.
  */
 export function titrePropre(brut: string | null): string | null {
   if (brut === null) return null
-  const decode = decodeEntites(brut).replace(/\s+/g, ' ').trim()
+  // Les entités d'abord, jusqu'à ce qu'elles ne bougent plus : « &amp;amp;amp; » en
+  // compte trois étages, et `decodeEntites` n'en défait que deux par appel.
+  let decode = brut
+  for (let passe = 0; passe < PASSES_MAX; passe++) {
+    const suivant = decodeEntites(decode)
+    if (suivant === decode) break
+    decode = suivant
+  }
+  decode = decode.replace(/\s+/g, ' ').trim()
   let t = decode
-  for (let passe = 0; passe < 3; passe++) {
+  for (let passe = 0; passe < PASSES_MAX; passe++) {
     const suivant = nettoyeUnePasse(t)
     if (suivant === t) break
     t = suivant

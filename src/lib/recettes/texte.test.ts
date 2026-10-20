@@ -94,9 +94,40 @@ describe('le titre', () => {
       'Tarte a l&#039;oignon - Cookeo', 'Velouté (recette facile)',
       'Poulet, riz et petits pois - Recette facile',
       'Salade de pâtes, tomates et feta - Recette rapide',
-      'Lasagnes à la bolognaise | Recette | Marmiton']) {
+      'Lasagnes à la bolognaise | Recette | Marmiton',
+      // Quatre fins empilées : une par passe, la réclame en dernier.
+      'Poulet - Recette - Cookeo - Marmiton - Jow',
+      'Poulet - Cookeo - Marmiton - Jow - Ptitchef - Thermomix - CuisineAZ',
+      // Une entité à trois étages.
+      'Fish &amp;amp;amp; chips']) {
       const une = titrePropre(t)
       expect(titrePropre(une), t).toBe(une)
+    }
+  })
+
+  it('rend « Poulet » pour quatre fins empilées, dès le premier appel', () => {
+    expect(titrePropre('Poulet - Recette - Cookeo - Marmiton - Jow')).toBe('Poulet')
+  })
+
+  it('décode une entité à trois étages en un seul appel', () => {
+    expect(titrePropre('Fish &amp;amp;amp; chips')).toBe('Fish & chips')
+  })
+
+  it('est idempotent sur deux cent mille titres tirés au hasard', () => {
+    // Un générateur à graine fixe : le jour où ça casse, on rejoue le même titre.
+    let etat = 123456789
+    const alea = () => { etat = (Math.imul(etat, 1664525) + 1013904223) >>> 0; return etat / 2 ** 32 }
+    const choix = <T,>(l: T[]) => l[Math.floor(alea() * l.length)]
+    const morceaux = ['Poulet', 'riz', 'Recette', 'recettes', 'facile', 'Cookeo', 'Marmiton', 'Jow',
+      'Thermomix', 'Ptitchef', 'de', 'la', 'du', 'a', 'l\'', 'pâtes', '&amp;', '&amp;amp;', '&#039;',
+      'la meilleure', '(recette facile)', 'a la', 'Saint-Jacques']
+    const seps = [' ', ' - ', ' | ', ' : ', ', ', ' – ', ' — ', '-', '. ', ' ']
+    for (let n = 0; n < 200_000; n++) {
+      const k = 1 + Math.floor(alea() * 7)
+      let t = ''
+      for (let j = 0; j < k; j++) t += (j ? choix(seps) : '') + choix(morceaux)
+      const une = titrePropre(t)
+      expect(titrePropre(une), JSON.stringify(t)).toBe(une)
     }
   })
 })
