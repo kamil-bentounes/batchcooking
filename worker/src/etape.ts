@@ -287,6 +287,9 @@ const HOMOGRAPHES = new Set([
   'beurre', 'poivre', 'sale', 'zeste', 'plie', 'sable', 'nappe', 'abaisse',
 ])
 
+/** Ce qui suit un homographe quand c'est son NOM : « poivre ET sel », « beurre DE cacahuète ». */
+const SUITES_DE_NOM = new Set(['et', 'ou', 'de', 'd'])
+
 type Formes = { partout: RegExp; enTete: RegExp; apresEn: RegExp }
 /** `suite` : les mots qui suivent le verbe d'un geste de plusieurs mots, pliés et sans « er ». */
 type Geste = { canonique: string; ligne: LigneDuree; tete: string; formes: Formes; suite: string[] }
@@ -385,9 +388,12 @@ function formeDemandee(p: Proposition, i: number, f: Formes): boolean {
     if (ouvre && !HOMOGRAPHES.has(mot)) return true
     if (i === 0) {
       // En tête de phrase, le tutoiement ne fait pas doute : « Beurre le moule ».
-      // Après une virgule il lui faut son article, et il n'est jamais seul dans
-      // une liste : « farine, sucre, beurre, œufs ».
-      if (p.debut ? suivant !== null || p.seule : apresDeterminant) return true
+      // Sauf devant « et », « ou », « de » : « Poivre et sel », « Beurre de
+      // cacahuète » sont des ingrédients. Après une virgule il lui faut son
+      // article, et il n'est jamais seul dans une liste : « farine, sucre, beurre ».
+      if (p.debut) {
+        if (suivant !== null ? !SUITES_DE_NOM.has(suivant) : p.seule) return true
+      } else if (apresDeterminant) return true
     } else if (LIANTS.has(mots[i - 1].plie) && apresDeterminant) {
       return true
     }

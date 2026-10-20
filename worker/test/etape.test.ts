@@ -552,6 +552,16 @@ describe('les gestes d’une étape (R6)', () => {
     expect(g('Ajoutez le sel, poivre et huile.')).toBe(1)
   })
 
+  it('ne lit pas un nom d’ingrédient en tête de phrase : « poivre et sel »', () => {
+    expect(g('Poivre et sel.')).toBeNull()
+    expect(g('Poivre ou sel.')).toBeNull()
+    expect(g('Beurre de cacahuète et farine.')).toBeNull()
+    expect(g('Beurre d’amande.')).toBeNull()
+    // Avec un complément, c'est bien un impératif.
+    expect(g('Beurre le moule.')).toBe(2)
+    expect(g('Poivre la viande.')).toBe(0.5)
+  })
+
   it('écarte un verbe nié', () => {
     expect(g('Ne pas mélanger.')).toBeNull()
     expect(g('Ne remuez pas.')).toBeNull()
