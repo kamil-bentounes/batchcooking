@@ -16,6 +16,11 @@
                                   seize fois avant d'exister ici. */
   --color-brume:     #DCE2D6;  /* filets et séparateurs */
   --color-groseille: #B3402F;  /* erreurs seulement */
+  --color-piste:     #E4E9E1;  /* le fond des filtres, des pastilles, des pictos */
+  --color-sable:     #F6EAD2;  /* le fond de ce qui demande tes mains */
+
+  /* L'ombre des cartes de la direction A : un trait, puis un halo. */
+  --shadow-carte: 0 1px 2px rgba(28, 43, 35, .06), 0 8px 24px rgba(28, 43, 35, .07);
 
   --font-titre: "Fraunces", Georgia, serif;
   --font-texte: "Instrument Sans", system-ui, sans-serif;
@@ -74,6 +79,24 @@ body {
   font-variation-settings: "opsz" 144, "SOFT" 30, "WONK" 0;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
+}
+
+/* Les grands titres de la direction A : Fraunces à son optique d'affiche.
+   Dans `components` pour qu'un utilitaire (`leading-…`) puisse la surcharger. */
+@layer components {
+  .titre-fort {
+    font-family: var(--font-titre);
+    font-variation-settings: "opsz" 144, "SOFT" 30, "WONK" 0;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+}
+
+/* La fiche (i) monte du bas : on voit d'où elle vient, donc où elle repart. */
+@keyframes monte {
+  from { transform: translateY(24px); opacity: .6; }
+  to   { transform: none; opacity: 1; }
 }
 
 :focus-visible {
