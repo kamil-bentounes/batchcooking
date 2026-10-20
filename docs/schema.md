@@ -33,6 +33,13 @@ la lit. C'est une colonne de DROITS : seul le foyer propriétaire y touche, et
 gestes entre recettes (D35) compare des verbes, pas des phrases, et la mesure
 des durées (D48) s'agrège par verbe — une étape n'est jamais refaite, un verbe
 l'est toutes les semaines. Remplis par l'ingestion, voir [`ingestion.md`](ingestion.md).
+
+`recipe_step.gesture_min` (0092, `numeric`, `>= 0`) : les minutes de gestes que l'étape
+conjugue, quel que soit le verbe retenu ; `NULL` = non mesuré, l'étape compte comme avant.
+`tg_recipe_agrege` compte, par étape, le plus grand de sa durée et de ses gestes (active ou
+bloquante), ou ses gestes seuls (passive). `recipe.image_url` (0092, `https://`, 2 048
+caractères au plus) : la photo du site, en lien, écrite par le rôle de service seul
+(`tg_recipe_photo`).
 | **C — foyer** | RLS stricte, trois formes de prédicat. | `household`, `user_profile`, `nutrition_target`, `invitation`, `llm_usage`, `foyer_ami`, `session_convive` + les 18 tables du lot 1 et les 6 des lots 0c et 5 (ci-dessous) |
 
 Deux tables ouvrent une brèche *nommée* dans la classe C, et une seule à la fois :
@@ -112,11 +119,75 @@ remettrait `current_household()` à `NULL` et lui permettrait de créer un secon
 | `tg_session_task_duree` / `_mesure` | La durée réelle est mesurée entre « je prends » et « c'est fait », jamais demandée. Alimente `duration_observation`. |
 | `tg_meal_slot_consomme` | Une case passée à « mangé » consomme sa barquette. |
 | `tables_de_foyer()` | Introspection, rôle de service. Ne liste que des `BASE TABLE` — sinon la vue `price_knowledge` réclamerait un export en plus de la table qu'elle lit. Sert au test qui empêche `export_my_data` de prendre du retard sur le schéma. |
-| `tg_recipe_agrege` | `AFTER INSERT/UPDATE/DELETE` sur `recipe_step` : recalcule temps actif, appareils et nombre d'étapes. **Un trigger ne rattrape pas le passé** — `scripts/recalcule.mjs` existe pour cela. |
+| `tg_recipe_agrege` | `AFTER INSERT/UPDATE/DELETE` sur `recipe_step` : recalcule temps actif (chaque étape compte au moins ses gestes, 0092), appareils et nombre d'étapes. **Un trigger ne rattrape pas le passé** — `scripts/recalcule.mjs` existe pour cela. |
+| `tg_recipe_photo` | `BEFORE INSERT OR UPDATE OF image_url` sur `recipe` : hors rôle de service, poser ou changer la photo est refusé (`check_violation`). Une adresse posée par un compte ferait charger à tous une image de son choix, et lui dirait qui regarde et quand. Pas `security definer` : `is_service_role()` suffit, et la porte ne disparaît pas en silence le jour où elle le deviendrait. |
+| `recettes_faisables()` | `STABLE`, `SECURITY INVOKER`, ids **triés** (`order by r.id`). Les recettes planifiables dont tous les ingrédients reconnus sont au placard du foyer, et qui en ont au moins un. La RLS de `recipe` et de `stock_item` s'applique telle quelle. `authenticated` seul (`revoke … from public, anon`). Voir [`api.md`](api.md) |
 | `tg_receipt_line_apprend` | `AFTER INSERT` sur `receipt_line` : apprend le prix (ramené au kilo ou au litre, **médiane mobile**) et reporte `paid_price_eur`. ⚠️ `SECURITY DEFINER`, donc il **vérifie lui-même** le foyer de l'article et du magasin — la RLS ne le protège pas. |
 | `tg_pesee_apprend` | `AFTER INSERT/UPDATE/DELETE` sur `weighing` : rejette les aberrantes hors `[0,4× ; 2,5×]` la référence, retient la **médiane**, active à 3 observations (5 sans référence). Repart des observations à chaque fois — une médiane incrémentale serait fausse dès la première suppression. |
 | `poids_unitaire(food, unit)` | Le poids appris s'il est actif, sinon la référence, sinon `NULL`. Jamais un chiffre inventé (D18). |
 | `llm_consomme(foyer, kind)` | Incrément **atomique** du quota. Le code lisait puis écrivait : un appel simultané sur deux ne comptait pas. Rôle de service seulement. |
+
+### La règle du temps actif, et son contrôle (0092)
+
+| Charge de l'étape | Ce qu'elle compte |
+|---|---|
+| `actif`, `bloquant` | `greatest(duration_min, gesture_min)`, chacun nul comptant 0 |
+| autre (`passif`) | `gesture_min` seul : le four cuit seul, mais quelqu'un a versé la pâte dans le moule |
+
+`recipe.active_time_min` est la somme de ces nombres sur les étapes. Une étape à `gesture_min`
+nul compte comme avant la 0092. La même règle est écrite côté client dans
+`src/lib/recettes/temps.ts` (`minutesDeMains`), et `tests/recettes.test.ts` vérifie que les
+deux disent la même chose : si l'une change, l'autre doit suivre.
+
+Après un recalcul, cette requête doit rendre **0** :
+
+```sql
+select count(*) from recipe r
+where exists (select 1 from recipe_step s where s.recipe_id = r.id)
+  and active_time_min is distinct from (
+    select coalesce(sum(case when load_type in ('actif','bloquant')
+           then greatest(coalesce(duration_min,0), coalesce(gesture_min,0))
+           else coalesce(gesture_min,0) end), 0)
+    from recipe_step s where s.recipe_id = r.id)
+```
+
+### Retour arrière de la 0092
+
+Dans cet ordre, et pas un autre : tant que le corps de `tg_recipe_agrege` lit `gesture_min`,
+chaque écriture d'étape échouerait si la colonne n'existait plus.
+
+1. Remettre le corps de la 0023 de `tg_recipe_agrege` :
+
+   ```sql
+   create or replace function public.tg_recipe_agrege()
+   returns trigger language plpgsql security definer set search_path = public as $$
+   declare r uuid := coalesce(new.recipe_id, old.recipe_id);
+   begin
+     update public.recipe set
+       active_time_min = (
+         select coalesce(sum(duration_min), 0) from public.recipe_step
+         where recipe_id = r and load_type in ('actif', 'bloquant')),
+       appliances = (
+         select coalesce(array_agg(distinct appliance_type), '{}')
+         from public.recipe_step
+         where recipe_id = r and appliance_type is not null),
+       step_count = (select count(*) from public.recipe_step where recipe_id = r)
+     where id = r;
+     return null;
+   end $$;
+   ```
+
+2. `drop trigger recipe_photo on public.recipe;`
+3. `drop function public.tg_recipe_photo();`
+4. `drop function public.recettes_faisables();`
+5. Et seulement alors : `alter table public.recipe drop column image_url;` et
+   `alter table public.recipe_step drop column gesture_min;`.
+
+Les `active_time_min` déjà recalculés gardent les gestes jusqu'à la prochaine écriture de
+leurs étapes : la sauvegarde prise avant le recalcul en prod (`recipe` : `id`, `title`,
+`active_time_min`, `total_time_min` ; `recipe_nutrition` entier ; `recipe_step` : `id`,
+`duration_min`) sert à les remettre. Les photos et les gestes, eux, sont perdus avec leurs
+colonnes — ils se relisent par [`ingestion.md`](ingestion.md).
 
 ## Budget LLM
 
