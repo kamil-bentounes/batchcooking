@@ -18,6 +18,7 @@
     "banc-ticket": "vite-node scripts/banc-ticket.mjs --",
     "banc-charges": "node --experimental-strip-types scripts/banc-charges.mjs",
     "recalcule": "vite-node scripts/recalcule.mjs --",
+    "relis-photos": "vite-node scripts/relis-photos.mjs --",
     "e2e": "playwright test",
     "deploy": "node scripts/deployer.mjs",
     "couverture": "rm -rf .nyc_output coverage && COUVERTURE=1 npm run build -- --mode development && COUVERTURE=1 npx playwright test && npx nyc report --reporter=text --report-dir coverage",
