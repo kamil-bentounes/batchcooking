@@ -18,10 +18,10 @@ bibliothèque personnelle, pas du scraping.
 
 | Étape | Module | Ce qu'elle fait |
 |---|---|---|
-| 1 | `worker/src/jsonld.ts` | Lit le bloc `application/ld+json` `schema.org/Recipe`. Jamais le HTML. |
+| 1 | `worker/src/jsonld.ts` | Lit le bloc `application/ld+json` `schema.org/Recipe`. Jamais le HTML. Prend aussi la photo (`image`), en lien. |
 | 2 | `worker/src/ingredient.ts` | Découpe une ligne d'ingrédient : quantité, unité, aliment, préparation |
 | 3 | `worker/src/aliment.ts` | Rattache à CIQUAL (Jaccard pondéré, seuil 0,34). Refuse plutôt que de se tromper |
-| 4 | `worker/src/etape.ts` | Verbe, appareil, durée, température, charge |
+| 4 | `worker/src/etape.ts` | Verbe, appareil, durée, température, charge, gestes |
 | 5 | `worker/src/ingere.ts` | Assemble, décide `plannable`, construit le graphe |
 
 ## Mesuré sur 25 recettes réelles
@@ -51,6 +51,25 @@ donc le premier — aucune étape retenue n'entre dans un plan sans durée.
 | **Poêle et casserole → `plaques`** | On coche « plaques de cuisson », pas « poêle ». Chacune occupe un feu, et il y en a quatre |
 | **Un compte reste `null`** (« 2 oignons ») | `unit_weight` n'est pas rempli. Un poids inventé vaut moins qu'une fourchette assumée (D18) |
 | **CIQUAL se charge par pages de 1000** | PostgREST plafonne à `db.max-rows` **sans le dire**. Un `.limit(5000)` rend 1000 lignes et zéro erreur — c'est ce qui faisait tomber le rattachement à 52 % |
+
+## La photo, le titre, les gestes (spec du 19/10/2026, migration 0092)
+
+| Quoi | Où | La règle |
+|---|---|---|
+| La photo | `jsonld.ts` (`photo()`) → `recipe.image_url` | Un **lien** vers la photo du site, jamais une copie : la première adresse utilisable de `image` (adresse, liste, `ImageObject` par `url` puis `contentUrl`, renvoi `@id` suivi dans tout le graphe de la page), résolue contre la page, passée en https, 2 048 caractères au plus. Seul le rôle de service l'écrit (trigger `recipe_photo`, voir [`schema.md`](schema.md)) |
+| Le titre | `src/lib/recettes/texte.ts` (`titrePropre`) | Retire la réclame (« : la meilleure recette », « - Recette Ptitchef », « \| Recette \| Marmiton »), une parenthèse finale qui parle de recette, une marque seule en fin (« - Cookeo »), « Recette de… » en tête ; décode les entités (« &amp;amp; » compris) ; rend l'accent perdu (« a l' » → « à l' »). Rejoué jusqu'à ce que le titre ne bouge plus ; sous trois caractères, le titre d'origine reste |
+| Les gestes | `etape.ts` (`gestesMin`) → `recipe_step.gesture_min` | Les minutes de chaque verbe de main que l'étape **conjugue** — ni participe (« les poivrons coupés »), ni nom (« le beurre »), ni infinitif nié ou remis à plus tard (« sans les éplucher »). Un verbe qui mobilise un appareil n'en est pas un : « mixez » ne compte pas, « versez le lait dans le blender » si. `null` quand aucun. Le temps actif compte, par étape, au moins ses gestes |
+| Les macros | `src/lib/nutrition/macros.ts` (`plausible`) | Une part impossible n'a pas de macros : plus de 900 kcal/100 g, plus de 1,5 kg, moins de 20 ou plus de 2 000 kcal. Une valeur fausse servirait à filtrer, et elle est pire qu'aucune |
+
+Une part écartée **ne rend pas la recette non planifiable** (`plannable` ne dépend que des
+étapes) : elle n'a simplement pas de macros, et le journal le dit. Le motif
+`macros écartées : <kcal> kcal pour <g> g la part` s'ajoute à ceux du refus dans
+`ingestion_job.error`.
+
+Une ré-ingestion réécrit `image_url` avec ce que la page publie ce jour-là.
+
+La recette **collée** (`importer`, voir [`api.md`](api.md)) suit les mêmes règles : ses
+étapes portent `gesture_min`, et ses macros ne sont écrites que si la part est plausible.
 
 ## Quels sites — mesuré, pas supposé
 
