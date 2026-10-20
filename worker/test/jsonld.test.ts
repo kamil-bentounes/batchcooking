@@ -264,6 +264,17 @@ describe('la photo (R3)', () => {
       .toBe('https://a.fr/c.webp')
   })
 
+  it('se rabat sur contentUrl quand url est vide ou inutilisable', () => {
+    expect(photo({ url: '', contentUrl: 'https://a.fr/c.jpg' }, P)).toBe('https://a.fr/c.jpg')
+    expect(photo({ url: 'data:image/png;base64,AA', contentUrl: 'https://a.fr/c.jpg' }, P))
+      .toBe('https://a.fr/c.jpg')
+  })
+
+  it('préfère url à contentUrl quand les deux sont utilisables', () => {
+    expect(photo({ url: 'https://a.fr/u.jpg', contentUrl: 'https://a.fr/c.jpg' }, P))
+      .toBe('https://a.fr/u.jpg')
+  })
+
   it('lit une liste d’ImageObject', () => {
     expect(photo([{ url: 'https://a.fr/1x1.jpg' }, { url: 'https://a.fr/16x9.jpg' }], P))
       .toBe('https://a.fr/1x1.jpg')

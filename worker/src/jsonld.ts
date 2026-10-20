@@ -195,9 +195,11 @@ export function photo(
     if (Array.isArray(x)) { for (const e of x) visite(e, profondeur + 1); return }
     if (!x || typeof x !== 'object') return
     const o = x as Record<string, unknown>
-    const directe = typeof o.url === 'string' ? o.url
-      : typeof o.contentUrl === 'string' ? o.contentUrl : null
-    if (directe) { candidates.push(directe); return }
+    // Les deux sont des candidates, `url` d'abord : le choix se fait à la
+    // validation, sinon un `url` vide ou en `data:` cache un `contentUrl` valide.
+    const directes = [o.url, o.contentUrl]
+      .filter((a): a is string => typeof a === 'string' && a.trim() !== '')
+    if (directes.length > 0) { candidates.push(...directes); return }
     const id = typeof o['@id'] === 'string' ? o['@id'] : null
     if (!id) return
     const renvoi = graphe.get(id)
