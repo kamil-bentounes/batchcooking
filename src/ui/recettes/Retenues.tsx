@@ -82,17 +82,29 @@ export function Retenues({ cible, choisies, surCible, surParts, surRetire }: {
                       className="min-h-11 px-2 text-[13px] text-fond/70">Retirer</button>
             </li>
           ) : (
-            <li key={c.id} className="flex items-center gap-2.5 p-2 rounded-[16px] bg-fond/7">
-              <Photo url={c.recipe.image_url} glyphe={20} className="size-[38px] rounded-[12px]" />
-              <span className="grow min-w-0 truncate text-[14px] text-brume">{c.recipe.title}</span>
-              <input type="number" min={1} max={20} value={c.servings}
-                     aria-label={`Parts de ${c.recipe.title}`}
-                     onChange={e => surParts(c.recipe_id, Math.max(1, Number(e.target.value) || 1))}
-                     className="w-12 h-9 rounded-[10px] bg-fond/10 px-1.5 text-right text-fond
-                                outline-none focus:bg-fond/15" />
-              <span className="text-[13px] text-fond/70">{c.servings > 1 ? 'parts' : 'part'}</span>
-              <button type="button" onClick={() => surRetire(c.id)}
-                      className="min-h-11 px-2 text-[13px] text-fond/70">Retirer</button>
+            /*
+             * Deux lignes : le nom d'abord, sur deux lignes au plus, puis les gestes
+             * à droite. Tout sur une seule ligne laissait au titre une douzaine de
+             * caractères (« Banc recette… ») : on ne reconnaissait plus ce qu'on avait
+             * retenu.
+             */
+            <li key={c.id} className="p-2 rounded-[16px] bg-fond/7">
+              <div className="flex items-center gap-2.5">
+                <Photo url={c.recipe.image_url} glyphe={20} className="size-[38px] rounded-[12px]" />
+                <span className="grow min-w-0 line-clamp-2 text-[14px] leading-[1.3] text-brume">
+                  {c.recipe.title}
+                </span>
+              </div>
+              <div className="flex items-center justify-end gap-2.5">
+                <input type="number" min={1} max={20} value={c.servings}
+                       aria-label={`Parts de ${c.recipe.title}`}
+                       onChange={e => surParts(c.recipe_id, Math.max(1, Number(e.target.value) || 1))}
+                       className="w-12 h-9 rounded-[10px] bg-fond/10 px-1.5 text-right text-fond
+                                  outline-none focus:bg-fond/15" />
+                <span className="text-[13px] text-fond/70">{c.servings > 1 ? 'parts' : 'part'}</span>
+                <button type="button" onClick={() => surRetire(c.id)}
+                        className="min-h-11 px-2 text-[13px] text-fond/70">Retirer</button>
+              </div>
             </li>
           )))}
         </ul>
