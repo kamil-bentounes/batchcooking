@@ -291,21 +291,29 @@ for (const r of recettes) {
 }
 console.log(`2. Macros : ${macros.length} recettes calculées, ${insuffisantes} trop incomplètes, `
   + `${aberrantes.length} impossibles.`)
+// Une recette devenue trop incomplète — ou impossible — ne doit pas garder ses
+// anciennes macros : elles serviraient à filtrer, et elles seraient fausses.
+const gardees = new Set(macros.map(m => m.recipe_id))
+const aEffacer = recettes.map(r => r.id).filter(id => !gardees.has(id))
 if (SEC) {
   for (const x of aberrantes) {
     console.log(`   ✗ ${x.titre} — ${x.kcal} kcal, ${x.grams} g la part, ${x.parts} parts`)
   }
+  // On annonce les lignes qui existent vraiment, pas les recettes écartées : la
+  // plupart n'ont jamais eu de macros.
+  const ecartees = new Set(aEffacer)
+  const perimees = (await tout('recipe_nutrition', 'recipe_id', q => q, 'recipe_id'))
+    .filter(n => ecartees.has(n.recipe_id)).length
+  console.log(`   ${perimees} macros périmées seraient effacées.`)
 } else {
-  // Une recette devenue trop incomplète — ou impossible — ne doit pas garder ses
-  // anciennes macros : elles serviraient à filtrer, et elles seraient fausses.
-  const gardees = new Set(macros.map(m => m.recipe_id))
-  const aEffacer = recettes.map(r => r.id).filter(id => !gardees.has(id))
+  let effacees = 0
   for (let d = 0; d < aEffacer.length; d += 200) {
-    const { error } = await db.from('recipe_nutrition')
-      .delete().in('recipe_id', aEffacer.slice(d, d + 200))
+    const { error, count } = await db.from('recipe_nutrition')
+      .delete({ count: 'exact' }).in('recipe_id', aEffacer.slice(d, d + 200))
     if (error) throw new Error(error.message)
+    effacees += count ?? 0
   }
-  if (aEffacer.length > 0) console.log(`   ${aEffacer.length} macros périmées effacées.`)
+  console.log(`   ${effacees} macros périmées effacées.`)
   for (let d = 0; d < macros.length; d += 300) {
     const { error } = await db.from('recipe_nutrition')
       .upsert(macros.slice(d, d + 300), { onConflict: 'recipe_id' })
