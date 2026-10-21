@@ -19,9 +19,9 @@
 import { Marque } from '../ui/coque.tsx'
 import { useCycle, GESTE } from '../lib/donnees/cycle.ts'
 import { useBarquettes } from '../lib/donnees/barquettes.ts'
-import { useFoyer, prenomDe, initialeDe } from '../lib/donnees/foyer.ts'
-import { useMois, useEnveloppes, useComptes, useRevenus, virements, moisDe, eurosRonds, euros }
-  from '../lib/donnees/budget.ts'
+import { useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
+import { useMois, useRevenus, useSaisies, moisDe, eurosRonds } from '../lib/donnees/budget.ts'
+import { aDire, ligneDuHub, nomDuMois, resteDuMois } from '../lib/budget/mois.ts'
 
 function Carte({ titre, onClick, children }:
   { titre: string; onClick: () => void; children: React.ReactNode }) {
@@ -50,27 +50,16 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
      commencer par un mensonge. */
   const budget = useMois(mois)
   const depenses = budget.data ?? []
-  const { data: enveloppes = [] } = useEnveloppes(mois)
-  const { data: comptes = [] } = useComptes()
+  const saisies = useSaisies(mois)
   const { data: revenus = [] } = useRevenus()
   const revenuPose = revenus.some(r => r.user_profile_id === userId)
-
   const moi = foyer?.membres.find(m => m.id === userId)
-  const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, prenomDe(m.display_name)]))
-  const aVerser = virements(depenses, userId, comptes, prenoms)
-    .reduce((s, v) => s + v.cents, 0)
 
-  /* L'enveloppe la plus TENDUE, pas la première : c'est celle-là qui peut
-     changer ce qu'on fait dans l'heure, et c'est le seul critère qui vaille
-     pour mériter sa place ici. */
-  /* ⚠️ La plus TENDUE, pas la plus petite.
-     Le tri portait sur `reste_cents`, qui ignore le prévu : le premier du mois,
-     rien n'est confirmé, tous les restes valent le plafond, et le hub
-     désignait donc la plus petite enveloppe — « Culture, 100 € » — au lieu de
-     celle qui serre. On compare ce qui est ENGAGÉ à son plafond. */
-  const part = (e: { plafond_cents: number; prevu_cents: number; depense_cents: number }) =>
-    e.plafond_cents === 0 ? 0 : Math.max(e.depense_cents, e.prevu_cents) / e.plafond_cents
-  const tendue = [...enveloppes].sort((a, b) => part(b) - part(a))[0]
+  /* Le chiffre de l'écran du mois, au même calcul (§ 3.1.1). Le mois courant
+     n'est jamais clôturé (D78) : `clos` vaut faux. */
+  const reste = resteDuMois({ lignes: depenses, saisies: saisies.data ?? [], moi: userId,
+                             revenus, mois, clos: false })
+  const suite = ligneDuHub({ aCloturer: null, aDire: aDire(depenses, saisies.data ?? [], false) })
   const geste = GESTE[cycle?.state ?? 'vide']
 
   return (
@@ -113,7 +102,9 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
           </Carte>
 
           <Carte titre="Budget" onClick={() => va('/budget')}>
-            {budget.isPending ? (
+            {/* Les saisies aussi : sans elles, un mois au fil passait pour « à dire »
+                et son reste pour plein, le temps d'une seconde. */}
+            {budget.isPending || saisies.isPending ? (
               <p className="titre text-[28px] mt-5 opacity-50">…</p>
             ) : depenses.length === 0 ? (
               <>
@@ -124,22 +115,22 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
               </>
             ) : (
               <>
-                <p className="mt-4 flex items-baseline gap-2.5">
-                  <span className="chiffre text-[40px] text-herbe">{eurosRonds(aVerser)}</span>
-                  <span className="text-[15px]">à verser ce mois</span>
-                </p>
-                <p className="mt-2.5 text-[15px] text-doux">
-                  {/* « Il reste 0,00 € » s'affichait le premier du mois, avant
-                      le moindre achat : la provision comptait comme dépensée.
-                      Tant que rien n'est confirmé, on annonce le plafond. */}
-                  {tendue
-                    ? tendue.depense_cents === 0
-                      ? `${tendue.libelle} : ${euros(tendue.plafond_cents)} pour le mois`
-                      : tendue.reste_cents >= 0
-                        ? `${tendue.libelle} : il reste ${euros(tendue.reste_cents)}`
-                        : `${tendue.libelle} : dépassé de ${euros(-tendue.reste_cents)}`
-                    : 'Aucune enveloppe posée'}
-                </p>
+                {/* Ce qui reste, en euros ronds (§ 3.6). « 0 € à verser » et
+                    « Courses : dépassé de 500 € » disaient l'état d'une enveloppe ;
+                    ceci dit ce qu'on peut encore dépenser. */}
+                {reste.reste === null ? (
+                  <p className="titre text-[28px] mt-5">Ajoute ton revenu</p>
+                ) : (
+                  <p className="mt-4 flex items-baseline gap-2.5 flex-wrap">
+                    <span className="text-[15px]">{reste.reste < 0 ? 'Il te manque' : 'Il te reste'}</span>
+                    <span className="chiffre text-[40px]"
+                          style={{ color: reste.reste < 0 ? 'var(--color-ocre)' : 'var(--color-herbe)' }}>
+                      {eurosRonds(Math.abs(reste.reste))}
+                    </span>
+                    <span className="text-[15px]">en {nomDuMois(mois)}</span>
+                  </p>
+                )}
+                <p className="mt-2.5 text-[15px] text-doux">{suite}</p>
               </>
             )}
           </Carte>
