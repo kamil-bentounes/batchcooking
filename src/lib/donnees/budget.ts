@@ -13,6 +13,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ou, ouNul, supabase } from '../supabase.ts'
+import { maintenant } from '../horloge.ts'
 
 export const CLE = {
   mois: (m: string) => ['budget-mois', m] as const,
@@ -25,7 +26,7 @@ export const CLE = {
 }
 
 /** Le premier jour du mois d'une date, en heure LOCALE. */
-export function moisDe(d = new Date()): string {
+export function moisDe(d = maintenant()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 
