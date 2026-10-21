@@ -21,12 +21,13 @@ import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
   useCharges, useCatalogue, useAjouteCharge, useRetireLaCharge, useComptes, useChangeCategorie,
   useRattacheCharge, useMajParticipants, useCorrigeCharge, useAUneHistoire, useEtatDeLAnnee,
-  euros, enCentimes, type Charge,
+  euros, moisDe, type Charge,
 } from '../lib/donnees/budget.ts'
 import { CATEGORIES, NOM_DU_MODE, categorieDeLArticle, infoCategorie, modeDeLArticle,
          type Categorie, type Mode } from '../lib/budget/categories.ts'
-import { ceQuiChange, ditLaCorrection, periodiciteDeLaFacon, retireesEncoreAReg, sousTitreDeLaFacon,
-         suiteDuRetrait, texteDeLaRetiree, type Rythme } from '../lib/budget/charges.ts'
+import { ceQuiChange, debutDuChamp, ditLaCorrection, peutCorriger, peutPoser, periodiciteDeLaFacon,
+         plancherDuDebut, retireesEncoreAReg, sousTitreDeLaFacon, suiteDuRetrait, texteDeLaRetiree,
+         type Rythme } from '../lib/budget/charges.ts'
 import { maintenant } from '../lib/horloge.ts'
 import { FeuilleMiseDeCote } from '../ui/budget/FeuilleMiseDeCote.tsx'
 
@@ -129,7 +130,7 @@ function Retiree({ charge, ouvrir }: { charge: Charge; ouvrir: () => void }) {
 }
 
 /** Le formulaire d'ajout, qu'il vienne du catalogue ou d'une ligne inventée. */
-function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
+export function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
   depart: { libelle: string; periode: string; portee: string; precision: string | null
             catalogueId: string | null
             /* La section et le rang de plafond de l'article : la catégorie et la
@@ -170,8 +171,7 @@ function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
      charge annuelle posée en septembre doit pouvoir commencer en janvier :
      sinon elle ne provisionne que les mois restants, et sa régularisation
      facture l'année entière d'un coup. */
-  const [debut, setDebut] = useState<string>(`${new Date().getFullYear()}-${
-    String(new Date().getMonth() + 1).padStart(2, '0')}-01`)
+  const [debut, setDebut] = useState<string>(moisDe())
   /* L'intention, déclarée à la main quand on est encore seul dans le foyer.
      Sans elle, `qui.length > 1` était impossible et aucune charge inventée ne
      pouvait accueillir le second membre à son arrivée. Le catalogue la
@@ -191,9 +191,12 @@ function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
     depart?.portee === 'perso' ? [moi] : membres.map(m => m.id))
   const ajoute = useAjouteCharge()
 
-  const cents = enCentimes(montant)
-  const saisiFaux = montant.trim() !== '' && cents === null
-  const pret = libelle.trim() !== '' && cents !== null && cents > 0 && qui.length > 0
+  /* Le montant et le départ passent par les mêmes règles que les feuilles : 0 € et plus de
+     1 000 000 € se refusent avant l'envoi, et un « Elle court depuis » vidé ne part pas
+     comme « -01 ». */
+  const plancher = plancherDuDebut(maintenant())
+  const { pret, cents, refusMontant, refusDebut } = peutPoser({
+    libelle, montant, qui: qui.length, debut, plancher })
 
   return (
     <>
@@ -204,9 +207,9 @@ function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
         )}
         <Champ label="Combien (€)" type="text" inputMode="decimal" value={montant}
                onChange={e => setMontant(e.target.value)} />
-        {saisiFaux && (
-          <p className="-mt-1 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
-            Un montant, avec au plus deux décimales : 37 ou 10,70.
+        {refusMontant && (
+          <p role="alert" className="-mt-1 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
+            {refusMontant}
           </p>
         )}
 
@@ -280,11 +283,16 @@ function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
           </label>
           <input id="debut-charge" type="month" value={debut.slice(0, 7)}
                  /* Pas avant janvier de l'année précédente : la base refuse (0096). */
-                 min={`${maintenant().getFullYear() - 1}-01`}
-                 onChange={e => setDebut(`${e.target.value}-01`)}
+                 min={plancher.slice(0, 7)}
+                 onChange={e => setDebut(debutDuChamp(e.target.value))}
                  className="mt-2 w-full min-h-11 rounded-[14px] border border-brume
                             bg-surface px-4 text-[16px]" />
-          {periode !== 'mensuel' && debut.slice(0, 4) === String(new Date().getFullYear())
+          {refusDebut && (
+            <p role="alert" className="mt-2 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
+              {refusDebut}
+            </p>
+          )}
+          {periode !== 'mensuel' && debut.slice(0, 4) === String(maintenant().getFullYear())
             && Number(debut.slice(5, 7)) > 1 && (
             <p className="mt-2 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
               On ne mettra de côté qu’à partir de ce mois-là. Si tu la paies
@@ -710,8 +718,11 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                 </div>
 
                 {corrigeOuvert === c.id && (() => {
-                  const cents = enCentimes(cMontant)
-                  const pret = cLibelle.trim() !== '' && cents !== null && cents > 0
+                  /* Les mêmes règles que l'ajout : le plafond de 1 000 000 €, et un départ
+                     vidé ne part pas comme « -01 ». */
+                  const { pret, cents, refusMontant, refusDebut } = peutCorriger({
+                    libelle: cLibelle, montant: cMontant, mode: cMode, debut: cDebut,
+                    garde: c.debut, plancher: plancherDuDebut(maintenant()) })
                   return (
                     <div className="mt-3 rounded-[14px] border border-brume p-3 space-y-3">
                       <label className="block">
@@ -730,6 +741,10 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                                             bg-surface px-3 text-[16px]" />
                           <span className="text-[15px] text-doux">€</span>
                         </span>
+                        {refusMontant && cMontant.trim() !== '' && (
+                          <span role="alert" className="mt-1 block text-[14px]"
+                                style={{ color: 'var(--color-ocre)' }}>{refusMontant}</span>
+                        )}
                       </label>
                       <ChoixCategorie valeur={cCategorie} choisir={setCCategorie}
                                       nom={`Catégorie de ${c.libelle}`} />
@@ -741,9 +756,13 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                           <span className="text-[14px] text-doux">Elle court depuis</span>
                           <input type="month" value={cDebut.slice(0, 7)}
                                  aria-label={`Depuis quand court ${c.libelle}`}
-                                 onChange={e => setCDebut(`${e.target.value}-01`)}
+                                 onChange={e => setCDebut(debutDuChamp(e.target.value))}
                                  className="mt-1 min-h-11 rounded-[12px] border border-brume
                                             bg-surface px-3 text-[16px]" />
+                          {refusDebut && (
+                            <span role="alert" className="mt-1 block text-[14px]"
+                                  style={{ color: 'var(--color-ocre)' }}>{refusDebut}</span>
+                          )}
                           <span className="mt-1 block text-[14px] text-doux">
                             C’est elle qui décide sur combien de mois le montant
                             se répartit.

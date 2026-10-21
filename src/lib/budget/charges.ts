@@ -4,7 +4,8 @@
  * figer — l'écran, lui, n'a pas de banc de composants.
  */
 import { infoCategorie, NOM_DU_MODE, type Categorie, type Mode } from './categories.ts'
-import { montant } from './mois.ts'
+import { montant, nomDuMois } from './mois.ts'
+import { lisLeMontant } from './feuilles.ts'
 import type { Retrait } from '../donnees/budget.ts'
 
 export type Rythme = 'trimestriel' | 'annuel'
@@ -77,4 +78,61 @@ export function ditLaCorrection(libelle: string, moisRefaits: number): string {
   return moisRefaits === 0
     ? `« ${libelle} » corrigée.`
     : `« ${libelle} » corrigée, ${moisRefaits} mois refait${moisRefaits > 1 ? 's' : ''}.`
+}
+
+/**
+ * Le champ « Elle court depuis » (`<input type="month">`) rend « 2026-09 » — ou « » quand
+ * on l'efface, ou qu'on n'a tapé qu'une partie. L'écran écrivait `${''}-01`, soit « -01 »,
+ * et l'envoyait à la base : on ne garde que ce qui est un mois entier.
+ */
+export function debutDuChamp(valeur: string): string {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(valeur) ? `${valeur}-01` : ''
+}
+
+/** Le plus ancien départ que la base accepte (0096) : janvier de l'année précédente. */
+export function plancherDuDebut(maintenant: Date): string {
+  return `${maintenant.getFullYear() - 1}-01-01`
+}
+
+/**
+ * Un départ est-il acceptable ? `garde` : celui que la charge a déjà. Il reste accepté même
+ * avant le plancher — corriger un libellé ne doit pas obliger à réécrire une date que la
+ * base a posée —, mais tout AUTRE départ passe le plancher.
+ */
+export function lisLeDebut(debut: string, o: { plancher: string; garde?: string }):
+  { valide: boolean; refus: string | null } {
+  if (!/^\d{4}-\d{2}-01$/.test(debut)) return { valide: false, refus: 'Choisis le mois où elle commence.' }
+  if (debut !== o.garde && debut < o.plancher) {
+    return { valide: false,
+             refus: `Pas avant ${nomDuMois(o.plancher)} ${o.plancher.slice(0, 4)}.` }
+  }
+  return { valide: true, refus: null }
+}
+
+/**
+ * Ce que le formulaire d'ajout permet d'envoyer. Le montant passe par `lisLeMontant`, comme
+ * les feuilles : 0 € et plus de 1 000 000 € se refusent AVANT l'envoi, avec leur phrase.
+ */
+export function peutPoser(o: { libelle: string; montant: string; qui: number; debut: string; plancher: string }):
+  { pret: boolean; cents: number | null; refusMontant: string | null; refusDebut: string | null } {
+  const m = lisLeMontant(o.montant, { zeroOk: false })
+  const d = lisLeDebut(o.debut, { plancher: o.plancher })
+  return { pret: o.libelle.trim() !== '' && m.valide && o.qui > 0 && d.valide,
+           cents: m.cents, refusMontant: m.refus, refusDebut: d.refus }
+}
+
+/**
+ * Ce que le panneau « Corriger » permet d'enregistrer. Le départ ne se lit que pour une mise
+ * de côté : c'est la seule façon dont le champ est montré, et les autres envoient celui que
+ * la charge a déjà.
+ */
+export function peutCorriger(o: {
+  libelle: string; montant: string; mode: Mode; debut: string; garde: string; plancher: string
+}): { pret: boolean; cents: number | null; refusMontant: string | null; refusDebut: string | null } {
+  const m = lisLeMontant(o.montant, { zeroOk: false })
+  const d = o.mode === 'mis_de_cote'
+    ? lisLeDebut(o.debut, { plancher: o.plancher, garde: o.garde })
+    : { valide: true, refus: null }
+  return { pret: o.libelle.trim() !== '' && m.valide && d.valide,
+           cents: m.cents, refusMontant: m.refus, refusDebut: d.refus }
 }

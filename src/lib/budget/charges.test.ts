@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ceQuiChange, ditLaCorrection, periodiciteDeLaFacon, retireesEncoreAReg, sousTitreDeLaFacon,
+import { ceQuiChange, debutDuChamp, ditLaCorrection, lisLeDebut, peutCorriger, peutPoser,
+         periodiciteDeLaFacon, plancherDuDebut, retireesEncoreAReg, sousTitreDeLaFacon,
          suiteDuRetrait, texteDeLaRetiree } from './charges.ts'
 import { montant } from './mois.ts'
 
@@ -116,5 +117,97 @@ describe('ditLaCorrection', () => {
   it('un mois, puis plusieurs : « refait » prend le pluriel', () => {
     expect(ditLaCorrection('Loyer', 1)).toBe('« Loyer » corrigée, 1 mois refait.')
     expect(ditLaCorrection('Loyer', 3)).toBe('« Loyer » corrigée, 3 mois refaits.')
+  })
+})
+
+describe('« Elle court depuis » — un champ vidé ne part pas comme « -01 »', () => {
+  // `<input type="month">` rend « » quand on l'efface (ou qu'on n'a tapé qu'une partie) :
+  // l'écran écrivait `${''}-01`, soit « -01 », et l'envoyait à la base.
+  it('debutDuChamp : un mois complet devient son premier jour, le reste devient vide', () => {
+    expect(debutDuChamp('2026-09')).toBe('2026-09-01')
+    expect(debutDuChamp('')).toBe('')
+    expect(debutDuChamp('2026-9')).toBe('')
+    expect(debutDuChamp('2026-13')).toBe('')
+    expect(debutDuChamp('2026-00')).toBe('')
+  })
+
+  const plancher = plancherDuDebut(new Date(2026, 9, 21))
+  it('le plancher est janvier de l’année précédente (la base refuse avant, 0096)', () => {
+    expect(plancher).toBe('2025-01-01')
+  })
+
+  it('lisLeDebut : vide, mal formé ou avant le plancher ne passent pas, et le disent', () => {
+    for (const d of ['', '-01', '0002-05-01', '2024-12-01']) {
+      const r = lisLeDebut(d, { plancher })
+      expect(r.valide, d).toBe(false)
+      expect(r.refus, d).toBeTypeOf('string')
+    }
+    expect(lisLeDebut('2025-01-01', { plancher })).toEqual({ valide: true, refus: null })
+    expect(lisLeDebut('2026-10-01', { plancher }).valide).toBe(true)
+  })
+
+  it('lisLeDebut : le départ DÉJÀ posé reste accepté, même antérieur au plancher (corriger un libellé ne le réécrit pas)', () => {
+    expect(lisLeDebut('2024-03-01', { plancher, garde: '2024-03-01' }).valide).toBe(true)
+    expect(lisLeDebut('2024-04-01', { plancher, garde: '2024-03-01' }).valide).toBe(false)
+  })
+})
+
+describe('peutPoser — l’ajout d’une charge ne part qu’avec un montant ET un départ acceptés', () => {
+  const plancher = '2025-01-01'
+  const base = { libelle: 'Loyer', montant: '800', qui: 1, debut: '2026-10-01', plancher }
+
+  it('un cas ordinaire est prêt, en centimes', () => {
+    expect(peutPoser(base)).toMatchObject({ pret: true, cents: 80_000, refusMontant: null, refusDebut: null })
+  })
+
+  it('le plafond de 1 000 000 € se refuse, avec sa phrase (comme les feuilles)', () => {
+    const r = peutPoser({ ...base, montant: '1000000,01' })
+    expect(r.pret).toBe(false)
+    expect(r.refusMontant).toContain('1 000 000')
+    expect(peutPoser({ ...base, montant: '1000000' }).pret).toBe(true)
+    expect(peutPoser({ ...base, montant: '99999999' }).pret).toBe(false)
+  })
+
+  it('0 €, vide et illisible ne passent pas ; le vide ne gronde pas encore', () => {
+    expect(peutPoser({ ...base, montant: '0' }).pret).toBe(false)
+    expect(peutPoser({ ...base, montant: '' })).toMatchObject({ pret: false, refusMontant: null })
+    expect(peutPoser({ ...base, montant: '4,5,6' }).refusMontant).toBeTypeOf('string')
+  })
+
+  it('un départ vidé ou avant le plancher bloque, et se dit', () => {
+    expect(peutPoser({ ...base, debut: '' })).toMatchObject({ pret: false })
+    expect(peutPoser({ ...base, debut: '' }).refusDebut).toBeTypeOf('string')
+    expect(peutPoser({ ...base, debut: '0002-05-01' }).pret).toBe(false)
+  })
+
+  it('sans libellé ou sans participant, non', () => {
+    expect(peutPoser({ ...base, libelle: '  ' }).pret).toBe(false)
+    expect(peutPoser({ ...base, qui: 0 }).pret).toBe(false)
+  })
+})
+
+describe('peutCorriger — corriger ne contourne ni le plafond ni la date', () => {
+  const plancher = '2025-01-01'
+  const base = { libelle: 'Taxe foncière', montant: '1450', mode: 'mis_de_cote' as const,
+                 debut: '2026-01-01', garde: '2026-01-01', plancher }
+
+  it('un cas ordinaire est prêt', () => {
+    expect(peutCorriger(base)).toMatchObject({ pret: true, cents: 145_000 })
+  })
+
+  it('le plafond de 1 000 000 € se refuse aussi', () => {
+    const r = peutCorriger({ ...base, montant: '1000000,01' })
+    expect(r.pret).toBe(false)
+    expect(r.refusMontant).toContain('1 000 000')
+  })
+
+  it('un départ vidé bloque une mise de côté — il n’est pas lu pour les autres façons (le champ est caché)', () => {
+    expect(peutCorriger({ ...base, debut: '' }).pret).toBe(false)
+    expect(peutCorriger({ ...base, debut: '' }).refusDebut).toBeTypeOf('string')
+    expect(peutCorriger({ ...base, mode: 'fixe', debut: '' }).pret).toBe(true)
+  })
+
+  it('le départ ancien déjà posé ne bloque pas un simple changement de libellé', () => {
+    expect(peutCorriger({ ...base, debut: '2024-03-01', garde: '2024-03-01' }).pret).toBe(true)
   })
 })
