@@ -20,6 +20,7 @@ import type { Page } from '@playwright/test'
 import { MOT_DE_PASSE, amorce, efface } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
 import { releve } from './couverture.ts'
+import { ouvreLaCategorie } from './aides-budget.ts'
 
 let foyer: Foyer
 
@@ -399,7 +400,7 @@ test.describe('les deux univers', () => {
   })
 })
 
-test.describe('le budget, du vide jusqu’au virement', () => {
+test.describe('le budget, du vide jusqu’au chiffre', () => {
   test('on pose un revenu, un compte, une charge — et le chiffre apparaît', async ({ page }) => {
     /*
      * Le parcours entier, celui qui manquait. Une relecture avait trouvé que
@@ -424,10 +425,6 @@ test.describe('le budget, du vide jusqu’au virement', () => {
     await page.getByRole('button', { name: /ajouter ce compte/i }).click()
     await expect(page.getByText('Commun').first()).toBeVisible({ timeout: 10_000 })
 
-    await page.getByLabel(/nom de l’enveloppe/i).fill('Restaurant')
-    await page.getByLabel(/plafond mensuel/i).fill('400')
-    await page.getByRole('button', { name: /ajouter cette enveloppe/i }).click()
-    await expect(page.getByText(/400,00/).first()).toBeVisible({ timeout: 10_000 })
     await capture(page, 'clic-18-reglages-remplis')
 
     // Une charge, depuis le catalogue.
@@ -438,15 +435,15 @@ test.describe('le budget, du vide jusqu’au virement', () => {
     await expect(page.getByText(/37,00/).first()).toBeVisible({ timeout: 15_000 })
     await capture(page, 'clic-19-charge-posee')
 
-    /* Et le mois doit annoncer un VIREMENT NOMMÉ, pas « à répartir ».
-       La première version de ce test n'assertait que la présence du titre
-       « À verser » — elle n'a donc pas vu que les charges créées par l'écran
-       ne portaient aucun compte, et retombaient toutes dans le bac à sable. */
+    /* Et le mois doit l'annoncer : ce qui reste, sur le revenu qu'on vient de
+       poser, et la charge rangée dans sa catégorie. « À verser » reviendra au
+       lot 4 ; le compte de la charge, lui, se vérifie plus bas. */
     await page.goto('/budget')
-    await expect(page.getByText(/à verser/i).first()).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByRole('heading', { name: /rien à verser/i })).toHaveCount(0)
-    await expect(page.getByText('Commun', { exact: true }).first())
-      .toBeVisible({ timeout: 10_000 })
+    const recap = page.getByRole('region', { name: 'Ce qui reste' })
+    await expect(recap.getByText(/sur 2\s400 € de revenus/)).toBeVisible({ timeout: 15_000 })
+    await ouvreLaCategorie(page, 'Maison')
+    await expect(page.getByRole('region', { name: 'Catégorie Maison' })
+      .getByText('Internet').first()).toBeVisible()
     await capture(page, 'clic-20-budget-rempli')
 
     /* ⚠️ L'assertion portait sur l'ABSENCE de « à répartir » sur tout l'écran.
@@ -497,10 +494,15 @@ test.describe('le budget, du vide jusqu’au virement', () => {
       'le montant faux est resté dans la liste').toHaveCount(0)
     await capture(page, 'clic-23-charge-corrigee')
 
-    /* Et le mois, pas seulement la liste : c'est lui qui dit quoi virer. */
+    /* Et le mois, pas seulement la liste. L'écran du mois écrit « 37 € », sans
+       « ,00 » : chercher « 3 700,00 » n'y trouvait plus rien et passait à vide.
+       On lit la ligne elle-même, dans sa catégorie. */
     await page.goto('/budget')
-    await expect(page.getByText(/3\s?700,00/),
-      'le mois facture encore le montant faux').toHaveCount(0)
+    await ouvreLaCategorie(page, 'Maison')
+    const gaz = page.getByRole('region', { name: 'Catégorie Maison' })
+      .getByRole('button', { name: /^Gaz/ })
+    await expect(gaz).toContainText('37 €')
+    await expect(gaz, 'le mois facture encore le montant faux').not.toContainText(/3\s700/)
     await capture(page, 'clic-24-mois-corrige')
 
     expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])

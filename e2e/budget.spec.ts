@@ -9,6 +9,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { MOT_DE_PASSE, amorce, efface, db } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
 import { releve } from './couverture.ts'
+import { ouvreLaCategorie } from './aides-budget.ts'
 
 let foyer: Foyer
 test.beforeAll(async () => { foyer = await amorce() })
@@ -30,14 +31,6 @@ async function prend(page: Page, nom: string) {
   await page.screenshot({ path: `.shots/budget/${nom}.png` })
   await page.screenshot({ path: `.shots/budget/${nom}-entier.png`, fullPage: true })
   await releve(page)
-}
-
-/** Ouvre une catégorie repliée. Une catégorie sans montant à dire l'est d'office. */
-async function ouvreLaCategorie(page: Page, nom: string) {
-  const entete = page.getByRole('region', { name: `Catégorie ${nom}` })
-    .locator('button[aria-expanded]').first()
-  await expect(entete).toBeVisible({ timeout: 15_000 })
-  if (await entete.getAttribute('aria-expanded') === 'false') await entete.click()
 }
 
 test.describe('l’écran du mois', () => {
@@ -106,7 +99,11 @@ test.describe('l’écran du mois', () => {
       await page.getByRole('button', { name: /^Entretien auto/ }).click()
       const feuille = page.getByRole('dialog', { name: 'Entretien auto' })
       await expect(feuille.getByText(/Prévu pour \d{4}/)).toBeVisible({ timeout: 10_000 })
-      await feuille.getByLabel('Montant de la facture').fill('9000')
+      /* 600 € contre 500,04 € prévus : un dépassement qui reste dans le revenu. À
+         9 000 €, la facture (toute à Kamil) faisait « Il te manque 7 225 € » et le test
+         du hub, qui attend « Il te reste », échouait — puis le banc repartait d'un
+         foyer neuf et les tests suivants lisaient une base sans leurs saisies. */
+      await feuille.getByLabel('Montant de la facture').fill('600')
       await expect(feuille.getByText(/de plus que les .* prévus pour \d{4} : ils s’ajoutent à /))
         .toBeVisible()
       await prend(page, '04-feuille-mise-de-cote')
@@ -144,4 +141,44 @@ test.describe('l’écran du mois', () => {
     await expect(carte.getByText(/montants? à dire|Tout est à jour|est à clôturer/)).toBeVisible()
     await prend(page, '06-hub')
   })
+
+  test('Mes charges : la catégorie et la façon viennent de l’article', async ({ page }) => {
+    await connecte(page)
+    await page.goto('/charges')
+    await page.getByRole('button', { name: 'Courses', exact: true }).click()
+    await expect(page.getByRole('radiogroup', { name: 'Catégorie' })
+      .getByRole('radio', { name: 'Vie courante' })).toHaveAttribute('aria-checked', 'true')
+    await expect(page.getByRole('radio', { name: 'Plusieurs dépenses dans le mois' }))
+      .toHaveAttribute('aria-checked', 'true')
+    await prend(page, '07-charge-courses')
+
+    await page.getByRole('button', { name: 'Les charges' }).click()
+    await page.getByRole('button', { name: 'Taxe foncière', exact: true }).click()
+    await expect(page.getByRole('radiogroup', { name: 'Catégorie' })
+      .getByRole('radio', { name: 'Maison' })).toHaveAttribute('aria-checked', 'true')
+    await expect(page.getByRole('radio', { name: 'Mise de côté' })).toHaveAttribute('aria-checked', 'true')
+    await expect(page.getByRole('radio', { name: 'Une fois par an' })).toHaveAttribute('aria-checked', 'true')
+  })
+
+  test('Retirer : les dépenses déclarées se confirment d’abord ; la charge mise de côté garde sa feuille',
+    async ({ page }) => {
+      await connecte(page)
+      await page.goto('/charges')
+      const annonces: string[] = []
+      page.on('dialog', d => { annonces.push(d.message()); void d.accept() })
+
+      await page.getByRole('button', { name: 'Retirer Courses' }).click()
+      await expect(page.getByText(/« Courses » retirée/)).toBeVisible({ timeout: 15_000 })
+      expect(annonces).toEqual(['Retirer « Courses » ? Elle disparaîtra de tous les mois.',
+                                'Retirer Courses et ses 166,40 € déclarés ?'])
+
+      /* L'Entretien a une facture (le test d'avant) : il s'archive, et sa feuille
+         reste à portée — sa prochaine facture arrivera après son retrait. */
+      await page.getByRole('button', { name: 'Retirer Entretien auto' }).click()
+      await expect(page.getByText(/« Entretien auto » retirée/)).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByText('Retirées, encore à régler')).toBeVisible()
+      await expect(page.getByText(`${new Date().getFullYear()} reste à régler`)).toBeVisible()
+      await page.getByRole('button', { name: 'Ajouter une facture' }).click()
+      await expect(page.getByRole('dialog', { name: 'Entretien auto' })).toBeVisible()
+      await prend(page, '08-retiree-encore-a-regler')
 })

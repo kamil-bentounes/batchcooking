@@ -159,15 +159,6 @@ test.describe('le tout premier soir', () => {
       await expect(page.getByRole('button', { name: 'Livret A', exact: true }),
         'la proposition survit à sa propre création').toHaveCount(0)
 
-      /* Et le libellé d'enveloppe part du catalogue TEL QUEL : c'est lui qui
-         rattachera la charge « Courses » à la jauge « Courses ». */
-      await page.getByRole('button', { name: 'Courses', exact: true }).click()
-      await expect(page.getByLabel('Nom de l’enveloppe')).toHaveValue('Courses')
-      await page.getByLabel('Plafond mensuel (€)').fill('800')
-      await page.getByRole('button', { name: 'Ajouter cette enveloppe' }).click()
-      await expect(page.getByText('800,00 € / mois')).toBeVisible({ timeout: 15_000 })
-      await expect(page.getByRole('button', { name: 'Courses', exact: true })).toHaveCount(0)
-
       await prend(page, 'vide-budget-reglages-pioche')
     })
 })
@@ -196,93 +187,50 @@ test.describe('les états du foyer rempli', () => {
   test.beforeAll(async () => { foyer = await amorce() })
   test.afterAll(async () => { if (foyer) await efface(foyer) })
 
-  test('quand une écriture échoue, l’écran le dit', async ({ page }) => {
-    /* Le bandeau d'erreur des charges n'avait jamais été vu : `majQui` et
-       `rattache` levaient dans le vide jusqu'à ce matin, et `corrige` vient
-       d'être câblé. Une erreur qu'on n'a jamais regardée est une erreur dont
-       on ne sait pas si elle se lit.
+  test('un montant hors borne : l’écran le refuse avant la base, et le dit', async ({ page }) => {
+    /* « Mes charges » vérifie désormais le montant à la frappe (`peutCorriger`) :
+       le refus de `corrige_la_charge` (un million d'euros au plus) n'est plus atteint
+       par ce geste, et ce test, qui attendait la réponse de la base, cliquait sur
+       un bouton grisé. On regarde donc ce que la personne voit : le refus, en
+       clair, DANS la fenêtre, et rien qui s'écrive.
 
-       Le refus est RÉEL, pas simulé : `corrige_la_charge` borne le montant à
-       un million d'euros, et l'écran envoie ce qu'on tape. */
+       ⚠️ Le bandeau d'erreur d'une écriture que la base refuse vraiment n'a plus de
+       banc ici : aucun geste de cet écran n'y mène sans passer par la garde. */
     await connecte(page, foyer.email)
     await page.goto('/charges')
     await page.getByRole('button', { name: 'Corriger Internet' }).click()
     await page.getByLabel('Montant de Internet').fill('2000000')
-    await page.getByRole('button', { name: 'Enregistrer', exact: true }).click()
     /* ⚠️ `toBeVisible` ne dit pas « on le voit » : un message quatre écrans
-       plus haut est « visible » pour Playwright. La première version de ce
-       test passait avec le refus affiché en tête de page, hors de l'écran.
-       On exige donc qu'il soit DANS la fenêtre, à côté du bouton touché. */
-    const refus = page.getByText(/borne|refus|hors/i).first()
+       plus haut est « visible » pour Playwright. On exige donc qu'il soit DANS la
+       fenêtre, à côté du champ touché. */
+    const refus = page.getByText(/au plus 1\s000\s000/)
     await expect(refus).toBeVisible({ timeout: 15_000 })
     await expect(refus).toBeInViewport()
+    await expect(page.getByRole('button', { name: 'Enregistrer', exact: true }),
+      'un montant refusé peut encore s’enregistrer').toBeDisabled()
     await prend(page, 'erreur-01-charge-refusee')
   })
 
-  test('un mois confirmé, et le mois d’avant', async ({ page }) => {
-    test.setTimeout(90_000)
-    /* Tout ce qui a été photographié jusqu'ici l'était AVANT confirmation :
-       l'écran du 27, celui où l'on saisit ce qu'on a vraiment payé, et celui
-       d'un mois déjà vécu, n'existaient sur aucune image. */
+  test('le mois d’avant, et la porte des charges', async ({ page }) => {
+    /* Le mois d'avant se lit d'une pastille, et la porte vers les charges est le
+       premier geste, sans condition : conditionnée à un virement à faire, elle
+       a disparu une fois, et les charges sont devenues inatteignables.
+       « Vraiment payé » et « Marquer ce mois comme réglé » ne sont plus à
+       l'écran : la facture se valide dans sa feuille, le mois se clôture
+       (lot 3), et ce qu'on a versé reviendra avec « À verser » (lot 4). */
     await connecte(page, foyer.email)
     await page.goto('/budget')
+    await expect(page.getByRole('region', { name: 'Ce qui reste' })).toBeVisible({ timeout: 15_000 })
+    await prend(page, 'confirme-01-mois')
 
-    /* ⚠️ `count()` n'attend RIEN. Compté avant que l'écran ait fini de charger,
-       il rend zéro et le test échoue sur une capture qui, elle, montre bien
-       les champs — on cherche alors le défaut là où il n'est pas. */
-    const champs = page.getByLabel(/vraiment payé/i)
-    await expect(champs.first()).toBeVisible({ timeout: 15_000 })
-    const combien = await champs.count()
-    expect(combien, 'aucune ligne à confirmer : l’amorce a changé').toBeGreaterThan(0)
-    /* ⚠️ Toujours la PREMIÈRE : une ligne confirmée quitte la liste, et
-       `nth(1)` n'existe plus une fois la première partie. */
-    for (let reste = combien; reste > 0; reste--) {
-      await champs.first().fill('42')
-      await page.getByRole('button', { name: /c’est ça/i }).first().click()
-      await expect(champs).toHaveCount(reste - 1, { timeout: 15_000 })
-    }
-    await prend(page, 'confirme-01-mois-confirme')
-
-    /* Le bouton dit « ‹ Avant » mais s'annonce « Mois précédent » : son
-       `aria-label` remplace le texte visible. C'est le nom accessible qui
-       compte pour un test comme pour une synthèse vocale. */
-    await page.getByRole('button', { name: 'Mois précédent' }).click()
+    await page.getByRole('button', { name: /^Mois précédent/ }).click()
+    await expect(page.getByRole('button', { name: /^Mois suivant/ })).toBeVisible()
     await page.waitForTimeout(800)
     await prend(page, 'confirme-02-mois-precedent')
 
-    /* Un mois PASSÉ réclamait un virement pour ce qu'on a déjà vécu et payé —
-       rattraper une charge annuelle depuis janvier en ouvre huit d'un coup — et
-       rien ne permettait de le dire. */
-    /* ⚠️ Plus de `if (await count())` ici. Trois fois cette session un tel
-       garde-fou a masqué un mauvais libellé : le banc restait vert en ne
-       faisant rien. Un mois précédent PROPOSE de se marquer réglé — si ce
-       n'est plus vrai, on veut le savoir. */
-    const deja = page.getByRole('button', { name: /marquer ce mois/i })
-    await expect(deja, 'un mois passé ne propose plus de se marquer réglé').toBeVisible()
-    {
-      await deja.click()
-      await expect(page.getByRole('button', { name: /revenir dessus/i }))
-        .toBeVisible({ timeout: 15_000 })
-      /* Un mois soldé ne redemande pas le relevé, et il garde sous les yeux ce
-         qu'il demandait : sinon on ne sait plus ce qu'on vient de payer. */
-      await expect(page.getByLabel(/vraiment payé/i),
-        'un mois soldé redemande le relevé').toHaveCount(0)
-      await expect(page.getByText(/Ce mois demandait/),
-        'un mois soldé cache ce qu’il demandait').toBeVisible()
-      await prend(page, 'confirme-03-mois-regle')
-
-      /* ⚠️ LA PORTE VERS LES CHARGES, dans l'état précis où elle disparaissait.
-         Un mois soldé n'a plus AUCUN virement à faire, et le bouton « Voir et
-         modifier les charges » était conditionné à `aFaire.length > 0`. Comme
-         `/charges` n'est pas dans la barre du bas, l'écran devenait
-         inatteignable : charges posées, rien à virer, aucun chemin pour aller
-         les corriger. */
-      await expect(page.getByRole('button', { name: 'Voir et modifier les charges' }),
-        'un mois sans virement n’a plus de porte vers les charges').toBeVisible()
-      await page.getByRole('button', { name: 'Voir et modifier les charges' }).click()
-      await expect(page.getByRole('heading', { name: 'Les charges' }),
-        'la porte ne mène pas à l’écran des charges').toBeVisible({ timeout: 15_000 })
-    }
+    await page.getByRole('button', { name: 'Mes charges' }).click()
+    await expect(page.getByRole('heading', { name: 'Les charges' }),
+      'la porte ne mène pas à l’écran des charges').toBeVisible({ timeout: 15_000 })
   })
 
   test('ce que Thauba voit d’elle-même', async ({ page }) => {

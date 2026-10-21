@@ -16,6 +16,7 @@ import type { Page } from '@playwright/test'
 import { MOT_DE_PASSE, amorce, efface } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
 import { releve } from './couverture.ts'
+import { ouvreLaCategorie } from './aides-budget.ts'
 
 let foyer: Foyer
 
@@ -130,5 +131,33 @@ test.describe('les captures de revue', () => {
       const ajout = page.getByRole('button', { name: /à la main|ajouter/i }).first()
       if (await ajout.count()) { await ajout.click(); await prend(page, '26-ajout-manuel') }
     }
+  })
+})
+
+/* Le budget refait, à la largeur de sa maquette (390 px) : le mois et ses trois
+   feuilles. Aucune assertion de plus que l'ouverture : ce sont des images à
+   regarder, à côté de `docs/superpowers/maquettes/captures/budget-*.png`. */
+test.describe('le budget refait, à la largeur de la maquette', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('le mois et ses trois feuilles', async ({ page }) => {
+    test.setTimeout(120_000)
+    await connecte(page)
+    await page.goto('/budget')
+    await expect(page.getByRole('region', { name: 'Ce qui reste' })).toBeVisible({ timeout: 15_000 })
+    await prend(page, '30-budget-mois-390')
+
+    await page.getByRole('button', { name: 'Déclarer pour Courses' }).click()
+    await prend(page, '31-feuille-declarer')
+    await page.getByRole('button', { name: 'Fermer' }).click()
+
+    await ouvreLaCategorie(page, 'Maison')
+    await page.getByRole('button', { name: /^Électricité/ }).click()
+    await prend(page, '32-feuille-facture')
+    await page.getByRole('button', { name: 'Fermer' }).click()
+
+    await ouvreLaCategorie(page, 'Auto')
+    await page.getByRole('button', { name: /^Entretien auto/ }).click()
+    await prend(page, '33-feuille-mise-de-cote')
   })
 })
