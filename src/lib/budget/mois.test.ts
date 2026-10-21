@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { aDire, barre, dansLeFiltre, maPart, montant, montantCompte, parCategorie, pourcentages,
-         resteDuMois, revenuDuMois, totauxDuFiltre, type Ligne, type Saisie } from './mois.ts'
+import { aDire, bandeau, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
+         maPart, maPartDesSoldes, montant, montantCompte, moisVoisin, nomDuMois, parCategorie,
+         pourcentages, recapCloture, resteDuMois, revenuDuMois, totauxDuFiltre, type Ligne,
+         type Saisie } from './mois.ts'
 
 const K = 'kamil'
 const T = 'thauba'
@@ -180,5 +182,90 @@ describe('la barre du récap', () => {
   it('quand il manque de l’argent : sur le total des charges, sans « Reste »', () => {
     const b = barre({ lignes, charges, saisies: [], moi: K, revenu: 250_000, clos: false })
     expect(b.map(s => [s.cle, s.pourcent])).toEqual([['maison', 67], ['vie_courante', 33]])
+  })
+})
+
+describe('les dates', () => {
+  it('courtes, à la française', () => {
+    expect(dateCourte('2026-10-03')).toBe('Sam. 3 oct.')
+    expect(dateCourte('2026-10-07')).toBe('Mer. 7 oct.')
+    expect(dateCourte('2026-12-25')).toBe('Ven. 25 déc.')
+  })
+  it('le mois, ses voisins, ses jours restants', () => {
+    expect(nomDuMois('2026-08-01')).toBe('août')
+    expect(moisVoisin('2026-01-01', -1)).toBe('2025-12-01')
+    expect(joursRestants('2026-10-01', '2026-10-01')).toBe(30)
+    expect(joursRestants('2026-10-01', '2026-10-31')).toBe(0)
+    expect(joursRestants('2026-09-01', '2026-10-05')).toBeNull()
+  })
+  it('les jours proposés tombent toujours dans le mois affiché', () => {
+    expect(joursProposes('2026-10-01', '2026-10-19').choix.map(c => c.libelle))
+      .toEqual(['Aujourd’hui', 'Hier'])
+    expect(joursProposes('2026-10-01', '2026-10-01').choix.map(c => c.libelle),
+      'le 1er, « Hier » est dans le mois d’avant').toEqual(['Aujourd’hui'])
+    expect(joursProposes('2026-09-01', '2026-10-19'))
+      .toEqual({ choix: [{ libelle: 'Mer. 30 sept.', date: '2026-09-30' }],
+                 min: '2026-09-01', max: '2026-09-30' })
+  })
+})
+
+describe('le bandeau', () => {
+  const tout = { clos: () => false, aRevenu: () => true }
+  it('avant le 27 : le rappel ; à partir du 27 : « se termine »', () => {
+    expect(bandeau({ ...tout, clos: m => m === '2026-09-01', mois: '2026-10-01',
+                     aujourdhui: '2026-10-19' })).toEqual({ genre: 'rappel', mois: '2026-10-01' })
+    expect(bandeau({ ...tout, clos: m => m === '2026-09-01', mois: '2026-10-01',
+                     aujourdhui: '2026-10-27' })).toEqual({ genre: 'bientot', mois: '2026-10-01' })
+  })
+  it('le mois précédent non clôturé passe devant, s’il a un revenu', () => {
+    expect(bandeau({ ...tout, mois: '2026-10-01', aujourdhui: '2026-10-28' }))
+      .toEqual({ genre: 'cloturer', mois: '2026-09-01' })
+    expect(bandeau({ clos: () => false, aRevenu: m => m >= '2026-10-01', mois: '2026-10-01',
+                     aujourdhui: '2026-10-05' })).toEqual({ genre: 'rappel', mois: '2026-10-01' })
+  })
+  it('un mois passé non clôturé, s’il a un revenu ; un mois clôturé, rien', () => {
+    expect(bandeau({ ...tout, mois: '2026-08-01', aujourdhui: '2026-10-05' }))
+      .toEqual({ genre: 'cloturer', mois: '2026-08-01' })
+    expect(bandeau({ clos: () => false, aRevenu: () => false, mois: '2026-08-01',
+                     aujourdhui: '2026-10-05' })).toBeNull()
+    expect(bandeau({ clos: () => true, aRevenu: () => true, mois: '2026-10-01',
+                     aujourdhui: '2026-10-05' })).toBeNull()
+  })
+})
+
+describe('la carte du hub', () => {
+  it('le mois à clôturer, puis les montants à dire, puis « Tout est à jour »', () => {
+    expect(ligneDuHub({ aCloturer: '2026-09-01', aDire: 3 })).toBe('Septembre est à clôturer')
+    expect(ligneDuHub({ aCloturer: null, aDire: 3 })).toBe('3 montants à dire')
+    expect(ligneDuHub({ aCloturer: null, aDire: 1 })).toBe('1 montant à dire')
+    expect(ligneDuHub({ aCloturer: null, aDire: 0 })).toBe('Tout est à jour')
+  })
+})
+
+describe('le récap de la clôture', () => {
+  it('X + Y fait le chiffre, avec un dépassement et une économie le même mois', () => {
+    const lignes = [
+      ligne({ id: 'courses', charge_id: 'courses', montant_cents: 80_000 }),
+      ligne({ id: 'resto', charge_id: 'resto', montant_cents: 40_000 }),
+      ligne({ id: 'sorties', charge_id: 'sorties', montant_cents: 10_000 }),
+      ligne({ id: 'elec', charge_id: 'elec', facon: 'facture', montant_cents: 5_000 }),
+      ligne({ id: 'internet', charge_id: 'internet', facon: 'fixe', montant_cents: 3_700 }),
+    ]
+    const saisies = [saisie('courses', 64_230), saisie('resto', 45_000)]
+    const r = recapCloture({ revenu: 432_500, lignes, saisies, moi: K,
+      factures: new Map([['elec', 6_200]]), rien: new Set(['sorties']), soldes: 0 })
+    // Prévu : 80 000 + 40 000 + 10 000 + 6 200 + 3 700 = 139 900.
+    expect(r.prevus).toBe(432_500 - 139_900)
+    // Écart : +15 770 (courses) − 5 000 (resto) + 10 000 (sorties, rien dépensé).
+    expect(r.ecart).toBe(20_770)
+    expect(r.reste).toBe(r.prevus + r.ecart)
+    expect(r.reste).toBe(432_500 - (64_230 + 45_000 + 0 + 6_200 + 3_700))
+  })
+  it('ma part des soldes que la clôture posera', () => {
+    const lignes = [ligne({ id: 'e', charge_id: 'entretien', facon: 'mis_de_cote',
+                            montant_cents: 4_167, parts: [[K, 2_084], [T, 2_083]] })]
+    expect(maPartDesSoldes([{ charge: 'entretien', cents: -16_668 }], lignes, K))
+      .toBe(Math.round(-16_668 * 2_084 / 4_167))
+    expect(maPartDesSoldes([{ charge: 'autre', cents: -1_000 }], [], K)).toBe(-1_000)
   })
 })

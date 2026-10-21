@@ -233,5 +233,142 @@ export function barre(o: {
   return tous.map((s, i) => ({ ...s, pourcent: p[i] }))
 }
 
-// (suite en 2.5)
+export const NOMS_DES_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
+  'août', 'septembre', 'octobre', 'novembre', 'décembre'] as const
+
+export function nomDuMois(iso: string): string {
+  return NOMS_DES_MOIS[Number(iso.slice(5, 7)) - 1]
+}
+
+export function capitale(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+export function moisVoisin(iso: string, pas: number): string {
+  const [a, m] = iso.split('-').map(Number)
+  const d = new Date(a, m - 1 + pas, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+
+/** « Il reste N jours. », sur le mois courant seulement. On compte des JOURS : le dernier
+    jour à 14 h, il en reste 0 (« Dernier jour. »). */
+export function joursRestants(mois: string, aujourdhui: string): number | null {
+  if (aujourdhui.slice(0, 7) !== mois.slice(0, 7)) return null
+  return Number(dernierJour(mois).slice(8)) - Number(aujourdhui.slice(8))
+}
+
+const JOURS_COURTS = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.']
+const MOIS_COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août',
+  'sept.', 'oct.', 'nov.', 'déc.']
+
+/** « Sam. 3 oct. » */
+export function dateCourte(iso: string): string {
+  const [a, m, j] = iso.split('-').map(Number)
+  return `${JOURS_COURTS[new Date(a, m - 1, j).getDay()]} ${j} ${MOIS_COURTS[m - 1]}`
+}
+
+function veille(iso: string): string {
+  const [a, m, j] = iso.split('-').map(Number)
+  const d = new Date(a, m - 1, j - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${
+    String(d.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * Les jours qu'on propose pour une dépense (§ 3.2) : toujours dans le mois
+ * affiché. Mois courant : « Aujourd'hui », « Hier » (pas le 1er), et un autre
+ * jour jusqu'à aujourd'hui. Mois passé : son dernier jour, et un autre jour du
+ * mois. Une dépense n'est pas dans l'avenir.
+ */
+export function joursProposes(mois: string, aujourdhui: string): {
+  choix: { libelle: string; date: string }[]; min: string; max: string
+} {
+  if (aujourdhui.slice(0, 7) === mois.slice(0, 7)) {
+    const choix = [{ libelle: 'Aujourd’hui', date: aujourdhui }]
+    if (aujourdhui.slice(8) !== '01') choix.push({ libelle: 'Hier', date: veille(aujourdhui) })
+    return { choix, min: mois, max: aujourdhui }
+  }
+  const dernier = dernierJour(mois)
+  return { choix: [{ libelle: dateCourte(dernier), date: dernier }], min: mois, max: dernier }
+}
+
+export const JOUR_DU_RAPPEL = 27
+
+export type Bandeau = { genre: 'rappel' | 'bientot' | 'cloturer'; mois: string } | null
+
+/**
+ * Le bandeau du mois (§ 3.1, point 9) : un seul à la fois, et celui du mois
+ * précédent non clôturé passe devant les autres. Les bandeaux de clôture ne
+ * paraissent que si j'ai un revenu ce mois-là : sans revenu (janvier à août
+ * 2026), un mois ne se clôture pas, et rien ne le propose.
+ */
+export function bandeau(o: {
+  mois: string; aujourdhui: string; clos: (m: string) => boolean; aRevenu: (m: string) => boolean
+}): Bandeau {
+  const courant = `${o.aujourdhui.slice(0, 7)}-01`
+  if (o.clos(o.mois)) return null
+  if (o.mois === courant) {
+    const precedent = moisVoisin(courant, -1)
+    if (!o.clos(precedent) && o.aRevenu(precedent)) return { genre: 'cloturer', mois: precedent }
+    return { genre: Number(o.aujourdhui.slice(8)) >= JOUR_DU_RAPPEL ? 'bientot' : 'rappel',
+             mois: o.mois }
+  }
+  if (o.mois < courant && o.aRevenu(o.mois)) return { genre: 'cloturer', mois: o.mois }
+  return null
+}
+
+/** La seconde ligne de la carte Budget du hub (§ 3.6). */
+export function ligneDuHub(o: { aCloturer: string | null; aDire: number }): string {
+  if (o.aCloturer) return `${capitale(nomDuMois(o.aCloturer))} est à clôturer`
+  if (o.aDire > 0) return `${o.aDire} montant${o.aDire > 1 ? 's' : ''} à dire`
+  return 'Tout est à jour'
+}
+
+/** Ma part des soldes que la clôture posera (`apercu_des_soldes`) : au prorata de mes
+    parts sur la ligne du mois de la même charge ; tout, si elle n'en a pas. La base
+    reste juge (`reste_cents`) : à deux, l'aperçu peut différer de quelques centimes. */
+export function maPartDesSoldes(apercu: { charge: string; cents: number }[], lignes: Ligne[],
+                                moi: string): number {
+  return apercu.reduce((t, s) => {
+    const l = lignes.find(x => x.charge_id === s.charge && x.facon !== null && x.parts.length > 0)
+    if (!l) return t + s.cents
+    const mienne = l.parts.find(p => p.user_profile_id === moi)?.part_cents ?? 0
+    const total = l.parts.reduce((u, p) => u + p.part_cents, 0)
+    return t + (total === 0 ? 0 : Math.round((s.cents * mienne) / total))
+  }, 0)
+}
+
+export type RecapCloture = { prevus: number; ecart: number; reste: number }
+
+/**
+ * Le récap de la clôture (§ 3.5, étape 3). X (`prevus`) : ce qui resterait si
+ * chaque ligne au fil du mois coûtait son prévu, soldes d'année compris. Y
+ * (`ecart`) : l'écart net de l'étape 2, prévu moins réel. X + Y fait le chiffre.
+ * Le tout en MES parts, comme « Il te reste ».
+ *
+ * Le réel d'une ligne au fil du mois est ce que la clôture retiendra : la somme
+ * des saisies s'il y en a ; 0 si « Rien dépensé » ; sinon le prévu.
+ */
+export function recapCloture(o: {
+  revenu: number; lignes: Ligne[]; saisies: Saisie[]; moi: string
+  factures: Map<string, number>; rien: Set<string>; soldes: number
+}): RecapCloture {
+  let prevus = o.revenu - o.soldes
+  let ecart = 0
+  for (const l of o.lignes) {
+    if (l.facon === 'au_fil') {
+      const p = prevu(l)
+      const reel = aDesSaisies(l, o.saisies) ? declare(l, o.saisies)
+        : l.charge_id && o.rien.has(l.charge_id) ? 0 : p
+      prevus -= partSur(l, o.moi, p)
+      ecart += partSur(l, o.moi, p) - partSur(l, o.moi, reel)
+    } else if (l.facon === 'facture' && o.factures.has(l.id)) {
+      prevus -= partSur(l, o.moi, o.factures.get(l.id)!)
+    } else {
+      prevus -= l.parts.find(p => p.user_profile_id === o.moi)?.part_cents ?? 0
+    }
+  }
+  return { prevus, ecart, reste: prevus + ecart }
+}
+
 export { CATEGORIES }
