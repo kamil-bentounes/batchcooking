@@ -328,10 +328,10 @@ export function useAjouteCharge() {
       }
       return ligne
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: CLE.charges })
-      qc.invalidateQueries({ queryKey: ['budget-mois'] })
-    },
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: CLE.charges }),
+      qc.invalidateQueries({ queryKey: ['budget-mois'] }),
+    ]),
   })
 }
 
@@ -367,10 +367,10 @@ export function useCorrigeCharge() {
       if (error) throw new Error(error.message)
       return (data as number) ?? 0
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: CLE.charges })
-      qc.invalidateQueries({ queryKey: ['budget-mois'] })
-    },
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: CLE.charges }),
+      qc.invalidateQueries({ queryKey: ['budget-mois'] }),
+    ]),
   })
 }
 
@@ -430,10 +430,10 @@ export function usePoseCompte() {
       titulaire_id: c.genre === 'perso' ? c.titulaireId : null,
       matelas_cents: c.matelasCents,
     }).select().single()),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: CLE.comptes })
-      qc.invalidateQueries({ queryKey: ['budget-mois'] })
-    },
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: CLE.comptes }),
+      qc.invalidateQueries({ queryKey: ['budget-mois'] }),
+    ]),
   })
 }
 
@@ -482,10 +482,10 @@ export function useVerse() {
       household_id: v.foyerId, poche_id: v.pocheId, user_profile_id: v.userId,
       montant_cents: v.cents, motif: v.motif ?? (v.cents < 0 ? 'retrait' : 'mensuel'),
     }).select().single()),
-    onSuccess: (_d, v) => {
-      qc.invalidateQueries({ queryKey: CLE.soldes(v.pocheId) })
-      qc.invalidateQueries({ queryKey: CLE.poches })
-    },
+    onSuccess: (_d, v) => Promise.all([
+      qc.invalidateQueries({ queryKey: CLE.soldes(v.pocheId) }),
+      qc.invalidateQueries({ queryKey: CLE.poches }),
+    ]),
   })
 }
 
@@ -516,10 +516,10 @@ export function usePoseRegle() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: poseRegle,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['regle-partage'] })
-      qc.invalidateQueries({ queryKey: ['budget-mois'] })
-    },
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['regle-partage'] }),
+      qc.invalidateQueries({ queryKey: ['budget-mois'] }),
+    ]),
   })
 }
 
@@ -546,10 +546,10 @@ export function usePosePoste() {
       household_id: p.foyerId, poche_id: p.pocheId,
       libelle: p.libelle, montant_cents: p.cents, ordre: p.ordre,
     }).select().single()),
-    onSuccess: (_d, p) => {
-      qc.invalidateQueries({ queryKey: ['poche-postes', p.pocheId] })
-      qc.invalidateQueries({ queryKey: CLE.poches })
-    },
+    onSuccess: (_d, p) => Promise.all([
+      qc.invalidateQueries({ queryKey: ['poche-postes', p.pocheId] }),
+      qc.invalidateQueries({ queryKey: CLE.poches }),
+    ]),
   })
 }
 
@@ -651,10 +651,10 @@ export function useMajParticipants() {
       const { error } = await supabase.rpc('refige_le_mois', { le_mois: moisDe() })
       if (error) throw new Error(error.message)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: CLE.charges })
-      qc.invalidateQueries({ queryKey: ['budget-mois'] })
-    },
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: CLE.charges }),
+      qc.invalidateQueries({ queryKey: ['budget-mois'] }),
+    ]),
   })
 }
 
@@ -676,12 +676,18 @@ export function useRangeCompte() {
 
 /* Chaque mutation relit tout ce que l'argent touche. Sans cela, la feuille
    restée ouverte après une facture de 320 € annonçait « Il restera 66,68 € de
-   côté » pour 100 €, quand la base posait +100 €. */
+   côté » pour 100 €, quand la base posait +100 €.
+
+   ⚠️ Et la mutation ATTEND ces relectures : `onSuccess` rend cette promesse, et
+   TanStack ne déclare la mutation finie qu'après elle. Sans le `return`, la feuille de
+   déclaration vidait son champ et rallumait « Ajouter » pendant que la jauge montrait
+   encore l'ancien chiffre ; sur réseau lent on croyait l'ajout perdu, on le retapait,
+   et l'identifiant neuf le comptait deux fois. */
 const CE_QUE_L_ARGENT_TOUCHE = ['budget-mois', 'saisies', 'factures', 'cloture',
   'etat-de-l-annee', 'apercu-des-soldes', 'budget-charges', 'budget-poches', 'budget-solde',
   'budget-revenus']
 export function relisLeBudget(qc: QueryClient) {
-  for (const cle of CE_QUE_L_ARGENT_TOUCHE) qc.invalidateQueries({ queryKey: [cle] })
+  return Promise.all(CE_QUE_L_ARGENT_TOUCHE.map(cle => qc.invalidateQueries({ queryKey: [cle] })))
 }
 
 // ── Les dépenses au fil du mois ──────────────────────────────────────────────

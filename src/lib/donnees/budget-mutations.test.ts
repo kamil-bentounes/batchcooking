@@ -1,0 +1,89 @@
+/**
+ * Chaque mutation du budget ATTEND ses relectures avant de se dire finie.
+ *
+ * `onSuccess: () => qc.invalidateQueries(…)` sans `return` termine la mutation AVANT la fin
+ * des relectures : `FeuilleDeclarer` vidait son champ et rallumait « Ajouter » pendant que
+ * la jauge montrait encore l'ancien chiffre. Sur réseau lent, on croyait l'ajout perdu et on
+ * le retapait — avec un identifiant neuf, donc compté deux fois.
+ *
+ * Le dépôt n'a ni jsdom ni Testing Library : on remplace `useMutation` par l'identité (le
+ * hook rend ses options), `useQueryClient` par un faux client dont chaque
+ * `invalidateQueries` reste en attente jusqu'à ce que le test la libère, et on appelle
+ * `onSuccess` de chaque hook exporté du fichier. Aucune liste écrite à la main : une
+ * mutation ajoutée demain est éprouvée sans qu'on y pense.
+ */
+import { describe, expect, it, vi } from 'vitest'
+
+const faux = vi.hoisted(() => ({ qc: null as unknown }))
+
+vi.mock('@tanstack/react-query', async importOriginal => ({
+  ...await importOriginal<typeof import('@tanstack/react-query')>(),
+  useMutation: (o: unknown) => o,
+  useQuery: (o: unknown) => o,
+  useQueryClient: () => faux.qc,
+}))
+
+const budget = await import('./budget.ts')
+const { relisLeBudget } = budget
+
+type Options = { mutationFn?: unknown; onSuccess?: (d: unknown, v: unknown, c?: unknown) => unknown }
+
+/** Un client dont les relectures ne finissent que quand on les libère. */
+function clientEnAttente() {
+  const enAttente: (() => void)[] = []
+  const invalidateQueries = vi.fn(() => new Promise<void>(fin => { enAttente.push(fin) }))
+  return { qc: { invalidateQueries }, invalidateQueries, libere: () => enAttente.splice(0).forEach(f => f()) }
+}
+/** Laisse passer toutes les microtâches en attente. */
+const tour = () => new Promise<void>(r => setTimeout(r, 0))
+/** Des variables de mutation qui répondent n'importe quoi (`p.pocheId`, `v.id`…). */
+const variables = new Proxy({}, { get: () => 'x' })
+
+/** Toutes les mutations exportées : on appelle chaque `use…` et on garde ceux qui rendent un `mutationFn`. */
+function mutations(): { nom: string; options: Options; client: ReturnType<typeof clientEnAttente> }[] {
+  const trouvees = []
+  for (const [nom, valeur] of Object.entries(budget)) {
+    if (!nom.startsWith('use') || typeof valeur !== 'function') continue
+    const client = clientEnAttente()
+    faux.qc = client.qc
+    const options = (valeur as (...a: unknown[]) => Options)('x', 'y')
+    if (options && typeof options.mutationFn === 'function') trouvees.push({ nom, options, client })
+  }
+  return trouvees
+}
+
+describe('relisLeBudget', () => {
+  it('rend une promesse qui ne se résout qu’une fois TOUTES les relectures finies', async () => {
+    const { qc, invalidateQueries, libere } = clientEnAttente()
+    let fini = false
+    const r = relisLeBudget(qc as never)
+    void Promise.resolve(r).then(() => { fini = true })
+    await tour()
+    expect(invalidateQueries.mock.calls.length).toBeGreaterThan(5)
+    expect(fini).toBe(false)
+    libere()
+    await tour()
+    expect(fini).toBe(true)
+  })
+})
+
+describe('les mutations du budget attendent leurs relectures', () => {
+  const toutes = mutations()
+
+  it('on en éprouve bien beaucoup (le test ne dort pas)', () => {
+    expect(toutes.length).toBeGreaterThanOrEqual(20)
+  })
+
+  it.each(toutes.map(m => [m.nom, m] as const))('%s : onSuccess rend les relectures, la mutation ne finit pas avant', async (_nom, m) => {
+    expect(m.options.onSuccess, 'une mutation sans onSuccess ne relit rien').toBeTypeOf('function')
+    let fini = false
+    const r = m.options.onSuccess!(undefined, variables)
+    void Promise.resolve(r).then(() => { fini = true })
+    await tour()
+    expect(m.client.invalidateQueries.mock.calls.length).toBeGreaterThan(0)
+    expect(fini, 'onSuccess a rendu avant la fin des relectures').toBe(false)
+    m.client.libere()
+    await tour()
+    expect(fini).toBe(true)
+  })
+})
