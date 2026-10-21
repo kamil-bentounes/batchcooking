@@ -96,6 +96,59 @@ describe('la garde des saisies', () => {
       .toMatch(/million/)
   })
 
+  it('un client ne change ni la source, ni la référence, ni la date de création, ni l’id', async () => {
+    const id = randomUUID()
+    ou(await declare(f, lignes['2026-10-01'], '2026-10-06', 1_500, id))
+    for (const [champ, valeur] of [
+      ['source', 'banque'], ['source', 'courses'], ['reference_externe', 'faux-virement-1'],
+      ['created_at', '2020-01-01T00:00:00Z'], ['id', randomUUID()],
+    ] as const) {
+      const { error } = await f.client.from('saisie').update({ [champ]: valeur })
+        .eq('id', id).select()
+      expect(error?.message, `${champ} → ${valeur} est passé`).toMatch(/ne se changent pas/)
+    }
+    const { data } = await admin().from('saisie')
+      .select('source, reference_externe, id').eq('id', id).single()
+    expect(data).toEqual({ source: 'manuel', reference_externe: null, id })
+    // Le montant et la date, eux, se corrigent toujours.
+    ou(await f.client.from('saisie').update({ montant_cents: 1_600 }).eq('id', id).select())
+  })
+
+  it('un client n’invente pas non plus une saisie « venue de la banque »', async () => {
+    for (const extra of [{ source: 'banque' }, { source: 'courses' },
+                         { reference_externe: 'faux-virement-2' }]) {
+      const { error } = await f.client.from('saisie').insert({
+        id: randomUUID(), household_id: f.householdId, depense_id: lignes['2026-10-01'],
+        fait_le: '2026-10-07', montant_cents: 900, saisi_par: f.userId, ...extra }).select()
+      expect(error?.message, JSON.stringify(extra)).toMatch(/ne se choisit pas/)
+    }
+  })
+
+  it('refuse de déplacer une saisie d’un mois clôturé vers une ligne ouverte', async () => {
+    await ouvre(f, '2026-06-01')
+    const juin = (await ligne(courses, '2026-06-01'))!.id
+    const id = randomUUID()
+    ou(await declare(f, juin, '2026-06-12', 2_000, id))
+    await clos(f, '2026-06-01')
+    const { error } = await f.client.from('saisie')
+      .update({ depense_id: lignes['2026-10-01'], fait_le: '2026-10-12' }).eq('id', id).select()
+    expect(error?.message, 'la saisie a quitté un mois clôturé').toMatch(/Juin est clôturé/)
+    const { data } = await admin().from('saisie').select('depense_id').eq('id', id).single()
+    expect(data!.depense_id).toBe(juin)
+  })
+
+  it('le million se garde aussi à la modification, et sans compter la saisie deux fois', async () => {
+    await ouvre(f, '2026-12-01')
+    const decembre = (await ligne(courses, '2026-12-01'))!.id
+    ou(await declare(f, decembre, '2026-12-02', 99_999_000))
+    const id = randomUUID()
+    ou(await declare(f, decembre, '2026-12-03', 500, id))
+    expect((await f.client.from('saisie').update({ montant_cents: 1_001 }).eq('id', id).select())
+      .error?.message).toMatch(/million/)
+    // Pile 1 000 000 € : passe, la saisie modifiée n'est pas comptée avec son ancien montant.
+    ou(await f.client.from('saisie').update({ montant_cents: 1_000 }).eq('id', id).select())
+  })
+
   it('le voisin n’écrit pas sur notre ligne', async () => {
     expect((await declare(voisin, lignes['2026-10-01'], '2026-10-05', 1_000)).error).not.toBeNull()
   })

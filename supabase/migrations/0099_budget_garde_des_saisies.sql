@@ -58,6 +58,27 @@ begin
       using errcode = 'insufficient_privilege';
   end if;
 
+  /* La provenance appartient au serveur. La policy ne borne que le foyer : sans
+     ceci, un client réétiquetait sa saisie `banque` ou `courses` (un faux
+     « venu de la banque » que rien ne distingue d'un vrai), ou lui donnait une
+     `reference_externe` qui ferait refuser la vraie plus tard (l'unicité du
+     foyer). Sous le propriétaire (la synchro bancaire de demain, la clé de
+     service), rien n'est jugé. */
+  if current_user = 'authenticated' then
+    if tg_op = 'INSERT' and (new.source <> 'manuel' or new.reference_externe is not null) then
+      raise exception 'La provenance d''une dépense ne se choisit pas.'
+        using errcode = 'insufficient_privilege';
+    end if;
+    if tg_op = 'UPDATE' and (new.id is distinct from old.id
+        or new.source is distinct from old.source
+        or new.reference_externe is distinct from old.reference_externe
+        or new.created_at is distinct from old.created_at
+        or new.household_id is distinct from old.household_id) then
+      raise exception 'La provenance, l''identifiant et la date de création d''une dépense ne se changent pas.'
+        using errcode = 'insufficient_privilege';
+    end if;
+  end if;
+
   /* ── La ligne : une ligne du générateur, au fil du mois PAR SA FAÇON — celle
         de la ligne, jamais celle de la charge (§ 4.1). ───────────────────── */
   select d.source, d.facon, d.mois, d.household_id into la_ligne
