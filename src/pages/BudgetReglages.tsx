@@ -1,5 +1,5 @@
 /**
- * Les prérequis du budget : les revenus, les comptes, les enveloppes.
+ * Les prérequis du budget : les revenus, la règle de partage, les comptes.
  *
  * Cet écran existe parce qu'il manquait, et que son absence rendait tout le
  * reste faux sans le dire :
@@ -7,11 +7,10 @@
  *  · sans REVENU, `parts_du_foyer` bascule tout le monde à poids égal — le
  *    formulaire proposait « Au prorata » et ne l'honorait pas ;
  *  · sans COMPTE, les virements ne pouvaient annoncer qu'une ligne « à
- *    répartir », c'est-à-dire rien sur quoi agir ;
- *  · sans ENVELOPPE, aucun plafond ne s'affichait nulle part.
+ *    répartir », c'est-à-dire rien sur quoi agir.
  *
- * L'ordre des trois sections est celui de leur nécessité, pas de leur
- * complexité : on ne peut rien calculer sans les revenus.
+ * Les enveloppes en sont parties (§ 3.8) : une charge « au fil du mois » porte
+ * désormais son plafond elle-même — c'est son prévu (D76).
  */
 import { useState } from 'react'
 import { useRoute } from '../lib/route.ts'
@@ -19,9 +18,10 @@ import { Surface, Erreur, Attente } from '../ui/coque.tsx'
 import { Champ } from '../ui/kit.tsx'
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
-  useRevenus, usePoseRevenu, useComptes, usePoseCompte, useRegle, usePoseRegle, useRangeCompte, useRangeEnveloppe,
-  useEnveloppesPosees, usePoseEnveloppe, useSuggestionsEnveloppe, euros, enCentimes,
+  useRevenus, usePoseRevenu, useComptes, usePoseCompte, useRegle, usePoseRegle, useRangeCompte,
+  euros, enCentimes, moisDe,
 } from '../lib/donnees/budget.ts'
+import { revenuDuMois } from '../lib/budget/mois.ts'
 
 /**
  * Ce qu'on propose, plutôt qu'un champ vide.
@@ -81,34 +81,30 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
   const { data: foyer, isPending } = useFoyer()
   const revenus = useRevenus()
   const comptes = useComptes()
-  const enveloppes = useEnveloppesPosees()
-  const suggestions = useSuggestionsEnveloppe()
   const poseRevenu = usePoseRevenu()
   const poseCompte = usePoseCompte()
-  const poseEnveloppe = usePoseEnveloppe()
   const regle = useRegle()
   const poseRegle = usePoseRegle()
   const rangeCompte = useRangeCompte()
-  const rangeEnveloppe = useRangeEnveloppe()
 
   const [monRevenu, setMonRevenu] = useState('')
   const [nomCompte, setNomCompte] = useState('')
   const [genreCompte, setGenreCompte] = useState<'commun' | 'perso' | 'epargne'>('commun')
-  const [nomEnveloppe, setNomEnveloppe] = useState('')
-  const [plafond, setPlafond] = useState('')
 
   if (isPending) return <main className="min-h-dvh grid place-items-center"><Attente /></main>
 
   const foyerId = foyer?.id ?? ''
   const membres = foyer?.membres ?? []
   const prenoms = new Map(membres.map(m => [m.id, prenomDe(m.display_name)]))
-  /* `useRevenus` rend TOUT l'historique, du plus récent au plus ancien : un `Map`
-     construit tel quel garderait le dernier de la liste, donc le PLUS ANCIEN. */
-  const parPersonne = new Map([...(revenus.data ?? [])].reverse().map(r => [r.user_profile_id, r]))
-  const manquants = membres.filter(m => !parPersonne.has(m.id))
+  /* Le revenu EN VIGUEUR de chacun, comme `Profil.tsx`. Avec tout l'historique,
+     la `Map` d'ici gardait le dernier lu — le plus ANCIEN, la liste étant triée
+     du plus récent au plus vieux — puis, renversée, le plus récent : celui d'un
+     mois qui n'a pas commencé. Les deux affichaient un autre chiffre que celui
+     dont la base partage le mois. */
+  const enVigueur = (id: string) => revenuDuMois(revenus.data ?? [], id, moisDe())
+  const manquants = membres.filter(m => enVigueur(m.id) === null)
 
   const cRevenu = enCentimes(monRevenu)
-  const cPlafond = enCentimes(plafond)
 
   return (
     <main className="min-h-dvh px-6 pt-14 pb-16">
@@ -141,15 +137,15 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
                        et le foyer le voit — vous partagez un compte, pas des secrets.">
           <Surface className="mt-4">
             {membres.map((m, i) => {
-              const r = parPersonne.get(m.id)
+              const r = enVigueur(m.id)
               return (
                 <div key={m.id}
                      className={`py-3.5 flex items-baseline justify-between
                                  ${i < membres.length - 1 ? 'border-b border-brume' : ''}`}>
                   <span className="text-[16px]">{prenomDe(m.display_name)}</span>
                   <span className="text-[15px]"
-                        style={{ color: r ? undefined : 'var(--color-ocre)' }}>
-                    {r ? `${euros(r.net_mensuel_cents)} / mois` : 'pas encore renseigné'}
+                        style={{ color: r !== null ? undefined : 'var(--color-ocre)' }}>
+                    {r !== null ? `${euros(r)} / mois` : 'pas encore renseigné'}
                   </span>
                 </div>
               )
@@ -172,9 +168,9 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
                       { onSuccess: () => setMonRevenu('') })}
                     className="w-full min-h-11 rounded-[14px] bg-herbe text-fond text-[15px]
                                font-medium disabled:bg-brume disabled:text-encre">
-              {parPersonne.has(userId) ? 'Mettre à jour mon revenu' : 'Enregistrer mon revenu'}
+              {enVigueur(userId) !== null ? 'Mettre à jour mon revenu' : 'Enregistrer mon revenu'}
             </button>
-            {parPersonne.has(userId) && (
+            {enVigueur(userId) !== null && (
               <p className="text-[14px] text-doux">
                 Le précédent est gardé : les mois déjà partagés ne bougent pas.
               </p>
@@ -205,7 +201,7 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
           <Erreur de={regle.error ?? poseRegle.error} />
         </Section>
 
-        <Erreur de={rangeCompte.error ?? rangeEnveloppe.error} />
+        <Erreur de={rangeCompte.error} />
 
         <Section titre="Les comptes"
                  aide="Un par vrai compte bancaire. Sans eux, l'app ne peut annoncer qu'un
@@ -276,54 +272,6 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
             </button>
           </div>
           <Erreur de={comptes.error ?? poseCompte.error} />
-        </Section>
-
-        <Section titre="Les enveloppes"
-                 aide="Un plafond mensuel : restaurant, sorties, culture. Aucun argent ne
-                       bouge — c'est une limite, et elle repart à zéro chaque mois.">
-          <Surface className="mt-4">
-            {(enveloppes.data ?? []).length === 0
-              ? <p className="py-3 text-[15px] text-doux">Aucune enveloppe.</p>
-              : (enveloppes.data ?? []).map((e, i) => (
-                  <div key={e.id}
-                       className={`py-3.5 flex items-baseline justify-between
-                                   ${i < (enveloppes.data ?? []).length - 1 ? 'border-b border-brume' : ''}`}>
-                    <span className="text-[16px]">{e.libelle}</span>
-                    <span className="flex items-baseline gap-2">
-                      <span className="text-[15px] text-doux">{euros(e.plafond_cents)} / mois</span>
-                      <button onClick={() => rangeEnveloppe.mutate({ id: e.id, ranger: true })}
-                              disabled={rangeEnveloppe.isPending}
-                              aria-label={`Ranger ${e.libelle}`}
-                              className="min-h-11 px-2 text-[14px] text-doux">Ranger</button>
-                    </span>
-                  </div>
-                ))}
-          </Surface>
-
-          {/* Le libellé part du catalogue TEL QUEL : une charge « Restaurants »
-              se range d'elle-même dans l'enveloppe qui porte le même nom, et
-              « Restaurant » au singulier casserait ce rattachement. */}
-          <Suggestions amorce="Les postes qui se plafonnent :"
-            de={(suggestions.data ?? [])
-              .map(c => c.libelle)
-              .filter(l => !(enveloppes.data ?? []).some(
-                e => e.libelle.toLowerCase() === l.toLowerCase()))}
-            sur={setNomEnveloppe} />
-          <div className="mt-4 space-y-3">
-            <Champ label="Nom de l’enveloppe" value={nomEnveloppe}
-                   onChange={e => setNomEnveloppe(e.target.value)} />
-            <Champ label="Plafond mensuel (€)" type="text" inputMode="decimal"
-                   value={plafond} onChange={e => setPlafond(e.target.value)} />
-            <button disabled={nomEnveloppe.trim() === '' || !cPlafond || poseEnveloppe.isPending}
-                    onClick={() => poseEnveloppe.mutate({
-                      foyerId, libelle: nomEnveloppe.trim(), plafondCents: cPlafond!,
-                    }, { onSuccess: () => { setNomEnveloppe(''); setPlafond('') } })}
-                    className="w-full min-h-11 rounded-[14px] bg-herbe text-fond text-[15px]
-                               font-medium disabled:bg-brume disabled:text-encre">
-              Ajouter cette enveloppe
-            </button>
-          </div>
-          <Erreur de={enveloppes.error ?? poseEnveloppe.error ?? suggestions.error} />
         </Section>
       </div>
     </main>
