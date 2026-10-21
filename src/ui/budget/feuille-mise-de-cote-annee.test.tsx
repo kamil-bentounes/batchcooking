@@ -9,13 +9,13 @@
  */
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { Charge } from '../../lib/donnees/budget.ts'
 
 const etat = vi.hoisted(() => ({
   payeLe: null as string | null,
-  lectureEtat: null as unknown as ReturnType<typeof vi.fn>,
-  lectureFactures: null as unknown as ReturnType<typeof vi.fn>,
+  lectureEtat: null as unknown as Mock<(...a: unknown[]) => unknown>,
+  lectureFactures: null as unknown as Mock<(...a: unknown[]) => unknown>,
 }))
 
 vi.mock('react', async importOriginal => {

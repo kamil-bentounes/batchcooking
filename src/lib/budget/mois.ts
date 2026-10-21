@@ -36,6 +36,19 @@ export function montant(cents: number): string {
   return `${cents < 0 ? '−' : ''}${s} €`
 }
 
+const ORDRE_DU_FILTRE: Filtre[] = ['tout', 'commun', 'moi']
+
+/**
+ * La flèche d'un `radiogroup` : → et ↓ vont au suivant, ← et ↑ au précédent, en boucle.
+ * Toute autre touche rend `null` : Tab, Entrée et les lettres restent au navigateur.
+ */
+export function filtreVoisin(filtre: Filtre, touche: string): Filtre | null {
+  const pas = touche === 'ArrowRight' || touche === 'ArrowDown' ? 1
+    : touche === 'ArrowLeft' || touche === 'ArrowUp' ? -1 : 0
+  if (pas === 0) return null
+  return ORDRE_DU_FILTRE[(ORDRE_DU_FILTRE.indexOf(filtre) + pas + ORDRE_DU_FILTRE.length) % ORDRE_DU_FILTRE.length]
+}
+
 /**
  * Un reste non nul que l'arrondi à l'euro ferait disparaître (−0,30 € devient « 0 € »).
  * Le hub arrondit ses gros chiffres ; sur ceux-là il dit les centimes, parce que « Il te

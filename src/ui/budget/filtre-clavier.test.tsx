@@ -9,8 +9,8 @@
 import { isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { Filtre } from '../../lib/budget/mois.ts'
-import { FiltreDuMois, filtreVoisin } from './Filtre.tsx'
+import { filtreVoisin, type Filtre } from '../../lib/budget/mois.ts'
+import { FiltreDuMois } from './Filtre.tsx'
 
 const totaux: Record<Filtre, number> = { tout: 100_00, commun: 60_00, moi: 40_00 }
 type Props = Record<string, unknown>

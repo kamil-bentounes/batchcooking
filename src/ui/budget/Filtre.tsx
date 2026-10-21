@@ -1,18 +1,7 @@
 /** Le filtre Tout / Commun / Moi, chacun avec son total (§ 3.1, point 8). */
-import { montant, type Filtre } from '../../lib/budget/mois.ts'
+import { filtreVoisin, montant, type Filtre } from '../../lib/budget/mois.ts'
 
 const CHOIX: [Filtre, string][] = [['tout', 'Tout'], ['commun', 'Commun'], ['moi', 'Moi']]
-
-/**
- * La flèche d'un `radiogroup` : → et ↓ vont au suivant, ← et ↑ au précédent, en boucle.
- * Toute autre touche rend `null` : Tab, Entrée et les lettres restent au navigateur.
- */
-export function filtreVoisin(filtre: Filtre, touche: string): Filtre | null {
-  const pas = touche === 'ArrowRight' || touche === 'ArrowDown' ? 1
-    : touche === 'ArrowLeft' || touche === 'ArrowUp' ? -1 : 0
-  if (pas === 0) return null
-  return CHOIX[(CHOIX.findIndex(([f]) => f === filtre) + pas + CHOIX.length) % CHOIX.length][0]
-}
 
 export function FiltreDuMois({ filtre, totaux, choisir }: {
   filtre: Filtre; totaux: Record<Filtre, number>; choisir: (f: Filtre) => void
