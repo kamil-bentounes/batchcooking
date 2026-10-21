@@ -7,7 +7,7 @@
  * qu'elle acceptera, pour que le refus se lise AVANT l'envoi.
  */
 import { enCentimes, type Charge, type EtatAnnee } from '../donnees/budget.ts'
-import { montant, nomDuMois, prevu, type Ligne } from './mois.ts'
+import { dateCourte, montant, nomDuMois, prevu, type Ligne } from './mois.ts'
 
 /** 1 000 000 € : la borne des fonctions de la base (`confirme_la_ligne`, `paie_une_facture`). */
 export const PLAFOND_CENTS = 100_000_000
@@ -141,6 +141,11 @@ export function apercuFacture(e: EtatAnnee, annee: number, ajout: number, mois: 
   }
   if (delta < 0) return `${montant(-delta)} reviennent à ${mois}.`
   return `Il restera ${montant(Math.max(0, e.pl - nouveauB))} de côté pour ${annee}.`
+}
+
+/** La question avant de retirer une facture : son montant et son jour, pas « Êtes-vous sûr ? ». */
+export function questionDeRetrait(cents: number, payeLe: string, mois: string): string {
+  return `Retirer la facture de ${montant(cents)} du ${dateCourte(payeLe)} ? L’écart se recalcule sur ${mois}.`
 }
 
 /** L'effet de la correction du total d'un relevé (§ 3.4) : la différence, sur le mois en cours. */

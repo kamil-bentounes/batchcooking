@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { enCentimes, type Charge, type EtatAnnee } from '../donnees/budget.ts'
 import {
   apercuFacture, apercuReleve, depuisLe, envoiPermis, envoiPour, jourAccepte, lisLeMontant,
-  montantPropose, plancherDuJour, provisionParMois, saisiDe,
+  montantPropose, plancherDuJour, provisionParMois, questionDeRetrait, saisiDe,
 } from './feuilles.ts'
 import type { Ligne } from './mois.ts'
 
@@ -270,5 +270,16 @@ describe('apercuReleve — corriger le total d’un relevé', () => {
   it('un relevé corrigé à 0 € se rend en entier', () => {
     expect(apercuReleve(1200_00, 0, 'octobre'))
       .toBe(`1${FINE}200 € de moins que le relevé : ils reviennent à octobre.`)
+  })
+})
+
+describe('questionDeRetrait — retirer une facture se demande, avec son montant et son jour', () => {
+  it('dit la facture, et que l’écart se recalcule sur le mois en cours', () => {
+    expect(questionDeRetrait(320_00, '2026-10-06', 'octobre'))
+      .toBe('Retirer la facture de 320 € du Mar. 6 oct. ? L’écart se recalcule sur octobre.')
+  })
+  it('un montant à centimes et à milliers se lit comme à l’écran', () => {
+    expect(questionDeRetrait(1450_04, '2026-03-02', 'octobre'))
+      .toBe(`Retirer la facture de 1${FINE}450,04 € du Lun. 2 mars ? L’écart se recalcule sur octobre.`)
   })
 })
