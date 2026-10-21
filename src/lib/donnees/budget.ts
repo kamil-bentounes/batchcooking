@@ -11,9 +11,11 @@
  *    et un budget dont les parts ne recomposent pas le total est abandonné au
  *    troisième mois.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { ou, ouNul, supabase } from '../supabase.ts'
 import { maintenant } from '../horloge.ts'
+import { dernierJour, type Saisie as SaisieDuMois } from '../budget/mois.ts'
+import type { Categorie, Mode } from '../budget/categories.ts'
 
 export const CLE = {
   mois: (m: string) => ['budget-mois', m] as const,
@@ -64,17 +66,24 @@ export type Depense = {
   id: string
   charge_id: string | null
   libelle: string
+  mois: string
   montant_cents: number
   montant_prevu_cents: number | null
   nature: 'estimee' | 'connue'
   source: string
+  /* La façon de la LIGNE, figée à sa naissance (§ 4.1). Null : un ajustement. */
+  facon: Mode | null
+  confirme_le: string | null
+  regularise_annee: number | null
   /* Quand ça a été réellement payé. Un mois rattrapé — la taxe foncière posée
      en septembre ouvre janvier à août — annonçait « à verser » des mois qu'on
      a déjà vécus et déjà payés, sans aucun moyen de le dire. */
   regle_le: string | null
   enveloppe_id: string | null
   compte_id: string | null
-  parts: { user_profile_id: string; part_cents: number }[]
+  /* Les points de base survivent à une ligne confirmée à 0 € : c'est sur eux
+     que se lit la proportion d'un mois rouvert (`partSur`). */
+  parts: { user_profile_id: string; part_cents: number; part_bps: number }[]
 }
 
 /**
@@ -84,40 +93,40 @@ export type Depense = {
  * c'est la première lecture qui la déclenche. `ouvre_le_mois` est idempotente :
  * la clé se fige au premier appel, les suivants ne touchent rien.
  */
+export async function lisLeMois(mois: string): Promise<Depense[]> {
+  /* ⚠️ On n'ouvre JAMAIS un mois futur.
+   *
+   *    `ouvre_le_mois` est idempotente et fige la clé au premier appel :
+   *    feuilleter jusqu'en 2028 y créait donc les dépenses avec le partage
+   *    d'aujourd'hui, définitivement. Regarder l'avenir ne doit rien y
+   *    écrire — on le lit, on ne le décide pas. */
+  if (mois <= moisDe()) {
+    /* ⚠️ On RATTRAPE tous les mois manquants, pas seulement celui qu'on
+       regarde. Un mois qu'on n'ouvrait pas pendant son propre mois ne
+       s'ouvrait plus jamais — 120,83 € par mois d'absence, jamais mis de
+       côté, sans un mot. Le passé cesse de dépendre du moment où l'on a
+       regardé. */
+    const { error: eR } = await supabase.rpc('rattrape_les_mois')
+    if (eR) throw new Error(eR.message)
+    const { error } = await supabase.rpc('ouvre_le_mois', { le_mois: mois })
+    if (error) throw new Error(error.message)
+  }
+  const lignes = ou(await supabase.from('depense')
+    /* ⚠️ Une seule chaîne LITTÉRALE. PostgREST infère le type du résultat
+       depuis le texte du `select` ; une concaténation n'est plus un
+       littéral pour TypeScript, et tout retombe sur `GenericStringError`. */
+    .select('id, charge_id, libelle, mois, montant_cents, montant_prevu_cents, nature, source, facon, confirme_le, regularise_annee, enveloppe_id, compte_id, regle_le, depense_part(user_profile_id, part_cents, part_bps)')
+    .eq('mois', mois).order('libelle'))
+  return lignes.map(l => ({
+    ...l,
+    nature: l.nature as Depense['nature'],
+    facon: l.facon as Mode | null,
+    parts: (l.depense_part ?? []) as Depense['parts'],
+  }))
+}
+
 export function useMois(mois: string) {
-  return useQuery({
-    queryKey: CLE.mois(mois),
-    queryFn: async (): Promise<Depense[]> => {
-      /* ⚠️ On n'ouvre JAMAIS un mois futur.
-       *
-       *    `ouvre_le_mois` est idempotente et fige la clé au premier appel :
-       *    feuilleter jusqu'en 2028 y créait donc les dépenses avec le partage
-       *    d'aujourd'hui, définitivement. Regarder l'avenir ne doit rien y
-       *    écrire — on le lit, on ne le décide pas. */
-      if (mois <= moisDe()) {
-        /* ⚠️ On RATTRAPE tous les mois manquants, pas seulement celui qu'on
-           regarde. Un mois qu'on n'ouvrait pas pendant son propre mois ne
-           s'ouvrait plus jamais — 120,83 € par mois d'absence, jamais mis de
-           côté, sans un mot. Le passé cesse de dépendre du moment où l'on a
-           regardé. */
-        const { error: eR } = await supabase.rpc('rattrape_les_mois')
-        if (eR) throw new Error(eR.message)
-        const { error } = await supabase.rpc('ouvre_le_mois', { le_mois: mois })
-        if (error) throw new Error(error.message)
-      }
-      const lignes = ou(await supabase.from('depense')
-        /* ⚠️ Une seule chaîne LITTÉRALE. PostgREST infère le type du résultat
-           depuis le texte du `select` ; une concaténation n'est plus un
-           littéral pour TypeScript, et tout retombe sur `GenericStringError`. */
-        .select('id, charge_id, libelle, montant_cents, montant_prevu_cents, nature, source, enveloppe_id, compte_id, regle_le, depense_part(user_profile_id, part_cents)')
-        .eq('mois', mois).order('libelle'))
-      return lignes.map(l => ({
-        ...l,
-        nature: l.nature as 'estimee' | 'connue',
-        parts: (l.depense_part ?? []) as Depense['parts'],
-      }))
-    },
-  })
+  return useQuery({ queryKey: CLE.mois(mois), queryFn: () => lisLeMois(mois) })
 }
 
 /**
@@ -234,6 +243,11 @@ export type Charge = {
      ligne de quelqu'un d'autre est une surprise. On ne verrouille pas, on dit. */
   modifie_par: string | null
   periodicite: 'mensuel' | 'trimestriel' | 'annuel'
+  /* La façon de la CHARGE : elle ne sert qu'à « Mes charges ». L'écran du mois
+     lit celle de chaque ligne. */
+  mode: Mode
+  categorie: Categorie
+  catalogue_id: string | null
   variable: boolean; cle: 'prorata' | 'moitie' | null
   compte_id: string | null; enveloppe_id: string | null
   archive_le: string | null
@@ -245,11 +259,12 @@ export function useCharges() {
     queryKey: CLE.charges,
     queryFn: async (): Promise<Charge[]> => {
       const l = ou(await supabase.from('charge')
-        .select('id, libelle, montant_cents, periodicite, variable, cle, compte_id, enveloppe_id, archive_le, commun, debut, modifie_par, charge_participant(user_profile_id)')
+        .select('id, libelle, montant_cents, periodicite, mode, categorie, catalogue_id, variable, cle, compte_id, enveloppe_id, archive_le, commun, debut, modifie_par, charge_participant(user_profile_id)')
         .order('libelle'))
       return l.map(c => ({
         ...c,
         periodicite: c.periodicite as Charge['periodicite'],
+        mode: c.mode as Mode, categorie: c.categorie as Categorie,
         cle: c.cle as Charge['cle'],
         /* ⚠️ TRIÉS. Sans ordre, PostgREST rend les participants dans celui de
            la base : on lisait « Thauba et Kamil » sur une ligne et « Kamil et
@@ -268,7 +283,7 @@ export function useCatalogue() {
     queryKey: ['catalogue-charges'],
     queryFn: async () => {
       const l = ou(await supabase.from('catalogue_charge')
-        .select('id, section, libelle, periode, portee, precision_txt, ordre').order('ordre'))
+        .select('id, section, libelle, periode, portee, precision_txt, ordre, plafond_ordre').order('ordre'))
       const sections = new Map<string, typeof l>()
       for (const x of l) {
         if (!sections.has(x.section)) sections.set(x.section, [])
@@ -315,11 +330,16 @@ export function useAjouteCharge() {
       participants: string[]; cle?: string | null; catalogueId?: string | null
       variable?: boolean; compteId?: string | null; enveloppeId?: string | null
       commun?: boolean; debut?: string
+      mode?: Mode; categorie?: Categorie
       foyerId: string
     }) => {
       const ligne = ou(await supabase.from('charge').insert({
         household_id: c.foyerId, libelle: c.libelle, montant_cents: c.montantCents,
         periodicite: c.periodicite, cle: c.cle ?? null, catalogue_id: c.catalogueId ?? null,
+        /* La façon et la catégorie, dites par l'écran (§ 3.7). Sans elles, le
+           trigger de `charge` les déduit — c'est le chemin de l'ancien paquet. */
+        ...(c.mode ? { mode: c.mode } : {}),
+        ...(c.categorie ? { categorie: c.categorie } : {}),
         variable: c.variable ?? false, compte_id: c.compteId ?? null,
         enveloppe_id: c.enveloppeId ?? null,
         /* L'INTENTION, pas l'état : une charge commune posée pendant qu'on est
@@ -381,11 +401,15 @@ export function useCorrigeCharge() {
       /* La date de départ : le seul champ que l'écran signale comme dangereux,
          et le seul qu'on ne pouvait plus toucher. */
       debut: string
+      /* Absente, la clé ne part pas et la base prend son défaut (`null` : la
+         façon ne change pas). Un `null` explicite ne passerait pas le typage :
+         les types générés font des paramètres à défaut des `?: string`. */
+      mode?: Mode
     }) => {
       const { data, error } = await supabase.rpc('corrige_la_charge', {
         la_charge: m.id, nouveau_libelle: m.libelle,
         nouveau_montant: m.montantCents, nouvelle_periodicite: m.periodicite,
-        nouveau_debut: m.debut,
+        nouveau_debut: m.debut, nouveau_mode: m.mode,
       })
       if (error) throw new Error(error.message)
       return (data as number) ?? 0
@@ -429,49 +453,35 @@ export function useRetireCharge() {
 
 export type Revenu = { id: string; user_profile_id: string; net_mensuel_cents: number; valid_from: string }
 
-/** Le dernier revenu connu de chacun. C'est lui qui rend le prorata possible. */
+export async function lisLesRevenus(): Promise<Revenu[]> {
+  return ou(await supabase.from('revenu')
+    .select('id, user_profile_id, net_mensuel_cents, valid_from')
+    .order('valid_from', { ascending: false })) as Revenu[]
+}
+
+/** TOUT l'historique : le revenu en vigueur se lit à la fin du mois affiché
+    (`revenuDuMois`). Ne garder que le dernier faisait afficher décembre « sur
+    4 500 € » quand le revenu changeait en janvier. */
 export function useRevenus() {
-  return useQuery({
-    queryKey: CLE.revenus,
-    queryFn: async (): Promise<Revenu[]> => {
-      const l = ou(await supabase.from('revenu')
-        .select('id, user_profile_id, net_mensuel_cents, valid_from')
-        .order('valid_from', { ascending: false }))
-      const derniers = new Map<string, Revenu>()
-      for (const r of l) if (!derniers.has(r.user_profile_id)) derniers.set(r.user_profile_id, r)
-      return [...derniers.values()]
-    },
-  })
+  return useQuery({ queryKey: CLE.revenus, queryFn: lisLesRevenus })
 }
 
 /**
- * Poser son revenu.
- *
- * Toujours un INSERT, jamais un update : un revenu est un fait daté, et la
- * clé de chaque mois passé se lit dessus (D62). Le corriger au lieu d'en
- * ajouter un réécrirait le partage des mois déjà ouverts.
- *
- * La date d'effet est le premier du mois en cours : « à partir de maintenant ».
+ * Poser son revenu : UNE instruction, un `upsert` sur (personne, date d'effet).
+ * Le `delete` puis `insert` d'avant faisait deux transactions : un revenu posé
+ * pendant le départ de son compte tenait sa ligne en attendant le verrou du
+ * foyer, que `delete_my_account` tenait en attendant de la supprimer.
  */
+export async function poseRevenu(v: { foyerId: string; userId: string; cents: number }) {
+  return ou(await supabase.from('revenu').upsert({
+    household_id: v.foyerId, user_profile_id: v.userId,
+    net_mensuel_cents: v.cents, valid_from: moisDe(),
+  }, { onConflict: 'user_profile_id,valid_from' }).select().single())
+}
+
 export function usePoseRevenu() {
   const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (v: { foyerId: string; userId: string; cents: number }) => {
-      const depuis = moisDe()
-      // Deux saisies le même mois sont la même intention : on remplace celle du
-      // mois courant plutôt que d'échouer sur l'unicité (user, valid_from).
-      await supabase.from('revenu')
-        .delete().eq('user_profile_id', v.userId).eq('valid_from', depuis)
-      return ou(await supabase.from('revenu').insert({
-        household_id: v.foyerId, user_profile_id: v.userId,
-        net_mensuel_cents: v.cents, valid_from: depuis,
-      }).select().single())
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: CLE.revenus })
-      qc.invalidateQueries({ queryKey: ['budget-mois'] })
-    },
-  })
+  return useMutation({ mutationFn: poseRevenu, onSuccess: () => relisLeBudget(qc) })
 }
 
 export function usePoseCompte() {
@@ -671,19 +681,19 @@ export function useRegle() {
   })
 }
 
+/* Comme un revenu : une nouvelle règle est un FAIT DATÉ, pas une correction.
+   Deux changements le même mois sont la même intention : un `upsert`, une seule
+   transaction. */
+export async function poseRegle(r: { foyerId: string; cle: 'prorata' | 'moitie' }) {
+  return ou(await supabase.from('regle_partage').upsert({
+    household_id: r.foyerId, cle: r.cle, valid_from: moisDe(),
+  }, { onConflict: 'household_id,valid_from' }).select().single())
+}
+
 export function usePoseRegle() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (r: { foyerId: string; cle: 'prorata' | 'moitie' }) => {
-      const depuis = moisDe()
-      // Comme un revenu : une nouvelle règle est un FAIT DATÉ, pas une
-      // correction. Deux changements le même mois sont la même intention.
-      await supabase.from('regle_partage')
-        .delete().eq('household_id', r.foyerId).eq('valid_from', depuis)
-      return ou(await supabase.from('regle_partage').insert({
-        household_id: r.foyerId, cle: r.cle, valid_from: depuis,
-      }).select().single())
-    },
+    mutationFn: poseRegle,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['regle-partage'] })
       qc.invalidateQueries({ queryKey: ['budget-mois'] })
@@ -953,5 +963,246 @@ export function useRangeEnveloppe() {
       qc.invalidateQueries({ queryKey: ['enveloppes-posees'] })
       qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
     },
+  })
+}
+
+/* ── Le budget refait ─────────────────────────────────────────────────────── */
+
+/* Chaque mutation relit tout ce que l'argent touche. Sans cela, la feuille
+   restée ouverte après une facture de 320 € annonçait « Il restera 66,68 € de
+   côté » pour 100 €, quand la base posait +100 €. */
+const CE_QUE_L_ARGENT_TOUCHE = ['budget-mois', 'saisies', 'factures', 'cloture',
+  'etat-de-l-annee', 'apercu-des-soldes', 'budget-charges', 'budget-poches', 'budget-solde',
+  'budget-revenus', 'excedent']
+export function relisLeBudget(qc: QueryClient) {
+  for (const cle of CE_QUE_L_ARGENT_TOUCHE) qc.invalidateQueries({ queryKey: [cle] })
+}
+
+// ── Les dépenses au fil du mois ──────────────────────────────────────────────
+export type Saisie = SaisieDuMois & { created_at: string }
+
+export async function lisLesSaisies(mois: string): Promise<Saisie[]> {
+  return ou(await supabase.from('saisie')
+    .select('id, depense_id, fait_le, montant_cents, saisi_par, created_at')
+    .gte('fait_le', mois).lte('fait_le', dernierJour(mois))
+    .order('fait_le', { ascending: false }).order('created_at', { ascending: false })) as Saisie[]
+}
+export function useSaisies(mois: string) {
+  return useQuery({ queryKey: ['saisies', mois], queryFn: () => lisLesSaisies(mois) })
+}
+
+/**
+ * Déclarer une dépense. L'identifiant vient de l'appareil : la feuille le crée
+ * à la frappe du montant, le garde pour ses renvois, et en prend un neuf après
+ * un succès. Un second envoi du même identifiant — une coupure, un double
+ * toucher — rend 23505 : c'est un succès.
+ */
+export async function ajouteSaisie(s: {
+  id: string; foyerId: string; depenseId: string; faitLe: string; cents: number; moi: string
+}) {
+  const { error } = await supabase.from('saisie').insert({
+    id: s.id, household_id: s.foyerId, depense_id: s.depenseId, fait_le: s.faitLe,
+    montant_cents: s.cents, saisi_par: s.moi,
+  })
+  if (error && error.code !== '23505') throw new Error(error.message)
+}
+export function useAjouteSaisie() {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: ajouteSaisie, onSuccess: () => relisLeBudget(qc) })
+}
+
+export async function retireSaisie(id: string) {
+  ou(await supabase.from('saisie').delete().eq('id', id).select())
+}
+export function useRetireSaisie() {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: retireSaisie, onSuccess: () => relisLeBudget(qc) })
+}
+
+// ── Les factures du mois ─────────────────────────────────────────────────────
+/** « C'est ça » ou « Valider X € » : la feuille Facture du mois (§ 3.3). */
+export async function confirmeFacture(c: { depenseId: string; cents: number }) {
+  const { error } = await supabase.rpc('confirme_la_depense',
+    { la_depense: c.depenseId, reel_cents: c.cents })
+  if (error) throw new Error(error.message)
+}
+export function useConfirmeFacture() {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: confirmeFacture, onSuccess: () => relisLeBudget(qc) })
+}
+
+// ── Les factures des charges mises de côté ───────────────────────────────────
+export type Facture = {
+  id: string; charge_id: string; annee: number; paye_le: string; montant_cents: number
+  origine: 'saisie' | 'releve'; saisi_par: string | null
+}
+export async function lisLesFactures(chargeId: string, annee: number): Promise<Facture[]> {
+  return ou(await supabase.from('facture')
+    .select('id, charge_id, annee, paye_le, montant_cents, origine, saisi_par')
+    .eq('charge_id', chargeId).eq('annee', annee)
+    .order('paye_le', { ascending: false })) as Facture[]
+}
+export function useFactures(chargeId: string, annee: number) {
+  return useQuery({ queryKey: ['factures', chargeId, annee],
+                    queryFn: () => lisLesFactures(chargeId, annee) })
+}
+
+export async function paieFacture(p: { id: string; chargeId: string; cents: number; payeLe: string }) {
+  const { error } = await supabase.rpc('paie_une_facture', {
+    la_facture: p.id, la_charge: p.chargeId, montant_cents: p.cents, paye_le: p.payeLe })
+  if (error) throw new Error(error.message)
+}
+export function usePaieFacture() {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: paieFacture, onSuccess: () => relisLeBudget(qc) })
+}
+
+export async function retireFacture(id: string) {
+  const { error } = await supabase.rpc('retire_une_facture', { la_facture: id })
+  if (error) throw new Error(error.message)
+}
+export function useRetireFacture() {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: retireFacture, onSuccess: () => relisLeBudget(qc) })
+}
+
+export async function corrigeLeReleve(c: { id: string; cents: number }) {
+  const { error } = await supabase.rpc('corrige_le_releve',
+    { la_facture: c.id, montant_cents: c.cents })
+  if (error) throw new Error(error.message)
+}
+export function useCorrigeLeReleve() {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: corrigeLeReleve, onSuccess: () => relisLeBudget(qc) })
+}
+
+export type EtatAnnee = {
+  b: number; pl: number; pose: number; soldee: boolean; premier_mois_suivi: string | null
+}
+/** Ce que la base calcule pour une année : la feuille applique la formule du § 4.4
+    au montant tapé, elle ne recompte rien. */
+export async function lisEtatDeLAnnee(chargeId: string, annee: number): Promise<EtatAnnee> {
+  return ou(await supabase.rpc('etat_de_l_annee', { la_charge: chargeId, annee })) as EtatAnnee
+}
+export function useEtatDeLAnnee(chargeId: string, annee: number) {
+  return useQuery({ queryKey: ['etat-de-l-annee', chargeId, annee],
+                    queryFn: () => lisEtatDeLAnnee(chargeId, annee) })
+}
+
+/**
+ * Une charge mise de côté a-t-elle une histoire : une facture (les relevés en
+ * sont, depuis 0114), ou une ligne mise de côté confirmée ou réglée — un mois
+ * clôturé, même rouvert, est tout confirmé ? Elle ne devient alors pas
+ * mensuelle (§ 3.7). La base le refuse (0110) ; l'écran le dit AVANT, en
+ * grisant les trois autres façons.
+ */
+export async function aUneHistoire(chargeId: string): Promise<boolean> {
+  const f = await supabase.from('facture').select('id', { count: 'exact', head: true })
+    .eq('charge_id', chargeId)
+  if (f.error) throw new Error(f.error.message)
+  const d = await supabase.from('depense').select('id', { count: 'exact', head: true })
+    .eq('charge_id', chargeId).eq('source', 'modele').eq('facon', 'mis_de_cote')
+    .or('confirme_le.not.is.null,regle_le.not.is.null')
+  if (d.error) throw new Error(d.error.message)
+  return (f.count ?? 0) + (d.count ?? 0) > 0
+}
+export function useAUneHistoire(chargeId: string, actif: boolean) {
+  /* Sous `factures` : chaque mutation de l'argent la relit (`relisLeBudget`). */
+  return useQuery({ queryKey: ['factures', 'histoire', chargeId],
+                    enabled: actif && chargeId !== '', queryFn: () => aUneHistoire(chargeId) })
+}
+
+// ── La clôture ──────────────────────────────────────────────────────────────
+export type Choix = {
+  user_profile_id: string; reste_cents: number | null; mis_de_cote_cents: number
+  poche_id: string | null; versement_id: string | null
+}
+export type Cloture = { id: string; mois: string; cloture_le: string; choix: Choix[] }
+
+export async function lisLesClotures(): Promise<Cloture[]> {
+  const l = ou(await supabase.from('cloture')
+    .select('id, mois, cloture_le, cloture_choix(user_profile_id, reste_cents, mis_de_cote_cents, poche_id, versement_id)')
+    .order('mois', { ascending: false }))
+  return l.map(k => ({ id: k.id, mois: k.mois, cloture_le: k.cloture_le,
+                       choix: (k.cloture_choix ?? []) as Choix[] }))
+}
+export function useClotures() {
+  return useQuery({ queryKey: ['cloture'], queryFn: lisLesClotures })
+}
+
+export type NonSoldee = { charge: string; libelle: string; annee: number; raison: string }
+export async function clotureLeMois(c: {
+  mois: string; factures: { depense: string; montant_cents: number }[]
+  rien: string[]; misDeCote: number | null; poche: string | null
+}): Promise<{ cloture: string; non_soldees: NonSoldee[] }> {
+  const { data, error } = await supabase.rpc('cloture_le_mois', {
+    le_mois: c.mois, factures: c.factures, rien: c.rien,
+    /* `undefined`, pas `null` : la clé ne part pas, et la base prend son défaut —
+       `null`, c'est-à-dire « tout ce qui reste », et aucune poche. Les types
+       générés n'acceptent pas `null` pour un paramètre à défaut. */
+    mis_de_cote_cents: c.misDeCote ?? undefined, la_poche: c.poche ?? undefined })
+  if (error) throw new Error(error.message)
+  return data as { cloture: string; non_soldees: NonSoldee[] }
+}
+export function useClotureLeMois() {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: clotureLeMois, onSuccess: () => relisLeBudget(qc) })
+}
+
+export async function rouvreLeMois(mois: string) {
+  const { error } = await supabase.rpc('rouvre_le_mois', { le_mois: mois })
+  if (error) throw new Error(error.message)
+}
+export function useRouvreLeMois() {
+  const qc = useQueryClient()
+  return useMutation({ mutationFn: rouvreLeMois, onSuccess: () => relisLeBudget(qc) })
+}
+
+export type Solde = { charge: string; libelle: string; annee: number; cents: number }
+export async function lisApercuDesSoldes(mois: string): Promise<Solde[]> {
+  return ou(await supabase.rpc('apercu_des_soldes', { le_mois: mois })) as Solde[]
+}
+export function useApercuDesSoldes(mois: string, actif = true) {
+  return useQuery({ queryKey: ['apercu-des-soldes', mois], enabled: actif,
+                    queryFn: () => lisApercuDesSoldes(mois) })
+}
+
+// ── Retirer une charge ───────────────────────────────────────────────────────
+export type Retrait = { sort: 'supprimee' | 'archivee' }
+  | { aConfirmer: { cents: number; message: string } }
+
+/**
+ * « Retirer » (0111). Une saisie ne part pas sans qu'on l'ait vue : la base
+ * refuse d'abord, avec le total (`hint` = `avec_les_saisies`, `details` = les
+ * centimes). L'écran demande alors « Retirer Courses et ses 430 € déclarés ? »,
+ * puis rappelle avec `avecLesSaisies`.
+ */
+export async function retireCharge(id: string, avecLesSaisies = false): Promise<Retrait> {
+  const { data, error } = await supabase.rpc('retire_charge',
+    { p_charge: id, avec_les_saisies: avecLesSaisies })
+  if (error) {
+    if (error.hint === 'avec_les_saisies') {
+      return { aConfirmer: { cents: Number(error.details), message: error.message } }
+    }
+    throw new Error(error.message)
+  }
+  return { sort: data as 'supprimee' | 'archivee' }
+}
+export function useRetireLaCharge() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (r: { id: string; avecLesSaisies?: boolean }) => retireCharge(r.id, r.avecLesSaisies),
+    onSuccess: () => relisLeBudget(qc),
+  })
+}
+
+/** Changer de catégorie : un simple `update`, sous la policy `charge_update` (§ 4.1).
+    Rien d'autre ne bouge. */
+export function useChangeCategorie() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (c: { id: string; categorie: Categorie }) =>
+      ou(await supabase.from('charge').update({ categorie: c.categorie }).eq('id', c.id).select().single()),
+    onSuccess: () => relisLeBudget(qc),
   })
 }
