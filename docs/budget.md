@@ -133,20 +133,60 @@ Un projet atteint peut être réglé depuis l'épargne voyages plutôt que depui
 compte commun : le registre (D64) enregistre alors un retrait au prorata des
 versements, pas moitié-moitié.
 
-### D73 — les dépenses personnelles se suivent, ne se partagent jamais, et leur détail reste privé
+### D73 — les dépenses personnelles se suivent, et ne se partagent jamais
 
 Sans elles, le reste à vivre de D68 est une fiction : un crédit personnel de
 400 € ne se voit nulle part et l'app annonce un confort qui n'existe pas.
 
-D'où la règle en deux temps : **le total** d'une personne est visible dans le
-foyer, parce que c'est lui qui donne le reste à vivre ; **le détail** ne l'est
-que pour elle, sauf à le partager explicitement. Un salaire est une donnée du
-foyer (D63), la liste de ce qu'on achète n'en est pas une.
+D'où la règle : **le total** d'une personne est visible dans le foyer, parce que
+c'est lui qui donne le reste à vivre ; **le détail** l'est aussi (D80,
+01/10/2026) : c'est un seul foyer. Une dépense perso se suit, et ne se partage
+jamais.
 
 Elles ne se saisissent **pas** à l'onboarding (D70) : demander à quelqu'un
 d'énumérer ses crédits pour finir son inscription, c'est la meilleure façon de
 ne jamais le voir revenir. Elles vivent dans un écran « Mes dépenses »,
 remplissable à tout moment, avec un rappel discret tant qu'il est vide.
+
+### D74 à D80 — l'écran refait (01/10/2026)
+
+Spec : [`superpowers/specs/2026-10-01-ecran-budget-design.md`](superpowers/specs/2026-10-01-ecran-budget-design.md) (§ 2).
+Plan : `superpowers/plans/2026-10-19-budget.md`. La base porte tout l'argent, en
+centimes entiers.
+
+**D74 — l'écran ouvre sur ce qui reste.** Les gestes, ce qui reste du mois,
+l'épargne, puis les charges rangées par catégorie. La catégorie appartient à la
+charge (`charge.categorie`), pas au catalogue : elle en vient par défaut et se
+change dans « Mes charges ».
+
+**D75 — quatre façons de payer.** Fixe, facture du mois, au fil du mois, mise de
+côté (`charge.mode`). Une charge non mensuelle est toujours « mise de côté », et
+l'inverse ; les trois autres sont mensuelles. Chaque ligne fige sa façon à sa
+naissance (`depense.facon`).
+
+**D76 — au fil du mois, le plafond, c'est le prévu.** L'enveloppe disparaît de
+l'écran : une ligne a un seul chiffre, et il borne la jauge. Les enveloppes sans
+charge deviennent des lignes au fil du mois ; celle qui fait doublon est retirée.
+Chaque dépense est une `saisie`.
+
+**D77 — une charge mise de côté se règle facture par facture.** Les `facture`
+s'ajoutent au total payé de l'année, comparé au prévu des seuls mois suivis. Le
+dépassement va tout de suite au mois en cours ; ce qui reste revient à la
+clôture de décembre. Plus de relevé à saisir : `releve_annuel` ne marque que
+l'année soldée.
+
+**D78 — le mois fini, on le clôture.** À partir du 1er du mois suivant, jamais le
+mois en cours. Trois étapes : les factures, les dépenses au fil du mois, ce qui
+reste (mis de côté ou gardé). Une ligne sans réponse garde son prévu : la clôture
+ne bloque jamais, et on peut revenir dessus (`cloture`, `cloture_choix`).
+
+**D79 — une confirmation ne laisse pas de trace à l'écran.** Valider, saisir une
+facture ou clôturer n'écrit aucune phrase sur l'écran du mois : la ligne affiche
+le bon chiffre, le détail se lit dans sa feuille.
+
+**D80 — le foyer voit tout.** Le détail des dépenses perso est visible de tout le
+foyer, comme leur total. « Il te reste » ne compte que mes parts : voir une ligne
+ne veut pas dire la payer.
 
 
 ---

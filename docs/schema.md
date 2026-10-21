@@ -292,6 +292,33 @@ pas gagner zéro.
 | `depense` | La ligne d'un mois. `unique (charge_id, mois) where source = 'modele'` — partielle, sans quoi la ligne d'ajustement de D62 serait impossible. |
 | `depense_part` | La part de chacun, **figée en centimes**. Son `user_profile_id` n'a **pas** de clé étrangère, délibérément : une part figée est un fait comptable, pas un pointeur, et elle survit au départ de la personne. |
 
+`charge.mode` dit comment on la paie (D75) : `fixe`, `facture`, `au_fil` ou
+`mis_de_cote` — ce dernier si et seulement si la charge n'est pas mensuelle
+(contrainte `charge_mode_periodicite`). `charge.categorie` la range à l'écran
+(D74) : elle vient du catalogue par défaut et se change dans « Mes charges ».
+`depense.facon` fige la façon de LA LIGNE à sa naissance : la clôture et la garde
+des saisies la lisent, jamais celle de la charge, qui a pu changer depuis. Null
+pour un ajustement ; toute ligne `modele` en a une (`depense_modele_a_une_facon`).
+
+### Le budget refait (migrations 0093 à 0114, D74 à D80)
+
+| Table | Ce qu'elle porte |
+|---|---|
+| `saisie` | Une dépense au fil du mois, rattachée à la LIGNE du mois (`depense_id`, en cascade). L'id vient de l'appareil : un renvoi est un succès sans effet. `saisi_par` à null : la saisie d'amorce posée par 0114 pour une ligne déjà confirmée, ou un membre parti. |
+| `facture` | Une facture d'une charge mise de côté. Pour une charge et une année, le total payé est la somme de ses factures, aucune autre source. `origine = 'releve'` : un ancien relevé annuel, converti par 0114. |
+| `cloture` | Un mois clôturé par foyer (`unique (household_id, mois)`), avec l'heure de la clôture. |
+| `cloture_choix` | Le choix de chacun à la clôture : son reste, ce qu'il met de côté, sur quelle poche. `user_profile_id` sans clé étrangère : un fait comptable, qui survit au départ. |
+
+`releve_annuel` ne porte plus que l'année soldée, et son prévu figé
+(`prevu_cents`) ; le total payé, ce sont les factures.
+
+**L'heure.** `maintenant()`, `aujourdhui()` et `mois_courant()` donnent l'heure de
+Paris ; `popote.maintenant` (réglage de base, superutilisateur seul) la fait jouer
+aux bancs. **Le verrou du foyer.** Toute fonction du budget prend
+`verrou_du_foyer` avant sa première écriture, et un trigger d'instruction fait de
+même pour les écritures du client : une saisie ou une facture qui arrive pendant
+une clôture attend sa fin, puis la voit.
+
 `ouvre_le_mois(le_mois, le_foyer default null)` engendre les dépenses des
 charges actives et fige les parts. Idempotente — il n'y a pas de `pg_cron`,
 donc l'ouverture est paresseuse et le premier qui ouvre l'app le 1er la
@@ -316,7 +343,8 @@ moitié-moitié alors que les versements ne l'étaient pas (D64). Le
 `regularise_annuel(charge, annee, reel)` pose la ligne d'ajustement de D62. Elle
 ne touche à aucun mois déjà partagé : l'écart se répartit selon ce que chacun a
 **porté** sur l'année, donc selon la clé en vigueur chaque mois, sans avoir à la
-relire. Quelqu'un arrivé en octobre ne porte que ses trois mois.
+relire. Quelqu'un arrivé en octobre ne porte que ses trois mois. (Depuis 0113, elle
+ne fait plus que refuser : ce sont les factures qui régularisent, D77.)
 
 **`depense.montant_cents` est signé.** Un relevé inférieur à la provision est un
 remboursement, pas une anomalie. Le contrôle qui compte reste le même : la somme

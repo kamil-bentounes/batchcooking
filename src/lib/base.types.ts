@@ -137,6 +137,7 @@ export type Database = {
         Row: {
           archive_le: string | null
           catalogue_id: string | null
+          categorie: string
           cle: string | null
           commun: boolean
           compte_id: string | null
@@ -147,6 +148,7 @@ export type Database = {
           household_id: string
           id: string
           libelle: string
+          mode: string
           modifie_le: string | null
           modifie_par: string | null
           montant_cents: number
@@ -156,6 +158,7 @@ export type Database = {
         Insert: {
           archive_le?: string | null
           catalogue_id?: string | null
+          categorie?: string
           cle?: string | null
           commun?: boolean
           compte_id?: string | null
@@ -166,6 +169,7 @@ export type Database = {
           household_id: string
           id?: string
           libelle: string
+          mode?: string
           modifie_le?: string | null
           modifie_par?: string | null
           montant_cents: number
@@ -175,6 +179,7 @@ export type Database = {
         Update: {
           archive_le?: string | null
           catalogue_id?: string | null
+          categorie?: string
           cle?: string | null
           commun?: boolean
           compte_id?: string | null
@@ -185,6 +190,7 @@ export type Database = {
           household_id?: string
           id?: string
           libelle?: string
+          mode?: string
           modifie_le?: string | null
           modifie_par?: string | null
           montant_cents?: number
@@ -265,6 +271,107 @@ export type Database = {
             columns: ["user_profile_id"]
             isOneToOne: false
             referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cloture: {
+        Row: {
+          cloture_le: string
+          cloture_par: string | null
+          household_id: string
+          id: string
+          mois: string
+        }
+        Insert: {
+          cloture_le: string
+          cloture_par?: string | null
+          household_id: string
+          id?: string
+          mois: string
+        }
+        Update: {
+          cloture_le?: string
+          cloture_par?: string | null
+          household_id?: string
+          id?: string
+          mois?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cloture_cloture_par_fkey"
+            columns: ["cloture_par"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cloture_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cloture_choix: {
+        Row: {
+          baisse_cents: number
+          cloture_id: string
+          household_id: string
+          mis_de_cote_cents: number
+          poche_id: string | null
+          reste_cents: number | null
+          user_profile_id: string
+          versement_id: string | null
+        }
+        Insert: {
+          baisse_cents?: number
+          cloture_id: string
+          household_id: string
+          mis_de_cote_cents?: number
+          poche_id?: string | null
+          reste_cents?: number | null
+          user_profile_id: string
+          versement_id?: string | null
+        }
+        Update: {
+          baisse_cents?: number
+          cloture_id?: string
+          household_id?: string
+          mis_de_cote_cents?: number
+          poche_id?: string | null
+          reste_cents?: number | null
+          user_profile_id?: string
+          versement_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cloture_choix_cloture_id_fkey"
+            columns: ["cloture_id"]
+            isOneToOne: false
+            referencedRelation: "cloture"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cloture_choix_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cloture_choix_poche_id_fkey"
+            columns: ["poche_id"]
+            isOneToOne: false
+            referencedRelation: "poche_epargne"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cloture_choix_versement_id_fkey"
+            columns: ["versement_id"]
+            isOneToOne: false
+            referencedRelation: "versement_epargne"
             referencedColumns: ["id"]
           },
         ]
@@ -506,6 +613,7 @@ export type Database = {
           confirme_le: string | null
           created_at: string
           enveloppe_id: string | null
+          facon: string | null
           household_id: string
           id: string
           libelle: string
@@ -525,6 +633,7 @@ export type Database = {
           confirme_le?: string | null
           created_at?: string
           enveloppe_id?: string | null
+          facon?: string | null
           household_id: string
           id?: string
           libelle: string
@@ -544,6 +653,7 @@ export type Database = {
           confirme_le?: string | null
           created_at?: string
           enveloppe_id?: string | null
+          facon?: string | null
           household_id?: string
           id?: string
           libelle?: string
@@ -716,6 +826,64 @@ export type Database = {
             columns: ["household_id"]
             isOneToOne: false
             referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      facture: {
+        Row: {
+          annee: number
+          charge_id: string
+          created_at: string
+          household_id: string
+          id: string
+          montant_cents: number
+          origine: string
+          paye_le: string
+          saisi_par: string | null
+        }
+        Insert: {
+          annee: number
+          charge_id: string
+          created_at?: string
+          household_id: string
+          id: string
+          montant_cents: number
+          origine?: string
+          paye_le: string
+          saisi_par?: string | null
+        }
+        Update: {
+          annee?: number
+          charge_id?: string
+          created_at?: string
+          household_id?: string
+          id?: string
+          montant_cents?: number
+          origine?: string
+          paye_le?: string
+          saisi_par?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facture_charge_id_fkey"
+            columns: ["charge_id"]
+            isOneToOne: false
+            referencedRelation: "charge"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "facture_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "facture_saisi_par_fkey"
+            columns: ["saisi_par"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
             referencedColumns: ["id"]
           },
         ]
@@ -2111,6 +2279,7 @@ export type Database = {
           ecart_cents: number
           household_id: string
           id: string
+          prevu_cents: number
           reel_cents: number
           saisi_le: string
           saisi_par: string | null
@@ -2121,6 +2290,7 @@ export type Database = {
           ecart_cents: number
           household_id: string
           id?: string
+          prevu_cents: number
           reel_cents: number
           saisi_le?: string
           saisi_par?: string | null
@@ -2131,6 +2301,7 @@ export type Database = {
           ecart_cents?: number
           household_id?: string
           id?: string
+          prevu_cents?: number
           reel_cents?: number
           saisi_le?: string
           saisi_par?: string | null
@@ -2195,6 +2366,64 @@ export type Database = {
           {
             foreignKeyName: "revenu_user_profile_id_fkey"
             columns: ["user_profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saisie: {
+        Row: {
+          created_at: string
+          depense_id: string
+          fait_le: string
+          household_id: string
+          id: string
+          montant_cents: number
+          reference_externe: string | null
+          saisi_par: string | null
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          depense_id: string
+          fait_le: string
+          household_id: string
+          id: string
+          montant_cents: number
+          reference_externe?: string | null
+          saisi_par?: string | null
+          source?: string
+        }
+        Update: {
+          created_at?: string
+          depense_id?: string
+          fait_le?: string
+          household_id?: string
+          id?: string
+          montant_cents?: number
+          reference_externe?: string | null
+          saisi_par?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saisie_depense_id_fkey"
+            columns: ["depense_id"]
+            isOneToOne: false
+            referencedRelation: "depense"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saisie_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saisie_saisi_par_fkey"
+            columns: ["saisi_par"]
             isOneToOne: false
             referencedRelation: "user_profile"
             referencedColumns: ["id"]
@@ -3086,11 +3315,42 @@ export type Database = {
     }
     Functions: {
       accepter_amitie: { Args: { p_jeton: string }; Returns: string }
+      annees_a_solder: {
+        Args: { foyer: string; le_mois: string }
+        Returns: {
+          annee: number
+          charge_id: string
+          libelle: string
+        }[]
+      }
+      apercu_des_soldes: { Args: { le_mois: string }; Returns: Json }
       arc_corrigible: {
         Args: { apres: string; avant: string }
         Returns: boolean
       }
       arc_sien: { Args: { apres: string; avant: string }; Returns: boolean }
+      aujourdhui: { Args: never; Returns: string }
+      categorie_de_l_article: { Args: { article: string }; Returns: string }
+      cible_de: {
+        Args: { annee: number; comme_soldee?: boolean; la_charge: string }
+        Returns: {
+          b: number
+          cible: number
+          pl: number
+          pose: number
+          soldee: boolean
+        }[]
+      }
+      cloture_le_mois: {
+        Args: {
+          factures?: Json
+          la_poche?: string
+          le_mois: string
+          mis_de_cote_cents?: number
+          rien?: string[]
+        }
+        Returns: Json
+      }
       compte_pour_invitation: {
         Args: { adresse: string }
         Returns: {
@@ -3102,20 +3362,35 @@ export type Database = {
         Args: { la_depense: string; reel_cents: number }
         Returns: undefined
       }
+      confirme_la_ligne: {
+        Args: { la_ligne: string; reel_cents: number }
+        Returns: undefined
+      }
       corrige_la_charge: {
         Args: {
           la_charge: string
           nouveau_debut?: string
           nouveau_libelle: string
+          nouveau_mode?: string
           nouveau_montant: number
           nouvelle_periodicite: string
         }
         Returns: number
       }
+      corrige_le_releve: {
+        Args: { la_facture: string; montant_cents: number }
+        Returns: undefined
+      }
       create_household: { Args: { p_name: string }; Returns: string }
       current_cycle: { Args: never; Returns: string }
       current_household: { Args: never; Returns: string }
+      de_mois: { Args: { d: string }; Returns: string }
       delete_my_account: { Args: never; Returns: undefined }
+      en_euros: { Args: { cents: number }; Returns: string }
+      etat_de_l_annee: {
+        Args: { annee: number; la_charge: string }
+        Returns: Json
+      }
       excedent_du_mois: {
         Args: { le_mois: string }
         Returns: {
@@ -3152,6 +3427,10 @@ export type Database = {
         Returns: number
       }
       llm_global_budget_remaining: { Args: never; Returns: number }
+      maintenant: { Args: never; Returns: string }
+      mois_courant: { Args: never; Returns: string }
+      mois_suivi: { Args: { foyer: string; le_mois: string }; Returns: boolean }
+      nom_du_mois: { Args: { d: string }; Returns: string }
       open_cycle: {
         Args: { p_servings?: number; p_week_of: string }
         Returns: string
@@ -3164,8 +3443,24 @@ export type Database = {
         Args: { le_foyer?: string; le_mois: string }
         Returns: number
       }
+      paie_une_facture: {
+        Args: {
+          la_charge: string
+          la_facture: string
+          montant_cents: number
+          paye_le: string
+        }
+        Returns: string
+      }
       parts_du_foyer: {
         Args: { la_cle?: string; le_foyer?: string; le_mois: string }
+        Returns: {
+          part_bps: number
+          user_profile_id: string
+        }[]
+      }
+      parts_du_mois: {
+        Args: { la_cle?: string; le_foyer: string; le_mois: string }
         Returns: {
           part_bps: number
           user_profile_id: string
@@ -3175,6 +3470,12 @@ export type Database = {
         Args: { p_food_id: string; p_unit?: string }
         Returns: number
       }
+      pose_les_parts: {
+        Args: { foyer: string; la_ligne: string; montant: number }
+        Returns: number
+      }
+      premier_mois_suivi: { Args: { foyer: string }; Returns: string }
+      prenom_de: { Args: { nom: string }; Returns: string }
       prenoms_visibles: {
         Args: never
         Returns: {
@@ -3208,6 +3509,11 @@ export type Database = {
         Returns: undefined
       }
       rattrape_les_mois: { Args: never; Returns: number }
+      recale_l_annee: {
+        Args: { annee: number; la_charge: string; mois_cible?: string }
+        Returns: undefined
+      }
+      recale_la_charge: { Args: { la_charge: string }; Returns: undefined }
       recettes_faisables: { Args: never; Returns: string[] }
       recettes_partagees: { Args: never; Returns: string[] }
       refige_le_mois: { Args: { le_mois: string }; Returns: number }
@@ -3234,7 +3540,12 @@ export type Database = {
           reste_cents: number
         }[]
       }
-      retire_charge: { Args: { p_charge: string }; Returns: string }
+      retire_charge: {
+        Args: { avec_les_saisies?: boolean; p_charge: string }
+        Returns: string
+      }
+      retire_une_facture: { Args: { la_facture: string }; Returns: undefined }
+      rouvre_le_mois: { Args: { le_mois: string }; Returns: undefined }
       sessions_partagees: { Args: never; Returns: string[] }
       solde_epargne: {
         Args: { la_poche: string }
@@ -3243,6 +3554,10 @@ export type Database = {
           user_profile_id: string
         }[]
       }
+      solde_l_annee: {
+        Args: { annee: number; la_charge: string; mois_cible: string }
+        Returns: undefined
+      }
       tables_de_foyer: {
         Args: never
         Returns: {
@@ -3250,6 +3565,7 @@ export type Database = {
         }[]
       }
       taches_partagees: { Args: never; Returns: string[] }
+      verrou_du_foyer: { Args: { foyer: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
