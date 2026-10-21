@@ -22,17 +22,24 @@ begin
   end if;
   perform public.verrou_du_foyer(foyer);
 
-  /* L'idempotence AVANT toute règle : un renvoi après une coupure, ou un double
-     toucher, est un succès sans effet. L'identifiant vient de l'appareil. */
-  if exists (select 1 from public.facture f where f.id = la_facture) then
-    return la_facture;
-  end if;
-
+  /* La charge est celle du foyer, AVANT tout, l'idempotence comprise : un
+     identifiant de facture d'un autre foyer rendait sinon un succès silencieux,
+     sans rien écrire, et confirmait au passage que cette facture existe. */
   select c.mode into le_mode from public.charge c
   where c.id = la_charge and c.household_id = foyer;
   if le_mode is null then
     raise exception 'Cette charge n''est pas celle de ton foyer.'
       using errcode = 'insufficient_privilege';
+  end if;
+
+  /* L'idempotence AVANT toute autre règle : un renvoi après une coupure, ou un
+     double toucher, est un succès sans effet. L'identifiant vient de l'appareil.
+     Seule NOTRE facture, sur CETTE charge, compte comme un renvoi ; l'id d'un
+     autre foyer échoue à l'insertion (clé primaire) : une erreur, pas un succès. */
+  if exists (select 1 from public.facture f
+             where f.id = la_facture and f.household_id = foyer
+               and f.charge_id = la_charge) then
+    return la_facture;
   end if;
   /* Une charge retirée garde son mode : sa feuille s'ouvre encore (§ 3.4). */
   if le_mode <> 'mis_de_cote' then
