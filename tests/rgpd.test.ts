@@ -51,6 +51,9 @@ describe('RGPD', () => {
       enveloppe: 'enveloppes', poche_epargne: 'poches_epargne',
       releve_annuel: 'releves_annuels',
       poche_poste: 'poche_postes', versement_epargne: 'versements_epargne',
+      // Budget refait (0097)
+      saisie: 'saisies', facture: 'factures', cloture: 'clotures',
+      cloture_choix: 'cloture_choix',
     }
 
     const oubliees = (tables as { table_name: string }[])
