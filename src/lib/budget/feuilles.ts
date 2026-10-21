@@ -44,9 +44,13 @@ export function lisLeMontant(saisi: string, o: { zeroOk: boolean }): MontantTape
  * française, et le champ se relirait mal.
  */
 export function saisiDe(cents: number): string {
-  const entier = Math.trunc(cents / 100)
-  const reste = Math.abs(cents % 100)
-  return reste === 0 ? String(entier) : `${entier},${String(reste).padStart(2, '0')}`
+  /* Le signe se pose À PART : `Math.trunc(-5 / 100)` vaut -0, que `String` écrit « 0 » —
+     « -0,05 » perdait son signe et se relisait « 0,05 ». */
+  const signe = cents < 0 ? '-' : ''
+  const a = Math.abs(cents)
+  const entier = Math.trunc(a / 100)
+  const reste = a % 100
+  return reste === 0 ? `${signe}${entier}` : `${signe}${entier},${String(reste).padStart(2, '0')}`
 }
 
 /**
@@ -91,6 +95,18 @@ export function jourAccepte(jour: string, min: string, max: string): boolean {
   // « 2026-02-31 » devient mars : une date qui n'existe pas ne passe pas.
   if (d.getFullYear() !== a || d.getMonth() !== mo - 1) return false
   return jour >= min && jour <= max
+}
+
+/**
+ * L'année tapée dans « Autre jour » vaut-elle une lecture ? Un `<input type="date">` rend
+ * « 0002-10-21 » dès que l'année en est à son deuxième chiffre : chaque frappe changeait
+ * l'année de la feuille et lançait `etat_de_l_annee` et `factures` pour rien. On ne lit que
+ * pour quatre chiffres, à cinq ans au plus de l'année du jour (la base n'a rien au-delà).
+ */
+export function anneePlausible(jour: string, aujourdhui: string): boolean {
+  const m = /^(\d{4})-\d{2}-\d{2}$/.exec(jour)
+  if (!m) return false
+  return Math.abs(Number(m[1]) - Number(aujourdhui.slice(0, 4))) <= 5
 }
 
 /** Ce qu'une charge mise de côté met de côté chaque mois : l'arrondi de `provision_mensuelle`. */

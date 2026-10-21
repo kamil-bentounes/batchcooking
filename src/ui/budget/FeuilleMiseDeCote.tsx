@@ -23,7 +23,7 @@ import {
 import { aujourdhui } from '../../lib/horloge.ts'
 import { dateCourte, montant, nomDuMois } from '../../lib/budget/mois.ts'
 import {
-  apercuFacture, apercuReleve, depuisLe, envoiPermis, envoiPour, jourAccepte, lisLeMontant,
+  anneePlausible, apercuFacture, apercuReleve, depuisLe, envoiPermis, envoiPour, jourAccepte, lisLeMontant,
   plancherDuJour, provisionParMois, questionDeRetrait, saisiDe, type Envoi, type MontantTape,
 } from '../../lib/budget/feuilles.ts'
 import { Erreur } from '../coque.tsx'
@@ -202,8 +202,11 @@ export function FeuilleMiseDeCote({ charge, fermer }: { charge: Charge; fermer: 
      porte autre chose (autre montant, autre jour), et l'oublie après un succès. */
   const envoi = useRef<Envoi | null>(null)
   const annee = Number(payeLe.slice(0, 4))
-  const etat = useEtatDeLAnnee(charge.id, annee)
-  const factures = useFactures(charge.id, annee)
+  /* On ne lit que pour une année plausible : « 0002 » en cours de frappe changeait l'année
+     et lançait deux requêtes parasites à chaque touche. */
+  const lire = anneePlausible(payeLe, jour)
+  const etat = useEtatDeLAnnee(charge.id, annee, lire)
+  const factures = useFactures(charge.id, annee, lire)
   const paie = usePaieFacture()
   const retire = useRetireFacture()
   const corrige = useCorrigeLeReleve()

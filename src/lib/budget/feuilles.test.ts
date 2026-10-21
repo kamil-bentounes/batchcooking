@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { enCentimes, type Charge, type EtatAnnee } from '../donnees/budget.ts'
 import {
   apercuFacture, apercuReleve, depuisLe, envoiPermis, envoiPour, jourAccepte, lisLeMontant,
-  montantPropose, plancherDuJour, provisionParMois, questionDeRetrait, saisiDe,
+  anneePlausible, montantPropose, plancherDuJour, provisionParMois, questionDeRetrait, saisiDe,
 } from './feuilles.ts'
 import type { Ligne } from './mois.ts'
 
@@ -90,6 +90,13 @@ describe('saisiDe — le montant qu’on redonne à corriger', () => {
     expect(saisiDe(47_90)).toBe('47,90')
     expect(saisiDe(5)).toBe('0,05')
     expect(saisiDe(0)).toBe('0')
+  })
+
+  it('un négatif garde son signe : -5 centimes n’est pas « 0,05 »', () => {
+    expect(saisiDe(-5)).toBe('-0,05')
+    expect(saisiDe(-99)).toBe('-0,99')
+    expect(saisiDe(-100)).toBe('-1')
+    expect(saisiDe(-1234)).toBe('-12,34')
   })
 
   it('se relit à l’identique : aucun centime ne bouge entre l’écran et le champ', () => {
@@ -281,5 +288,26 @@ describe('questionDeRetrait — retirer une facture se demande, avec son montant
   it('un montant à centimes et à milliers se lit comme à l’écran', () => {
     expect(questionDeRetrait(1450_04, '2026-03-02', 'octobre'))
       .toBe(`Retirer la facture de 1${FINE}450,04 € du Lun. 2 mars ? L’écart se recalcule sur octobre.`)
+  })
+})
+
+describe('anneePlausible — la lecture d’une année ne part pas à chaque touche', () => {
+  // Un <input type="date"> rend « 0002-10-21 » dès que l'année en est à son deuxième chiffre :
+  // chaque frappe changeait `annee` et lançait deux requêtes (`etat_de_l_annee`, `factures`).
+  it('l’année de la date du jour, et ±5 ans, passent', () => {
+    expect(anneePlausible('2026-10-21', '2026-10-21')).toBe(true)
+    expect(anneePlausible('2021-10-21', '2026-10-21')).toBe(true)
+    expect(anneePlausible('2031-01-01', '2026-10-21')).toBe(true)
+  })
+
+  it('une année en cours de frappe ne passe pas', () => {
+    for (const d of ['0002-10-21', '0020-10-21', '0202-10-21', '2-10-21', '', '202610-21']) {
+      expect(anneePlausible(d, '2026-10-21'), d).toBe(false)
+    }
+  })
+
+  it('au-delà de 5 ans, non', () => {
+    expect(anneePlausible('2020-10-21', '2026-10-21')).toBe(false)
+    expect(anneePlausible('2032-10-21', '2026-10-21')).toBe(false)
   })
 })

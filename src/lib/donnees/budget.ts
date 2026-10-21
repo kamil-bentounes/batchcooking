@@ -754,8 +754,8 @@ export async function lisLesFactures(chargeId: string, annee: number): Promise<F
     .eq('charge_id', chargeId).eq('annee', annee)
     .order('paye_le', { ascending: false })) as Facture[]
 }
-export function useFactures(chargeId: string, annee: number) {
-  return useQuery({ queryKey: ['factures', chargeId, annee],
+export function useFactures(chargeId: string, annee: number, actif = true) {
+  return useQuery({ queryKey: ['factures', chargeId, annee], enabled: actif,
                     queryFn: () => lisLesFactures(chargeId, annee) })
 }
 
@@ -796,8 +796,8 @@ export type EtatAnnee = {
 export async function lisEtatDeLAnnee(chargeId: string, annee: number): Promise<EtatAnnee> {
   return ou(await supabase.rpc('etat_de_l_annee', { la_charge: chargeId, annee })) as EtatAnnee
 }
-export function useEtatDeLAnnee(chargeId: string, annee: number) {
-  return useQuery({ queryKey: ['etat-de-l-annee', chargeId, annee],
+export function useEtatDeLAnnee(chargeId: string, annee: number, actif = true) {
+  return useQuery({ queryKey: ['etat-de-l-annee', chargeId, annee], enabled: actif,
                     queryFn: () => lisEtatDeLAnnee(chargeId, annee) })
 }
 
