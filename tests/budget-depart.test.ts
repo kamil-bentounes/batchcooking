@@ -6,7 +6,9 @@
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import type pg from 'pg'
 import { admin } from './helpers/db'
+import { connexion, enProprietaire } from './helpers/pg'
 import { ajustements, clore, clos, declare, foyerDOctobre, foyerSolo, ligne, membre, ou, ouvre,
          ouvreLAnnee, poseCharge } from './helpers/budget'
 import { regleLHeure, remetLHeure } from './helpers/horloge'
@@ -93,6 +95,75 @@ describe('un membre part, le foyer reste', () => {
     ou(await thauba.client.rpc('delete_my_account'))
     // Plus aucun revenu : plus aucun mois suivi, Pl = 0, toute la facture compte.
     expect((await ajustements(entretien)).map(l => l.montant_cents)).toEqual([15_332, 16_668])
+  })
+})
+
+/**
+ * Une charge perso annuelle de Thauba, dont elle a porté septembre et octobre
+ * (2 × 41,67 € = 83,34 €), puis qui part. Ce qu'elle avait mis de côté est parti
+ * avec elle : `recale_l_annee` ne le rend pas à Kamil. Mais ce que Kamil a posé
+ * LUI-MÊME après son départ lui revient, retirer sa facture comprise.
+ */
+describe('une charge perso de la membre partie', () => {
+  let c: pg.Client
+  beforeAll(async () => { c = await connexion() })
+  afterAll(async () => { await c.end() })
+
+  async function sansThauba(nom: string) {
+    const f = await foyerSolo(nom, { revenu: 300_000 })
+    const thauba = await membre(f, 'Thauba', { arrivee: '2026-09-01', revenu: 300_000 })
+    const entretien = await poseCharge(f, { libelle: 'Entretien perso', cents: 50_004,
+      mode: 'mis_de_cote', participants: [thauba.userId] })
+    for (const m of ['2026-09-01', '2026-10-01']) {
+      ou(await f.client.rpc('ouvre_la_charge', { la_charge: entretien, foyer: f.householdId,
+                                                 le_mois: m }))
+    }
+    ou(await thauba.client.rpc('delete_my_account'))
+    return { f, entretien }
+  }
+  const somme = async (charge: string) =>
+    (await ajustements(charge)).reduce((s, l) => s + l.montant_cents, 0)
+
+  it('la facture de Kamil se pose sur lui, et la retirer la rend : rien ne reste sur novembre',
+    async () => {
+      const { f, entretien } = await sansThauba('dep-facture-retiree')
+      const la = randomUUID()
+      ou(await f.client.rpc('paie_une_facture', { la_facture: la, la_charge: entretien,
+                                                  montant_cents: 20_000, paye_le: '2026-11-10' }))
+      // 200 € moins les 83,34 € que Thauba avait mis de côté, sur Kamil seul.
+      expect((await ajustements(entretien)).map(l => [l.mois, l.montant_cents]))
+        .toEqual([['2026-11-01', 11_666]])
+      ou(await f.client.rpc('retire_une_facture', { la_facture: la }))
+      expect(await somme(entretien), 'les 116,66 € de Kamil sont restés sur novembre').toBe(0)
+    })
+
+  it('corriger le relevé à la baisse, après le départ, ne laisse rien non plus', async () => {
+    const { f, entretien } = await sansThauba('dep-releve-corrige')
+    const la = randomUUID()
+    ou(await admin().from('releve_annuel').insert({
+      household_id: f.householdId, charge_id: entretien, annee: 2026, reel_cents: 20_000,
+      prevu_cents: 8_334, ecart_cents: 11_666, saisi_par: f.userId }).select())
+    ou(await admin().from('facture').insert({
+      id: la, household_id: f.householdId, charge_id: entretien, annee: 2026,
+      paye_le: '2026-11-10', montant_cents: 20_000, origine: 'releve', saisi_par: f.userId }).select())
+    ou(await f.client.rpc('corrige_le_releve', { la_facture: la, montant_cents: 20_000 }))
+    expect(await somme(entretien)).toBe(11_666)
+    ou(await f.client.rpc('corrige_le_releve', { la_facture: la, montant_cents: 8_334 }))
+    expect(await somme(entretien), 'la correction n’a pas rendu l’écart à Kamil').toBe(0)
+  })
+
+  it('le solde de décembre ne rend pas à Kamil ce que Thauba avait mis de côté', async () => {
+    const { f, entretien } = await sansThauba('dep-solde-sans-rendre')
+    await enProprietaire(c, f.userId)
+    try {
+      await c.query('select public.solde_l_annee($1, $2, $3)', [entretien, 2026, '2026-12-01'])
+      await c.query('commit')
+    } catch (e) { await c.query('rollback'); throw e }
+    expect(await ajustements(entretien), 'Kamil a reçu 83,34 € qu’il n’avait pas mis de côté')
+      .toEqual([])
+    const { data: r } = await admin().from('releve_annuel').select('reel_cents, prevu_cents')
+      .eq('charge_id', entretien).eq('annee', 2026)
+    expect(r).toEqual([{ reel_cents: 0, prevu_cents: 8_334 }])
   })
 })
 

@@ -210,9 +210,14 @@ begin
      avaient mis de côté est parti avec eux. L'Entretien perso de Thauba, partie
      le 03/11 : la clôture de décembre rendait sinon 166,68 € à Kamil, qui ne les
      avait jamais mis de côté. Au solde, l'année est déjà marquée soldée : elle
-     l'est donc sans ligne. */
+     l'est donc sans ligne.
+     MAIS ce que des ajustements ont déjà posé (`x.pose`) est de l'argent que le
+     foyer présent a porté : le rendre est toujours permis. Sans cette borne, la
+     facture que Kamil retirait après le départ de Thauba laissait ses 116,66 €
+     sur novembre. On ne rend donc que la part de `delta` qui défait du posé. */
   if presents <= 0 and tous > 0 and delta < 0 then
-    return;
+    delta := greatest(delta, -x.pose);
+    if delta = 0 then return; end if;
   end if;
 
   insert into public.depense
