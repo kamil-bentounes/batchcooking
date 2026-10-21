@@ -12,14 +12,13 @@
  *    troisième mois.
  */
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { ou, ouNul, supabase } from '../supabase.ts'
+import { ou, supabase } from '../supabase.ts'
 import { maintenant } from '../horloge.ts'
 import { dernierJour, type Saisie as SaisieDuMois } from '../budget/mois.ts'
 import type { Categorie, Mode } from '../budget/categories.ts'
 
 export const CLE = {
   mois: (m: string) => ['budget-mois', m] as const,
-  enveloppes: (m: string) => ['budget-enveloppes', m] as const,
   charges: ['budget-charges'] as const,
   comptes: ['budget-comptes'] as const,
   poches: ['budget-poches'] as const,
@@ -129,26 +128,6 @@ export function useMois(mois: string) {
   return useQuery({ queryKey: CLE.mois(mois), queryFn: () => lisLeMois(mois) })
 }
 
-/**
- * Marquer un mois comme déjà réglé — et revenir dessus.
- *
- * Il manquait, et c'était bloquant à l'arrivée : poser une charge annuelle qui
- * court depuis janvier ouvre huit mois d'un coup, et chacun réclamait un
- * virement pour un mois déjà vécu. La seule issue était de ne pas regarder.
- */
-export function useRegleLeMois() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (m: { mois: string; regle: boolean }) => {
-      const lignes = ou(await supabase.from('depense')
-        .update({ regle_le: m.regle ? new Date().toISOString() : null })
-        .eq('mois', m.mois).select('id'))
-      return lignes.length
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['budget-mois'] }),
-  })
-}
-
 export type Virement = { vers: string; compteId: string | null; cents: number; detail: string }
 
 /**
@@ -207,32 +186,6 @@ export function useComptes() {
       /* Un compte rangé ne se propose plus — ni dans la liste, ni dans le menu
          « où débiter » de chaque charge. C'est tout l'intérêt de le ranger. */
       .is('archive_le', null).order('nom')) as Compte[],
-  })
-}
-
-export type ResteEnveloppe = {
-  enveloppe_id: string; libelle: string
-  /* Trois choses distinctes, et elles l'étaient si peu que la jauge affichait
-     « il reste 0,00 € » le premier du mois : `prevu` est le plan (la provision
-     pas encore confirmée), `depense` est ce qui a réellement été porté. */
-  plafond_cents: number; prevu_cents: number
-  depense_cents: number; reste_cents: number
-}
-
-export function useEnveloppes(mois: string) {
-  return useQuery({
-    queryKey: CLE.enveloppes(mois),
-    queryFn: async (): Promise<ResteEnveloppe[]> => {
-      const l = ou(await supabase.rpc('reste_enveloppe', { le_mois: mois }))
-      // Les agrégats reviennent en `bigint`, donc en chaîne : `Number` ici une
-      // fois, plutôt que dans chaque composant qui les affiche.
-      return l.map(x => ({
-        ...x,
-        prevu_cents: Number(x.prevu_cents),
-        depense_cents: Number(x.depense_cents),
-        reste_cents: Number(x.reste_cents),
-      }))
-    },
   })
 }
 
@@ -421,27 +374,6 @@ export function useCorrigeCharge() {
   })
 }
 
-export function useRetireCharge() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (id: string) => {
-      /* « Retirer », c'est retirer : la charge part de TOUS les mois, puis
-         elle-même. Elle s'archivait dès qu'elle avait une ligne, et les mois
-         déjà ouverts la gardaient — un doublon retiré comptait encore 580 €
-         en septembre. Seuls restent le confirmé et le réglé ; voir 0088. */
-      const sort = ou(await supabase.rpc('retire_charge', { p_charge: id }))
-      return sort as 'supprimee' | 'archivee'
-    },
-    /* Le MOIS aussi : ses lignes viennent de partir. Seules les charges
-       étaient relues, et le budget gardait la ligne jusqu'au rechargement. */
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: CLE.charges })
-      qc.invalidateQueries({ queryKey: ['budget-mois'] })
-      qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
-    },
-  })
-}
-
 /* ── Ce qui manquait : de quoi POSER les prérequis ─────────────────────────
  *
  * Les écrans du budget lisaient des comptes, des enveloppes et des revenus
@@ -505,76 +437,15 @@ export function usePoseCompte() {
   })
 }
 
-export function usePoseEnveloppe() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (e: { foyerId: string; libelle: string; plafondCents: number }) =>
-      ou(await supabase.from('enveloppe').insert({
-        household_id: e.foyerId, libelle: e.libelle, plafond_cents: e.plafondCents,
-      }).select().single()),
-    onSuccess: () => {
-      /* ⚠️ LES DEUX clés. `budget-enveloppes` porte la jauge de l'écran du
-         mois ; `enveloppes-posees` porte la LISTE de l'écran des réglages,
-         celle qu'on vient de remplir. Seule la première était invalidée : on
-         ajoutait une enveloppe, les champs se vidaient — donc l'écriture avait
-         bien eu lieu — et la liste au-dessus continuait d'afficher « Aucune
-         enveloppe » jusqu'au rechargement. `useRangeEnveloppe`, juste en
-         dessous, invalidait pourtant les deux : ARCHIVER rafraîchissait,
-         CRÉER non. */
-      qc.invalidateQueries({ queryKey: ['enveloppes-posees'] })
-      qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
-    },
-  })
-}
-
-export function useEnveloppesPosees() {
-  return useQuery({
-    queryKey: ['enveloppes-posees'],
-    queryFn: async () => ou(await supabase.from('enveloppe')
-      .select('id, libelle, plafond_cents').is('archive_le', null).order('libelle')),
-  })
-}
-
-/**
- * Les enveloppes qu'on PROPOSE, prises dans le référentiel.
- *
- * Le catalogue des charges existe depuis 0050 pour une raison écrite dans son
- * en-tête : « on ne se souvient pas de ses charges, on les RECONNAÎT ». Les
- * enveloppes n'avaient rien de tel — un champ vide, et à chacun de deviner ce
- * qu'on attend de lui.
- *
- * ⚠️ On rend le LIBELLÉ du catalogue tel quel, sans le réécrire. `Charges.tsx`
- *    rattache une charge à l'enveloppe qui porte le même nom : « Restaurants »
- *    proposé ici et « Restaurant » tapé à la main ne sont pas la même
- *    enveloppe, et la jauge resterait vide.
- *
- * ⚠️ Et on trie sur `plafond_ordre`, PAS sur `ordre`. Le second range les
- *    charges par section, si bien que les enveloppes sortaient « Essence,
- *    Pharmacie, Courses… » — les deux plus rares en tête.
- */
-export function useSuggestionsEnveloppe() {
-  return useQuery({
-    queryKey: ['suggestions-enveloppe'],
-    queryFn: async () => ou(await supabase.from('catalogue_charge')
-      .select('id, libelle, plafond_ordre')
-      .not('plafond_ordre', 'is', null).order('plafond_ordre')),
-    staleTime: Infinity,   // un référentiel ne bouge pas pendant une session
-  })
-}
-
-/** Rattacher une charge à un compte et à une enveloppe, après coup. */
+/** Rattacher une charge à un compte, après coup. Les enveloppes sont parties de
+    l'écran (§ 3.7) ; `virements()` lira le compte au lot 4. */
 export function useRattacheCharge() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (r: { id: string; compteId?: string | null; enveloppeId?: string | null }) =>
-      ou(await supabase.from('charge').update({
-        ...(r.compteId !== undefined ? { compte_id: r.compteId } : {}),
-        ...(r.enveloppeId !== undefined ? { enveloppe_id: r.enveloppeId } : {}),
-      }).eq('id', r.id).select().single()),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: CLE.charges })
-      qc.invalidateQueries({ queryKey: ['budget-mois'] })
-    },
+    mutationFn: async (r: { id: string; compteId: string | null }) =>
+      ou(await supabase.from('charge').update({ compte_id: r.compteId })
+        .eq('id', r.id).select().single()),
+    onSuccess: () => relisLeBudget(qc),
   })
 }
 
@@ -620,55 +491,6 @@ export function useVerse() {
 
 /* ── La régularisation : ce qu'on a VRAIMENT payé ─────────────────────────── */
 
-/**
- * Remplacer une provision par le montant réel.
- *
- * ⚠️ On ne pose PAS une ligne d'ajustement ici, et c'est réfléchi : un réel
- *    INFÉRIEUR à la provision — l'énergie d'un mois doux — demanderait une
- *    dépense négative, que la contrainte `montant_cents >= 0` interdit à bon
- *    droit. On corrige donc la ligne du mois et on repose ses parts.
- *
- *    La ligne d'ajustement de D62 reste nécessaire pour la régularisation
- *    ANNUELLE, où l'écart se répartit sur douze mois déjà partagés ; elle
- *    viendra avec elle, et l'unicité partielle du générateur est déjà posée
- *    pour la rendre possible.
- *
- * Les nouvelles parts gardent les POINTS DE BASE de la provision, pas la clé
- * d'aujourd'hui : corriger un montant n'est pas l'occasion de repartager. Le
- * centime résiduel va au plus gros contributeur, sans quoi la somme ne
- * recomposerait pas le montant et le trigger différé refuserait l'écriture.
- *
- * Trois requêtes, dans cet ordre imposé : PostgREST valide chacune dans sa
- * propre transaction, et le contrôle de somme n'admet que zéro part ou un total
- * exact. Retirer les parts d'abord est donc le seul chemin.
- */
-export function useRegularise() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (r: { foyerId: string; depense: Depense; reelCents: number }) => {
-      /* UNE seule requête, donc une seule transaction.
-       *
-       * La version d'avant en faisait trois — retirer les parts, changer le
-       * montant, les reposer — et une coupure réseau au milieu, sur un
-       * téléphone, vers le 27, laissait la dépense sans aucune part et sans
-       * reprise possible.
-       *
-       * Elle pose aussi le marqueur de confirmation, sans lequel un relevé égal
-       * à la provision — le cas le plus fréquent — ne clôturait pas le mois et
-       * le laissait repartageable par un simple changement de revenu. */
-      const { error } = await supabase.rpc('confirme_la_depense', {
-        la_depense: r.depense.id, reel_cents: r.reelCents,
-      })
-      if (error) throw new Error(error.message)
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['budget-mois'] })
-      qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
-      qc.invalidateQueries({ queryKey: ['excedent'] })
-    },
-  })
-}
-
 /** La règle par défaut du foyer. Datée : elle ne réécrit pas les mois passés. */
 export function useRegle() {
   return useQuery({
@@ -697,74 +519,6 @@ export function usePoseRegle() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['regle-partage'] })
       qc.invalidateQueries({ queryKey: ['budget-mois'] })
-    },
-  })
-}
-
-/**
- * Le relevé annuel est arrivé.
- *
- * On ne touche PAS aux mois déjà partagés : on pose une ligne d'ajustement dans
- * le mois courant, répartie selon ce que chacun a porté sur l'année. Quelqu'un
- * arrivé en octobre ne porte donc que ses trois mois, sans qu'aucune règle de
- * date soit écrite — elle est déjà dans les parts figées.
- */
-export function useRegulariseAnnuel() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (r: { chargeId: string; annee: number; reelCents: number }) =>
-      ou(await supabase.rpc('regularise_annuel', {
-        la_charge: r.chargeId, annee: r.annee, reel_cents: r.reelCents,
-      })),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['budget-mois'] })
-      /* ⚠️ Et les PROVISIONS, qui vivent sous une autre clé. Sans ça, dans la
-         session même où l'on saisit le relevé, l'écran ne voit pas qu'il
-         existe : le bouton ne grise pas, on reclique, et on reçoit une
-         violation d'index brute. Le seul garde-fou promis ne se déclenchait
-         jamais au moment où il servait. */
-      qc.invalidateQueries({ queryKey: ['provisions'] })
-    },
-  })
-}
-
-/** Ce qui a été provisionné sur une charge pour une année, et par qui. */
-export function useProvisionsDe(chargeId: string | undefined, annee: number) {
-  return useQuery({
-    queryKey: ['provisions', chargeId, annee],
-    enabled: !!chargeId,
-    queryFn: async () => {
-      const l = ou(await supabase.rpc('provisions_de',
-        { la_charge: chargeId!, annee }))
-      /* ⚠️ Ce que l'année provisionnera EN ENTIER, pas seulement les mois déjà
-         ouverts. C'est sur ce total que la base calcule l'écart depuis 0073 ;
-         l'écran, lui, était resté sur les mois faits — il annonçait « il
-         manque 362,53 € » pendant que la base en posait 0,04, et la ligne
-         consommait l'index unique, rendant toute correction impossible. */
-      const { data: aVenir, error } = await supabase.rpc('provisions_a_venir',
-        { la_charge: chargeId!, annee })
-      if (error) throw new Error(error.message)
-      /* Le relevé a-t-il déjà été saisi ? Aucun écran ne le disait, et rien
-         n'empêchait donc de le ressaisir — sauf l'index unique, qui rendait
-         alors une violation de contrainte brute. */
-      /* ⚠️ `ouNul`, PAS `ou`.
-         `ou` lève sur `data === null`, et `maybeSingle()` rend légitimement
-         null quand l'année n'a pas encore été saisie — c'est le seul état où
-         cet écran sert. La requête tombait donc en erreur, `provisions.data`
-         devenait indéfini, et l'écran affichait « 0,00 € mis de côté » et
-         « il manque 1 500,00 € » alors que la base en poserait 60. J'avais
-         remplacé un garde-fou tombé du mauvais côté par un autre tombé de
-         l'autre. Le fichier `supabase.ts` dit pourquoi les deux existent. */
-      const releve = ouNul(await supabase.from('releve_annuel')
-        .select('reel_cents, ecart_cents, saisi_le')
-        .eq('charge_id', chargeId!).eq('annee', annee).maybeSingle())
-      return {
-        releve,
-        faites: Number(l[0]?.total_cents ?? 0),
-        aVenir: Number(aVenir ?? 0),
-        total: Number(l[0]?.total_cents ?? 0) + Number(aVenir ?? 0),
-        parPersonne: l.map(x => ({ userId: x.user_profile_id, cents: Number(x.porte_cents) })),
-      }
     },
   })
 }
@@ -842,37 +596,6 @@ export function effortMensuel(
 }
 
 /**
- * L'excédent du mois, par personne.
- *
- * Chacun a viré sa part des PROVISIONS ; une fois les réels saisis, la
- * différence lui revient. Aucun solde bancaire n'est nécessaire — je l'ai cru
- * un moment, à tort : l'écart entre le prévu et le payé suffit.
- *
- * Positif = versé en trop. Négatif = il reste à payer.
- */
-export function useExcedent(mois: string) {
-  return useQuery({
-    queryKey: ['excedent', mois],
-    queryFn: async () => {
-      const l = ou(await supabase.rpc('excedent_du_mois', { le_mois: mois }))
-      return l.map(x => ({ userId: x.user_profile_id, cents: Number(x.excedent_cents) }))
-    },
-  })
-}
-
-/** Le jour du mois à partir duquel on réclame le relevé. */
-export const JOUR_DU_RELEVE = 27
-
-export function cestLHeureDuReleve(mois: string): boolean {
-  const n = new Date()
-  const [a, m] = mois.split('-').map(Number)
-  // Un mois passé est toujours à confirmer ; le mois courant seulement à partir
-  // du 27 — avant, on n'a pas encore tout dépensé.
-  if (a < n.getFullYear() || (a === n.getFullYear() && m < n.getMonth() + 1)) return true
-  return a === n.getFullYear() && m === n.getMonth() + 1 && n.getDate() >= JOUR_DU_RELEVE
-}
-
-/**
  * Changer qui participe à une charge.
  *
  * Il manquait, et le manque était bloquant : les participants ne se cochaient
@@ -931,7 +654,6 @@ export function useMajParticipants() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: CLE.charges })
       qc.invalidateQueries({ queryKey: ['budget-mois'] })
-      qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
     },
   })
 }
@@ -950,22 +672,6 @@ export function useRangeCompte() {
   })
 }
 
-/** Idem pour une enveloppe. */
-export function useRangeEnveloppe() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (m: { id: string; ranger: boolean }) => {
-      const { error } = await supabase.rpc('range_l_enveloppe',
-        { l_enveloppe: m.id, ranger: m.ranger })
-      if (error) throw new Error(error.message)
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['enveloppes-posees'] })
-      qc.invalidateQueries({ queryKey: ['budget-enveloppes'] })
-    },
-  })
-}
-
 /* ── Le budget refait ─────────────────────────────────────────────────────── */
 
 /* Chaque mutation relit tout ce que l'argent touche. Sans cela, la feuille
@@ -973,7 +679,7 @@ export function useRangeEnveloppe() {
    côté » pour 100 €, quand la base posait +100 €. */
 const CE_QUE_L_ARGENT_TOUCHE = ['budget-mois', 'saisies', 'factures', 'cloture',
   'etat-de-l-annee', 'apercu-des-soldes', 'budget-charges', 'budget-poches', 'budget-solde',
-  'budget-revenus', 'excedent']
+  'budget-revenus']
 export function relisLeBudget(qc: QueryClient) {
   for (const cle of CE_QUE_L_ARGENT_TOUCHE) qc.invalidateQueries({ queryKey: [cle] })
 }
