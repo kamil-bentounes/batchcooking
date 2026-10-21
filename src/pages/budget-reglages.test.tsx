@@ -114,3 +114,46 @@ describe('Réglages du budget — les enveloppes sont parties', () => {
     expect(texte(h)).toContain('Les comptes')
   })
 })
+
+describe('Réglages du budget — les revenus pas encore lus', () => {
+  /** Le foyer est lu ; les revenus ne le sont pas (`rate` : ils sont en panne). */
+  function sansRevenus(membres: { id: string; display_name: string }[], rate?: Error) {
+    const qc = new QueryClient({ defaultOptions: { queries: {
+      retry: false, retryOnMount: false, staleTime: Infinity } } })
+    qc.setQueryData(CLE_FOYER.foyer, foyer(membres))
+    qc.setQueryData(CLE.comptes, [])
+    qc.setQueryData(['regle-partage'], 'prorata')
+    if (rate) {
+      qc.getQueryCache().build(qc, { queryKey: CLE.revenus })
+        .setState({ status: 'error', error: rate, data: undefined, fetchStatus: 'idle' })
+    }
+    return renderToStaticMarkup(
+      <QueryClientProvider client={qc}>
+        <BudgetReglages userId="u1" retour={() => {}} />
+      </QueryClientProvider>)
+  }
+  const bouton = (h: string, nom: string) =>
+    [...h.matchAll(/<button\b([^>]*)>(.*?)<\/button>/gs)].find(m => texte(m[2]) === nom)
+
+  it('pas lus : personne n’est « pas encore renseigné », et aucun « parts égales » ne se dit', () => {
+    const h = sansRevenus([K, T])
+    expect(texte(h)).not.toContain('pas encore renseigné')
+    expect(texte(h)).not.toContain('parts égales')
+  })
+
+  it('pas lus : le bouton ne dit ni « Enregistrer » ni « Mettre à jour » (il ne sait pas), et il est éteint', () => {
+    const h = sansRevenus([K])
+    expect(texte(h)).not.toContain('Enregistrer mon revenu')
+    expect(texte(h)).not.toContain('Mettre à jour mon revenu')
+    const b = bouton(h, 'Mon revenu…')
+    expect(b && /\bdisabled(=|\s|$)/.test(b[1])).toBe(true)
+  })
+
+  it('en panne : la panne se dit, sans « pas encore renseigné » ni « parts égales »', () => {
+    const h = sansRevenus([K, T], new Error('boom'))
+    expect(texte(h)).toContain('boom')
+    expect(texte(h)).not.toContain('pas encore renseigné')
+    expect(texte(h)).not.toContain('parts égales')
+    expect(bouton(h, 'Enregistrer mon revenu')).toBeUndefined()
+  })
+})

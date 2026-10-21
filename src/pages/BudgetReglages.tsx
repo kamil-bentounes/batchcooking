@@ -102,7 +102,12 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
      mois qui n'a pas commencé. Les deux affichaient un autre chiffre que celui
      dont la base partage le mois. */
   const enVigueur = (id: string) => revenuDuMois(revenus.data ?? [], id, moisDe())
-  const manquants = membres.filter(m => enVigueur(m.id) === null)
+  /* ⚠️ Les revenus pas encore lus (ou en panne) ne sont pas des revenus absents : avec
+     `?? []`, chaque membre passait pour « pas encore renseigné », le texte ocre
+     « parts égales » s'affichait, et le bouton disait « Enregistrer » à qui avait déjà un
+     revenu — au lieu de « Mettre à jour ». */
+  const lus = revenus.data !== undefined
+  const manquants = lus ? membres.filter(m => enVigueur(m.id) === null) : []
 
   const cRevenu = enCentimes(monRevenu)
 
@@ -144,8 +149,9 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
                                  ${i < membres.length - 1 ? 'border-b border-brume' : ''}`}>
                   <span className="text-[16px]">{prenomDe(m.display_name)}</span>
                   <span className="text-[15px]"
-                        style={{ color: r !== null ? undefined : 'var(--color-ocre)' }}>
-                    {r !== null ? `${euros(r)} / mois` : 'pas encore renseigné'}
+                        style={{ color: !lus || r !== null ? undefined : 'var(--color-ocre)' }}>
+                    {!lus ? (revenus.error ? 'non lu' : '…')
+                      : r !== null ? `${euros(r)} / mois` : 'pas encore renseigné'}
                   </span>
                 </div>
               )
@@ -162,15 +168,16 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
           <div className="mt-4 space-y-3">
             <Champ label="Mon net mensuel (€)" type="text" inputMode="decimal"
                    value={monRevenu} onChange={e => setMonRevenu(e.target.value)} />
-            <button disabled={!cRevenu || cRevenu <= 0 || poseRevenu.isPending}
+            <button disabled={!lus || !cRevenu || cRevenu <= 0 || poseRevenu.isPending}
                     onClick={() => poseRevenu.mutate(
                       { foyerId, userId, cents: cRevenu! },
                       { onSuccess: () => setMonRevenu('') })}
                     className="w-full min-h-11 rounded-[14px] bg-herbe text-fond text-[15px]
                                font-medium disabled:bg-brume disabled:text-encre">
-              {enVigueur(userId) !== null ? 'Mettre à jour mon revenu' : 'Enregistrer mon revenu'}
+              {!lus ? 'Mon revenu…'
+                : enVigueur(userId) !== null ? 'Mettre à jour mon revenu' : 'Enregistrer mon revenu'}
             </button>
-            {enVigueur(userId) !== null && (
+            {lus && enVigueur(userId) !== null && (
               <p className="text-[14px] text-doux">
                 Le précédent est gardé : les mois déjà partagés ne bougent pas.
               </p>
