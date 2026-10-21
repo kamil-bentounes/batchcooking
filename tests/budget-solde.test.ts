@@ -222,3 +222,56 @@ describe('les années que la clôture solderait', () => {
     expect(await apercu(f, '2027-01-01')).toEqual([])
   })
 })
+
+/**
+ * Une charge posée APRÈS la clôture de septembre et d'octobre n'a pas de ligne
+ * dans ces mois (le gel : on n'ajoute rien à un mois clôturé). On vérifie que
+ * l'année n'en est pas sous-comptée : ce que le foyer a payé de plus que ce qu'il
+ * a mis de côté (novembre et décembre seuls) se pose en entier, et ce qu'il n'a
+ * pas dépensé se rend en entier, au centime.
+ */
+describe('une charge posée après la clôture de septembre et d’octobre', () => {
+  async function posee(nom: string) {
+    await regleLHeure('2026-11-10T12:00:00+01:00')
+    const f = await foyerSolo(nom)
+    await clos(f, '2026-09-01')
+    await clos(f, '2026-10-01')
+    const entretien = await poseCharge(f, { libelle: 'Entretien auto', cents: 50_004,
+                                            mode: 'mis_de_cote', debut: '2026-01-01' })
+    await ouvreLAnnee(f, entretien, 2026)
+    return { f, entretien }
+  }
+  /** Ce que l'année a porté : les lignes des mois suivis, plus les ajustements. */
+  const portee = async (charge: string) => {
+    const lignes = ou(await admin().from('depense').select('mois, montant_cents')
+      .eq('charge_id', charge)) as { mois: string; montant_cents: number }[]
+    return lignes.filter(l => l.mois >= '2026-09-01').reduce((s, l) => s + l.montant_cents, 0)
+  }
+  afterAll(() => regleLHeure('2027-01-05T10:00:00+01:00'))
+
+  it('les mois clôturés n’ont pas de ligne, novembre et décembre portent 83,34 €', async () => {
+    const { entretien } = await posee('solde-posee-apres')
+    expect(await ligne(entretien, '2026-09-01')).toBeNull()
+    expect(await ligne(entretien, '2026-10-01')).toBeNull()
+    expect(await portee(entretien)).toBe(8_334)
+  })
+
+  it('une facture de 300,01 € : l’année porte exactement 300,01 €', async () => {
+    const { f, entretien } = await posee('solde-posee-facture')
+    ou(await f.client.rpc('paie_une_facture', { la_facture: randomUUID(), la_charge: entretien,
+                                                montant_cents: 30_001, paye_le: '2026-11-10' }))
+    expect(await portee(entretien)).toBe(30_001)
+    await solde(f, entretien, 2026, '2026-12-01')
+    expect(await portee(entretien), 'le solde a déplacé le total').toBe(30_001)
+    expect(await releve(entretien)).toEqual({ reel_cents: 30_001, prevu_cents: 8_334,
+                                              ecart_cents: 21_667 })
+  })
+
+  it('sans facture : le solde rend les 83,34 € mis de côté, l’année porte 0', async () => {
+    const { f, entretien } = await posee('solde-posee-rien')
+    await solde(f, entretien, 2026, '2026-12-01')
+    expect(await portee(entretien)).toBe(0)
+    expect(await releve(entretien)).toEqual({ reel_cents: 0, prevu_cents: 8_334,
+                                              ecart_cents: -8_334 })
+  })
+})
