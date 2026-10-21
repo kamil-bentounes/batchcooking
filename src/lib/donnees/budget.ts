@@ -825,7 +825,7 @@ export function effortMensuel(
 ): { parMois: number; mois: number } | null {
   if (!objectifCents || !echeance) return null
   const [a, m] = echeance.split('-').map(Number)
-  const n = new Date()
+  const n = maintenant()
   const mois = Math.max(0, (a - n.getFullYear()) * 12 + (m - 1 - n.getMonth()))
   const reste = Math.max(0, objectifCents - dejaCents)
   return { parMois: mois === 0 ? reste : Math.ceil(reste / mois), mois }

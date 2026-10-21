@@ -16,7 +16,12 @@ export function maintenant(): Date {
   if (import.meta.env.MODE === 'development') {
     try {
       const reglee = globalThis.localStorage?.getItem('popote.maintenant')
-      if (reglee) return new Date(reglee)
+      if (reglee) {
+        const d = new Date(reglee)
+        /* Une valeur illisible donnerait « Invalid Date », puis « NaN-NaN-NaN » dans
+           chaque date de l'écran : mieux vaut l'heure vraie. */
+        if (!Number.isNaN(d.getTime())) return d
+      }
     } catch { /* stockage bloqué : l'heure vraie */ }
   }
   return new Date()

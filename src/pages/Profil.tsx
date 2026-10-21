@@ -17,13 +17,7 @@ import { Champ, Bouton, Message } from '../ui/kit.tsx'
 import { supabase, ou, deconnecte } from '../lib/supabase.ts'
 import { CLE, useFoyer } from '../lib/donnees/foyer.ts'
 import { usePoseRevenu, useRevenus, enCentimes, euros } from '../lib/donnees/budget.ts'
-
-/** Aujourd'hui en heure LOCALE : `toISOString()` recule d'un jour avant 2 h. */
-function aujourdhui(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${
-    String(d.getDate()).padStart(2, '0')}`
-}
+import { aujourdhui } from '../lib/horloge.ts'
 
 export function Profil({ userId, onFini, retour }: {
   userId: string; onFini: () => void; retour: () => void
