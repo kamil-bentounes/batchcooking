@@ -122,6 +122,13 @@ body {
  * sur une cible de 28 px.
  */
 .champ-recherche:focus-visible { outline: none; }
+
+/*
+ * Le champ de montant des feuilles : son cadre porte déjà le trait `herbe`, et un
+ * anneau carré par-dessus le dessinait en double. Même défaut, même remède que
+ * `.champ-recherche`.
+ */
+.champ-montant:focus-visible { outline: none; }
 .champ-recherche::-webkit-search-cancel-button {
   appearance: none;
   width: 28px;

@@ -140,7 +140,7 @@ export function VueMiseDeCote({
         <span className="mt-1.5 flex items-center rounded-[18px] border-2 border-herbe bg-surface px-4">
           <input value={saisi} onChange={ev => tape(ev.target.value)} inputMode="decimal"
                  aria-label="Montant de la facture"
-                 className="chiffre grow min-w-0 bg-transparent py-3 text-[32px] outline-none" />
+                 className="champ-montant chiffre grow min-w-0 bg-transparent py-3 text-[32px] outline-none" />
           <span aria-hidden="true" className="chiffre text-[28px] text-doux">€</span>
         </span>
       </label>

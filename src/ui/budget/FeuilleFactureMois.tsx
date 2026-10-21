@@ -76,7 +76,7 @@ export function VueFactureMois({
             <span className="mt-1.5 flex items-center rounded-[18px] border-2 border-herbe bg-surface px-4">
               <input value={saisi} onChange={e => tape(e.target.value)} inputMode="decimal" autoFocus
                      aria-label="Le montant de la facture"
-                     className="chiffre grow min-w-0 bg-transparent py-3 text-[32px] outline-none" />
+                     className="champ-montant chiffre grow min-w-0 bg-transparent py-3 text-[32px] outline-none" />
               <span aria-hidden="true" className="chiffre text-[28px] text-doux">€</span>
             </span>
           </label>

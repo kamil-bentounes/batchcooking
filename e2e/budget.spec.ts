@@ -181,4 +181,37 @@ test.describe('l’écran du mois', () => {
       await page.getByRole('button', { name: 'Ajouter une facture' }).click()
       await expect(page.getByRole('dialog', { name: 'Entretien auto' })).toBeVisible()
       await prend(page, '08-retiree-encore-a-regler')
+    })
+
+  test('un libellé long ne casse pas le montant de sa ligne en deux', async ({ page }) => {
+    /* « Charges de copropriété du bâtiment B » prenait la place du montant, qui
+       passait à la ligne : « 100 » puis « € » en dessous (vu sur la capture 03). */
+    await connecte(page)
+    await page.goto('/budget')
+    await ouvreLaCategorie(page, 'Maison')
+    const copro = page.getByRole('region', { name: 'Catégorie Maison' })
+      .getByRole('button', { name: /^Charges de copropriété/ })
+    const montant = copro.getByText(/^100\s€$/)
+    await expect(montant).toBeVisible()
+    const lignesDeTexte = await montant.evaluate(el => {
+      const r = document.createRange()
+      r.selectNodeContents(el)
+      return new Set([...r.getClientRects()].map(x => Math.round(x.top))).size
+    })
+    expect(lignesDeTexte, 'le montant tient sur plusieurs lignes').toBe(1)
+  })
+
+  test('le champ de montant n’a qu’un anneau, pas un carré dans le rectangle arrondi', async ({ page }) => {
+    /* `outline-none` de Tailwind (dans une couche) perd contre `:focus-visible` (hors
+       couches) : la saisie se dessinait un second anneau, carré, dans celui de son
+       cadre (vu sur la capture 04, une fois le montant tapé). */
+    await connecte(page)
+    await page.goto('/budget')
+    await page.getByRole('button', { name: 'Déclarer pour Restaurant' }).click()
+    const champ = page.getByRole('dialog', { name: 'Restaurant' }).getByLabel('Nouvelle dépense')
+    await champ.focus()
+    await champ.fill('12')
+    await expect(champ).toBeFocused()
+    await expect(champ).toHaveCSS('outline-style', 'none')
+  })
 })

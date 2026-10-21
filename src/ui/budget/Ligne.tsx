@@ -49,7 +49,7 @@ export function LigneDuMois({ ligne, charge, saisies, clos, ouvrir }: {
         <button onClick={() => ouvrir('facture', ligne)}
                 className="w-full min-h-11 py-3 flex items-baseline justify-between gap-3 text-left">
           <span className="text-[16px] font-medium">{ligne.libelle}</span>
-          <span className="text-[16px] tabular-nums">{montant(ligne.montant_cents)}</span>
+          <span className="text-[16px] tabular-nums whitespace-nowrap shrink-0">{montant(ligne.montant_cents)}</span>
         </button>
       </li>
     )
@@ -67,17 +67,19 @@ export function LigneDuMois({ ligne, charge, saisies, clos, ouvrir }: {
             <span className="block text-[16px] font-medium">{ligne.libelle}</span>
             <span className="block text-[13px] text-doux">{rythme}</span>
           </span>
-          <span className="text-[16px] tabular-nums">{montant(ligne.montant_cents)}</span>
+          <span className="text-[16px] tabular-nums whitespace-nowrap shrink-0">{montant(ligne.montant_cents)}</span>
         </button>
       </li>
     )
   }
 
   // Fixe, ou ajustement (montant signé, libellé tel qu'en base) : rien à faire ici.
+  // Le montant ne se coupe ni ne rétrécit (`whitespace-nowrap shrink-0`, ici et dans les
+  // lignes voisines) : sans cela, un libellé long le renvoyait à la ligne (« 100 / € »).
   return (
     <li className="min-h-11 py-3 flex items-baseline justify-between gap-3">
       <span className="text-[16px] font-medium">{ligne.libelle}</span>
-      <span className="text-[16px] tabular-nums">{montant(ligne.montant_cents)}</span>
+      <span className="text-[16px] tabular-nums whitespace-nowrap shrink-0">{montant(ligne.montant_cents)}</span>
     </li>
   )
 }
