@@ -171,3 +171,53 @@ export async function ajustementEnAdmin(f: { householdId: string; userId: string
   }).select())
   return d.id
 }
+
+/**
+ * Le foyer de Kamil en octobre 2026, une ligne de chaque façon, et sa poche
+ * d'urgence. Prévu d'octobre pour lui : 3 700 + 5 000 + 80 000 + 40 000
+ * + 10 000 + 4 167 = 142 867.
+ */
+export async function foyerDOctobre(nom: string, o: { revenu?: number } = {}) {
+  const f = await foyerSolo(nom, { revenu: o.revenu ?? 432_500 })
+  const id = {
+    internet: await poseCharge(f, { libelle: 'Internet', cents: 3_700, categorie: 'maison' }),
+    electricite: await poseCharge(f, { libelle: 'Électricité', cents: 5_000, mode: 'facture',
+                                       categorie: 'maison' }),
+    courses: await poseCharge(f, { libelle: 'Courses', cents: 80_000, mode: 'au_fil',
+                                   commun: true, categorie: 'vie_courante' }),
+    restaurants: await poseCharge(f, { libelle: 'Restaurants', cents: 40_000, mode: 'au_fil',
+                                       commun: true, categorie: 'vie_courante' }),
+    sorties: await poseCharge(f, { libelle: 'Sorties et culture', cents: 10_000, mode: 'au_fil',
+                                   commun: true, categorie: 'vie_courante' }),
+    entretien: await poseCharge(f, { libelle: 'Entretien auto', cents: 50_004,
+                                     mode: 'mis_de_cote', categorie: 'auto' }),
+  }
+  await ouvre(f, '2026-10-01')
+  const poche = (ou(await admin().from('poche_epargne').insert({
+    household_id: f.householdId, libelle: 'Épargne d’urgence', genre: 'urgence',
+    objectif_cents: 400_000,
+  }).select().single()) as { id: string }).id
+  return { f, id, poche }
+}
+
+/** Clôture comme l'écran : rend la réponse de la base. */
+export function clore(a: Actor, o: {
+  mois?: string; factures?: { depense: string; montant_cents: number }[]
+  rien?: string[]; mis?: number | null; poche?: string | null
+} = {}) {
+  return a.client.rpc('cloture_le_mois', {
+    le_mois: o.mois ?? '2026-10-01', factures: o.factures ?? [], rien: o.rien ?? [],
+    mis_de_cote_cents: o.mis === undefined ? null : o.mis, la_poche: o.poche ?? null,
+  })
+}
+
+/** Le choix de clôture d'un membre pour un mois. */
+export async function choixDe(a: Actor, mois = '2026-10-01') {
+  const k = ou(await admin().from('cloture').select('id')
+    .eq('household_id', a.householdId).eq('mois', mois).single()) as { id: string }
+  return ou(await admin().from('cloture_choix')
+    .select('reste_cents, mis_de_cote_cents, versement_id, poche_id')
+    .eq('cloture_id', k.id).eq('user_profile_id', a.userId).single()) as {
+      reste_cents: number | null; mis_de_cote_cents: number
+      versement_id: string | null; poche_id: string | null }
+}
