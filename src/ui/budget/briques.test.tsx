@@ -61,6 +61,18 @@ describe('Jauge', () => {
     expect(h).toContain('aria-valuenow="3000"')
   })
 
+  it('aria-valuenow ne dépasse jamais aria-valuemax : un meter au-delà de son max est invalide', () => {
+    // Le dépassement se dit par l'ocre (testé plus haut), pas par une valeur hors bornes.
+    const h = rends(<Jauge valeur={150_00} plafond={100_00} nom="Courses" />)
+    expect(h).toContain('aria-valuemax="10000"')
+    expect(h).toContain('aria-valuenow="10000"')
+    expect(h).not.toContain('aria-valuenow="15000"')
+  })
+
+  it('aria-valuenow ne passe pas sous aria-valuemin non plus (un avoir)', () => {
+    expect(rends(<Jauge valeur={-20_00} plafond={100_00} nom="x" />)).toContain('aria-valuenow="0"')
+  })
+
   it('la version épaisse est plus haute que la fine', () => {
     expect(rends(<Jauge valeur={1} plafond={2} nom="x" epaisse />)).toContain('h-2.5')
     expect(rends(<Jauge valeur={1} plafond={2} nom="x" />)).toContain('h-1.5')
