@@ -18,3 +18,4 @@ coverage/
 
 # L'état de la relecture des photos : local à chaque poste (voir scripts/relis-photos.mjs).
 .relis-photos.etat.json
+tests/fixtures/*.local.sql
