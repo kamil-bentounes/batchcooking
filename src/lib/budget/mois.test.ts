@@ -183,6 +183,22 @@ describe('la barre du récap', () => {
     const b = barre({ lignes, charges, saisies: [], moi: K, revenu: 250_000, clos: false })
     expect(b.map(s => [s.cle, s.pourcent])).toEqual([['maison', 67], ['vie_courante', 33]])
   })
+  it('le segment « Reste » vaut « Il te reste », même quand une catégorie a une part nette négative', () => {
+    // Auto : une provision de 4 167 et un ajustement de −16 668 (règlement d'un solde) :
+    // −12 501 net. Filtrer la catégorie AVANT de calculer le reste le gonflait de 12 501.
+    const l = [
+      ligne({ id: 'm', charge_id: 'loyer', facon: 'fixe', montant_cents: 100_000 }),
+      ligne({ id: 'p', charge_id: 'auto', facon: 'mis_de_cote', montant_cents: 4_167 }),
+      ligne({ id: 'aj', charge_id: 'auto', facon: null, montant_cents: -16_668 }),
+    ]
+    const ch = new Map([...charges, ['auto', { id: 'auto', categorie: 'auto', commun: true }]])
+    const b = barre({ lignes: l, charges: ch, saisies: [], moi: K, revenu: 400_000, clos: false })
+    const attendu = resteDuMois({ lignes: l, saisies: [], moi: K, mois: '2026-10-01', clos: false,
+      revenus: [{ user_profile_id: K, net_mensuel_cents: 400_000, valid_from: '2026-01-01' }] })
+    expect(attendu.reste).toBe(312_501)
+    expect(b.find(s => s.cle === 'reste')?.cents).toBe(312_501)
+    expect(b.map(s => s.cle), 'la catégorie négative ne s’affiche pas').toEqual(['maison', 'reste'])
+  })
 })
 
 describe('les dates', () => {

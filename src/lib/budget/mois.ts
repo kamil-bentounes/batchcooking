@@ -224,10 +224,13 @@ export function barre(o: {
     const c = categorieDe(l, o.charges)
     parCat.set(c, (parCat.get(c) ?? 0) + maPart(l, o.moi, o.saisies, o.clos))
   }
+  /* Le reste se compte sur TOUTES les parts nettes, y compris celles d'une catégorie à 0 ou
+     en négatif (un solde réglé) : seul l'affichage les écarte. Sinon « Reste » ne valait plus
+     « Il te reste » (`resteDuMois` les compte). */
+  const reste = o.revenu - [...parCat.values()].reduce((t, c) => t + c, 0)
   const cats = [...parCat].filter(([, cents]) => cents > 0)
     .sort((a, b) => b[1] - a[1] || rangDeCategorie(a[0]) - rangDeCategorie(b[0]))
     .map(([cle, cents]) => ({ cle: cle as Categorie | 'reste', nom: infoCategorie(cle).nom, cents }))
-  const reste = o.revenu - cats.reduce((t, s) => t + s.cents, 0)
   const tous = reste > 0 ? [...cats, { cle: 'reste' as const, nom: 'Reste', cents: reste }] : cats
   const p = pourcentages(tous.map(s => s.cents))
   return tous.map((s, i) => ({ ...s, pourcent: p[i] }))
