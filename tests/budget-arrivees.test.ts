@@ -7,6 +7,7 @@
  */
 import { afterAll, describe, expect, it } from 'vitest'
 import { admin } from './helpers/db'
+import { connexion } from './helpers/pg'
 import { clos, foyerSolo, ligne, membre, ou, ouvre, poseCharge } from './helpers/budget'
 import { regleLHeure, remetLHeure } from './helpers/horloge'
 
@@ -62,5 +63,52 @@ describe('changer sa date d’arrivée', () => {
       .eq('id', f.userId).select())
     const apres = (await ligne(loyer, '2026-10-01'))!.depense_part.map(p => p.part_cents).sort()
     expect(apres, 'octobre a été repartagé sur Kamil seul').toEqual(avant)
+  })
+
+  it('traverse plusieurs mois : refige juillet à septembre, et pas octobre', async () => {
+    await regleLHeure('2026-11-05T10:00:00+01:00')
+    const f = await foyerSolo('entre-le-mois', { revenu: 370_000, depuis: '2026-01-01' })
+    const thauba = await membre(f, 'Thauba', { arrivee: '2026-07-10', revenu: 240_000,
+                                               depuis: '2026-01-01' })
+    const loyer = await poseCharge(f, { libelle: 'Loyer', cents: 167_853, commun: true,
+                                        participants: [f.userId, thauba.userId] })
+    for (const m of ['2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01']) {
+      await ouvre(f, m)
+    }
+    // Juillet à octobre : eux deux.
+    expect((await ligne(loyer, '2026-08-01'))!.depense_part).toHaveLength(2)
+    /* Un centime d'écart posé à la main sur octobre, hors de l'intervalle : un
+       refige le remettrait à la valeur calculée, et on le verrait. */
+    const marque = async (mois: string) => {
+      const l = (await ligne(loyer, mois))!
+      const [premier, second] = l.depense_part
+      const c = await connexion()
+      try {
+        // Une part ne se retouche pas : on la supprime et on la repose, dans la même transaction.
+        await c.query('begin')
+        await c.query('delete from public.depense_part where depense_id = $1', [l.id])
+        for (const [p, delta] of [[premier, 1], [second, -1]] as const) {
+          await c.query(`insert into public.depense_part
+              (depense_id, user_profile_id, household_id, part_cents, part_bps)
+            values ($1, $2, $3, $4, 5000)`,
+            [l.id, p.user_profile_id, f.householdId, p.part_cents + delta])
+        }
+        await c.query('commit')
+      } finally { await c.end() }
+    }
+    const lues = async (mois: string) =>
+      (await ligne(loyer, mois))!.depense_part.map(p => `${p.user_profile_id}:${p.part_cents}`).sort()
+    await marque('2026-10-01')
+    const octobre = await lues('2026-10-01')
+
+    // Thauba n'est arrivée que le 15/09 : juillet et août la perdent, septembre la garde.
+    ou(await admin().from('user_profile').update({ entre_le: '2026-09-15' })
+      .eq('id', thauba.userId).select())
+    expect((await ligne(loyer, '2026-07-01'))!.depense_part, 'juillet n’a pas été refigé')
+      .toHaveLength(1)
+    expect((await ligne(loyer, '2026-08-01'))!.depense_part, 'août n’a pas été refigé')
+      .toHaveLength(1)
+    expect((await ligne(loyer, '2026-09-01'))!.depense_part).toHaveLength(2)
+    expect(await lues('2026-10-01'), 'octobre, après l’intervalle, a été refigé').toEqual(octobre)
   })
 })
