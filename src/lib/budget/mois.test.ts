@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { maPart, montant, montantCompte, resteDuMois, revenuDuMois, type Ligne, type Saisie }
-  from './mois.ts'
+import { aDire, barre, dansLeFiltre, maPart, montant, montantCompte, parCategorie, pourcentages,
+         resteDuMois, revenuDuMois, totauxDuFiltre, type Ligne, type Saisie } from './mois.ts'
 
 const K = 'kamil'
 const T = 'thauba'
 
 /** Une ligne du mois, prévue et partagée comme on le demande. */
-function ligne(o: Partial<Ligne> & { parts?: [string, number][] } = {}): Ligne {
+function ligne(o: Omit<Partial<Ligne>, 'parts'> & { parts?: [string, number][] } = {}): Ligne {
   const { parts, ...reste } = o
   const montantCents = o.montant_cents ?? 80_000
   const liste = parts ?? [[K, montantCents]]
@@ -96,5 +96,89 @@ describe('les montants à l’écran', () => {
     expect(montant(432_500)).toBe('4 325 €')
     expect(montant(42_680)).toBe('426,80 €')
     expect(montant(-16_668)).toBe('−166,68 €')
+  })
+})
+
+const charges = new Map([
+  ['loyer', { id: 'loyer', categorie: 'maison', commun: true }],
+  ['courses', { id: 'courses', categorie: 'vie_courante', commun: true }],
+  ['forfait', { id: 'forfait', categorie: 'abonnements', commun: false }],
+  ['pharmacie', { id: 'pharmacie', categorie: 'sante', commun: false }],
+  ['electricite', { id: 'electricite', categorie: 'maison', commun: true }],
+])
+
+describe('le filtre', () => {
+  const lignes = [
+    ligne({ id: 'l1', charge_id: 'loyer', facon: 'fixe', montant_cents: 100_000,
+            parts: [[K, 60_656], [T, 39_344]] }),
+    ligne({ id: 'l2', charge_id: 'forfait', facon: 'fixe', montant_cents: 1_990,
+            parts: [[K, 1_990]] }),
+    ligne({ id: 'l3', charge_id: 'pharmacie', montant_cents: 2_000, parts: [[T, 2_000]] }),
+  ]
+  it('« Tout » montre aussi les lignes perso de l’autre (D80)', () => {
+    expect(lignes.filter(l => dansLeFiltre(l, charges, 'tout', K))).toHaveLength(3)
+    expect(lignes.filter(l => dansLeFiltre(l, charges, 'commun', K)).map(l => l.id)).toEqual(['l1'])
+    expect(lignes.filter(l => dansLeFiltre(l, charges, 'moi', K)).map(l => l.id)).toEqual(['l2'])
+  })
+  it('chaque filtre a son total', () => {
+    expect(totauxDuFiltre(lignes, charges, [], K, false))
+      .toEqual({ tout: 103_990, commun: 100_000, moi: 1_990 })
+  })
+})
+
+describe('les catégories', () => {
+  it('se trient par montant ; à montant égal, dans l’ordre de D74', () => {
+    const lignes = [
+      ligne({ id: 'a', charge_id: 'loyer', facon: 'fixe', montant_cents: 50_000 }),
+      ligne({ id: 'b', charge_id: 'courses', montant_cents: 50_000 }),
+      ligne({ id: 'c', charge_id: 'forfait', facon: 'fixe', montant_cents: 90_000 }),
+    ]
+    expect(parCategorie({ lignes, charges, saisies: [], filtre: 'tout', moi: K, clos: false })
+      .map(c => c.cle)).toEqual(['abonnements', 'vie_courante', 'maison'])
+  })
+  it('les lignes d’une catégorie, de la plus lourde à la plus légère', () => {
+    const lignes = [
+      ligne({ id: 'e', charge_id: 'electricite', facon: 'facture', montant_cents: 5_000 }),
+      ligne({ id: 'l', charge_id: 'loyer', facon: 'fixe', montant_cents: 58_000 }),
+    ]
+    expect(parCategorie({ lignes, charges, saisies: [], filtre: 'tout', moi: K, clos: false })[0]
+      .lignes.map(l => l.id)).toEqual(['l', 'e'])
+  })
+})
+
+describe('les montants à dire', () => {
+  it('une ligne au fil du mois sans saisie ; pas une facture ; rien sur un mois clôturé', () => {
+    const lignes = [
+      ligne({ id: 'courses' }), ligne({ id: 'resto' }),
+      ligne({ id: 'elec', facon: 'facture', montant_cents: 5_000 }),
+    ]
+    expect(aDire(lignes, [saisie('resto', 3_000)], false)).toBe(1)
+    expect(aDire(lignes, [], true)).toBe(0)
+  })
+})
+
+describe('les pourcentages', () => {
+  it('font 100, au plus fort reste', () => {
+    expect(pourcentages([1, 1, 1])).toEqual([34, 33, 33])
+    for (const valeurs of [[3, 7, 11, 13], [100_000, 1], [5, 0, 5], [1, 2, 3, 4, 5, 6, 7]]) {
+      expect(pourcentages(valeurs).reduce((t, x) => t + x, 0), String(valeurs)).toBe(100)
+    }
+    expect(pourcentages([0, 0])).toEqual([0, 0])
+  })
+})
+
+describe('la barre du récap', () => {
+  const lignes = [
+    ligne({ id: 'a', charge_id: 'loyer', facon: 'fixe', montant_cents: 200_000 }),
+    ligne({ id: 'b', charge_id: 'courses', montant_cents: 100_000 }),
+  ]
+  it('mes parts par catégorie, et le reste, en part du revenu', () => {
+    const b = barre({ lignes, charges, saisies: [], moi: K, revenu: 400_000, clos: false })
+    expect(b.map(s => [s.cle, s.pourcent])).toEqual([['maison', 50], ['vie_courante', 25],
+                                                     ['reste', 25]])
+  })
+  it('quand il manque de l’argent : sur le total des charges, sans « Reste »', () => {
+    const b = barre({ lignes, charges, saisies: [], moi: K, revenu: 250_000, clos: false })
+    expect(b.map(s => [s.cle, s.pourcent])).toEqual([['maison', 67], ['vie_courante', 33]])
   })
 })
