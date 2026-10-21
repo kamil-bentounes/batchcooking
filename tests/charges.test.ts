@@ -237,8 +237,18 @@ describe('ce qui ne change pas', () => {
     const { error } = await moi.client.from('charge').delete().eq('id', id)
     expect(error, 'une charge avec des dépenses a été supprimée').not.toBeNull()
 
-    // On l'archive : elle cesse d'engendrer, son histoire reste.
-    await moi.client.from('charge').update({ archive_le: new Date().toISOString() }).eq('id', id)
+    /* On l'archive : elle cesse d'engendrer, son histoire reste. Depuis 0096 le
+       client n'archive plus en direct (`tg_charge_garde`) : seul « Retirer » le
+       fait, et une charge dont la seule ligne est ouverte et non confirmée
+       partirait entièrement. On confirme donc la ligne d'août : c'est elle,
+       l'histoire. */
+    const { error: confirme } = await admin().from('depense')
+      .update({ confirme_le: '2026-08-31T20:00:00Z' })
+      .eq('household_id', moi.householdId).eq('libelle', 'Éphémère').eq('mois', '2026-08-01')
+    expect(confirme, 'la préparation a échoué').toBeNull()
+    const retrait = await moi.client.rpc('retire_charge', { p_charge: id })
+    expect(retrait.error, `retrait refusé : ${retrait.error?.message}`).toBeNull()
+    expect(retrait.data, 'la charge à histoire devait s’archiver').toBe('archivee')
     await moi.client.rpc('ouvre_le_mois', { le_mois: '2026-09-01' })
 
     const { data: apres } = await admin().from('depense').select('mois')
