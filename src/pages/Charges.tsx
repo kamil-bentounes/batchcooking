@@ -19,10 +19,16 @@ import { Surface, Vide, Attente, Erreur, Principal, BarreAction } from '../ui/co
 import { Champ } from '../ui/kit.tsx'
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
-  useCharges, useCatalogue, useAjouteCharge, useRetireCharge, useComptes,
-  useEnveloppesPosees, useRattacheCharge, useMajParticipants, useCorrigeCharge, euros, enCentimes,
-  type Charge,
+  useCharges, useCatalogue, useAjouteCharge, useRetireLaCharge, useComptes, useChangeCategorie,
+  useRattacheCharge, useMajParticipants, useCorrigeCharge, useAUneHistoire, useEtatDeLAnnee,
+  euros, enCentimes, type Charge,
 } from '../lib/donnees/budget.ts'
+import { CATEGORIES, NOM_DU_MODE, categorieDeLArticle, infoCategorie, modeDeLArticle,
+         type Categorie, type Mode } from '../lib/budget/categories.ts'
+import { ceQuiChange, ditLaCorrection, periodiciteDeLaFacon, retireesEncoreAReg, sousTitreDeLaFacon,
+         suiteDuRetrait, texteDeLaRetiree, type Rythme } from '../lib/budget/charges.ts'
+import { maintenant } from '../lib/horloge.ts'
+import { FeuilleMiseDeCote } from '../ui/budget/FeuilleMiseDeCote.tsx'
 
 const PERIODE: Record<string, string> = {
   mensuel: 'par mois', trimestriel: 'par trimestre', annuel: 'par an',
@@ -30,21 +36,127 @@ const PERIODE: Record<string, string> = {
 
 type Filtre = 'tout' | 'commun' | 'moi'
 
+/** « Catégorie » (§ 3.7) : les huit, chacune avec sa pastille — la couleur n'est
+    jamais seule, le nom est écrit. */
+function ChoixCategorie({ valeur, choisir, nom }: {
+  valeur: Categorie; choisir: (c: Categorie) => void; nom: string
+}) {
+  return (
+    <div>
+      <span className="block text-[15px] font-semibold">Catégorie</span>
+      <div role="radiogroup" aria-label={nom} className="mt-2 flex gap-2 flex-wrap">
+        {CATEGORIES.map(c => (
+          <button key={c.cle} type="button" role="radio" aria-checked={valeur === c.cle}
+                  onClick={() => choisir(c.cle)}
+                  className={`px-3.5 min-h-11 inline-flex items-center gap-2 rounded-full text-[14px]
+                              transition-colors
+                    ${valeur === c.cle ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
+            <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full"
+                  style={{ background: valeur === c.cle ? c.sombre : c.clair }} />
+            {c.nom}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * « Comment elle se paie » (§ 3.7). Ce choix remplace la périodicité seule et la
+ * case « variable » : les trois premiers fixent le mensuel, « Mise de côté »
+ * demande tous les trois mois ou une fois par an.
+ */
+function ChoixFacon({ mode, rythme, choisir, nom, bloque = false }: {
+  mode: Mode; rythme: Rythme; choisir: (m: Mode, r: Rythme) => void; nom: string
+  /** Une charge mise de côté qui a une histoire ne devient pas mensuelle (§ 4.5). */
+  bloque?: boolean
+}) {
+  return (
+    <div>
+      <span className="block text-[15px] font-semibold">Comment elle se paie</span>
+      <div role="radiogroup" aria-label={nom} className="mt-2 grid grid-cols-2 gap-2">
+        {(['fixe', 'facture', 'au_fil', 'mis_de_cote'] as const).map(m => (
+          <button key={m} type="button" role="radio" aria-checked={mode === m}
+                  disabled={bloque && m !== 'mis_de_cote'} onClick={() => choisir(m, rythme)}
+                  className={`min-h-11 px-3 py-2 rounded-[12px] text-[14px] leading-tight text-left
+                              transition-colors disabled:opacity-40
+                    ${mode === m ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
+            {NOM_DU_MODE[m]}
+          </button>
+        ))}
+      </div>
+      {mode === 'mis_de_cote' && (
+        <div role="radiogroup" aria-label="Tous les combien" className="mt-2 flex gap-2">
+          {([['trimestriel', 'Tous les trois mois'], ['annuel', 'Une fois par an']] as const)
+            .map(([r, texte]) => (
+              <button key={r} type="button" role="radio" aria-checked={rythme === r}
+                      onClick={() => choisir('mis_de_cote', r)}
+                      className={`flex-1 min-h-11 rounded-[12px] text-[14px] transition-colors
+                        ${rythme === r ? 'bg-herbe text-fond' : 'bg-brume/50 text-encre'}`}>
+                {texte}
+              </button>
+            ))}
+        </div>
+      )}
+      {bloque && (
+        <p className="mt-2 text-[14px] leading-snug text-doux">
+          Pour la payer chaque mois, retire-la et ajoute la nouvelle. Ses factures et ses années
+          soldées restent ; une année encore ouverte se soldera à la clôture de décembre.
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** Une charge mise de côté retirée, qui peut encore recevoir sa facture (§ 3.7). */
+function Retiree({ charge, ouvrir }: { charge: Charge; ouvrir: () => void }) {
+  const annee = Number(charge.archive_le!.slice(0, 4))
+  const etat = useEtatDeLAnnee(charge.id, annee)
+  return (
+    <div className="py-4 flex items-center justify-between gap-3 border-b border-brume last:border-0">
+      <span className="min-w-0">
+        <span className="block text-[16px]">{charge.libelle}</span>
+        <span className="block mt-0.5 text-[14px] text-doux">
+          {texteDeLaRetiree(etat.data?.soldee, annee)}
+        </span>
+      </span>
+      <button onClick={ouvrir}
+              className="shrink-0 min-h-11 px-3.5 rounded-[12px] border border-brume text-[14px]">
+        Ajouter une facture
+      </button>
+    </div>
+  )
+}
+
 /** Le formulaire d'ajout, qu'il vienne du catalogue ou d'une ligne inventée. */
-function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: {
+function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
   depart: { libelle: string; periode: string; portee: string; precision: string | null
-            catalogueId: string | null } | null
+            catalogueId: string | null
+            /* La section et le rang de plafond de l'article : la catégorie et la
+               façon s'en déduisent (§ 3.7). */
+            section?: string; plafondOrdre?: number | null } | null
   membres: { id: string; display_name: string }[]
   moi: string
   foyerId: string
   comptes: { id: string; nom: string; genre: string }[]
-  enveloppes: { id: string; libelle: string }[]
   surFini: () => void
 }) {
   const [libelle, setLibelle] = useState(depart?.libelle ?? '')
   const [montant, setMontant] = useState('')
-  const [periode, setPeriode] = useState(depart?.periode ?? 'mensuel')
-  const [variable, setVariable] = useState(false)
+  /* La catégorie vient de la section de l'article ; une ligne libre la demande,
+     « Autre » d'office. La façon vient de la nature de l'article : avec plafond,
+     au fil du mois ; Électricité et Gaz, une facture du mois ; non mensuel, mis
+     de côté ; le reste, fixe (§ 3.7). */
+  const [categorie, setCategorie] = useState<Categorie>(
+    depart?.catalogueId && depart.section
+      ? categorieDeLArticle({ section: depart.section, libelle: depart.libelle }) : 'autre')
+  const [mode, setMode] = useState<Mode>(
+    depart?.catalogueId
+      ? modeDeLArticle({ periode: depart.periode, plafond_ordre: depart.plafondOrdre ?? null,
+                         libelle: depart.libelle })
+      : 'fixe')
+  const [rythme, setRythme] = useState<Rythme>(depart?.periode === 'trimestriel' ? 'trimestriel' : 'annuel')
+  const periode = periodiciteDeLaFacon(mode, rythme)
   const [cle, setCle] = useState<'defaut' | 'prorata' | 'moitie'>('defaut')
   /* Le compte débité et l'enveloppe. Sans eux, l'app ne peut annoncer qu'un
      montant à répartir — jamais un virement, qui est la seule chose sur
@@ -73,7 +185,6 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
     depart?.catalogueId
       ? (depart.portee === 'commun' || membres.length > 1)
       : depart?.portee === 'commun')
-  const [enveloppeId, setEnveloppeId] = useState<string>('')
   /* Le catalogue PRÉ-COCHE : les deux pour l'électricité, une seule personne
      pour un forfait mobile. Ce n'est qu'une suggestion — la case reste ouverte. */
   const [qui, setQui] = useState<string[]>(
@@ -99,25 +210,15 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
           </p>
         )}
 
-        <div>
-          <span className="block text-[15px] font-semibold">À quel rythme</span>
-          <div role="radiogroup" aria-label="Périodicité" className="mt-2 flex gap-2">
-            {(['mensuel', 'trimestriel', 'annuel'] as const).map(p => (
-              <button key={p} role="radio" aria-checked={periode === p}
-                      onClick={() => setPeriode(p)}
-                      className={`flex-1 min-h-11 rounded-[12px] text-[14px] transition-colors
-                        ${periode === p ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
-                {p === 'mensuel' ? 'Mois' : p === 'trimestriel' ? 'Trimestre' : 'An'}
-              </button>
-            ))}
-          </div>
-          {periode !== 'mensuel' && (
-            <p className="mt-2 text-[14px] text-doux">
-              Provisionnée au {periode === 'annuel' ? 'douzième' : 'tiers'} chaque mois :
-              {' '}{euros(Math.round((cents ?? 0) / (periode === 'annuel' ? 12 : 3)))} par mois.
-            </p>
-          )}
-        </div>
+        <ChoixCategorie valeur={categorie} choisir={setCategorie} nom="Catégorie" />
+        <ChoixFacon mode={mode} rythme={rythme} nom="Comment elle se paie"
+                    choisir={(m, r) => { setMode(m); setRythme(r) }} />
+        {mode === 'mis_de_cote' && (
+          <p className="-mt-1 text-[14px] text-doux">
+            On en met de côté le {rythme === 'annuel' ? 'douzième' : 'tiers'} chaque mois :
+            {' '}{euros(Math.round((cents ?? 0) / (rythme === 'annuel' ? 12 : 3)))} par mois.
+          </p>
+        )}
 
         <div>
           <span className="block text-[15px] font-semibold">Qui participe</span>
@@ -178,6 +279,8 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
             Elle court depuis
           </label>
           <input id="debut-charge" type="month" value={debut.slice(0, 7)}
+                 /* Pas avant janvier de l'année précédente : la base refuse (0096). */
+                 min={`${maintenant().getFullYear() - 1}-01`}
                  onChange={e => setDebut(`${e.target.value}-01`)}
                  className="mt-2 w-full min-h-11 rounded-[14px] border border-brume
                             bg-surface px-4 text-[16px]" />
@@ -208,45 +311,12 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
           </div>
         )}
 
-        {enveloppes.length > 0 && (
-          <div>
-            <span className="block text-[15px] font-semibold">Dans quelle enveloppe</span>
-            <div role="radiogroup" aria-label="Enveloppe" className="mt-2 flex gap-2 flex-wrap">
-              <button role="radio" aria-checked={enveloppeId === ''}
-                      onClick={() => setEnveloppeId('')}
-                      className={`px-4 min-h-11 inline-flex items-center rounded-full
-                                  text-[14px] transition-colors
-                        ${enveloppeId === '' ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
-                Aucune
-              </button>
-              {enveloppes.map(e => (
-                <button key={e.id} role="radio" aria-checked={enveloppeId === e.id}
-                        onClick={() => setEnveloppeId(e.id)}
-                        className={`px-4 min-h-11 inline-flex items-center rounded-full
-                                    text-[14px] transition-colors
-                          ${enveloppeId === e.id ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
-                  {e.libelle}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {comptes.length === 0 && (
           <p className="text-[15px]" style={{ color: 'var(--color-ocre)' }}>
             Aucun compte déclaré : cette charge apparaîtra sous « à répartir »
             au lieu d’un virement. Pose-les dans les réglages du budget.
           </p>
         )}
-
-        <button role="checkbox" aria-checked={variable} onClick={() => setVariable(v => !v)}
-                className="flex items-center gap-3 min-h-11 text-left">
-          <span className={`w-[22px] h-[22px] rounded-[7px] border-2 shrink-0
-                            ${variable ? 'bg-herbe border-herbe' : 'border-brume'}`} />
-          <span className="text-[15px]">
-            Le montant change — l’app demandera le vrai en fin de mois
-          </span>
-        </button>
 
         <Erreur de={ajoute.error} />
       </div>
@@ -255,9 +325,13 @@ function Ajout({ depart, membres, moi, foyerId, comptes, enveloppes, surFini }: 
         <Principal disabled={!pret || ajoute.isPending}
                    onClick={() => ajoute.mutate({
                      libelle: libelle.trim(), montantCents: cents ?? 0, periodicite: periode,
+                     /* La façon et la catégorie, dites. `variable` et l'enveloppe ne
+                        servent plus qu'à l'ancien paquet (§ 4.1) : à faux et vide, le
+                        trigger de `charge` ne déduit rien par-dessus. */
+                     mode, categorie, variable: false, enveloppeId: null,
                      participants: qui, cle: cle === 'defaut' ? null : cle,
-                     catalogueId: depart?.catalogueId ?? null, variable, foyerId,
-                     compteId: compteId || null, enveloppeId: enveloppeId || null,
+                     catalogueId: depart?.catalogueId ?? null, foyerId,
+                     compteId: compteId || null,
                      /* Commune dès que plus d'une personne y participe — ou que
                         le catalogue le suggérait alors qu'on est encore seul
                         dans le foyer. C'est cette intention qui fera entrer le
@@ -283,24 +357,34 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   const { data: foyer } = useFoyer()
   const charges = useCharges()
   const { data: catalogue = [] } = useCatalogue()
-  const retire = useRetireCharge()
+  const retire = useRetireLaCharge()
   const ajouteUne = useAjouteCharge()
   const comptes = useComptes()
-  const enveloppes = useEnveloppesPosees()
   const rattache = useRattacheCharge()
   const majQui = useMajParticipants()
   const corrige = useCorrigeCharge()
+  const changeCategorie = useChangeCategorie()
+  /* La feuille d'une charge retirée qui attend encore une facture (§ 3.4). */
+  const [feuille, setFeuille] = useState<Charge | null>(null)
   const [quiOuvert, setQuiOuvert] = useState<string | null>(null)
   /* La charge en cours de correction, et ce qu'on y tape. Une faute de frappe
      le premier soir était définitive : aucun écran ne revenait sur un montant. */
   const [corrigeOuvert, setCorrigeOuvert] = useState<string | null>(null)
   const [cLibelle, setCLibelle] = useState('')
   const [cMontant, setCMontant] = useState('')
-  const [cPeriode, setCPeriode] = useState<'mensuel' | 'trimestriel' | 'annuel'>('mensuel')
+  const [cMode, setCMode] = useState<Mode>('fixe')
+  const [cRythme, setCRythme] = useState<Rythme>('annuel')
+  const [cCategorie, setCCategorie] = useState<Categorie>('autre')
   /* La date de départ. C'était le seul champ que le formulaire d'ajout signale
      comme dangereux — « remonte la date, sinon le relevé annuel tombera d'un
      coup » — et le seul qu'on ne pouvait plus toucher ensuite. */
   const [cDebut, setCDebut] = useState('')
+  /* Une charge mise de côté qui a une histoire ne devient pas mensuelle : on le
+     sait AVANT, pour griser les trois autres façons (§ 3.7). Un seul panneau de
+     correction est ouvert à la fois : une seule lecture. */
+  const enCorrection = (charges.data ?? []).find(c => c.id === corrigeOuvert)
+  const histoire = useAUneHistoire(corrigeOuvert ?? '', enCorrection?.mode === 'mis_de_cote')
+  const bloque = enCorrection?.mode === 'mis_de_cote' && histoire.data === true
   /* Le compte commun, pour la dictée : elle ne demande pas où débiter, et une
      charge sans compte ne produit pas de virement. */
   const compteParDefaut = (comptes.data ?? [])
@@ -326,6 +410,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
            sont écartées avant l'écriture, et l'écran de revue les montre
            décochées. */
         for (const l of lignes.filter(x => x.montant_cents && x.montant_cents > 0)) {
+          const article = catalogue.flatMap(s => s.lignes).find(k => k.libelle === l.catalogue_libelle)
           try {
             await ajouteUne.mutateAsync({
             libelle: l.libelle.slice(0, 80),
@@ -333,18 +418,20 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
             periodicite: l.periodicite,
             participants: l.portee === 'commun' ? membres.map(m => m.id) : [userId],
             commun: l.portee === 'commun',
-            variable: l.variable,
+            /* Une ligne du catalogue dit sa façon, comme à l'ajout à la main
+               (§ 3.7) : des Courses dictées se dépensent au fil du mois. Sans
+               article, la base la déduit de `variable` et de la périodicité,
+               comme pour l'ancien paquet. La catégorie, elle, vient de
+               l'article par la base (0096). */
+            ...(article
+              ? { mode: modeDeLArticle({ periode: l.periodicite, plafond_ordre: article.plafond_ordre,
+                                          libelle: article.libelle }), variable: false }
+              : { variable: l.variable }),
             compteId: compteParDefaut,
             /* Le modèle DÉSIGNE une ligne du catalogue, et on la jetait : un
                tiers de son prompt travaillait pour rien, et toute charge dictée
                arrivait détachée du référentiel. */
-            catalogueId: (catalogue.flatMap(s => s.lignes)
-              .find(k => k.libelle === l.catalogue_libelle)?.id) ?? null,
-            /* Si une enveloppe porte déjà ce nom — « Restaurant », « Culture » —
-               la charge s'y range d'elle-même : sinon la jauge resterait vide
-               alors que la ligne existe. */
-            enveloppeId: (enveloppes.data ?? []).find(
-              e => e.libelle.toLowerCase() === l.libelle.toLowerCase())?.id ?? null,
+            catalogueId: article?.id ?? null,
             foyerId: foyer?.id ?? '',
             /* Une charge non mensuelle dictée en septembre ne provisionnait que
                les mois restants, et sa régularisation réclamait l'année entière
@@ -379,7 +466,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
           </h1>
           <Ajout depart={ajout} membres={membres} moi={userId}
                  foyerId={foyer?.id ?? ''}
-                 comptes={comptes.data ?? []} enveloppes={enveloppes.data ?? []}
+                 comptes={comptes.data ?? []}
                  surFini={() => setAjout(undefined)} />
         </div>
       </main>
@@ -418,6 +505,44 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
     .filter(c => c.compte_id && sienPropre.has(c.compte_id)
                  && c.participants.length === 1 && c.participants[0] === userId)
     .reduce((s, c) => s + parMois(c), 0)
+
+  /* « Retirer » (0111). Une saisie ne part pas sans qu'on l'ait vue : la base
+     refuse d'abord avec le total, l'écran le demande, puis rappelle. */
+  const retirer = (c: Charge, avecLesSaisies = false) => retire.mutate({ id: c.id, avecLesSaisies }, {
+    onSuccess: r => {
+      const suite = suiteDuRetrait(r, c.libelle, confirm)
+      if ('rappeler' in suite) retirer(c, true)
+      else if ('dit' in suite) setDit(suite.dit)
+    },
+  })
+
+  /* Enregistrer une correction. L'argent passe par `corrige_la_charge`, qui
+     refait les mois ; la catégorie, par un simple `update`, qui ne touche aucun
+     montant (§ 4.1). Une catégorie seule n'appelle pas la première : « 0 mois
+     refait » aurait laissé croire qu'on avait corrigé l'argent. */
+  const enregistre = (c: Charge, cents: number) => {
+    const periodicite = periodiciteDeLaFacon(cMode, cRythme)
+    const debut = cDebut || c.debut
+    const { argent, categorie } = ceQuiChange(c, {
+      libelle: cLibelle, cents, mode: cMode, periodicite, debut, categorie: cCategorie })
+    if (!argent && !categorie) { setCorrigeOuvert(null); return }
+    const range = (texte: string) => {
+      const fini = () => { setCorrigeOuvert(null); setDit(texte) }
+      if (!categorie) fini()
+      else changeCategorie.mutate({ id: c.id, categorie: cCategorie }, { onSuccess: fini })
+    }
+    if (!argent) {
+      range(`« ${c.libelle} » rangée dans ${infoCategorie(cCategorie).nom}.`)
+      return
+    }
+    corrige.mutate({ id: c.id, libelle: cLibelle.trim(), montantCents: cents, periodicite, debut,
+                     mode: cMode }, {
+      onSuccess: n => range(ditLaCorrection(cLibelle.trim(), n)),
+    })
+  }
+
+  /* Elles disparaissent le 31 décembre de l'année qui suit leur retrait (§ 3.7). */
+  const retirees = retireesEncoreAReg(charges.data ?? [], maintenant().getFullYear())
 
   return (
     <main className="min-h-dvh px-6 pt-14 pb-16">
@@ -464,10 +589,12 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                soit. Le serveur garantit déjà que le libellé vient du catalogue
                — si on ne le retrouve pas, on ouvre quand même, vide plutôt que
                faux. */
-            const l = catalogue.flatMap(sec => sec.lignes).find(x => x.libelle === libelle)
-            setAjout(l
+            const sec = catalogue.find(s => s.lignes.some(x => x.libelle === libelle))
+            const l = sec?.lignes.find(x => x.libelle === libelle)
+            setAjout(sec && l
               ? { libelle: l.libelle, periode: l.periode, portee: l.portee,
-                  precision: l.precision_txt, catalogueId: l.id }
+                  precision: l.precision_txt, catalogueId: l.id,
+                  section: sec.nom, plafondOrdre: l.plafond_ordre }
               : { libelle, periode: 'mensuel', portee: 'commun',
                   precision: null, catalogueId: null })
           }} />
@@ -513,7 +640,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                         : (prenoms.get(c.participants[0]) ?? '?') + ' seul'}
                     {c.cle === 'moitie' && ' · moitié-moitié'}
                     {c.cle === 'prorata' && ' · au prorata'}
-                    {c.variable && ' · variable'}
+                    {sousTitreDeLaFacon(c)}
                     {!c.compte_id && ' · sans compte'}
                     {/* « en attente du foyer » ne dit pas ce qui est attendu.
                         C'est une charge marquée commune alors qu'on est encore
@@ -555,7 +682,9 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                           setCorrigeOuvert(o => (o === c.id ? null : c.id))
                           setCLibelle(c.libelle)
                           setCMontant(String(c.montant_cents / 100).replace('.', ','))
-                          setCPeriode(c.periodicite)
+                          setCMode(c.mode)
+                          setCRythme(c.periodicite === 'trimestriel' ? 'trimestriel' : 'annuel')
+                          setCCategorie(c.categorie)
                           setCDebut(c.debut)
                         }}
                         aria-label={`Corriger ${c.libelle}`}
@@ -563,11 +692,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                         className="text-herbe min-h-11 px-2 text-[14px]">Corriger</button>
                 <button onClick={() => {
                           if (!confirm(`Retirer « ${c.libelle} » ? Elle disparaîtra de tous les mois.`)) return
-                          retire.mutate(c.id, {
-                            onSuccess: sort => setDit(sort === 'supprimee'
-                              ? `« ${c.libelle} » retirée.`
-                              : `« ${c.libelle} » retirée. Les mois que tu as confirmés ou réglés la gardent : c’est de l’argent sorti.`),
-                          })
+                          retirer(c)
                         }}
                         disabled={retire.isPending}
                         aria-label={`Retirer ${c.libelle}`}
@@ -606,19 +731,12 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                           <span className="text-[15px] text-doux">€</span>
                         </span>
                       </label>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {([['mensuel', 'par mois'], ['trimestriel', 'par trimestre'],
-                           ['annuel', 'par an']] as const).map(([v, nom]) => (
-                          <button key={v} type="button" aria-pressed={cPeriode === v}
-                                  onClick={() => setCPeriode(v)}
-                                  className={`px-3.5 min-h-11 inline-flex items-center rounded-full
-                                              text-[14px] transition-colors
-                                    ${cPeriode === v ? 'bg-herbe text-fond' : 'bg-brume/50 text-encre'}`}>
-                            {nom}
-                          </button>
-                        ))}
-                      </div>
-                      {cPeriode !== 'mensuel' && (
+                      <ChoixCategorie valeur={cCategorie} choisir={setCCategorie}
+                                      nom={`Catégorie de ${c.libelle}`} />
+                      <ChoixFacon mode={cMode} rythme={cRythme} bloque={bloque}
+                                  nom={`Comment se paie ${c.libelle}`}
+                                  choisir={(m, r) => { setCMode(m); setCRythme(r) }} />
+                      {cMode === 'mis_de_cote' && (
                         <label className="block">
                           <span className="text-[14px] text-doux">Elle court depuis</span>
                           <input type="month" value={cDebut.slice(0, 7)}
@@ -638,21 +756,11 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                         Les mois déjà confirmés gardent leur montant. Les autres
                         se refont.
                       </p>
-                      <Erreur de={corrige.variables?.id === c.id ? corrige.error : null} />
+                      <Erreur de={(corrige.variables?.id === c.id ? corrige.error : null)
+                                  ?? (changeCategorie.variables?.id === c.id ? changeCategorie.error : null)} />
                       <div className="flex gap-2">
-                        <button disabled={!pret || corrige.isPending}
-                                onClick={() => corrige.mutate({
-                                  id: c.id, libelle: cLibelle.trim(),
-                                  montantCents: cents ?? 0, periodicite: cPeriode,
-                                  debut: cDebut || c.debut,
-                                }, {
-                                  onSuccess: n => {
-                                    setCorrigeOuvert(null)
-                                    setDit(n === 0
-                                      ? `« ${cLibelle.trim()} » corrigée.`
-                                      : `« ${cLibelle.trim()} » corrigée, ${n} mois refait${n > 1 ? 's' : ''}.`)
-                                  },
-                                })}
+                        <button disabled={!pret || corrige.isPending || changeCategorie.isPending}
+                                onClick={() => enregistre(c, cents ?? 0)}
                                 className="px-4 min-h-11 rounded-[12px] bg-herbe text-fond
                                            text-[15px] disabled:opacity-40">
                           {corrige.isPending ? 'Je corrige…' : 'Enregistrer'}
@@ -668,7 +776,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                     `variables` dit laquelle l'a déclenchée. Sans ce filtre, un
                     refus sur une charge s'afficherait sous les cinq autres. */}
                 <Erreur de={
-                  (retire.error && retire.variables === c.id && retire.error) ||
+                  (retire.error && retire.variables?.id === c.id && retire.error) ||
                   (rattache.error && rattache.variables?.id === c.id && rattache.error) ||
                   (majQui.error && majQui.variables?.chargeId === c.id && majQui.error) ||
                   null} />
@@ -701,6 +809,23 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
             ))}
           </Surface>
         )}
+
+        {/* « Retirées, encore à régler » (§ 3.7) : une charge mise de côté retirée
+            garde sa feuille jusqu'au 31 décembre de l'année qui suit son retrait.
+            La facture d'une maison vendue arrive souvent après — la régularisation
+            de copropriété votée en avril. « Retirer » a emporté ses lignes des
+            mois ouverts : sans ce chemin, la feuille ne s'ouvrirait plus. */}
+        {retirees.length > 0 && (
+          <>
+            <h2 className="mt-10 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+              Retirées, encore à régler
+            </h2>
+            <Surface className="mt-3">
+              {retirees.map(c => <Retiree key={c.id} charge={c} ouvrir={() => setFeuille(c)} />)}
+            </Surface>
+          </>
+        )}
+        {feuille && <FeuilleMiseDeCote charge={feuille} fermer={() => setFeuille(null)} />}
 
         <button onClick={() => setDictee(true)}
                 className="mt-8 w-full min-h-[58px] rounded-[18px] bg-encre text-fond
@@ -737,6 +862,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                           onClick={() => setAjout({
                             libelle: l.libelle, periode: l.periode, portee: l.portee,
                             precision: l.precision_txt, catalogueId: l.id,
+                            section: section.nom, plafondOrdre: l.plafond_ordre,
                           })}
                           className="px-3.5 min-h-11 inline-flex items-center rounded-full
                                      border border-brume text-[14px] hover:bg-brume/40
