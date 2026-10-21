@@ -207,53 +207,54 @@ export async function amorce(
       net_mensuel_cents: cents, valid_from: moisCourant(),
     }).select())
   }
+  /* Le premier revenu de chacun remonte au mois de son arrivée, janvier (0103) :
+     les mois passés ont donc un revenu. C'est ce qui rend le mois précédent
+     « à clôturer » — sur le hub, et dans le bandeau. */
 
   const compte = ou(await db.from('compte').insert({
     household_id: foyer.id, nom: 'Compte commun', genre: 'commun', matelas_cents: 100_000,
   }).select().single())
 
-  const enveloppe = ou(await db.from('enveloppe').insert({
-    household_id: foyer.id, libelle: 'Restaurant', plafond_cents: 20_000,
-  }).select().single())
-
-  /* Une charge DÉPASSE son enveloppe à dessein : c'est le seul moyen que
-     l'audit mesure la teinte ocre du dépassement, qui n'existe nulle part
-     ailleurs dans l'application. */
+  /* Une charge de chaque façon, dans plusieurs catégories. Sans catégorie, tout
+     tombait dans « Autre », et l'écran du mois n'avait qu'une carte. */
   for (const c of [
-    { libelle: 'Internet', cents: 3_700, env: null as string | null, variable: false,
-      commun: true, compte: true, periodicite: 'mensuel' },
-    { libelle: 'Électricité', cents: 5_000, env: null, variable: true,
-      commun: true, compte: true, periodicite: 'mensuel' },
-    { libelle: 'Restaurant', cents: 26_000, env: enveloppe.id, variable: false,
-      commun: true, compte: true, periodicite: 'mensuel' },
-    /* Une charge PERSO : sans elle, le filtre « À moi » et la mention
-       « Kamil seul » ne se voyaient sur aucune capture. */
-    { libelle: 'Forfait mobile', cents: 1_990, env: null, variable: false,
-      commun: false, compte: true, periodicite: 'mensuel' },
-    /* Et la pire ligne possible : un libellé long, NON MENSUELLE, et SANS
-       COMPTE — donc trois actions côte à côte. C'est elle qui a montré
-       « Retirer » coupé au bord de la carte, et aucune autre ne le pouvait. */
-    { libelle: 'Charges de copropriété du bâtiment B', cents: 30_000, env: null,
-      variable: false, commun: true, compte: false, periodicite: 'trimestriel' },
-    /* Les BORNES, telles que la base les accepte : 80 caractères — le maximum —
-       et un montant à six chiffres. Aucune capture ne montrait ce que devient
-       une carte, un total ou un virement quand on les pousse jusque-là. */
+    { libelle: 'Internet', cents: 3_700, mode: 'fixe', categorie: 'maison', pour: 'deux',
+      compte: true, periodicite: 'mensuel' },
+    { libelle: 'Électricité', cents: 5_000, mode: 'facture', categorie: 'maison', pour: 'deux',
+      compte: true, periodicite: 'mensuel' },
+    { libelle: 'Courses', cents: 80_000, mode: 'au_fil', categorie: 'vie_courante', pour: 'deux',
+      compte: true, periodicite: 'mensuel' },
+    { libelle: 'Restaurant', cents: 26_000, mode: 'au_fil', categorie: 'vie_courante',
+      pour: 'deux', compte: true, periodicite: 'mensuel' },
+    /* Une charge PERSO de chacun : D80 — le foyer voit tout, mais « Il te reste »
+       ne compte que ses parts. */
+    { libelle: 'Forfait mobile', cents: 1_990, mode: 'fixe', categorie: 'abonnements',
+      pour: 'lui', compte: true, periodicite: 'mensuel' },
+    { libelle: 'Pharmacie', cents: 2_000, mode: 'au_fil', categorie: 'sante', pour: 'elle',
+      compte: true, periodicite: 'mensuel' },
+    { libelle: 'Entretien auto', cents: 50_004, mode: 'mis_de_cote', categorie: 'auto',
+      pour: 'lui', compte: true, periodicite: 'annuel' },
+    /* La pire ligne : un libellé long, NON MENSUELLE, et SANS COMPTE — trois
+       actions côte à côte dans « Mes charges ». */
+    { libelle: 'Charges de copropriété du bâtiment B', cents: 30_000, mode: 'mis_de_cote',
+      categorie: 'maison', pour: 'deux', compte: false, periodicite: 'trimestriel' },
+    /* Les BORNES : 80 caractères, un montant à six chiffres. */
     { libelle: 'Crédit immobilier de la résidence principale et de '
-               + 'l’investissement locatif', cents: 158_000,
-      env: null, variable: false, commun: true, compte: true, periodicite: 'mensuel' },
-    { libelle: 'Impôt sur le revenu', cents: 1_284_000, env: null,
-      variable: false, commun: true, compte: true, periodicite: 'annuel' },
+               + 'l’investissement locatif', cents: 158_000, mode: 'fixe',
+      categorie: 'credits', pour: 'deux', compte: true, periodicite: 'mensuel' },
+    { libelle: 'Impôt sur le revenu', cents: 1_284_000, mode: 'mis_de_cote',
+      categorie: 'impots', pour: 'deux', compte: true, periodicite: 'annuel' },
   ]) {
     const charge = ou(await db.from('charge').insert({
       household_id: foyer.id, libelle: c.libelle, montant_cents: c.cents,
-      periodicite: c.periodicite, debut: `${new Date().getFullYear()}-01-01`,
-      compte_id: c.compte ? compte.id : null,
-      enveloppe_id: c.env, variable: c.variable, commun: c.commun,
+      periodicite: c.periodicite, mode: c.mode, categorie: c.categorie,
+      debut: `${new Date().getFullYear()}-01-01`, compte_id: c.compte ? compte.id : null,
+      commun: c.pour === 'deux',
     }).select().single())
-    ou(await db.from('charge_participant').insert(
-      (c.commun ? [u.user.id, elle] : [u.user.id]).map(qui => ({
-        charge_id: charge.id, user_profile_id: qui, household_id: foyer.id,
-      }))).select())
+    const qui = c.pour === 'deux' ? [u.user.id, elle] : c.pour === 'elle' ? [elle] : [u.user.id]
+    ou(await db.from('charge_participant').insert(qui.map(p => ({
+      charge_id: charge.id, user_profile_id: p, household_id: foyer.id,
+    }))).select())
   }
 
   const poche = ou(await db.from('poche_epargne').insert({
