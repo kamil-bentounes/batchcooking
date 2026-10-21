@@ -26,6 +26,8 @@ describe('les catégories', () => {
       .toBe('au_fil')
     expect(modeDeLArticle({ periode: 'mensuel', plafond_ordre: null, libelle: 'Électricité' }))
       .toBe('facture')
+    expect(modeDeLArticle({ periode: 'mensuel', plafond_ordre: null, libelle: 'Gaz' }))
+      .toBe('facture')
     expect(modeDeLArticle({ periode: 'mensuel', plafond_ordre: null, libelle: 'Internet' }))
       .toBe('fixe')
   })

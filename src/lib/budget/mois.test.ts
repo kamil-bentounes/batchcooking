@@ -51,6 +51,17 @@ describe('le montant compté au fil du mois', () => {
   })
 })
 
+describe('ma part sur un mois clôturé', () => {
+  it('une ligne au fil du mois vaut sa part en base, pas un recalcul sur les saisies', () => {
+    const l = ligne({ id: 'courses', montant_cents: 22_880, montant_prevu_cents: 80_000,
+                      parts: [[K, 13_728], [T, 9_152]] })
+    const saisies = [saisie('courses', 90_000)]
+    expect(maPart(l, K, saisies, true)).toBe(13_728)
+    expect(maPart(l, K, saisies, false), 'ouvert : max(prévu, déclaré)')
+      .toBe(Math.round(90_000 * 13_728 / 22_880))
+  })
+})
+
 describe('« Il te reste »', () => {
   const revenus = [
     { user_profile_id: K, net_mensuel_cents: 370_000, valid_from: '2026-01-01' },
@@ -90,6 +101,20 @@ describe('le revenu du mois', () => {
     expect(revenuDuMois(revenus, K, '2027-01-01')).toBe(450_000)
     expect(revenuDuMois(revenus, K, '2026-08-01')).toBeNull()
   })
+  it('posé le dernier jour du mois, il vaut ce mois ; le lendemain, le suivant', () => {
+    const revenus = [
+      { user_profile_id: K, net_mensuel_cents: 400_000, valid_from: '2026-01-01' },
+      { user_profile_id: K, net_mensuel_cents: 450_000, valid_from: '2026-10-31' },
+      { user_profile_id: K, net_mensuel_cents: 500_000, valid_from: '2026-11-01' },
+      { user_profile_id: T, net_mensuel_cents: 999_999, valid_from: '2026-10-01' },
+    ]
+    expect(revenuDuMois(revenus, K, '2026-10-01')).toBe(450_000)
+    expect(revenuDuMois(revenus, K, '2026-11-01')).toBe(500_000)
+    expect(revenuDuMois(revenus, K, '2026-09-01')).toBe(400_000)
+    // Février d'une année bissextile : son dernier jour est le 29.
+    expect(revenuDuMois([{ user_profile_id: K, net_mensuel_cents: 1, valid_from: '2028-02-29' }],
+                        K, '2028-02-01')).toBe(1)
+  })
 })
 
 describe('les montants à l’écran', () => {
@@ -128,6 +153,21 @@ describe('le filtre', () => {
   })
 })
 
+describe('les totaux du filtre avec des saisies', () => {
+  it('comptent max(prévu, déclaré) des lignes au fil du mois, dans chaque filtre', () => {
+    const lignes = [
+      ligne({ id: 'courses', charge_id: 'courses', montant_cents: 80_000 }),
+      ligne({ id: 'forfait', charge_id: 'forfait', montant_cents: 5_000 }),
+    ]
+    const saisies = [saisie('courses', 50_000), saisie('courses', 40_000),
+                     saisie('forfait', 1_000)]
+    expect(totauxDuFiltre(lignes, charges, saisies, K, false))
+      .toEqual({ tout: 95_000, commun: 90_000, moi: 5_000 })
+    expect(totauxDuFiltre(lignes, charges, saisies, K, true))
+      .toEqual({ tout: 85_000, commun: 80_000, moi: 5_000 })
+  })
+})
+
 describe('les catégories', () => {
   it('se trient par montant ; à montant égal, dans l’ordre de D74', () => {
     const lignes = [
@@ -137,6 +177,28 @@ describe('les catégories', () => {
     ]
     expect(parCategorie({ lignes, charges, saisies: [], filtre: 'tout', moi: K, clos: false })
       .map(c => c.cle)).toEqual(['abonnements', 'vie_courante', 'maison'])
+  })
+  it('à poids égal, les lignes se rangent par libellé, à la française', () => {
+    const lignes = [
+      ligne({ id: '1', libelle: 'Resto', charge_id: 'courses', montant_cents: 10_000 }),
+      ligne({ id: '2', libelle: 'Fruits', charge_id: 'courses', montant_cents: 10_000 }),
+      ligne({ id: '3', libelle: 'Épicerie', charge_id: 'courses', montant_cents: 10_000 }),
+    ]
+    expect(parCategorie({ lignes, charges, saisies: [], filtre: 'tout', moi: K, clos: false })[0]
+      .lignes.map(l => l.libelle)).toEqual(['Épicerie', 'Fruits', 'Resto'])
+  })
+  it('compte les montants à dire de chaque catégorie', () => {
+    const lignes = [
+      ligne({ id: 'a', charge_id: 'courses' }), ligne({ id: 'b', charge_id: 'courses' }),
+      ligne({ id: 'c', charge_id: 'pharmacie' }),
+      ligne({ id: 'd', charge_id: 'loyer', facon: 'fixe', montant_cents: 90_000 }),
+    ]
+    const saisies = [saisie('b', 1_000)]
+    const dires = (clos: boolean) => Object.fromEntries(
+      parCategorie({ lignes, charges, saisies, filtre: 'tout', moi: K, clos })
+        .map(c => [c.cle, c.aDire]))
+    expect(dires(false)).toEqual({ maison: 0, vie_courante: 1, sante: 1 })
+    expect(dires(true)).toEqual({ maison: 0, vie_courante: 0, sante: 0 })
   })
   it('les lignes d’une catégorie, de la plus lourde à la plus légère', () => {
     const lignes = [
@@ -166,6 +228,17 @@ describe('les pourcentages', () => {
       expect(pourcentages(valeurs).reduce((t, x) => t + x, 0), String(valeurs)).toBe(100)
     }
     expect(pourcentages([0, 0])).toEqual([0, 0])
+  })
+  it('une valeur négative vaut 0 et ne pèse pas dans le total', () => {
+    expect(pourcentages([-10, 1, 3])).toEqual([0, 25, 75])
+    expect(pourcentages([-5, -5])).toEqual([0, 0])
+  })
+  it('le point en trop va au plus fort reste, pas au premier', () => {
+    // 33,33 et 66,67 : le reste de 2/3 l'emporte, 33 + 67.
+    expect(pourcentages([1, 2])).toEqual([33, 67])
+    expect(pourcentages([2, 1, 0])).toEqual([67, 33, 0])
+    // À reste égal, le premier de la liste.
+    expect(pourcentages([1, 1, 1, 0])).toEqual([34, 33, 33, 0])
   })
 })
 
@@ -201,6 +274,25 @@ describe('la barre du récap', () => {
   })
 })
 
+describe('la barre, aux bords', () => {
+  const ch = new Map([...charges, ['rien', { id: 'rien', categorie: 'sante', commun: true }]])
+  it('un segment à 0 centime ne s’affiche pas, et un reste exactement nul non plus', () => {
+    const l = [
+      ligne({ id: 'a', charge_id: 'loyer', facon: 'fixe', montant_cents: 200_000 }),
+      ligne({ id: 'b', charge_id: 'courses', montant_cents: 100_000 }),
+      ligne({ id: 'z', charge_id: 'rien', facon: 'fixe', montant_cents: 0, parts: [[K, 0]] }),
+    ]
+    const b = barre({ lignes: l, charges: ch, saisies: [], moi: K, revenu: 300_000, clos: false })
+    expect(b.map(s => [s.cle, s.cents, s.pourcent]))
+      .toEqual([['maison', 200_000, 67], ['vie_courante', 100_000, 33]])
+  })
+  it('un reste d’un centime s’affiche', () => {
+    const l = [ligne({ id: 'a', charge_id: 'loyer', facon: 'fixe', montant_cents: 299_999 })]
+    expect(barre({ lignes: l, charges: ch, saisies: [], moi: K, revenu: 300_000, clos: false })
+      .map(s => s.cle)).toEqual(['maison', 'reste'])
+  })
+})
+
 describe('les dates', () => {
   it('courtes, à la française', () => {
     expect(dateCourte('2026-10-03')).toBe('Sam. 3 oct.')
@@ -219,6 +311,13 @@ describe('les dates', () => {
       .toEqual(['Aujourd’hui', 'Hier'])
     expect(joursProposes('2026-10-01', '2026-10-01').choix.map(c => c.libelle),
       'le 1er, « Hier » est dans le mois d’avant').toEqual(['Aujourd’hui'])
+    expect(joursProposes('2026-10-01', '2026-10-19')).toEqual({
+      choix: [{ libelle: 'Aujourd’hui', date: '2026-10-19' }, { libelle: 'Hier', date: '2026-10-18' }],
+      min: '2026-10-01', max: '2026-10-19' })
+    expect(joursProposes('2026-03-01', '2026-03-02').choix.map(c => c.date))
+      .toEqual(['2026-03-02', '2026-03-01'])
+    expect(joursProposes('2026-10-01', '2026-10-01').choix)
+      .toEqual([{ libelle: 'Aujourd’hui', date: '2026-10-01' }])
     expect(joursProposes('2026-09-01', '2026-10-19'))
       .toEqual({ choix: [{ libelle: 'Mer. 30 sept.', date: '2026-09-30' }],
                  min: '2026-09-01', max: '2026-09-30' })
@@ -276,6 +375,24 @@ describe('le récap de la clôture', () => {
     expect(r.ecart).toBe(20_770)
     expect(r.reste).toBe(r.prevus + r.ecart)
     expect(r.reste).toBe(432_500 - (64_230 + 45_000 + 0 + 6_200 + 3_700))
+  })
+  it('les soldes entrent dans X : ils comptent contre le revenu, X + Y fait toujours le chiffre', () => {
+    const lignes = [
+      ligne({ id: 'courses', charge_id: 'courses', montant_cents: 80_000 }),
+      ligne({ id: 'internet', charge_id: 'internet', facon: 'fixe', montant_cents: 3_700 }),
+    ]
+    const saisies = [saisie('courses', 70_000)]
+    const base = { revenu: 432_500, lignes, saisies, moi: K, factures: new Map<string, number>(),
+                   rien: new Set<string>() }
+    const sans = recapCloture({ ...base, soldes: 0 })
+    // Un solde négatif (de l'argent qui revient) allège X ; un positif (à payer) l'alourdit.
+    const rend = recapCloture({ ...base, soldes: -16_668 })
+    expect(rend.prevus).toBe(sans.prevus + 16_668)
+    expect(rend.ecart).toBe(sans.ecart)
+    expect(rend.reste).toBe(rend.prevus + rend.ecart)
+    const doit = recapCloture({ ...base, soldes: 8_334 })
+    expect(doit.prevus).toBe(sans.prevus - 8_334)
+    expect(doit.reste).toBe(sans.reste - 8_334)
   })
   it('ma part des soldes que la clôture posera', () => {
     const lignes = [ligne({ id: 'e', charge_id: 'entretien', facon: 'mis_de_cote',
