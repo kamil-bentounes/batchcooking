@@ -21,7 +21,8 @@ import { useCycle, GESTE } from '../lib/donnees/cycle.ts'
 import { useBarquettes } from '../lib/donnees/barquettes.ts'
 import { useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
 import { useMois, useRevenus, useSaisies, moisDe, eurosRonds } from '../lib/donnees/budget.ts'
-import { aDire, ligneDuHub, nomDuMois, resteDuMois } from '../lib/budget/mois.ts'
+import { aDire, ligneDuHub, montant, nomDuMois, resteDuMois, sousLEuro } from '../lib/budget/mois.ts'
+import { etatDeLEcran, messageDeLecture } from '../lib/budget/ecran.ts'
 
 function Carte({ titre, onClick, children }:
   { titre: string; onClick: () => void; children: React.ReactNode }) {
@@ -51,9 +52,20 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
   const budget = useMois(mois)
   const depenses = budget.data ?? []
   const saisies = useSaisies(mois)
-  const { data: revenus = [] } = useRevenus()
+  const lecteurRevenus = useRevenus()
+  const revenus = lecteurRevenus.data ?? []
   const revenuPose = revenus.some(r => r.user_profile_id === userId)
   const moi = foyer?.membres.find(m => m.id === userId)
+  /* ⚠️ Les trois lectures du chiffre, comme l'écran du mois (`etatDeLEcran`). `= []`
+     sans `isPending` disait « Ajoute ton revenu » à qui l'avait posé ; une panne du mois
+     se lisait « Rien de posé » ; une panne des saisies comptait le PRÉVU pour du déclaré,
+     sans un mot. Un faux chiffre est pire qu'un « … ». */
+  const lectures = [budget, saisies, lecteurRevenus]
+  const etat = etatDeLEcran(lectures)
+  const enPanne = lectures.find(q => q.data === undefined && q.error)
+  /* Le bandeau ne dit « complète ton profil » que sur ce qu'on a LU : un revenu ou un
+     foyer pas encore revenus ne sont pas des revenus ou un profil absents. */
+  const profilLu = foyer !== undefined && lecteurRevenus.data !== undefined
 
   /* Le chiffre de l'écran du mois, au même calcul (§ 3.1.1). Le mois courant
      n'est jamais clôturé (D78) : `clos` vaut faux. */
@@ -104,8 +116,12 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
           <Carte titre="Budget" onClick={() => va('/budget')}>
             {/* Les saisies aussi : sans elles, un mois au fil passait pour « à dire »
                 et son reste pour plein, le temps d'une seconde. */}
-            {budget.isPending || saisies.isPending ? (
+            {etat === 'chargement' ? (
               <p className="titre text-[28px] mt-5 opacity-50">…</p>
+            ) : etat === 'erreur' ? (
+              <p role="alert" className="mt-4 text-[15px] leading-snug text-doux">
+                {messageDeLecture(enPanne?.error)}
+              </p>
             ) : depenses.length === 0 ? (
               <>
                 <p className="titre text-[28px] mt-5">Rien de posé</p>
@@ -125,7 +141,9 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
                     <span className="text-[15px]">{reste.reste < 0 ? 'Il te manque' : 'Il te reste'}</span>
                     <span className="chiffre text-[40px]"
                           style={{ color: reste.reste < 0 ? 'var(--color-ocre)' : 'var(--color-herbe)' }}>
-                      {eurosRonds(Math.abs(reste.reste))}
+                      {/* Sous l'euro, l'arrondi dirait « 0 € » d'un manque de 0,30 €. */}
+                      {sousLEuro(reste.reste) ? montant(Math.abs(reste.reste))
+                                              : eurosRonds(Math.abs(reste.reste))}
                     </span>
                     <span className="text-[15px]">en {nomDuMois(mois)}</span>
                   </p>
@@ -139,7 +157,7 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
         {/* Le bandeau n'est pas un reproche : il MÈNE quelque part. Tant que le
             revenu manque, `parts_du_foyer` partage à parts égales — autant le
             dire, et offrir le chemin dans la même phrase. */}
-        {(!moi?.display_name || !revenuPose) && (
+        {profilLu && (!moi?.display_name || !revenuPose) && (
           <button onClick={() => va('/profil')}
                   className="mt-4 w-full text-left bg-surface border border-dashed
                              border-brume rounded-[18px] p-4 transition-colors

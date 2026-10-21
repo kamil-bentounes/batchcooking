@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { aDire, bandeau, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
          maPart, maPartDesSoldes, montant, montantCompte, moisVoisin, nomDuMois, parCategorie,
-         partSur, pourcentages, recapCloture, resteDuMois, revenuDuMois, totauxDuFiltre, type Ligne,
+         partSur, pourcentages, recapCloture, resteDuMois, revenuDuMois, sousLEuro, totauxDuFiltre, type Ligne,
          type Saisie } from './mois.ts'
 
 const K = 'kamil'
@@ -407,5 +407,19 @@ describe('le récap de la clôture', () => {
                             montant_cents: 0, montant_prevu_cents: 0, parts: [[K, 0], [T, 0]] })]
     expect(maPartDesSoldes([{ charge: 'entretien', cents: -1_000 }], lignes, K)).toBe(-500)
     expect(partSur(lignes[0], K, -1_000)).toBe(-500)
+  })
+})
+
+describe('sousLEuro', () => {
+  it('un reste non nul que l’arrondi à l’euro ferait tomber à « 0 € »', () => {
+    expect(sousLEuro(-30)).toBe(true)
+    expect(sousLEuro(30)).toBe(true)
+    expect(sousLEuro(49)).toBe(true)
+  })
+  it('0 exactement, et dès 50 centimes (qui arrondit à 1 €), non', () => {
+    expect(sousLEuro(0)).toBe(false)
+    expect(sousLEuro(50)).toBe(false)
+    expect(sousLEuro(-50)).toBe(false)
+    expect(sousLEuro(-3_000)).toBe(false)
   })
 })

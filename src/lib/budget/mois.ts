@@ -36,6 +36,16 @@ export function montant(cents: number): string {
   return `${cents < 0 ? '−' : ''}${s} €`
 }
 
+/**
+ * Un reste non nul que l'arrondi à l'euro ferait disparaître (−0,30 € devient « 0 € »).
+ * Le hub arrondit ses gros chiffres ; sur ceux-là il dit les centimes, parce que « Il te
+ * manque 0 € » est faux et que le signe, lui, ne se lit plus.
+ */
+export function sousLEuro(cents: number): boolean {
+  const a = Math.abs(cents)
+  return a !== 0 && Math.round(a / 100) === 0
+}
+
 /** La façon d'une ligne. Celle de la charge ne sert qu'à « Mes charges ». */
 export function facon(l: Ligne): Facon | 'ajustement' {
   return l.facon ?? 'ajustement'
