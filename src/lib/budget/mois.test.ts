@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { aDire, bandeau, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
          maPart, maPartDesSoldes, montant, montantCompte, moisVoisin, nomDuMois, parCategorie,
-         pourcentages, recapCloture, resteDuMois, revenuDuMois, totauxDuFiltre, type Ligne,
+         partSur, pourcentages, recapCloture, resteDuMois, revenuDuMois, totauxDuFiltre, type Ligne,
          type Saisie } from './mois.ts'
 
 const K = 'kamil'
@@ -400,5 +400,12 @@ describe('le récap de la clôture', () => {
     expect(maPartDesSoldes([{ charge: 'entretien', cents: -16_668 }], lignes, K))
       .toBe(Math.round(-16_668 * 2_084 / 4_167))
     expect(maPartDesSoldes([{ charge: 'autre', cents: -1_000 }], [], K)).toBe(-1_000)
+  })
+  it('une ligne aux parts nulles se partage sur ses points de base, comme partSur', () => {
+    // Une provision à 0 € : les parts en centimes sont nulles, les points de base restent.
+    const lignes = [ligne({ id: 'e', charge_id: 'entretien', facon: 'mis_de_cote',
+                            montant_cents: 0, montant_prevu_cents: 0, parts: [[K, 0], [T, 0]] })]
+    expect(maPartDesSoldes([{ charge: 'entretien', cents: -1_000 }], lignes, K)).toBe(-500)
+    expect(partSur(lignes[0], K, -1_000)).toBe(-500)
   })
 })

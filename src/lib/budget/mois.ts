@@ -66,11 +66,11 @@ export function montantCompte(l: Ligne, saisies: Saisie[], clos: boolean): numbe
   return Math.max(prevu(l), declare(l, saisies))
 }
 
-/** Ma part d'un montant, dans la proportion de mes parts sur la ligne. */
-export function partSur(l: Ligne, moi: string, cents: number): number {
+/** Ma part de `cents`, dans la proportion de mes parts sur la ligne. Les parts en centimes ;
+    et si elles sont toutes nulles, les points de base. */
+function prorata(l: Ligne, moi: string, cents: number): number {
   const mienne = l.parts.find(p => p.user_profile_id === moi)
   if (!mienne) return 0
-  if (cents === l.montant_cents) return mienne.part_cents
   const total = l.parts.reduce((t, p) => t + p.part_cents, 0)
   if (total !== 0) return Math.round((cents * mienne.part_cents) / total)
   /* Une ligne confirmée à 0 € (« Rien dépensé ») n'a plus que des parts nulles :
@@ -78,6 +78,14 @@ export function partSur(l: Ligne, moi: string, cents: number): number {
      eux, un mois rouvert effaçait le prévu revenu de « Il te reste ». */
   const totalBps = l.parts.reduce((t, p) => t + (p.part_bps ?? 0), 0)
   return totalBps === 0 ? 0 : Math.round((cents * (mienne.part_bps ?? 0)) / totalBps)
+}
+
+/** Ma part d'un montant, dans la proportion de mes parts sur la ligne. */
+export function partSur(l: Ligne, moi: string, cents: number): number {
+  const mienne = l.parts.find(p => p.user_profile_id === moi)
+  if (!mienne) return 0
+  if (cents === l.montant_cents) return mienne.part_cents
+  return prorata(l, moi, cents)
 }
 
 /** Ma part de la ligne, comme « Il te reste » la compte (§ 3.1.1). « Voir une ligne
@@ -335,9 +343,7 @@ export function maPartDesSoldes(apercu: { charge: string; cents: number }[], lig
   return apercu.reduce((t, s) => {
     const l = lignes.find(x => x.charge_id === s.charge && x.facon !== null && x.parts.length > 0)
     if (!l) return t + s.cents
-    const mienne = l.parts.find(p => p.user_profile_id === moi)?.part_cents ?? 0
-    const total = l.parts.reduce((u, p) => u + p.part_cents, 0)
-    return t + (total === 0 ? 0 : Math.round((s.cents * mienne) / total))
+    return t + prorata(l, moi, s.cents)
   }, 0)
 }
 
