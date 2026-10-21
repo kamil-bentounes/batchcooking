@@ -1,8 +1,9 @@
 # Finaliser Popote : où on en est
 
-Mis à jour le 20/10/2026, vers 17 h. Le code du chantier 2 (Recettes) est fini, relu et
-vérifié sur la branche `feat/recettes`. Il reste sa mise en ligne (tâche 24), qui demande
-l'accès à la prod : voir « Reprendre ici ».
+Mis à jour le 21/10/2026. Le chantier 2 (Recettes) est EN LIGNE depuis ce matin (migration 0092,
+fonction `importer`, recalcule, site, 1 426 photos relues). Le chantier 3 (Budget) est en cours
+sur `feat/budget-refait`. Kamil a donné son « go » le 21/10 : finir seul, tout tester en local
+(front et base, tous les parcours), tout corriger, puis tout pousser en prod.
 
 Kamil voulait « finaliser ce projet qui date depuis un MOMMMMMMENT ». Il a pris six
 décisions ce jour-là ; la mémoire les garde sous `decisions-du-19-octobre`.
@@ -28,17 +29,14 @@ high** : c'est sa demande, notée en mémoire sous `agents-en-sonnet-high`.
 
 ## Reprendre ici
 
-1. Le dépôt est sur la branche **`feat/recettes`**, poussée sur `origin`, 90 commits devant
-   `main` (85eb7fb), qui est un ancêtre : le passage de `main` se fait en avance rapide.
-2. **Chantier 2 (Recettes) : code terminé le 20/10.** Vérifié, seul sur la base et sur le port
+1. `main` est à 49cca8d (les recettes), poussé. Le Budget se code sur **`feat/budget-refait`**.
+2. **Chantier 2 (Recettes) : en ligne le 21/10** (compte rendu : https://claude.ai/artifact/KZAnyZt9JqY5JRi4vyZSeG). Vérifié, seul sur la base et sur le port
    4173 : `npm run build` vert, `npm run lint` sans erreur, 65 fichiers et 1 493 tests (purs et
    base), 99 bancs navigateur sur l'appli construite, le banc de clôture `e2e/recettes.spec.ts`
    (10 parcours) aussi sur le serveur de dev. Deux relectures adverses indépendantes, les
    mutations du code (28, deux trous comblés) et de la base (4, toutes attrapées).
-3. **Reste : la tâche 24, la mise en ligne**, puis la page de compte rendu. Voir plus bas. Elle
-   demande des accès à la prod : le contrôle de sécurité de Claude Code a refusé une lecture de
-   la prod le 20/10 (« Production Reads »). Kamil doit l'autoriser (règle de permission, ou un
-   « go prod » dans la conversation), ou jouer lui-même les étapes.
+3. La mise en ligne (tâche 24) est faite : voir « Fait le 21/10 » plus bas. La sauvegarde de la prod
+   est dans `~/PERSO/sauvegardes-popote/2026-10-21/`.
 4. Pour les bancs : relancer `npx supabase start` si la pile locale est arrêtée, et `npx supabase
    functions serve` en fond (sans lui, les tests d'invitation échouent : 503).
 5. Ensuite, chantier 3 (Budget) : son plan est prêt.
@@ -69,7 +67,7 @@ Le compte rendu, avec les captures : https://claude.ai/artifact/JKzrwPqxTw7w8DuJ
 | Réveil quotidien de la base (GitHub Actions, 06:17 UTC) | d4d630a | poussé sur `main` |
 | Fumée de la prod en lecture seule (`node scripts/fumee-prod.mjs`) | cec159e | — |
 
-## Chantier 2 · Recettes — CODE FINI le 20/10 sur `feat/recettes`, pas encore en prod
+## Chantier 2 · Recettes — EN LIGNE le 21/10
 
 La spec est `docs/superpowers/specs/2026-10-19-recettes-design.md`. Le plan, en 25
 tâches, est `docs/superpowers/plans/2026-10-19-recettes.md` (ses amendements, à la fin, priment
@@ -119,7 +117,7 @@ sur le texte des tâches).
 - Un test lent peut sortir rouge sous charge : `ordonnance.test.ts` (400 ms) a échoué une fois,
   vert aux autres passages.
 
-### Reste : la tâche 24, la mise en ligne (par le contrôleur)
+### Fait le 21/10 : la tâche 24, la mise en ligne (par le contrôleur)
 
 À faire dans cet ordre, en disant à Kamil ce qui est parti. Jamais rien au nom de Thauba.
 
