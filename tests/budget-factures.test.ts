@@ -86,6 +86,22 @@ describe('payer une facture', () => {
     expect(await montants(entretien)).toHaveLength(1)
   })
 
+  it('une charge au nom très long se solde quand même : le libellé de l’ajustement tient en 80', async () => {
+    /* `depense_libelle_check` s'arrête à 80 caractères (0084). Le suffixe « — facture
+       2026 » en fait 15 : le nom est coupé à 55, sans quoi la facture d'une charge
+       nommée sur 70 caractères échouerait sur une erreur brute. */
+    const nom = 'Entretien de la voiture familiale, '.padEnd(70, 'pneus et freins, ')
+    expect(nom).toHaveLength(70)
+    const f = await foyerSolo('fac-nom-long')
+    const entretien = await poseCharge(f, { libelle: nom, cents: 50_004, mode: 'mis_de_cote' })
+    await ouvreLAnnee(f, entretien, 2026)
+    ou(await paie(f, entretien, 32_000, '2026-11-10'))
+    const [aj] = await ajustements(entretien)
+    expect(aj.montant_cents).toBe(15_332)
+    expect(aj.libelle).toHaveLength(70)
+    expect(aj.libelle).toBe(`${nom.slice(0, 55)} — facture 2026`)
+  })
+
   it('une charge qui n’est pas mise de côté ne prend pas de facture', async () => {
     const f = await foyerSolo('fac-fixe')
     const internet = await poseCharge(f, { libelle: 'Internet', cents: 3_700 })
@@ -235,6 +251,28 @@ describe('les parts d’un ajustement, à deux', () => {
     const parUser = (ps: Part[]) => new Map(ps.map(p => [p.user_profile_id, p.part_cents]))
     // Mêmes poids, mêmes départages : le contre-ajustement annule chaque part.
     for (const [u, c] of parUser(pose)) expect(parUser(contre).get(u)).toBe(-c)
+  })
+
+  it('à deux, le dépassement se répartit selon ce que chacun a porté sur l’année', async () => {
+    const f = await foyerSolo('fac-porte', { revenu: 370_000 })
+    const thauba = await membre(f, 'Thauba', { arrivee: '2026-11-01', revenu: 240_000,
+                                               depuis: '2026-11-01' })
+    const e = await poseCharge(f, { libelle: 'Entretien auto', cents: 50_004, mode: 'mis_de_cote',
+      commun: true, participants: [f.userId, thauba.userId] })
+    await ouvreLAnnee(f, e, 2026)
+    const porte = await portes(e)
+    const total = [...porte.values()].reduce((s, x) => s + x, 0)
+    ou(await paie(f, e, 32_000, '2026-11-10'))
+    const [aj] = await ajustements(e)
+    expect(aj.montant_cents).toBe(15_332)
+    const parts = await partsDe(aj.id)
+    expect(parts.reduce((s, p) => s + p.part_cents, 0)).toBe(15_332)
+    const sienne = parts.find(p => p.user_profile_id === thauba.userId)!.part_cents
+    // Elle n'a porté que novembre et décembre, au prorata : bien moins d'un quart.
+    expect(sienne).toBeGreaterThan(0)
+    expect(sienne).toBeLessThan(15_332 / 4)
+    // Et au centime près ce qu'elle a porté sur l'année, pas une clé fraîche du jour.
+    expect(Math.abs(sienne - 15_332 * porte.get(thauba.userId)! / total)).toBeLessThan(1)
   })
 
   it('l’état de l’année suit : ce qui est posé vaut le dépassement', async () => {

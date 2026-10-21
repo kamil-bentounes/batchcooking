@@ -9,9 +9,14 @@
  *  · la somme des parts figées recompose EXACTEMENT le montant. C'est tout
  *    l'intérêt des centimes entiers ; un budget dont les parts ne se
  *    recomposent pas est abandonné au troisième mois.
+ *
+ * ⚠️ Les `debut: '2026-01-01'` écrits en dur passent jusqu'au 31/12/2027 : le
+ *    trigger de `charge` (0096) refuse un départ antérieur au 1er janvier de
+ *    l'année précédente. Au 1er janvier 2028, il faudra les avancer.
  */
 import { beforeAll, describe, expect, it } from 'vitest'
 import { admin, makeActor, type Actor } from './helpers/db'
+import { ajustementEnAdmin } from './helpers/budget'
 
 let moi: Actor
 let elle: string
@@ -51,6 +56,32 @@ async function poseCharge(o: {
     })))
   expect(eP, `participants refusés : ${eP?.message}`).toBeNull()
   return c!.id
+}
+
+/**
+ * Une année soldée, comme la base la laisse désormais : `regularise_annuel` ne
+ * fait plus que refuser (0113). On ouvre les mois d'abord — une fois l'année
+ * soldée, plus aucun n'y naît —, puis le relevé, avec le prévu figé : la somme
+ * des lignes de l'année.
+ */
+async function soldeAdmin(charge: string, annee: number, reelCents: number, a: Actor = moi) {
+  const { data: lignes } = await admin().from('depense').select('montant_cents')
+    .eq('charge_id', charge).eq('source', 'modele')
+    .gte('mois', `${annee}-01-01`).lte('mois', `${annee}-12-01`)
+  const prevu = (lignes ?? []).reduce((s, l) => s + l.montant_cents, 0)
+  const { error } = await admin().from('releve_annuel').insert({
+    household_id: a.householdId, charge_id: charge, annee,
+    reel_cents: reelCents, prevu_cents: prevu, ecart_cents: reelCents - prevu,
+  })
+  expect(error, `relevé refusé : ${error?.message}`).toBeNull()
+}
+
+/** Ouvre les douze mois d'une charge, comme `regularise_annuel` le faisait. */
+async function ouvreLAnnee(charge: string, annee: number, a: Actor = moi) {
+  for (let m = 1; m <= 12; m++) {
+    await a.client.rpc('ouvre_la_charge', { la_charge: charge, foyer: a.householdId,
+      le_mois: `${annee}-${String(m).padStart(2, '0')}-01` })
+  }
 }
 
 beforeAll(async () => {
@@ -246,6 +277,10 @@ describe('ce qui ne change pas', () => {
       .update({ confirme_le: '2026-08-31T20:00:00Z' })
       .eq('household_id', moi.householdId).eq('libelle', 'Éphémère').eq('mois', '2026-08-01')
     expect(confirme, 'la préparation a échoué').toBeNull()
+    const direct = await moi.client.from('charge')
+      .update({ archive_le: '2026-08-31' }).eq('id', id).select()
+    expect(direct.error?.message, 'le client a archivé la charge sans passer par « Retirer »')
+      .toMatch(/Retirer/)
     const retrait = await moi.client.rpc('retire_charge', { p_charge: id })
     expect(retrait.error, `retrait refusé : ${retrait.error?.message}`).toBeNull()
     expect(retrait.data, 'la charge à histoire devait s’archiver').toBe('archivee')
@@ -439,15 +474,17 @@ describe('la régularisation de D62', () => {
   it('peut poser une seconde ligne sur la même charge et le même mois', async () => {
     /* L'unicité `(charge_id, mois)` interdisait toute ligne d'ajustement — la
        régularisation annoncée par D62 était impossible. Elle ne porte plus que
-       sur ce que le générateur produit. */
+       sur ce que le générateur produit. Depuis 0101 le client n'écrit plus de
+       ligne de charge : l'ajustement s'insère par la clé de service, comme la
+       base le pose. */
     const { data: d } = await admin().from('depense').select('id, charge_id, mois')
       .eq('household_id', moi.householdId).eq('mois', '2026-05-01')
       .eq('libelle', 'Taxe foncière').single()
 
-    const { data: ajout, error } = await moi.client.from('depense').insert({
+    const { data: ajout, error } = await admin().from('depense').insert({
       household_id: moi.householdId, charge_id: d!.charge_id, mois: d!.mois,
       libelle: 'Taxe foncière — régularisation', montant_cents: 2_000,
-      nature: 'connue', source: 'manuel',
+      nature: 'connue', source: 'manuel', regularise_annee: 2026,
     }).select()
     expect(error, `la régularisation est refusée : ${error?.message}`).toBeNull()
     expect(ajout ?? [], 'aucune ligne de régularisation créée').toHaveLength(1)
@@ -524,214 +561,6 @@ describe('ce que la relecture finale a trouvé', () => {
 })
 
 describe('la régularisation annuelle (D62)', () => {
-  it('répartit l’écart selon ce que chacun a PORTÉ sur l’année', async () => {
-    /* Le cas réel : la taxe foncière provisionnée au douzième toute l'année, le
-       relevé qui arrive en septembre. L'écart ne s'impute pas au mois courant
-       avec la clé du jour — il se répartit selon ce que chacun a effectivement
-       porté, mois par mois. Quelqu'un arrivé en cours d'année ne porte donc que
-       ses mois, sans qu'aucune règle de date soit écrite. */
-    /* ⚠️ L'ANNÉE ENTIÈRE est ouverte.
-       Régulariser, c'est faire en sorte que l'année coûte exactement ce que dit
-       la facture — pas seulement les mois déjà ouverts. Sur une année partielle,
-       les mois restants provisionnent encore, et comparer au seul provisionné
-       facturait la charge une fois et demie : 1 812 € pour une facture de
-       1 450 €, mesuré. `provisions_a_venir` compte donc ce qui reste à venir,
-       et un test qui n'ouvre que trois mois ne dit plus rien du cas réel. */
-    const id = await poseCharge({ libelle: 'Foncier 2028', cents: 120_000,
-                                  periodicite: 'annuel', participants: [moi.userId, elle] })
-    for (let m = 1; m <= 12; m++) {
-      await moi.client.rpc('ouvre_le_mois', { le_mois: `2028-${String(m).padStart(2, '0')}-01` })
-    }
-
-    const { data: prov } = await admin().from('depense')
-      .select('montant_cents').eq('charge_id', id).eq('source', 'modele')
-    const provisionne = prov!.reduce((s, d) => s + d.montant_cents, 0)
-    expect(provisionne, 'douze mois au douzième').toBe(120_000)
-    expect(Number((await moi.client.rpc('provisions_a_venir',
-      { la_charge: id, annee: 2028 })).data),
-      'une année entièrement ouverte n’a plus rien à venir').toBe(0)
-
-    // Le vrai montant : 1 240 € au lieu des 1 200 € provisionnés.
-    const { data: ligne, error } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2028, reel_cents: 124_000,
-    })
-    expect(error, `régularisation refusée : ${error?.message}`).toBeNull()
-    expect(ligne, 'aucune ligne d’ajustement créée').not.toBeNull()
-
-    const { data: parts } = await admin().from('depense_part')
-      .select('user_profile_id, part_cents').eq('depense_id', ligne!)
-    const total = parts!.reduce((s, p) => s + p.part_cents, 0)
-    expect(total, 'l’écart ne se recompose pas').toBe(4_000)
-
-    // Et la répartition suit les parts de l'année, pas une clé fraîche.
-    const mienne = parts!.find(p => p.user_profile_id === moi.userId)!
-    expect(mienne.part_cents, 'le plus gros contributeur porte le plus gros écart')
-      .toBeGreaterThan(parts!.find(p => p.user_profile_id === elle)!.part_cents)
-
-    // Les provisions cessent d'être des estimations.
-    const { data: apres } = await admin().from('depense')
-      .select('nature').eq('charge_id', id).eq('source', 'modele')
-    expect(apres!.every(d => d.nature === 'connue'),
-      'les provisions restent des estimations après le relevé').toBe(true)
-  })
-
-  it('sait rendre de l’argent quand on a trop provisionné', async () => {
-    /* Une dépense NÉGATIVE est un remboursement, pas une anomalie : une année
-       douce, l'énergie provisionnée dépasse l'énergie payée. L'interdire
-       obligeait à écraser la ligne du mois, donc à perdre la trace de ce qui
-       avait été prévu. */
-    const id = await poseCharge({ libelle: 'Énergie 2028', cents: 60_000,
-                                  periodicite: 'annuel', participants: [moi.userId] })
-    for (let m = 1; m <= 12; m++) {
-      await moi.client.rpc('ouvre_le_mois', { le_mois: `2028-${String(m).padStart(2, '0')}-01` })
-    }
-
-    // 580 € payés pour 600 € provisionnés : l'app doit rendre 20 €.
-    const { data: ligne } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2028, reel_cents: 58_000,
-    })
-    const { data: d } = await admin().from('depense')
-      .select('montant_cents').eq('id', ligne!).single()
-    expect(d!.montant_cents, 'un trop-perçu ne se rend pas').toBe(-2_000)
-
-    const { data: parts } = await admin().from('depense_part')
-      .select('part_cents').eq('depense_id', ligne!)
-    expect(parts!.reduce((s, p) => s + p.part_cents, 0),
-      'les parts d’un remboursement ne le recomposent pas').toBe(-2_000)
-  })
-
-  it('ne pose rien quand le relevé tombe juste', async () => {
-    const id = await poseCharge({ libelle: 'Juste 2028', cents: 120_000,
-                                  periodicite: 'annuel', participants: [moi.userId] })
-    for (let m = 1; m <= 12; m++) {
-      await moi.client.rpc('ouvre_le_mois', { le_mois: `2028-${String(m).padStart(2, '0')}-01` })
-    }
-    /* ⚠️ AUCUNE dépense, mais une TRACE.
-       Un relevé qui tombe juste ne doit rien facturer — donc pas de ligne de
-       dépense. Mais il doit se souvenir d'avoir été saisi, sinon on le
-       ressaisit indéfiniment. 0077 posait une dépense à 0 € pour ça : mauvaise
-       idée, ses points de base 10000/0/0 étaient une proportion fausse que
-       `confirme_la_depense` relit comme poids. C'est une table. */
-    const { data: ligne } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2028, reel_cents: 120_000,
-    })
-    expect(ligne, 'un relevé juste a posé une dépense').toBeNull()
-
-    const { data: trace } = await moi.client.from('releve_annuel')
-      .select('reel_cents, ecart_cents').eq('charge_id', id).eq('annee', 2028)
-    expect(trace ?? [], 'un relevé juste ne laisse aucune trace').toHaveLength(1)
-    expect(trace![0].ecart_cents, 'l’écart consigné n’est pas nul').toBe(0)
-
-    /* Et on ne le ressaisit pas : la garde s'arme, même sans dépense.
-       ⚠️ On vérifie LE MESSAGE, pas seulement l'échec : sans la garde, c'est
-       l'index unique qui lève — une violation de contrainte brute — et le test
-       ne voyait aucune différence. */
-    const { error } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2028, reel_cents: 120_000,
-    })
-    expect(error, 'l’année se régularise deux fois').not.toBeNull()
-    expect(error!.message, 'le refus est une violation d’index, pas une phrase')
-      .toMatch(/déjà été saisi/i)
-  })
-
-  it('une charge au nom très long se régularise quand même', async () => {
-    /* `depense_libelle_check` s'arrête à 80 caractères, le suffixe
-       « — régularisation 2026 » en fait 23, et `charge.libelle` en permet 80 :
-       une charge nommée à 59 caractères ou plus ne pouvait JAMAIS être
-       régularisée. Erreur de contrainte brute, à chaque tentative, et l'année
-       inaccessible à vie. */
-    const nom = 'Taxe foncière de la maison de campagne de mes beaux-parents'
-    expect(nom.length, 'le nom du test n’est plus assez long').toBeGreaterThan(58)
-    const an = new Date().getFullYear()
-    const id = await poseCharge({ libelle: nom, cents: 120_000,
-                                  periodicite: 'annuel', participants: [moi.userId] })
-    const { error } = await moi.client.rpc('regularise_annuel',
-      { la_charge: id, annee: an, reel_cents: 130_000 })
-    expect(error, `un nom long empêche de régulariser : ${error?.message}`).toBeNull()
-  })
-
-  it('une année trop lointaine se refuse au lieu d’être à moitié ouverte', async () => {
-    /* `ouvre_la_charge` refuse les mois au-delà de cinq ans : une année dont
-       une partie dépasse la fenêtre n'en matérialisait que le début, posait
-       l'écart dessus, et restait figée à 9/12 pour toujours. Une demi-année
-       mesurée est pire qu'un refus. */
-    /* ⚠️ +6, pas +5. Avec +5, l'année entière rentre dans la fenêtre à partir
-       du 1er décembre — `make_date(Y+5, 12, 1) <= current_date + 5 ans` — et
-       le test devenait rouge tout le mois de décembre, chaque année. Avec +6,
-       janvier dépasse toujours, quel que soit le jour. Un test qui suppose une
-       date est un test qui ment un mois sur douze. */
-    const trop = new Date().getFullYear() + 6
-    const id = await poseCharge({ libelle: 'Trop loin', cents: 120_000,
-                                  periodicite: 'annuel', participants: [moi.userId] })
-    const { error } = await moi.client.rpc('regularise_annuel',
-      { la_charge: id, annee: trop, reel_cents: 130_000 })
-    expect(error, 'une année à moitié ouverte a été régularisée').not.toBeNull()
-    expect(error!.message).toMatch(/trop loin/i)
-
-    const { data: rien } = await admin().from('releve_annuel')
-      .select('id').eq('charge_id', id)
-    expect(rien ?? [], 'un refus a quand même laissé une trace').toHaveLength(0)
-  })
-
-  it('une année EN COURS ne facture pas la charge une fois et demie', async () => {
-    /*
-     * Le geste le plus ordinaire qui soit, et il coûtait 362 € : l'avis de taxe
-     * foncière arrive fin août ou en septembre, on saisit 1 450 €, et l'app
-     * facturait 1 812 €. L'écart se mesurait sur les mois DÉJÀ provisionnés —
-     * neuf au 23 septembre — puis octobre, novembre et décembre engendraient
-     * chacun leur douzième par-dessus, que personne n'annulait.
-     *
-     * Ici on ouvre neuf mois d'une année et on régularise au montant exact :
-     * l'écart doit être NUL, parce que les trois mois restants provisionneront
-     * précisément ce qui manque.
-     */
-    const id = await poseCharge({ libelle: 'Foncier en cours', cents: 145_000,
-                                  periodicite: 'annuel', participants: [moi.userId] })
-    for (let m = 1; m <= 9; m++) {
-      await moi.client.rpc('ouvre_le_mois', { le_mois: `2028-${String(m).padStart(2, '0')}-01` })
-    }
-
-    const { data: prov } = await admin().from('depense')
-      .select('montant_cents').eq('charge_id', id).eq('source', 'modele')
-    const faites = prov!.reduce((s, d) => s + d.montant_cents, 0)
-    const { data: aVenir } = await moi.client.rpc('provisions_a_venir',
-      { la_charge: id, annee: 2028 })
-    expect(faites + Number(aVenir),
-      'les douze mois ne reconstituent pas la charge annuelle').toBe(144_996)
-
-    const { data: ligne } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2028, reel_cents: faites + Number(aVenir),
-    })
-    expect(ligne,
-      'une année en cours provisionnée juste produit quand même une dépense').toBeNull()
-    const { data: traceJuste } = await moi.client.from('releve_annuel')
-      .select('ecart_cents').eq('charge_id', id).eq('annee', 2028)
-    expect(traceJuste?.[0]?.ecart_cents, 'le relevé juste n’est pas consigné').toBe(0)
-
-    /* Et si la facture dépasse VRAIMENT, l'écart ne vaut que le dépassement —
-       pas les mois qui restent à provisionner.
-
-       ⚠️ Sur une AUTRE charge : l'année précédente vient d'être régularisée, et
-       la garde « une seule fois » s'arme désormais même quand l'écart est nul. */
-    const id2 = await poseCharge({ libelle: 'Foncier dépassé', cents: 145_000,
-                                   periodicite: 'annuel', participants: [moi.userId] })
-    for (let m = 1; m <= 9; m++) {
-      await moi.client.rpc('ouvre_le_mois', { le_mois: `2028-${String(m).padStart(2, '0')}-01` })
-    }
-    /* ⚠️ Le total attendu se calcule À LA MAIN, pas en appelant la fonction
-       qu'on teste. La version d'avant demandait `provisions_a_venir`, puis
-       vérifiait que la base posait le même écart : quelle que soit la valeur
-       rendue, le test était vert. */
-    const attendu = 12 * Math.round(145_000 / 12)
-
-    const { data: ligne2 } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id2, annee: 2028, reel_cents: attendu + 5_000,
-    })
-    const { data: d2 } = await admin().from('depense')
-      .select('montant_cents').eq('id', ligne2 as string).single()
-    expect(d2!.montant_cents, 'l’écart compte les mois à venir deux fois').toBe(5_000)
-  })
-
   it('un mois révolu JAMAIS ouvert ne compte pas comme « à venir »', async () => {
     /*
      * Le pendule de l'autre côté. 0073 mesure l'écart sur l'année entière —
@@ -814,48 +643,6 @@ describe('la régularisation annuelle (D62)', () => {
     expect(Number(fuite ?? 0), 'le montant du voisin a fuité').toBe(0)
   })
 
-  it('corriger APRÈS avoir régularisé ne casse pas le total de l’année', async () => {
-    /* Le geste suivant le plus naturel, et la raison d'être de
-       `corrige_la_charge` : la facture tombe à 1 600 €, on régularise, puis on
-       met la charge au vrai montant. La ligne de régularisation survivait —
-       `source = 'manuel'` — et l'année totalisait 1 750 € pour 1 600 €. */
-    const id = await poseCharge({ libelle: 'Foncier réajusté', cents: 144_000,
-                                  periodicite: 'annuel', participants: [moi.userId] })
-    for (let m = 1; m <= 12; m++) {
-      await moi.client.rpc('ouvre_le_mois', { le_mois: `2029-${String(m).padStart(2, '0')}-01` })
-    }
-    await moi.client.rpc('regularise_annuel',
-      { la_charge: id, annee: 2029, reel_cents: 160_000 })
-
-    /* ⚠️ La ligne de régularisation se pose sur le MOIS EN COURS, pas dans
-       l'année qu'elle résume : c'est voulu — on ne réécrit pas un mois passé —
-       mais elle compte dans le total de l'année. */
-    const somme = async () => {
-      const { data: mois } = await admin().from('depense').select('montant_cents')
-        .eq('charge_id', id).gte('mois', '2029-01-01').lte('mois', '2029-12-31')
-      const { data: reg } = await admin().from('depense').select('montant_cents')
-        .eq('charge_id', id).eq('regularise_annee', 2029)
-      return [...(mois ?? []), ...(reg ?? [])]
-        .reduce((s, d) => s + d.montant_cents, 0)
-    }
-    expect(await somme(), 'la régularisation ne fait pas tomber juste').toBe(160_000)
-
-    await moi.client.rpc('corrige_la_charge', {
-      la_charge: id, nouveau_libelle: 'Foncier réajusté',
-      nouveau_montant: 160_000, nouvelle_periodicite: 'annuel',
-    })
-    /* La régularisation périmée est partie : l'année ne totalise plus que ses
-       douze mois. Les quatre centimes manquants sont l'arrondi du douzième
-       (D62) — c'est précisément ce qu'une nouvelle saisie du vrai montant
-       rattrapera. Ce qu'on refuse, c'est le total de 175 000 € que produisait
-       la ligne survivante. */
-    const { data: restante } = await admin().from('depense')
-      .select('id').eq('charge_id', id).eq('regularise_annee', 2029)
-    expect(restante ?? [], 'la régularisation périmée survit').toHaveLength(0)
-    expect(await somme(), 'l’année ne totalise plus ses douze mois')
-      .toBe(12 * Math.round(160_000 / 12))
-  })
-
   it('corriger une charge n’efface pas le relevé d’une année CLOSE', async () => {
     /*
      * `corrige_la_charge` supprimait les régularisations de TOUTES les années.
@@ -872,12 +659,10 @@ describe('la régularisation annuelle (D62)', () => {
           { le_mois: `${annee}-${String(m).padStart(2, '0')}-01` })
       }
     }
-    /* 2029 est RÉGLÉE : ses douze mois sont payés, l'année est close. */
-    await moi.client.rpc('regularise_annuel',
-      { la_charge: id, annee: 2029, reel_cents: 135_000 })
-    await admin().from('depense')
-      .update({ regle_le: new Date().toISOString() })
-      .eq('charge_id', id).gte('mois', '2029-01-01').lte('mois', '2029-12-31')
+    /* 2029 est SOLDÉE, comme la base la laisse : le relevé, et la ligne
+       d'ajustement que le solde a posée (1 350 € payés pour 1 200 € prévus). */
+    await soldeAdmin(id, 2029, 135_000)
+    await ajustementEnAdmin(moi, id, '2029-12-01', 2029, 15_000)
 
     /* On renomme la charge — le geste le plus anodin qui soit. */
     await moi.client.rpc('corrige_la_charge', {
@@ -894,40 +679,6 @@ describe('la régularisation annuelle (D62)', () => {
       .select('montant_cents').eq('charge_id', id).eq('regularise_annee', 2029)
     expect(reg ?? [], 'la régularisation d’une année close a été effacée')
       .toHaveLength(1)
-  })
-
-  it('mais on peut RESSAISIR le relevé d’une année qu’on vient de refaire', async () => {
-    /* Le pendant : si les mois de l'année bougent, le relevé ne vaut plus rien
-       et doit pouvoir être ressaisi. Sans effacer la trace, la garde
-       l'interdisait à jamais. */
-    const id = await poseCharge({ libelle: 'À ressaisir', cents: 120_000,
-                                  periodicite: 'annuel', participants: [moi.userId] })
-    for (let m = 1; m <= 12; m++) {
-      await moi.client.rpc('ouvre_le_mois', { le_mois: `2030-${String(m).padStart(2, '0')}-01` })
-    }
-    await moi.client.rpc('regularise_annuel',
-      { la_charge: id, annee: 2030, reel_cents: 130_000 })
-
-    await moi.client.rpc('corrige_la_charge', {
-      la_charge: id, nouveau_libelle: 'À ressaisir', nouveau_montant: 132_000,
-      nouvelle_periodicite: 'annuel',
-    })
-
-    const { error } = await moi.client.rpc('regularise_annuel',
-      { la_charge: id, annee: 2030, reel_cents: 140_000 })
-    expect(error, `ressaisie refusée : ${error?.message}`).toBeNull()
-  })
-
-  it('le voisin ne régularise pas une charge qui n’est pas la sienne', async () => {
-    const { data: sienne } = await admin().from('charge').insert({
-      household_id: voisin.householdId, libelle: 'Chez le voisin',
-      montant_cents: 1_000, periodicite: 'annuel', debut: '2028-01-01',
-    }).select().single()
-
-    const { error } = await moi.client.rpc('regularise_annuel', {
-      la_charge: sienne!.id, annee: 2028, reel_cents: 99_999,
-    })
-    expect(error, 'on régularise la charge du foyer d’à côté').not.toBeNull()
   })
 })
 
@@ -1011,112 +762,6 @@ describe('le relevé du mois et l’excédent', () => {
 })
 
 describe('la régularisation ne se déclenche qu’une fois', () => {
-  it('refuse la seconde, même sur un double-clic', async () => {
-    const id = await poseCharge({ libelle: 'Foncier unique', cents: 120_000,
-                                  periodicite: 'annuel', participants: [moi.userId] })
-    await moi.client.rpc('ouvre_le_mois', { le_mois: '2030-01-01' })
-
-    const { data: un } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2030, reel_cents: 15_000,
-    })
-    expect(un, 'la première régularisation a échoué').not.toBeNull()
-
-    const { error } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2030, reel_cents: 15_000,
-    })
-    expect(error, 'on peut régulariser deux fois la même année').not.toBeNull()
-
-    const { data: lignes } = await admin().from('depense')
-      .select('id').eq('charge_id', id).eq('source', 'manuel')
-    expect(lignes ?? [], 'plusieurs lignes d’ajustement coexistent').toHaveLength(1)
-  })
-
-  it('refuse une année sans aucune provision', async () => {
-    /* 0057 créait ici une dépense à ZÉRO PART — le défaut même que 0056 venait
-       de corriger dans le générateur, réintroduit dix lignes plus loin. */
-    const id = await poseCharge({ libelle: 'Jamais provisionnée', cents: 60_000,
-                                  periodicite: 'annuel', participants: [moi.userId] })
-    const { error } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2035, reel_cents: 60_000,
-    })
-    expect(error, 'une dépense que personne ne doit a été créée').not.toBeNull()
-
-    const { data: orphelines } = await admin().from('depense')
-      .select('id').eq('charge_id', id)
-    expect(orphelines ?? [], 'une ligne orpheline subsiste').toHaveLength(0)
-  })
-
-  it('refuse une provision à zéro plutôt que de rendre une erreur Postgres', async () => {
-    const id = await poseCharge({ libelle: 'Provision nulle', cents: 0,
-                                  periodicite: 'annuel', participants: [moi.userId] })
-    await moi.client.rpc('ouvre_le_mois', { le_mois: '2030-02-01' })
-    const { error } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2030, reel_cents: 5_000,
-    })
-    expect(error?.message, 'le message est celui de Postgres, pas le nôtre')
-      .toMatch(/provisions|zéro/i)
-  })
-
-  it('répartit selon les mois VRAIMENT portés, pas selon la clé du jour', async () => {
-    /* ⚠️ Le test d'origine était vide : ses deux membres entraient le même jour
-       avec des revenus constants, donc « porté » et « clé du jour »
-       coïncidaient. En remplaçant la répartition par `parts_du_foyer` du mois
-       courant, les 740 tests restaient verts. Ici quelqu'un arrive en cours
-       d'année : les deux répartitions divergent, et l'écart se voit.
-
-       L'année reste dans les deux ans que `user_profile_entre_le_borne`
-       autorise — une date de fantaisie ferait disparaître quelqu'un de tous
-       les mois, et la borne existe pour ça. */
-    const { data: u } = await admin().auth.admin.createUser({
-      email: `tard-${Date.now()}@fumee.test`, password: 'x'.repeat(12), email_confirm: true,
-    })
-    const tardif = u.user!.id
-    const { error: eProfil } = await admin().from('user_profile').insert({
-      id: tardif, household_id: moi.householdId, display_name: 'Tardif',
-      entre_le: '2027-03-01',
-    })
-    expect(eProfil, `profil refusé : ${eProfil?.message}`).toBeNull()
-    await admin().from('revenu').insert({
-      household_id: moi.householdId, user_profile_id: tardif,
-      net_mensuel_cents: 370_000, valid_from: '2027-01-01',
-    })
-
-    const id = await poseCharge({ libelle: 'Foncier tardif', cents: 120_000,
-                                  periodicite: 'annuel',
-                                  participants: [moi.userId, elle, tardif] })
-    /* Janvier et février SANS lui, mars et la suite AVEC. L'année entière est
-       ouverte : régulariser porte sur l'année, pas sur les mois déjà faits. */
-    for (let m = 1; m <= 12; m++) {
-      const mois = `2027-${String(m).padStart(2, '0')}-01`
-      const { error } = await moi.client.rpc('ouvre_le_mois', { le_mois: mois })
-      expect(error, `ouverture de ${mois} refusée : ${error?.message}`).toBeNull()
-    }
-
-    // 600 € payés pour 1 200 € provisionnés : un gros remboursement.
-    const { data: ligne, error: eReg } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2027, reel_cents: 60_000,
-    })
-    expect(eReg, `régularisation refusée : ${eReg?.message}`).toBeNull()
-    expect(ligne, 'aucune ligne posée').not.toBeNull()
-
-    const { data: parts } = await admin().from('depense_part')
-      .select('user_profile_id, part_cents').eq('depense_id', ligne!)
-    const sien = parts!.find(p => p.user_profile_id === tardif)!
-    const mien = parts!.find(p => p.user_profile_id === moi.userId)!
-
-    /* Il n'a porté que DIX mois sur douze, et à trois au lieu de deux : sa part
-       du remboursement doit être plus petite en valeur absolue que celle des
-       présents depuis janvier. Avec la clé du jour, elles seraient égales.
-       Les deux parts sont NÉGATIVES — c'est un remboursement — donc « moins
-       porter » veut dire « recevoir moins », donc être plus PROCHE de zéro. */
-    expect(Math.abs(sien.part_cents), 'il reçoit autant que ceux présents depuis janvier')
-      .toBeLessThan(Math.abs(mien.part_cents))
-    expect(parts!.reduce((s, p) => s + p.part_cents, 0),
-      'la somme ne recompose pas l’écart').toBe(60_000 - 120_000)
-
-    await admin().from('revenu').delete().eq('user_profile_id', tardif)
-    await admin().from('user_profile').delete().eq('id', tardif)
-  })
 
   it('le voisin ne lit pas les provisions d’un autre foyer', async () => {
     // `provisions_de` est `security definer` et accordée à `authenticated` :
@@ -1409,14 +1054,22 @@ describe('l’arrivée du second membre, éprouvée', () => {
   it('refuse de confirmer une dépense que personne ne doit', async () => {
     /* Le marqueur était posé quand même, et `refige_pour` refusait alors le mois
        entier pour toujours : une ligne que personne ne doit, gelée. */
-    const { data: d } = await admin().from('depense').insert({
-      household_id: moi.householdId, mois: '2027-09-01', libelle: 'Sans personne',
-      montant_cents: 5_000, source: 'manuel', nature: 'estimee',
+    /* Une ligne `modele` fixe, sans la moindre part, posée par `admin()`. Une
+       ligne `manuel` n'est de toute façon pas confirmable : le test passait à
+       vide, refusé pour une autre raison que celle qu'il nomme. */
+    const id = await poseCharge({ libelle: 'Sans personne', cents: 5_000,
+                                  periodicite: 'mensuel', participants: [moi.userId] })
+    const { data: d, error: eLigne } = await admin().from('depense').insert({
+      household_id: moi.householdId, charge_id: id, mois: '2027-09-01',
+      libelle: 'Sans personne', montant_cents: 5_000, montant_prevu_cents: 5_000,
+      source: 'modele', nature: 'connue', facon: 'fixe',
     }).select().single()
+    expect(eLigne, `ligne refusée : ${eLigne?.message}`).toBeNull()
 
     const { error } = await moi.client.rpc('confirme_la_depense',
       { la_depense: d!.id, reel_cents: 4_000 })
-    expect(error, 'une dépense sans part a été confirmée').not.toBeNull()
+    expect(error?.message, 'une dépense sans part a été confirmée')
+      .toMatch(/partagée avec personne/)
 
     const { data: apres } = await admin().from('depense')
       .select('confirme_le').eq('id', d!.id).single()
@@ -1494,26 +1147,6 @@ describe('l’arrondi ne penche d’aucun côté', () => {
        version donnait 0 à l'un et 8 à l'autre. */
     expect(recu[moi.userId], 'le centime ne tombe jamais sur lui').toBeGreaterThan(0)
     expect(recu[elle], 'le centime ne tombe jamais sur elle').toBeGreaterThan(0)
-  })
-
-  it('un remboursement se répartit comme une facture, pas à l’envers', async () => {
-    // La division entière tronque vers zéro : sur un montant négatif, c'était
-    // le plus gros contributeur qui en profitait.
-    const id = await poseCharge({ libelle: 'À rendre', cents: 120_000,
-                                  periodicite: 'annuel',
-                                  participants: [moi.userId, elle] })
-    await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-05-01' })
-    const { data: ligne } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2027, reel_cents: 9_237,
-    })
-    const { data: parts } = await admin().from('depense_part')
-      .select('part_cents').eq('depense_id', ligne!)
-    const { data: d } = await admin().from('depense')
-      .select('montant_cents').eq('id', ligne!).single()
-
-    expect(d!.montant_cents, 'le remboursement n’est pas négatif').toBeLessThan(0)
-    expect(parts!.reduce((s, p) => s + p.part_cents, 0),
-      'les parts d’un remboursement ne le recomposent pas').toBe(d!.montant_cents)
   })
 
   it('l’excédent ne déborde pas, et ne perd aucun centime', async () => {
@@ -1604,121 +1237,6 @@ describe('les quatre rouges de l’argent (0069)', () => {
       'le centime va toujours au même : le départage ne varie pas').toBeGreaterThan(1)
   })
 
-  it('la régularisation refuse des provisions de signes mêlés', async () => {
-    /* Sans cette garde, les points de base sortaient de [0, 10000] et la seule
-       chose qui arrêtait le calcul était la borne de la colonne — sur un
-       message de contrainte brut. En centimes, le partage sommait juste tout
-       en étant absurde. */
-    const id = await poseCharge({
-      libelle: 'Copro mêlée', cents: 30_000, periodicite: 'trimestriel',
-      participants: [moi.userId, elle],
-    })
-    /* ⚠️ On POSE la ligne, on ne la retouche pas : le contrôle de somme est
-       différé mais chaque appel PostgREST est sa propre transaction, si bien
-       que changer le montant puis les parts échoue au premier des deux — et
-       les données restaient intactes, le test passant pour la mauvaise raison.
-       Les deux parts partent donc dans UN seul insert. */
-    const { data: d, error: eD } = await admin().from('depense').insert({
-      household_id: moi.householdId, charge_id: id, mois: '2027-06-01',
-      libelle: 'Copro mêlée', montant_cents: 1_000, nature: 'connue',
-      source: 'modele',
-    }).select().single()
-    expect(eD, `dépense refusée : ${eD?.message}`).toBeNull()
-    /* Un avoir au milieu de l'année : l'un porte plus que le total, l'autre
-       porte négatif. Les deux sommes font bien le montant. */
-    const { error: eP } = await admin().from('depense_part').insert([
-      { depense_id: d!.id, user_profile_id: moi.userId, household_id: moi.householdId,
-        part_cents: 8_100, part_bps: 8_100 },
-      { depense_id: d!.id, user_profile_id: elle, household_id: moi.householdId,
-        part_cents: -7_100, part_bps: 1_900 },
-    ])
-    expect(eP, `parts refusées : ${eP?.message}`).toBeNull()
-
-    /* ⚠️ ARCHIVÉE avant de régulariser : le relevé matérialise désormais
-       l'année, et de vrais mois viendraient diluer la construction manuelle
-       qu'on veut éprouver. Une charge archivée n'engendre rien. */
-    await admin().from('charge')
-      .update({ archive_le: new Date().toISOString() }).eq('id', id)
-    const { error } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2027, reel_cents: 200_000,
-    })
-    expect(error, 'des provisions de signes mêlés sont passées').not.toBeNull()
-    expect(error!.message, 'le message ne dit pas ce qui ne va pas')
-      .toMatch(/sens|négatif/i)
-  })
-
-  it('la régularisation survit au départ d’un membre', async () => {
-    /* `provisions_de` groupe par `depense_part.user_profile_id`, y compris
-       l'identifiant de quelqu'un parti — c'est voulu, une part figée est un
-       fait comptable. Mais réinsérer cet identifiant dans `depense_part` est
-       refusé par la garde de rattachement : la régularisation de l'année
-       devenait impossible dès qu'une personne quittait le foyer. */
-    const partant = (await admin().auth.admin.createUser({
-      email: `partant-${Date.now()}@fumee.test`, password: 'x'.repeat(12),
-      email_confirm: true,
-    })).data.user!.id
-    await admin().from('user_profile').insert({
-      id: partant, household_id: moi.householdId, display_name: 'Partant',
-    })
-
-    /* ⚠️ TROIS restants, aux portés INÉGAUX, et plusieurs écarts.
-       Une contre-revue a montré que ce test restait vert en remettant les deux
-       défauts centraux du dépôt — division rendue exacte, reliquat non
-       distribué. La raison : à DEUX membres, diviser en numeric puis arrondir
-       redonne Hamilton par hasard, parce que l'arrondi va à la plus grande
-       partie fractionnaire, qui est justement le plus fort reste. Il faut au
-       moins trois parts pour que les arrondis indépendants cessent de
-       recomposer le total, et plusieurs écarts pour en rencontrer un qui
-       laisse un reste. */
-    const tiers: string[] = []
-    for (const n of [1, 2]) {
-      const u = (await admin().auth.admin.createUser({
-        email: `tiers-${n}-${Date.now()}@fumee.test`, password: 'x'.repeat(12),
-        email_confirm: true,
-      })).data.user!.id
-      await admin().from('user_profile').insert({
-        id: u, household_id: moi.householdId, display_name: `Tiers ${n}`,
-      })
-      await admin().from('revenu').insert({
-        household_id: moi.householdId, user_profile_id: u,
-        net_mensuel_cents: 100_000 * n + 7_777, valid_from: '2027-01-01',
-      })
-      tiers.push(u)
-    }
-
-    const id = await poseCharge({
-      libelle: 'Taxe du partant', cents: 120_000, periodicite: 'annuel',
-      participants: [moi.userId, elle, ...tiers, partant], cle: 'prorata',
-    })
-    await moi.client.rpc('ouvre_le_mois', { le_mois: '2027-08-01' })
-    await admin().auth.admin.deleteUser(partant)
-
-    const { data: ligne, error } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2027, reel_cents: 130_001,
-    })
-    expect(error, `régularisation refusée : ${error?.message}`).toBeNull()
-    expect(ligne, 'aucune ligne de régularisation').not.toBeNull()
-
-    /* Et l'écart va à ceux qui restent, pas à celui qui est parti. */
-    const { data: parts } = await admin().from('depense_part')
-      .select('user_profile_id, part_bps, part_cents').eq('depense_id', ligne as string)
-    expect((parts ?? []).map(p => p.user_profile_id),
-      'le partant reçoit une part qu’on ne peut plus lui demander')
-      .not.toContain(partant)
-    expect((parts ?? []).length,
-      'un seul restant : le reliquat n’a nulle part où aller, rien ne se mesure')
-      .toBeGreaterThan(1)
-    expect((parts ?? []).reduce((s, p) => s + p.part_bps, 0),
-      'les points de base ne font pas 10 000').toBe(10_000)
-
-    /* Et les CENTIMES doivent recomposer l'écart, au centime près : c'est ce
-       que la division non entière casse en silence. */
-    const { data: ligneD } = await admin().from('depense')
-      .select('montant_cents').eq('id', ligne as string).single()
-    expect((parts ?? []).reduce((s, p) => s + p.part_cents, 0),
-      'les parts ne recomposent pas l’écart').toBe(ligneD!.montant_cents)
-  })
-
   it('une dépense confirmée ne se supprime pas à la main', async () => {
     /* 0065 a fermé `depense_part` ; la grande porte restait ouverte. Supprimer
        la DÉPENSE emporte ses parts en cascade, `ouvre_le_mois` la recrée, et
@@ -1761,8 +1279,12 @@ describe('les quatre rouges de l’argent (0069)', () => {
     expect(reste ?? [], 'une dépense réglée a été supprimée').toHaveLength(0)
   })
 
-  it('mais une dépense NI confirmée NI réglée reste supprimable', async () => {
-    // Sinon `corrige_la_charge` et le ménage ordinaire seraient bloqués.
+  it('le client ne supprime plus aucune ligne, même ouverte et non confirmée', async () => {
+    /* Avant 0101, une ligne ni confirmée ni réglée se supprimait : `corrige_la_charge`
+       et le ménage ordinaire en avaient besoin. Ils passent désormais par des
+       fonctions `security definer`, et le client n'a plus de policy de suppression :
+       la ligne ouverte reste, comme les autres. Sans cela, un client supprimait
+       la ligne d'un mois à volonté, et les parts avec. */
     const id = await poseCharge({
       libelle: 'Encore ouverte', cents: 4_000, periodicite: 'mensuel',
       participants: [moi.userId],
@@ -1772,7 +1294,9 @@ describe('les quatre rouges de l’argent (0069)', () => {
       .eq('charge_id', id).eq('mois', '2027-10-01').single()
     const { data: parti } = await moi.client.from('depense')
       .delete().eq('id', d!.id).select()
-    expect(parti ?? [], 'un mois ouvert non confirmé ne se supprime plus').toHaveLength(1)
+    expect(parti ?? [], 'le client a supprimé une ligne de charge').toHaveLength(0)
+    const { data: reste } = await admin().from('depense').select('id').eq('id', d!.id)
+    expect(reste, 'la ligne a disparu malgré le refus').toHaveLength(1)
   })
 })
 
@@ -2060,10 +1584,9 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
     await admin().from('charge_participant').insert({
       charge_id: c!.id, user_profile_id: seul.userId, household_id: seul.householdId,
     })
-    for (let m = 1; m <= new Date().getMonth() + 1; m++) {
-      await seul.client.rpc('ouvre_le_mois',
-        { le_mois: `${new Date().getFullYear()}-${String(m).padStart(2, '0')}-01` })
-    }
+    /* Les mois d'abord : une fois l'année soldée, plus aucun n'y naît. Depuis
+       sa date d'arrivée, juin : ceux d'avant n'ont personne pour les porter. */
+    await ouvreLAnnee(c!.id, new Date().getFullYear(), seul)
 
     /* ⚠️ L'ARGENT RÉELLEMENT POSÉ, sans y ajouter `provisions_a_venir`.
        La première version de ce test additionnait la promesse à la somme : il
@@ -2076,11 +1599,12 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
       return (data ?? []).reduce((s, d) => s + d.montant_cents, 0)
     }
 
-    const { error: eReg } = await seul.client.rpc('regularise_annuel', {
-      la_charge: c!.id, annee: new Date().getFullYear(), reel_cents: 145_000,
-    })
-    expect(eReg, `relevé refusé : ${eReg?.message}`).toBeNull()
+    const avantReleve = await pose()
+    expect(avantReleve, 'la préparation n’a ouvert aucun mois').toBeGreaterThan(0)
+    await soldeAdmin(c!.id, new Date().getFullYear(), 145_000, seul)
     const apresReleve = await pose()
+    expect(apresReleve, 'le relevé a posé une ligne : le solde ne vit plus ici')
+      .toBe(avantReleve)
 
     /* Le geste qui rouvrait la porte : « en fait, je suis là depuis janvier ».
        Il ne doit RIEN ajouter : les mois révolus de l'année sont clos. */
@@ -2119,8 +1643,6 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
           .toBe(creuse)
       }
     }
-    /* Et l'année vaut exactement la facture. */
-    expect(apresReleve, 'l’année matérialisée ne vaut pas la facture').toBe(145_000)
   })
 
   it('reculer sa date d’entrée FAIT NAÎTRE les mois, sans feuilleter', async () => {
@@ -2247,16 +1769,9 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
     const an = new Date().getFullYear()
     const id = await poseCharge({ libelle: 'Année close', cents: 144_000,
                                   periodicite: 'annuel', participants: [moi.userId] })
-    for (let m = 1; m <= new Date().getMonth() + 1; m++) {
-      await moi.client.rpc('ouvre_le_mois', { le_mois: `${an}-${String(m).padStart(2, '0')}-01` })
-    }
-    await moi.client.rpc('regularise_annuel',
-      { la_charge: id, annee: an, reel_cents: 150_000 })
-
-    /* Le mois en cours est réglé — régularisation comprise, comme le fait
-       l'écran. */
-    await moi.client.from('depense')
-      .update({ regle_le: new Date().toISOString() }).eq('mois', moisCourant())
+    /* Les douze mois, puis l'année soldée : une fois soldée, plus aucun n'y naît. */
+    await ouvreLAnnee(id, an)
+    await soldeAdmin(id, an, 150_000)
 
     const pose = async () => {
       const { data } = await admin().from('depense').select('montant_cents')
@@ -2283,13 +1798,9 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
     const an = new Date().getFullYear()
     const id = await poseCharge({ libelle: 'Date et année close', cents: 144_000,
                                   periodicite: 'annuel', participants: [moi.userId] })
-    for (let m = 1; m <= new Date().getMonth() + 1; m++) {
-      await moi.client.rpc('ouvre_le_mois', { le_mois: `${an}-${String(m).padStart(2, '0')}-01` })
-    }
-    await moi.client.rpc('regularise_annuel',
-      { la_charge: id, annee: an, reel_cents: 150_000 })
-    await moi.client.from('depense')
-      .update({ regle_le: new Date().toISOString() }).eq('mois', moisCourant())
+    /* Les douze mois, puis l'année soldée : une fois soldée, plus aucun n'y naît. */
+    await ouvreLAnnee(id, an)
+    await soldeAdmin(id, an, 150_000)
 
     const pose = async () => {
       const { data } = await admin().from('depense').select('montant_cents')
@@ -2314,21 +1825,18 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
       'changer la date a effacé les mois d’une année close').toBe(avant)
   })
 
-  it('changer le MONTANT d’une année close et réglée se refuse, en le disant', async () => {
-    /* Aucune valeur ne serait juste : les mois passés garderaient l'ancien
-       douzième, ceux à venir naîtraient au nouveau — 1 590 € pour une facture
-       de 1 500 € — et le relevé, verrouillé par une régularisation réglée, ne
-       pourrait pas être ressaisi. On refuse plutôt que de mentir. */
+  it('changer le MONTANT d’une année close est permis, et ne touche pas l’année close', async () => {
+    /* Les mois passés garderaient l'ancien douzième, ceux à venir naîtraient
+       au nouveau — 1 590 € pour une facture de 1 500 € —, mais une année
+       soldée a ses douze mois, et la garde les fige : la correction passe sans
+       rien lui prendre. Avant 0113, le refus d'alors rendait la charge
+       incorrigible ; il n'a plus lieu d'être. */
     const an = new Date().getFullYear()
     const id = await poseCharge({ libelle: 'Montant verrouillé', cents: 144_000,
                                   periodicite: 'annuel', participants: [moi.userId] })
-    for (let m = 1; m <= new Date().getMonth() + 1; m++) {
-      await moi.client.rpc('ouvre_le_mois', { le_mois: `${an}-${String(m).padStart(2, '0')}-01` })
-    }
-    await moi.client.rpc('regularise_annuel',
-      { la_charge: id, annee: an, reel_cents: 150_000 })
-    await moi.client.from('depense')
-      .update({ regle_le: new Date().toISOString() }).eq('mois', moisCourant())
+    /* Les douze mois, puis l'année soldée : une fois soldée, plus aucun n'y naît. */
+    await ouvreLAnnee(id, an)
+    await soldeAdmin(id, an, 150_000)
 
     const avantM = await (async () => {
       const { data } = await admin().from('depense').select('montant_cents')
@@ -2392,11 +1900,8 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
       [seul.userId, ...autres].map(u => ({
         charge_id: c!.id, user_profile_id: u, household_id: seul.householdId,
       })))
-    for (let m = 1; m <= new Date().getMonth() + 1; m++) {
-      await seul.client.rpc('ouvre_le_mois', { le_mois: `${an}-${String(m).padStart(2, '0')}-01` })
-    }
-    await seul.client.rpc('regularise_annuel',
-      { la_charge: c!.id, annee: an, reel_cents: 150_000 })
+    await ouvreLAnnee(c!.id, an, seul)
+    await soldeAdmin(c!.id, an, 150_000, seul)
 
     const pose = async () => {
       const { data } = await admin().from('depense').select('montant_cents')
@@ -2456,10 +1961,8 @@ describe('ranger un compte, une enveloppe, et corriger la date', () => {
     const an = new Date().getFullYear()
     const id = await poseCharge({ libelle: 'Close et trouée', cents: 120_000,
                                   periodicite: 'annuel', participants: [moi.userId] })
-    await moi.client.rpc('ouvre_le_mois', { le_mois: `${an}-01-01` })
-    await moi.client.rpc('ouvre_le_mois', { le_mois: `${an}-02-01` })
-    await moi.client.rpc('regularise_annuel',
-      { la_charge: id, annee: an, reel_cents: 130_000 })
+    await ouvreLAnnee(id, an)
+    await soldeAdmin(id, an, 130_000)
 
     /* On creuse un trou dans l'année close. */
     await admin().from('depense').delete()
@@ -2514,108 +2017,6 @@ describe('ce que 0072 corrigeait, et que rien ne retenait', () => {
   /* Une contre-revue a montré que les TROIS corrections annoncées par 0072
      survivaient à la suite entière : on pouvait remettre chaque défaut sans
      qu'un seul test ne rougisse. */
-
-  it('le départage de la régularisation VARIE', async () => {
-    /* `regularise_annuel` départage les égalités par `md5(uid || ligne)`. Rien
-       ne le mesurait — alors que c'est la règle que ce dépôt enfreint le plus
-       souvent, et que `excedent_du_mois` a le sien depuis 0064.
-
-       ⚠️ TROIS membres, sans revenu : à deux, la division exacte suivie d'un
-       arrondi redonne Hamilton par hasard. */
-    const seul = await makeActor('departage-regul')
-    const autres: string[] = []
-    for (const n of [1, 2]) {
-      const u = (await admin().auth.admin.createUser({
-        email: `dr-${n}-${Date.now()}@fumee.test`, password: 'x'.repeat(12),
-        email_confirm: true,
-      })).data.user!.id
-      await admin().from('user_profile').insert({
-        id: u, household_id: seul.householdId, display_name: `Autre ${n}`,
-      })
-      autres.push(u)
-    }
-
-    /* ⚠️ `charge.debut` est borné à cinq ans : on ne peut pas s'étaler sur dix
-       années. On pose donc DEUX charges par année — la garde « une seule fois »
-       porte sur la charge, pas sur l'année. */
-    const gagnants = new Set<string>()
-    for (let n = 0; n < 10; n++) {
-      /* ⚠️ Quatre années, pas cinq : 2031 dépasse la borne des cinq ans, ses
-         derniers mois ne s'ouvrent pas, et l'année n'est plus complète — donc
-         l'écart n'est plus d'un centime et il n'y a plus d'égalité. */
-      const annee = 2027 + (n % 4)
-      const { data: c, error: eC } = await admin().from('charge').insert({
-        household_id: seul.householdId, libelle: `Égale ${n}`,
-        /* ⚠️ DIVISIBLE PAR TROIS, et par douze. 108 000 / 12 = 9 000 par mois,
-           / 3 = 3 000 par personne : les portés sont exactement égaux, donc il
-           y a vraiment une égalité à départager. Avec 120 000 les portés
-           divergent de quelques centimes et Hamilton tranche tout seul — le
-           test mesurait alors la division, pas le tirage. */
-        montant_cents: 108_000, periodicite: 'annuel', debut: `${annee}-01-01`,
-        fin: `${annee}-12-31`,
-      }).select().single()
-      expect(eC, `charge refusée : ${eC?.message}`).toBeNull()
-      await admin().from('charge_participant').insert(
-        [seul.userId, ...autres].map(u => ({
-          charge_id: c!.id, user_profile_id: u, household_id: seul.householdId,
-        })))
-      for (let m = 1; m <= 12; m++) {
-        await seul.client.rpc('ouvre_le_mois',
-          { le_mois: `${annee}-${String(m).padStart(2, '0')}-01` })
-      }
-      /* Un centime d'écart sur trois parts égales : il faut bien que
-         quelqu'un le prenne. */
-      const { data: ligne } = await seul.client.rpc('regularise_annuel',
-        { la_charge: c!.id, annee, reel_cents: 108_000 + 1 })
-      if (!ligne) continue
-      const { data: parts } = await admin().from('depense_part')
-        .select('user_profile_id, part_cents').eq('depense_id', ligne as string)
-      const { data: portes } = await seul.client.rpc('provisions_de',
-        { la_charge: c!.id, annee })
-      expect(new Set((portes ?? []).map((v: { porte_cents: number }) => Number(v.porte_cents))).size,
-        'les portés ne sont pas égaux : il n’y a rien à départager').toBe(1)
-
-      const pris = (parts ?? []).filter(p => p.part_cents === 1)
-      expect(pris, 'personne ne prend le centime').toHaveLength(1)
-      gagnants.add(pris[0].user_profile_id)
-    }
-    expect(gagnants.size,
-      'le centime va toujours au même : le départage ne varie pas')
-      .toBeGreaterThan(1)
-  })
-
-  it('l’ordre des gardes distingue un total négatif d’un mélange de signes', async () => {
-    /* « Les provisions ne sont pas positives » était inatteignable : dès qu'un
-       porté était négatif, le message des signes mêlés sortait d'abord. Ce ne
-       sont pas les mêmes choses à corriger. */
-    const id = await poseCharge({
-      libelle: 'Toute négative', cents: 1_000, periodicite: 'mensuel',
-      participants: [moi.userId, elle],
-    })
-    const { data: d } = await admin().from('depense').insert({
-      household_id: moi.householdId, charge_id: id, mois: '2029-03-01',
-      libelle: 'Toute négative', montant_cents: -1_000, nature: 'connue',
-      source: 'modele',
-    }).select().single()
-    await admin().from('depense_part').insert([
-      { depense_id: d!.id, user_profile_id: moi.userId, household_id: moi.householdId,
-        part_cents: -600, part_bps: 6_000 },
-      { depense_id: d!.id, user_profile_id: elle, household_id: moi.householdId,
-        part_cents: -400, part_bps: 4_000 },
-    ])
-
-    /* ⚠️ ARCHIVÉE avant de régulariser : le relevé matérialise désormais
-       l'année, et de vrais mois viendraient diluer la construction manuelle
-       qu'on veut éprouver. Une charge archivée n'engendre rien. */
-    await admin().from('charge')
-      .update({ archive_le: new Date().toISOString() }).eq('id', id)
-    const { error } = await moi.client.rpc('regularise_annuel', {
-      la_charge: id, annee: 2029, reel_cents: 5_000,
-    })
-    expect(error, 'des provisions négatives sont passées').not.toBeNull()
-    expect(error!.message, 'le message parle de signes mêlés pour un total négatif')
-      .toMatch(/pas positives/i)
-  })
 
   it('corriger une charge ÉPARGNE les mois déjà réglés hors période', async () => {
     /* 0074 l'énonce en toutes lettres — « un mois réglé ou confirmé garde la
@@ -2703,8 +2104,8 @@ describe('rattraper les mois manquants', () => {
     await admin().from('charge_participant').insert({
       charge_id: c!.id, user_profile_id: seul.userId, household_id: seul.householdId,
     })
-    await seul.client.rpc('regularise_annuel',
-      { la_charge: c!.id, annee: an, reel_cents: 130_000 })
+    await ouvreLAnnee(c!.id, an, seul)
+    await soldeAdmin(c!.id, an, 130_000, seul)
 
     const pose = async () => {
       const { data } = await admin().from('depense').select('montant_cents')
@@ -2786,11 +2187,23 @@ describe('l’excédent et les avoirs', () => {
       libelle: 'Énergie avoir', cents: 5_000, periodicite: 'mensuel',
       participants: [moi.userId, elle],
     })
-    await moi.client.rpc('ouvre_le_mois', { le_mois: '2030-10-01' })
-    const { data: d } = await admin().from('depense').select('id')
-      .eq('charge_id', id).eq('mois', '2030-10-01').single()
-    /* Un avoir : on nous rend 10 €, donc la dépense réelle est négative. */
-    await moi.client.rpc('confirme_la_depense', { la_depense: d!.id, reel_cents: -1_000 })
+    /* Un avoir : on nous rend 10 €, donc la dépense réelle est négative. La
+       ligne se fabrique par `admin()`, comme celle des signes mêlés plus bas :
+       `confirme_la_ligne` refuse un montant négatif (0104), et ouvrir 2030-10
+       d'abord ferait doublon sur l'unicité des lignes `modele`. */
+    const { data: d, error } = await admin().from('depense').insert({
+      household_id: moi.householdId, charge_id: id, mois: '2030-10-01',
+      libelle: 'Énergie avoir', montant_cents: -1_000, montant_prevu_cents: 5_000,
+      nature: 'connue', source: 'modele', facon: 'fixe',
+      confirme_le: '2030-10-31T20:00:00Z',
+    }).select().single()
+    expect(error, `avoir refusé : ${error?.message}`).toBeNull()
+    await admin().from('depense_part').insert([
+      { depense_id: d!.id, user_profile_id: moi.userId, household_id: moi.householdId,
+        part_cents: -600, part_bps: 6_000 },
+      { depense_id: d!.id, user_profile_id: elle, household_id: moi.householdId,
+        part_cents: -400, part_bps: 4_000 },
+    ])
 
     const { data: ex } = await moi.client.rpc('excedent_du_mois', { le_mois: '2030-10-01' })
     const total = (ex ?? []).reduce(
@@ -2809,7 +2222,8 @@ describe('l’excédent et les avoirs', () => {
     const { data: d } = await admin().from('depense').insert({
       household_id: moi.householdId, charge_id: id, mois: '2030-11-01',
       libelle: 'Mêlée', montant_cents: 1_000, montant_prevu_cents: 1_001,
-      nature: 'connue', source: 'modele',
+      nature: 'connue', source: 'modele', facon: 'fixe',
+      confirme_le: '2030-11-30T20:00:00Z',
     }).select().single()
     await admin().from('depense_part').insert([
       { depense_id: d!.id, user_profile_id: moi.userId, household_id: moi.householdId,

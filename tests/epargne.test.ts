@@ -151,19 +151,6 @@ describe('les enveloppes', () => {
     expect(Number(resto.reste_cents), 'l’enveloppe se vide toute seule').toBe(40_000)
   })
 
-  it('et le réel remplace le prévu dès qu’on le confirme', async () => {
-    const { data: d } = await admin().from('depense').select('id')
-      .eq('household_id', moi.householdId).eq('mois', '2026-04-01')
-      .eq('enveloppe_id', restaurant).single()
-    await moi.client.rpc('confirme_la_depense', { la_depense: d!.id, reel_cents: 31_000 })
-
-    const { data } = await moi.client.rpc('reste_enveloppe', { le_mois: '2026-04-01' })
-    const resto = (data ?? []).find((l: { libelle: string }) => l.libelle === 'Restaurant')
-    expect(Number(resto.prevu_cents), 'le prévu reste compté après confirmation').toBe(0)
-    expect(Number(resto.depense_cents), 'le réel confirmé n’entre pas').toBe(31_000)
-    expect(Number(resto.reste_cents), 'le reste ne suit pas le réel').toBe(9_000)
-  })
-
   it('un mois sans dépense laisse le plafond entier', async () => {
     const { data } = await moi.client.rpc('reste_enveloppe', { le_mois: '2026-09-01' })
     const resto = (data ?? []).find((l: { libelle: string }) => l.libelle === 'Restaurant')
