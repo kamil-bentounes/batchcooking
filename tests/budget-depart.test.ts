@@ -129,12 +129,12 @@ describe('une charge perso de la membre partie', () => {
       const { f, entretien } = await sansThauba('dep-facture-retiree')
       const la = randomUUID()
       ou(await f.client.rpc('paie_une_facture', { la_facture: la, la_charge: entretien,
-                                                  montant_cents: 20_000, paye_le: '2026-11-10' }))
-      // 200 € moins les 83,34 € que Thauba avait mis de côté, sur Kamil seul.
+                                                  montant_cents: 20_001, paye_le: '2026-11-10' }))
+      // 200,01 € moins les 83,34 € que Thauba avait mis de côté, sur Kamil seul.
       expect((await ajustements(entretien)).map(l => [l.mois, l.montant_cents]))
-        .toEqual([['2026-11-01', 11_666]])
+        .toEqual([['2026-11-01', 11_667]])
       ou(await f.client.rpc('retire_une_facture', { la_facture: la }))
-      expect(await somme(entretien), 'les 116,66 € de Kamil sont restés sur novembre').toBe(0)
+      expect(await somme(entretien), 'les 116,67 € de Kamil sont restés sur novembre').toBe(0)
     })
 
   it('corriger le relevé à la baisse, après le départ, ne laisse rien non plus', async () => {
