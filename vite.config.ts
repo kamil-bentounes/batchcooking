@@ -41,6 +41,10 @@ export default defineConfig({
       : []),
     VitePWA({
       registerType: 'autoUpdate',
+      /* Les photos du budget sont dans `public/` : le précache par défaut ne
+         prend que le JS, le CSS et le HTML. Sans elles, l'écran du mois hors
+         ligne n'a que des vignettes vides. */
+      includeAssets: ['budget/*.jpg'],
       /* ⚠️ Le bundle INSTRUMENTÉ pèse plus de 2 Mo, la limite par défaut de ce
          que le service worker met en cache : la construction échouait, et
          `npm run couverture` ne mesurait plus rien sans que personne ne le
