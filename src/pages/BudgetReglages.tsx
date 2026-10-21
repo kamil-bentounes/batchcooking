@@ -102,7 +102,9 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
   const foyerId = foyer?.id ?? ''
   const membres = foyer?.membres ?? []
   const prenoms = new Map(membres.map(m => [m.id, prenomDe(m.display_name)]))
-  const parPersonne = new Map((revenus.data ?? []).map(r => [r.user_profile_id, r]))
+  /* `useRevenus` rend TOUT l'historique, du plus récent au plus ancien : un `Map`
+     construit tel quel garderait le dernier de la liste, donc le PLUS ANCIEN. */
+  const parPersonne = new Map([...(revenus.data ?? [])].reverse().map(r => [r.user_profile_id, r]))
   const manquants = membres.filter(m => !parPersonne.has(m.id))
 
   const cRevenu = enCentimes(monRevenu)
