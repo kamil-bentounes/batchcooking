@@ -48,7 +48,9 @@ export function VueMiseDeCote({
   annee: number
   /** `undefined` tant que la base n'a pas répondu : on n'invente aucun chiffre. */
   etat: EtatAnnee | undefined
-  factures: Facture[]
+  /** `undefined` tant que la liste n'est pas lue (ou en panne) : « Aucune facture » est un
+      fait qu'il faut avoir lu, et on n'ajoute pas à l'aveugle (un doublon, sans un mot). */
+  factures: Facture[] | undefined
   erreur: unknown
   payeLe: string; autre: boolean; plancher: string; jourOk: boolean
   saisi: string; montantTape: MontantTape
@@ -89,7 +91,9 @@ export function VueMiseDeCote({
           <span>Factures payées en {annee}</span>
           <span className="font-semibold tabular-nums">{e ? montant(e.b) : '…'}</span>
         </p>
-        {factures.length === 0 ? (
+        {factures === undefined ? (
+          <p className="py-3 text-[14px] text-doux">…</p>
+        ) : factures.length === 0 ? (
           <p className="py-3 text-[14px] text-doux">Aucune facture cette année pour l’instant.</p>
         ) : factures.map(f => f.origine === 'releve' ? (
           <div key={f.id} className="py-3">
@@ -174,7 +178,8 @@ export function VueMiseDeCote({
         </p>
       )}
 
-      <button disabled={!envoiPermis({ valide: nouveau.valide, enCours: occupe.paie, jourOk })}
+      <button disabled={!envoiPermis({ valide: nouveau.valide && factures !== undefined,
+                                      enCours: occupe.paie, jourOk })}
               onClick={paie}
               className="mt-4 w-full h-[56px] rounded-[18px] bg-safran text-encre text-[17px] font-semibold
                          disabled:opacity-50">
@@ -210,8 +215,8 @@ export function FeuilleMiseDeCote({ charge, fermer }: { charge: Charge; fermer: 
   return (
     <VueMiseDeCote
       charge={charge} jour={jour} moisEnCours={moisEnCours} annee={annee} etat={etat.data}
-      factures={factures.data ?? []}
-      erreur={paie.error ?? retire.error ?? corrige.error ?? etat.error}
+      factures={factures.data}
+      erreur={paie.error ?? retire.error ?? corrige.error ?? etat.error ?? factures.error}
       payeLe={payeLe} autre={autre} plancher={plancher} jourOk={jourOk}
       saisi={saisi} montantTape={m} correction={correction}
       occupe={{ paie: paie.isPending, retrait: retire.isPending, correction: corrige.isPending }}
@@ -219,7 +224,8 @@ export function FeuilleMiseDeCote({ charge, fermer }: { charge: Charge; fermer: 
       aujourdhuiChoisi={() => { setAutre(false); setPayeLe(jour) }}
       autreJour={() => setAutre(true)} ecrisLeJour={setPayeLe}
       paie={() => {
-        if (!m.valide || !envoiPermis({ valide: true, enCours: paie.isPending, jourOk })) return
+        if (!m.valide || factures.data === undefined
+            || !envoiPermis({ valide: true, enCours: paie.isPending, jourOk })) return
         envoi.current = envoiPour(envoi.current, [charge.id, m.cents, payeLe].join('|'),
                                   () => crypto.randomUUID())
         paie.mutate({ id: envoi.current.id, chargeId: charge.id, cents: m.cents, payeLe },

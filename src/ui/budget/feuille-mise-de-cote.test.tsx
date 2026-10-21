@@ -343,6 +343,25 @@ describe('VueMiseDeCote — « Payée »', () => {
   })
 })
 
+describe('VueMiseDeCote — les factures pas encore lues', () => {
+  it('pas lues : « … », jamais « Aucune facture cette année » (c’est un fait que personne n’a lu)', () => {
+    const t = texte(vue(props({ factures: undefined })))
+    expect(t).not.toContain('Aucune facture')
+    expect(t).toContain('…')
+  })
+
+  it('pas lues : on ne peut pas ajouter — une facture déjà posée serait ajoutée en double sans un mot', () => {
+    const h = vue(avec('50', { factures: undefined }))
+    expect(eteint(bouton(h, 'Ajouter la facture'))).toBe(true)
+  })
+
+  it('lues et vides : la phrase se dit, et l’ajout reste permis', () => {
+    const h = vue(avec('50', { factures: [] }))
+    expect(texte(h)).toContain('Aucune facture cette année pour l’instant.')
+    expect(eteint(bouton(h, 'Ajouter la facture'))).toBe(false)
+  })
+})
+
 describe('VueMiseDeCote — l’erreur', () => {
   it('l’erreur de la base s’affiche telle quelle, annoncée', () => {
     const h = vue(props({ erreur: new Error('Ajoute ton revenu d’abord.') }))
@@ -371,5 +390,28 @@ describe('FeuilleMiseDeCote — la feuille montée, sur les données de la base'
     const t = texte(monte({}))
     expect(t).toContain('Prévu pour 2026 …')
     expect(t).toContain('Aucune facture cette année pour l’instant.')
+  })
+
+  const montePasLue = (rate?: Error) => {
+    /* `retryOnMount: false` : sans cela, la lecture en panne se relancerait au montage et
+       passerait en « chargement » dans le rendu. */
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false } } })
+    qc.setQueryData(['etat-de-l-annee', 'c1', 2026], etat())
+    if (rate) {
+      qc.getQueryCache().build(qc, { queryKey: ['factures', 'c1', 2026] })
+        .setState({ status: 'error', error: rate, data: undefined, fetchStatus: 'idle' })
+    }
+    return rends(<QueryClientProvider client={qc}><FeuilleMiseDeCote charge={charge()} fermer={() => {}} /></QueryClientProvider>)
+  }
+
+  it('les factures pas encore revenues : pas de « Aucune facture cette année »', () => {
+    expect(texte(montePasLue())).not.toContain('Aucune facture')
+  })
+
+  it('les factures en panne : l’erreur se dit, et on ne peut pas ajouter à l’aveugle', () => {
+    const h = montePasLue(new Error('les factures ne reviennent pas'))
+    expect(h).toMatch(/<p role="alert"[^>]*>les factures ne reviennent pas/)
+    expect(texte(h)).not.toContain('Aucune facture')
+    expect(eteint(bouton(h, 'Ajouter la facture'))).toBe(true)
   })
 })
