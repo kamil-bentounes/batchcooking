@@ -1,618 +1,242 @@
 /**
- * Le budget : le mois.
+ * Le budget : le mois (§ 3.1 ; direction A, « Potager »).
  *
- * Deux sections, dans cet ordre, et l'ordre est le message.
+ * L'écran ouvre sur ce qui reste, puis les charges par catégorie (D74). Chaque
+ * ligne se règle d'un geste, selon sa façon — celle de la LIGNE, figée à sa
+ * naissance (§ 4.1), jamais celle de la charge.
  *
- *  · LES VIREMENTS d'abord. C'est la seule chose sur laquelle on peut agir
- *    aujourd'hui — un solde abstrait ne se fait pas, un virement si.
- *  · LES ENVELOPPES ensuite, avec leur jauge. Une enveloppe dépassée s'affiche
- *    en OCRE, jamais en rouge : une dette entre deux personnes qui s'aiment
- *    n'est pas une erreur.
+ * La base porte l'argent, `mois.ts` le lit et le montre. Le seul chiffre que
+ * l'écran recompte avant elle est le montant d'une ligne au fil du mois tant
+ * que le mois est ouvert : le plus grand du prévu et du déclaré (§ 3.1.1).
  *
- * L'ouverture du mois est paresseuse — il n'y a pas de tâche planifiée, donc
- * c'est cette lecture qui la déclenche, et `ouvre_le_mois` est idempotente.
+ * L'ouverture du mois est paresseuse — il n'y a pas de tâche planifiée — et
+ * c'est `useMois` qui la déclenche : on n'y ouvre jamais un mois futur, et on y
+ * rattrape tous les mois manquants (voir ses commentaires).
+ *
+ * ⚠️ AUCUN chiffre avant d'avoir TOUT lu (`etatDeLEcran`). Le mois tient en six
+ *    lectures ; l'écran n'en attendait que deux (lignes, charges). Les revenus
+ *    pas encore revenus faisaient dire « Ajoute ton revenu » à qui l'avait posé,
+ *    les saisies manquantes comptaient le prévu, les clôtures manquantes
+ *    recomptaient un mois clos comme un mois ouvert. Et une lecture en ÉCHEC,
+ *    `isPending` faux et données vides, se lisait « Rien de posé ».
  */
 import { useState } from 'react'
-import { Marque, Surface, Vide, Attente, Erreur } from '../ui/coque.tsx'
-import { Champ } from '../ui/kit.tsx'
-import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
+import { Attente, Erreur, Marque, Vide } from '../ui/coque.tsx'
+import { etatDeLEcran, messageDeLecture, videDuMois } from '../lib/budget/ecran.ts'
+import { initialeDe, prenomDe, useFoyer } from '../lib/donnees/foyer.ts'
 import {
-  useMois, useEnveloppes, useComptes, useCharges, virements, moisDe, euros,
-  enCentimes, useRegularise, useRegulariseAnnuel, useProvisionsDe, useExcedent,
-  cestLHeureDuReleve, JOUR_DU_RELEVE, useRegleLeMois, useRevenus, type Depense,
+  moisDe, useCharges, useClotures, useComptes, useMois, useRevenus, useSaisies,
+  type Depense,
 } from '../lib/donnees/budget.ts'
+import {
+  barre, capitale, joursRestants, moisVoisin, nomDuMois, parCategorie,
+  resteDuMois, revenuDuMois, totauxDuFiltre, type Filtre,
+} from '../lib/budget/mois.ts'
+import { aujourdhui } from '../lib/horloge.ts'
+import { CarteEpargne } from '../ui/budget/CarteEpargne.tsx'
+import { Categorie } from '../ui/budget/Categorie.tsx'
+import { ChoixDeLaLigne } from '../ui/budget/ChoixDeLaLigne.tsx'
+import { FeuilleDeclarer } from '../ui/budget/FeuilleDeclarer.tsx'
+import { FeuilleFactureMois } from '../ui/budget/FeuilleFactureMois.tsx'
+import { FeuilleMiseDeCote } from '../ui/budget/FeuilleMiseDeCote.tsx'
+import { FiltreDuMois } from '../ui/budget/Filtre.tsx'
+import { Gestes } from '../ui/budget/Gestes.tsx'
+import type { Geste } from '../ui/budget/Ligne.tsx'
+import { Recap } from '../ui/budget/Recap.tsx'
 
-/**
- * Le relevé annuel.
- *
- * La taxe foncière a été provisionnée au douzième toute l'année ; en septembre
- * le vrai montant arrive. On ne l'impute pas au mois courant — ce serait
- * facturer 1450 € en octobre — mais on pose l'ÉCART, réparti selon ce que
- * chacun a porté sur l'année.
- */
-function ReleveAnnuel({ charge, annees }: {
-  charge: { id: string; libelle: string; periodicite: string }; annees: number[]
-}) {
-  /* ⚠️ L'ANNÉE SE CHOISIT.
-   *
-   *    La première version prenait l'année du mois affiché : en janvier 2027
-   *    elle proposait « le relevé 2027 », provisionné d'un seul douzième, et
-   *    saisir 1450 € facturait 1329 € d'un coup. Pire, le relevé de l'année
-   *    écoulée devenait insaisissable dès le 1er janvier. */
-  const [annee, setAnnee] = useState(annees[0])
-  const [reel, setReel] = useState('')
-  const provisions = useProvisionsDe(charge.id, annee)
-  const regularise = useRegulariseAnnuel()
-  const cents = enCentimes(reel)
-  const provisionne = provisions.data?.total ?? 0
-  const ecart = cents === null ? null : cents - provisionne
-
-  return (
-    <div className="py-4 border-b border-brume last:border-0">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[16px]">{charge.libelle}</span>
-        {/* « provisionné » est un mot de comptable au milieu d'une langue qui
-            n'en emploie aucun autre. Ce qu'on veut dire est plus simple : voilà
-            ce qu'on a déjà mis de côté. */}
-        <span className="text-[15px] text-doux">
-          {euros(provisions.data?.faites ?? 0)} mis de côté en {annee}
-          {(provisions.data?.aVenir ?? 0) > 0
-            && `, ${euros(provisions.data!.aVenir)} d’ici décembre`}
-        </span>
-      </div>
-      {annees.length > 1 && (
-        <div role="radiogroup" aria-label="Année" className="mt-2 flex gap-2">
-          {annees.map(a => (
-            <button key={a} role="radio" aria-checked={annee === a}
-                    onClick={() => setAnnee(a)}
-                    className={`px-4 min-h-11 inline-flex items-center rounded-full
-                                text-[14px] transition-colors
-                      ${annee === a ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
-              {a}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="mt-2.5 flex gap-2 items-end">
-        <div className="grow">
-          {/* Une charge trimestrielle n'a pas de « relevé annuel » : elle en a
-              quatre. On demande donc le TOTAL de l'année, ce qui vaut pour les
-              deux périodicités. */}
-          <Champ label={`Total payé en ${annee} (€)`} type="text" inputMode="decimal"
-                 value={reel} onChange={e => setReel(e.target.value)} />
-        </div>
-        {/* ⚠️ `ecart === 0` grisait le bouton : un relevé qui tombe JUSTE ne
-            pouvait pas être saisi, alors que c'est précisément celui qu'il faut
-            consigner pour ne pas le ressaisir. Ce qui grise, c'est qu'il l'ait
-            DÉJÀ été. */}
-        <button disabled={cents === null || !!provisions.data?.releve
-                          || regularise.isPending}
-                onClick={() => regularise.mutate(
-                  { chargeId: charge.id, annee, reelCents: cents! },
-                  { onSuccess: () => setReel('') })}
-                className="min-h-11 px-4 rounded-[14px] bg-herbe text-fond text-[15px]
-                           font-medium disabled:bg-brume disabled:text-encre shrink-0">
-          {/* « Régulariser » est le mot de l'avis, pas celui de la personne :
-              elle vient de recevoir une facture et veut la saisir. */}
-          Saisir le vrai montant
-        </button>
-      </div>
-      <p className="mt-2 text-[14px] text-doux">
-        La différence se pose sur le mois en cours ; les mois de {annee} ne bougent pas.
-      </p>
-      {/* ⚠️ Une année déjà saisie SE DIT.
-          Le bouton grisait sans un mot, pendant que le message au-dessus
-          continuait d'annoncer « il manque 604,19 € » : l'écran se
-          contredisait. (Et ce bloc avait été perdu : le script qui l'écrivait
-          a levé sur la modification suivante avant d'enregistrer le fichier —
-          c'est la revue qui l'a vu, pas moi.) */}
-      {provisions.data?.releve && (
-        <p className="mt-2 text-[15px]" style={{ color: 'var(--color-herbe)' }}>
-          ✓ Relevé {annee} saisi le{' '}
-          {new Date(provisions.data.releve.saisi_le).toLocaleDateString('fr-FR')}
-          {/* Le SIGNE compte : 604 € de trop-perçu et 604 € qui manquent se
-              lisaient pareil, et la ligne signée est masquée dès que l'année
-              est saisie. */}
-          {Number(provisions.data.releve.ecart_cents) === 0
-            ? ' — il tombait juste.'
-            : Number(provisions.data.releve.ecart_cents) > 0
-              ? ` — il manquait ${euros(Number(provisions.data.releve.ecart_cents))}.`
-              : ` — ${euros(-Number(provisions.data.releve.ecart_cents))} avaient été mis de trop.`}
-        </p>
-      )}
-      {/* Le chiffre manquant ne s'annonce plus une fois l'année saisie. */}
-      {!provisions.data?.releve && ecart !== null && ecart !== 0 && (
-        <p className="mt-2 text-[15px]"
-           style={{ color: ecart > 0 ? 'var(--color-ocre)' : undefined }}>
-          {ecart > 0
-            ? `Il manque ${euros(ecart)} — répartis selon ce que chacun a porté.`
-            : `${euros(-ecart)} de trop-perçu, à rendre dans les mêmes proportions.`}
-        </p>
-      )}
-      <Erreur de={regularise.error} />
-    </div>
-  )
-}
-
-/**
- * Ce qu'on a VRAIMENT payé.
- *
- * Une provision n'est qu'une estimation : l'énergie à la consommation, une
- * charge annuelle ramenée au douzième. En fin de mois on saisit le relevé, et
- * la ligne cesse d'être une supposition.
- *
- * Les parts se reposent avec les POINTS DE BASE de la provision, jamais avec la
- * clé d'aujourd'hui : corriger un montant n'est pas l'occasion de repartager.
- */
-function AConfirmer({ depense, foyerId }: { depense: Depense; foyerId: string }) {
-  const [reel, setReel] = useState('')
-  const regularise = useRegularise()
-  const cents = enCentimes(reel)
-
-  return (
-    <div className="py-4 border-b border-brume last:border-0">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[16px]">{depense.libelle}</span>
-        <span className="text-[15px] text-doux">prévu {euros(depense.montant_cents)}</span>
-      </div>
-      <div className="mt-2.5 flex gap-2 items-end">
-        <div className="grow">
-          <Champ label="Vraiment payé (€)" type="text" inputMode="decimal" value={reel}
-                 onChange={e => setReel(e.target.value)} />
-        </div>
-        <button disabled={cents === null || regularise.isPending}
-                onClick={() => regularise.mutate(
-                  { foyerId, depense, reelCents: cents! },
-                  { onSuccess: () => setReel('') })}
-                className="min-h-11 px-4 rounded-[14px] bg-herbe text-fond text-[15px]
-                           font-medium disabled:bg-brume disabled:text-encre shrink-0">
-          C’est ça
-        </button>
-      </div>
-      <Erreur de={regularise.error} />
-    </div>
-  )
-}
-
-const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
-              'août', 'septembre', 'octobre', 'novembre', 'décembre']
-
-function nomDuMois(iso: string): string {
-  const [a, m] = iso.split('-').map(Number)
-  return `${MOIS[m - 1]}${a === new Date().getFullYear() ? '' : ` ${a}`}`
-}
-
-function decale(iso: string, pas: number): string {
-  const [a, m] = iso.split('-').map(Number)
-  const d = new Date(a, m - 1 + pas, 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
-}
-
-/**
- * Une jauge. Au-delà du plafond elle reste pleine et change de teinte.
- *
- * `prevision` la rend CREUSE : une barre pleine et opaque disait « tout est
- * dépensé » le premier du mois, alors que le chiffre à côté annonçait un
- * prévu. Deux signaux contradictoires sur la même ligne, et c'est la barre
- * qu'on lit en premier.
- */
-function Jauge({ part, depasse, prevision }:
-  { part: number; depasse: boolean; prevision?: boolean }) {
-  const teinte = depasse ? 'var(--color-ocre)' : 'var(--color-herbe)'
-  return (
-    <div className="mt-2.5 h-[7px] rounded-full bg-brume overflow-hidden">
-      <div className="h-[7px] rounded-full transition-[width]"
-           style={{ width: `${Math.min(100, Math.max(0, part * 100))}%`,
-                    background: prevision
-                      ? `repeating-linear-gradient(115deg, ${teinte} 0 4px,
-                         transparent 4px 9px)`
-                      : teinte,
-                    opacity: prevision ? 0.65 : 1 }} />
-    </div>
-  )
-}
+/** Ce qui est ouvert par-dessus l'écran. On garde l'IDENTIFIANT de la ligne, pas
+    la ligne : une copie restait figée après « C'est ça », et la feuille
+    continuait d'annoncer le montant habituel pendant que la base avait validé. */
+type Ouverte = { geste: Geste; id: string } | { geste: 'choix' } | null
 
 export function Budget({ userId, va }: { userId: string; va: (v: string) => void }) {
-  const [mois, setMois] = useState(moisDe)
-  const [baisse, setBaisse] = useState(false)
-  const { data: foyer } = useFoyer()
+  const courant = moisDe()
+  const [mois, setMois] = useState(courant)
+  const [filtre, setFiltre] = useState<Filtre>('tout')
+  const [ouverte, setOuverte] = useState<Ouverte>(null)
+  const lecteurFoyer = useFoyer()
+  const foyer = lecteurFoyer.data
   const depenses = useMois(mois)
-  const { data: enveloppes = [] } = useEnveloppes(mois)
-  const { data: comptes = [] } = useComptes()
+  const saisies = useSaisies(mois)
   const charges = useCharges()
-
-  const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, prenomDe(m.display_name)]))
-  const aFaire = virements(depenses.data ?? [], userId, comptes, prenoms)
-  /* Ce que le mois DEMANDAIT, réglé ou non : un mois soldé cachait le chiffre,
-     et on ne pouvait plus savoir ce qu'on venait de payer. */
-  const aFaireBrut = virements(
-    (depenses.data ?? []).map(d => ({ ...d, regle_le: null })), userId, comptes, prenoms)
-  const regleLeMois = useRegleLeMois()
-  /* Un mois PASSÉ, et ce qu'on y a déjà réglé. Rattraper une charge annuelle
-     depuis janvier ouvre huit mois d'un coup, et chacun réclamait un virement
-     pour un mois qu'on a vécu et payé — sans aucun moyen de le dire. */
-  const moisPasse = mois < moisDe()
-  /* Qui n'a pas encore dit son revenu. `parts_du_foyer` retombe alors sur
-     moitié-moitié pour TOUT LE FOYER, silencieusement. */
   const revenus = useRevenus()
-  const avecRevenu = new Set((revenus.data ?? []).map(r => r.user_profile_id))
-  const sansRevenu = (foyer?.membres ?? [])
-    .filter(m => !avecRevenu.has(m.id))
-    .map(m => prenomDe(m.display_name))
+  const lecteurComptes = useComptes()
+  const clotures = useClotures()
+
+  /* Ce qu'il faut avoir lu avant de montrer un chiffre. Les comptes n'en sont pas :
+     ils ne décident que de la porte d'un mois vide, et leur panne ne doit pas
+     cacher le mois. */
+  const requises = [lecteurFoyer, depenses, saisies, charges, revenus, clotures]
+  const etat = etatDeLEcran(requises)
+  const enPanne = requises.find(q => q.error)
+  const nComptes = lecteurComptes.data ? lecteurComptes.data.length : null
+
   const lignes = depenses.data ?? []
-  const dejaRegle = lignes.length > 0 && lignes.every(d => d.regle_le)
-  /* Tout ce qui n'était qu'une PRÉVISION : les charges variables, et celles
-   * que porte une enveloppe — le restaurant à 400 € n'est pas un montant connu,
-   * c'est un plafond.
-   *
-   * ⚠️ Les charges NON mensuelles restent dehors. La taxe foncière au douzième
-   *    ne se confirme pas mois par mois : saisir 1450 € en octobre écraserait
-   *    octobre à 1450 €. Elle a son propre mécanisme, plus bas. */
-  const previsionnelles = new Set(
-    (charges.data ?? [])
-      .filter(c => c.periodicite === 'mensuel' && (c.variable || c.enveloppe_id))
-      .map(c => c.id))
-  const aConfirmer = (depenses.data ?? []).filter(
-    d => d.nature === 'estimee' && d.charge_id && previsionnelles.has(d.charge_id))
-  const heureDuReleve = cestLHeureDuReleve(mois)
-  const excedent = useExcedent(mois)
-  const monExcedent = (excedent.data ?? []).find(e => e.userId === userId)?.cents ?? 0
+  const dites = saisies.data ?? []
+  const parCharge = new Map((charges.data ?? []).map(c => [c.id, c]))
+  /* Un mois clôturé se lit tel que la clôture l'a laissé : ses montants en base,
+     plus de « max(prévu, déclaré) » (§ 3.1.1). */
+  const clos = (clotures.data ?? []).some(k => k.mois === mois)
+  const reste = resteDuMois({ lignes, saisies: dites, moi: userId, revenus: revenus.data ?? [],
+                             mois, clos })
+  const segments = reste.revenu === null ? []
+    : barre({ lignes, charges: parCharge, saisies: dites, moi: userId, revenu: reste.revenu, clos })
+  const totaux = totauxDuFiltre(lignes, parCharge, dites, userId, clos)
+  const categories = parCategorie({ lignes, charges: parCharge, saisies: dites, filtre,
+                                    moi: userId, clos })
+  const nLignes = categories.reduce((t, c) => t + c.lignes.length, 0)
+  const membres = (foyer?.membres ?? []).map(m => ({ id: m.id, display_name: m.display_name }))
+  const moi = foyer?.membres.find(m => m.id === userId)
+  const jours = joursRestants(mois, aujourdhui())
+  const precedent = moisVoisin(mois, -1)
+  const suivant = moisVoisin(mois, 1)
+  /* L'année, dès qu'elle n'est pas la nôtre : « Décembre » seul ne dit pas lequel. */
+  const annee = mois.slice(0, 4) === courant.slice(0, 4) ? '' : ` ${mois.slice(0, 4)}`
 
-  /* Les charges non mensuelles, dont le relevé arrive une fois l'an. On ne les
-     propose que si elles ont effectivement produit une provision ce mois-ci. */
-  /* Une charge ARCHIVÉE reste régularisable : son relevé arrive justement
-     après qu'on a cessé de la payer. On ne la filtre donc pas. */
-  const vues = new Set((depenses.data ?? []).map(d => d.charge_id))
-  const annuelles = (charges.data ?? [])
-    .filter(c => c.periodicite !== 'mensuel' && vues.has(c.id))
-  const anneeCourante = new Date().getFullYear()
-  const anneesOuvertes = [anneeCourante, anneeCourante - 1]
-  const total = aFaire.reduce((s, v) => s + v.cents, 0)
+  /* ⚠️ Le partage bascule en MOITIÉ-MOITIÉ dès qu'un revenu manque, et c'est ici
+     qu'on lit les chiffres qui en découlent. L'avertissement vivait dans les
+     réglages, là où l'on ne revient jamais : quelqu'un qui arrivait sans avoir
+     posé son revenu lisait « au prorata » et payait 50/50. Seul, il n'y a rien
+     à partager, et ce qui reste dit déjà « Ajoute ton revenu ». */
+  const sansRevenu = membres.length < 2 ? []
+    : membres.filter(m => revenuDuMois(revenus.data ?? [], m.id, mois) === null)
+             .map(m => prenomDe(m.display_name))
 
-  /* Le dernier jour à 14 h, `fin` valait minuit et tout le bloc disparaissait —
-     « Dernier jour. » était du code mort. On compte des JOURS, pas des instants. */
-  const joursRestants = (() => {
-    const [a, m] = mois.split('-').map(Number)
-    const dernier = new Date(a, m, 0).getDate()
-    const n = new Date()
-    if (n.getFullYear() !== a || n.getMonth() + 1 !== m) return null
-    return dernier - n.getDate()
-  })()
+  const choisie = ouverte && 'id' in ouverte ? lignes.find(l => l.id === ouverte.id) : undefined
+  const fermer = () => setOuverte(null)
+  const auFil = lignes.filter(l => l.facon === 'au_fil')
+    .sort((a, b) => a.libelle.localeCompare(b.libelle, 'fr'))
+  const vide = videDuMois({ mois, courant, nComptes })
+  const categorieDe = (l: Depense) =>
+    (l.charge_id && parCharge.get(l.charge_id)?.categorie) || 'autre'
 
   return (
-    <main className="min-h-dvh px-6 pt-4 pb-16">
+    <main className="min-h-dvh px-4 pt-4 pb-16">
       <div className="mx-auto w-full max-w-lg">
-        <header className="h-14 flex items-center">
+        <header className="h-14 flex items-center justify-between">
           <button onClick={() => va('/')} aria-label="Retour à l’accueil de Popote"
                   className="flex items-center gap-2 min-h-11 text-herbe">
             <span aria-hidden="true" className="text-[20px] text-doux">‹</span>
             <Marque taille={22} />
             <span className="titre text-[20px]">Popote</span>
           </button>
+          <button onClick={() => va('/profil')} aria-label="Mon profil"
+                  className="w-11 h-11 -mr-2 grid place-items-center">
+            <span className="w-[34px] h-[34px] rounded-full bg-herbe text-fond text-[13px]
+                             grid place-items-center">
+              {initialeDe(moi?.display_name)}
+            </span>
+          </button>
         </header>
 
-        {/* Le mois se choisit AVANT le titre, pas par un chevron orphelin posé à
-            sa droite : seul, à l'autre bout de la ligne, il se lisait comme un
-            repli et non comme « le mois d'avant ». */}
-        <div className="mt-2 flex items-center gap-2">
-          <h1 className="titre text-[34px] first-letter:uppercase grow">{nomDuMois(mois)}</h1>
-          <div className="flex gap-1 shrink-0">
-            <button onClick={() => setMois(m => decale(m, -1))} aria-label="Mois précédent"
-                    className="min-h-11 px-3 inline-flex items-center gap-1.5 rounded-full
-                               bg-brume/50 text-[14px]">
-              <span aria-hidden="true">‹</span> Avant
+        {/* Les pastilles des mois sur la ligne du surtitre, pas à côté du titre :
+            « Septembre » en Fraunces 46 px et deux pastilles ne tiennent pas
+            ensemble dans 390 px. */}
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-doux">Budget</p>
+          <div className="flex gap-1.5">
+            <button onClick={() => setMois(precedent)}
+                    aria-label={`Mois précédent : ${nomDuMois(precedent)}`}
+                    className="min-h-11 px-3.5 rounded-full bg-piste text-[14px] font-medium">
+              <span aria-hidden="true">‹ </span>{capitale(nomDuMois(precedent))}
             </button>
-            {/* Pas de flèche vers l'avant au mois courant. Une flèche grisée à
-                1,71:1 ne se lit pas, et laisser passer vers l'avenir CRÉERAIT
-                ses dépenses avec la clé du jour, figée. On n'affiche pas une
-                porte qui ne doit pas s'ouvrir. */}
-            {mois < moisDe() && (
-              <button onClick={() => setMois(m => decale(m, 1))} aria-label="Mois suivant"
-                      className="min-h-11 px-3 inline-flex items-center gap-1.5 rounded-full
-                                 bg-brume/50 text-[14px]">
-                Après <span aria-hidden="true">›</span>
+            {/* Jamais au-delà du mois courant : feuilleter vers l'avenir CRÉAIT ses
+                dépenses avec la clé du jour, figée. On n'affiche pas une porte
+                qui ne doit pas s'ouvrir. */}
+            {mois < courant && (
+              <button onClick={() => setMois(suivant)}
+                      aria-label={`Mois suivant : ${nomDuMois(suivant)}`}
+                      className="min-h-11 px-3.5 rounded-full bg-piste text-[14px] font-medium">
+                {capitale(nomDuMois(suivant))}<span aria-hidden="true"> ›</span>
               </button>
             )}
           </div>
         </div>
-        {joursRestants !== null && (
-          <p className="mt-1 text-[15px] text-doux">
-            {joursRestants === 0 ? 'Dernier jour.'
-              : joursRestants === 1 ? 'Il reste un jour.'
-              : `Il reste ${joursRestants} jours.`}
+        <h1 className="titre text-[46px] leading-none mt-1">{capitale(nomDuMois(mois))}{annee}</h1>
+        {/* On compte des JOURS, pas des instants : le dernier jour à 14 h, il en
+            reste zéro, et « Dernier jour. » s'affiche. */}
+        {jours !== null && (
+          <p className="mt-2 text-[15px] text-doux">
+            {jours === 0 ? 'Dernier jour.' : jours === 1 ? 'Il reste un jour.' : `Il reste ${jours} jours.`}
           </p>
         )}
 
-        {/* La porte vers les charges, EN HAUT. Elle était sous les virements,
-            les confirmations, le relevé annuel et les enveloppes — près de trois
-            mille pixels de défilement pour le geste le plus fréquent.
+        {/* La porte vers les charges est le premier geste, et SANS CONDITION : elle
+            a disparu une fois, conditionnée à un virement à faire, et un foyer qui
+            paie tout depuis le compte joint ne pouvait plus corriger ses charges —
+            `/charges` n'est dans aucune barre. */}
+        <Gestes va={va} declarer={() => setOuverte({ geste: 'choix' })} />
 
-            ⚠️ ET SANS CONDITION. Elle ne s'affichait que si `aFaire` n'était pas
-               vide, c'est-à-dire s'il restait un virement à faire ce mois-ci. Or
-               un foyer qui paie tout depuis le compte joint n'a JAMAIS de
-               virement : `virements()` écarte ce qu'on paie depuis son propre
-               compte. L'autre porte — « Poser les charges » — ne s'ouvre, elle,
-               que tant qu'aucune dépense n'existe. Entre les deux il y avait un
-               trou, et c'est celui où l'on se trouve une fois tout installé :
-               charges posées, rien à virer, et plus aucun chemin pour aller les
-               corriger. `/charges` n'est pas dans la barre du bas — elle ne
-               porte que le cycle de cuisine — donc l'écran devenait
-               définitivement inatteignable. Mesuré par Kamil, qui ne pouvait
-               plus rouvrir ses propres charges.
+        <Erreur de={enPanne ? new Error(messageDeLecture(enPanne.error)) : null} />
 
-               La condition porte donc sur ce qui la justifie — EXISTE-T-IL des
-               charges à modifier — et non sur ce qui n'a rien à y voir. Tant
-               qu'il n'y en a aucune, c'est le geste vert d'en bas qui ouvre la
-               porte, et on n'en empile pas deux. */}
-        {(depenses.data ?? []).length > 0 && (
-          <button onClick={() => va('/charges')}
-                  className="mt-5 w-full min-h-11 rounded-[14px] border border-brume
-                             text-[15px]">
-            Voir et modifier les charges
+        {etat === 'chargement' ? <Attente /> : etat === 'erreur' ? (
+          /* Rien d'autre que le message et de quoi réessayer : « Rien de posé » ou
+             « Ajoute ton revenu » seraient des faits que personne n'a lus. */
+          <button onClick={() => requises.forEach(q => { if (q.error) void q.refetch() })}
+                  className="mt-4 min-h-11 px-5 rounded-full bg-piste text-[15px] font-medium">
+            Réessayer
           </button>
-        )}
-
-        <Erreur de={depenses.error} />
-        {/* ⚠️ Le partage bascule en MOITIÉ-MOITIÉ dès qu'un revenu manque, et
-            c'est le seul écran où l'on lit les chiffres qui en découlent.
-            L'avertissement existait dans les réglages, donc là où l'on ne
-            revient jamais — quelqu'un qui arrive sans avoir posé son revenu
-            voyait « au prorata » sur chaque ligne et 50/50 dans les montants. */}
-        {sansRevenu.length > 0 && (
-          <p className="mt-4 text-[15px]" style={{ color: 'var(--color-ocre)' }}>
-            {sansRevenu.length === 1
-              ? `${sansRevenu[0]} n’a pas encore dit son revenu : tant qu’il manque, le partage se fait à parts égales.`
-              : 'Aucun revenu n’est posé : le partage se fait à parts égales.'}
-          </p>
-        )}
-
-        {/* Le geste n'existe QUE sur un mois passé : sur le mois courant, ce qui
-            dit qu'une ligne est payée, c'est la confirmation du 27. */}
-        {moisPasse && lignes.length > 0 && (
-          <div className="mt-3">
-            <button onClick={() => regleLeMois.mutate({ mois, regle: !dejaRegle })}
-                    disabled={regleLeMois.isPending}
-                    className={`min-h-11 px-4 rounded-full text-[14px] transition-colors
-                      ${dejaRegle ? 'bg-herbe text-fond' : 'bg-brume/50 text-encre'}`}>
-              {/* « Ce mois est déjà réglé » se lit comme un constat, pas comme
-                  un geste : on ne comprend que c'est un interrupteur qu'après
-                  l'avoir touché. */}
-              {dejaRegle ? '✓ Réglé — revenir dessus' : 'Marquer ce mois comme réglé'}
-            </button>
-            <Erreur de={regleLeMois.error} />
-          </div>
-        )}
-
-        {depenses.isPending ? <Attente /> : aFaire.length === 0 ? (
+        ) : lignes.length === 0 ? (
           <>
-            {/* Deux états VIDES distincts, et les confondre accusait à tort :
-                `virements()` écarte ce qu'on paie depuis son propre compte, et
-                quelqu'un arrivé en cours de mois n'a aucune part. Il voyait donc
-                « aucune charge n'est posée » — avec, juste dessous, les
-                enveloppes pleines de chiffres. */}
-            {/* Et un TROISIÈME : un mois qu'on a marqué réglé. Sans lui, il
-                s'annonçait « payé par quelqu'un d'autre », ce qui est faux et
-                inquiétant — on vient de dire l'avoir payé soi-même. */}
-            {dejaRegle && (
-              <p className="mt-4 text-[15px] text-doux">
-                Ce mois demandait {euros(aFaireBrut.reduce((s, v) => s + v.cents, 0))}.
-                Tu l’as marqué comme réglé.
-              </p>
+            <Vide titre={vide.titre} texte={vide.texte} />
+            {/* UN SEUL geste, celui qui vient en premier : sans compte, une charge
+                posée ne dit pas d'où elle part. Et seulement sur le mois courant
+                (`videDuMois`). */}
+            {vide.porte === 'revenus' && (
+              <button onClick={() => va('/budget-reglages')}
+                      className="w-full h-[58px] rounded-[18px] bg-herbe text-fond text-[17px] font-medium">
+                Commencer par les revenus et les comptes
+              </button>
             )}
-            <Vide titre={dejaRegle ? 'Ce mois est soldé'
-                    : (depenses.data ?? []).length === 0
-                    ? 'Rien à verser' : 'Rien à verser pour toi'}
-                  texte={dejaRegle
-                    ? 'Tu l’as marqué comme déjà réglé. Retouche le bouton pour revenir dessus.'
-                    : (depenses.data ?? []).length === 0
-                    ? 'Aucune charge n’est posée. On commence par là.'
-                    : 'Les charges du mois sont payées par quelqu’un d’autre, ou tu n’y participes pas.'} />
-            {/* ⚠️ UN SEUL geste, et c'est le BON dans l'ordre.
-                Il y en avait trois empilés : « Poser les charges » en vert,
-                « D'abord les revenus et les comptes », et « Revenus et comptes »
-                dans la nav du bas. Les deux derniers menaient au même endroit,
-                et le second disait de faire l'inverse du premier. On propose ce
-                qui vient EN PREMIER — sans compte, une charge posée ne produit
-                aucun virement.
-                ⚠️ « et l'autre reste accessible par la nav » disait ce
-                   commentaire : c'était faux. La barre du bas ne porte que le
-                   cycle de cuisine — Accueil, Semaine, Ce que j'ai, Bilan. La
-                   seule porte permanente vers les charges est celle d'en haut,
-                   et c'est pour ça qu'elle n'a plus de condition. */}
-            {(depenses.data ?? []).length === 0 && (
-              comptes.length === 0 ? (
-                <button onClick={() => va('/budget-reglages')}
-                        className="w-full h-[58px] rounded-[18px] bg-herbe text-fond
-                                   text-[17px] font-medium">
-                  Commencer par les revenus et les comptes
-                </button>
-              ) : (
-                <button onClick={() => va('/charges')}
-                        className="w-full h-[58px] rounded-[18px] bg-herbe text-fond
-                                   text-[17px] font-medium">
-                  Poser les charges
-                </button>
-              )
+            {vide.porte === 'charges' && (
+              <button onClick={() => va('/charges')}
+                      className="w-full h-[58px] rounded-[18px] bg-herbe text-fond text-[17px] font-medium">
+                Poser les charges
+              </button>
             )}
           </>
         ) : (
           <>
-            <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
-              À verser
-            </h2>
-            <Surface className="mt-3">
-              {aFaire.map((v, i) => (
-                <div key={`${v.compteId}-${i}`}
-                     className={`py-4 flex items-baseline justify-between
-                                 ${i < aFaire.length - 1 ? 'border-b border-brume' : ''}`}>
-                  <span>
-                    <span className="block text-[16px]">{v.vers}</span>
-                    <span className="block mt-0.5 text-[14px] text-doux">{v.detail}</span>
-                  </span>
-                  <span className="chiffre text-[26px] text-herbe">{euros(v.cents)}</span>
-                </div>
-              ))}
-              {aFaire.length > 1 && (
-                <div className="py-3.5 border-t border-brume flex items-baseline justify-between">
-                  <span className="text-[15px] text-doux">En tout</span>
-                  <span className="chiffre text-[20px]">{euros(total)}</span>
-                </div>
-              )}
-            </Surface>
-          </>
-        )}
-
-        {/* ⚠️ Un mois SOLDÉ ne redemande pas le relevé.
-            Il annonçait « Ce mois est soldé » et, juste dessous, « saisis ce
-            que vous avez vraiment payé sur chacun », champs actifs — alors que
-            le bloc « À verser » avait disparu. On ne savait plus ce qu'on
-            devait, et on nous redemandait de le confirmer. */}
-        {aConfirmer.length > 0 && !dejaRegle && (
-          <>
-            <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
-              {heureDuReleve ? 'Le relevé du mois' : 'À confirmer, vers le 27'}
-            </h2>
-            <p className="mt-2 text-[15px] text-doux">
-              {heureDuReleve
-                ? 'Saisis ce que vous avez vraiment payé sur chacun. L’écart avec ce qui était prévu revient dans le virement du mois suivant.'
-                : `Ces montants sont des prévisions. On te demandera le réel à partir du ${JOUR_DU_RELEVE}.`}
-            </p>
-            <Surface className="mt-3">
-              {aConfirmer.map(d => (
-                <AConfirmer key={d.id} depense={d} foyerId={foyer?.id ?? ''} />
-              ))}
-            </Surface>
-          </>
-        )}
-
-        {monExcedent !== 0 && (
-          <>
-            <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
-              {monExcedent > 0 ? 'Tu as versé en trop' : 'Il te reste à verser'}
-            </h2>
-            <Surface className="mt-3">
-              <p className="flex items-baseline gap-2.5">
-                <span className="chiffre text-[32px]"
-                      style={{ color: monExcedent > 0 ? 'var(--color-herbe)' : 'var(--color-ocre)' }}>
-                  {euros(Math.abs(monExcedent))}
-                </span>
-                <span className="text-[15px] text-doux">
-                  {monExcedent > 0 ? 'de plus que ce qui a été dépensé' : 'sur ce qui a été dépensé'}
-                </span>
+            <Recap mois={mois} reste={reste} segments={segments} va={va} />
+            {sansRevenu.length > 0 && (
+              <p className="mt-3 text-[15px] leading-snug" style={{ color: 'var(--color-ocre)' }}>
+                {sansRevenu.length === 1
+                  ? `${sansRevenu[0]} n’a pas encore dit son revenu : tant qu’il manque, le partage se fait à parts égales.`
+                  : 'Aucun revenu n’est posé : le partage se fait à parts égales.'}
               </p>
-              {monExcedent > 0 && (
-                <>
-                  <p className="mt-3 text-[15px] leading-[23px] text-doux">
-                    Cet argent est sur le compte commun. Deux façons de le rendre à qui
-                    l’a versé — et une seule bonne selon le mois : baisser le virement
-                    suivant quand c’est une variation, le mettre de côté quand c’est
-                    structurel.
-                  </p>
-                  <div className="mt-3.5 flex gap-2">
-                    <button onClick={() => va('/epargne')}
-                            className="flex-1 min-h-11 rounded-[14px] bg-herbe text-fond
-                                       text-[15px] font-medium">
-                      Le verser à l’épargne
-                    </button>
-                    <button onClick={() => setBaisse(b => !b)}
-                            className="flex-1 min-h-11 rounded-[14px] border border-brume
-                                       text-[15px]">
-                      Baisser le prochain
-                    </button>
-                  </div>
-                  {baisse && (
-                    <p className="mt-3 text-[15px] leading-[23px]">
-                      Vire {euros(Math.max(0, total - monExcedent))} au lieu de{' '}
-                      {euros(total)} le mois prochain. L’app ne le fait pas à ta place :
-                      c’est ta banque qui vire, pas elle.
-                    </p>
-                  )}
-                </>
-              )}
-            </Surface>
-          </>
-        )}
+            )}
+            <CarteEpargne va={va} />
 
-        {annuelles.length > 0 && (
-          <>
-            <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
-              Le relevé est arrivé ?
-            </h2>
-            <p className="mt-2 text-[15px] text-doux">
-              On met de côté un douzième chaque mois. Quand tu reçois la facture, saisis-la :
-              l’écart se répartit sur l’année, sans toucher aux mois déjà partagés.
-            </p>
-            <Surface className="mt-3">
-              {annuelles.map(c => (
-                <ReleveAnnuel key={c.id} charge={c} annees={anneesOuvertes} />
+            <div className="mt-8 flex items-baseline justify-between">
+              <h2 className="titre text-[24px]">Par catégorie</h2>
+              <span className="text-[14px] text-doux">{nLignes} ligne{nLignes > 1 ? 's' : ''}</span>
+            </div>
+            <FiltreDuMois filtre={filtre} totaux={totaux} choisir={setFiltre} />
+            {/* (lot 3) Le bandeau du mois vient ici, entre le filtre et les catégories. */}
+            <div className="mt-4 flex flex-col gap-3">
+              {categories.map(c => (
+                <Categorie key={c.cle} categorie={c} saisies={dites} charges={parCharge} clos={clos}
+                           ouvrir={(geste, l) => setOuverte({ geste, id: l.id })} />
               ))}
-            </Surface>
+            </div>
           </>
         )}
-
-        {enveloppes.length > 0 && (
-          <>
-            <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
-              Les enveloppes
-            </h2>
-            <Surface className="mt-3">
-              {enveloppes.map((e, i) => {
-                /* Rien de confirmé encore : la jauge ne mesurerait que la
-                    provision contre le plafond — deux fois la même chose, et
-                    elle affichait « plein » le premier du mois. On montre alors
-                    ce qui est PRÉVU, et on dit que le réel n'est pas connu. */
-                const seulementPrevu = e.depense_cents === 0 && e.prevu_cents > 0
-                const montre = seulementPrevu ? e.prevu_cents : e.depense_cents
-                /* Le dépassement se juge sur le CHIFFRE AFFICHÉ. Calculé sur le
-                   seul réel, une enveloppe montrant « 260,00 / 200,00 € »
-                   restait verte : la couleur disait que tout allait bien
-                   pendant que les chiffres disaient le contraire. */
-                const depasse = montre > e.plafond_cents
-                return (
-                  <div key={e.enveloppe_id}
-                       className={`py-4 ${i < enveloppes.length - 1 ? 'border-b border-brume' : ''}`}>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-[15px] font-semibold">{e.libelle}</span>
-                      <span className="text-[15px] text-doux">
-                        <span className="chiffre text-[17px]"
-                              style={{ color: depasse ? 'var(--color-ocre)'
-                                       : seulementPrevu ? 'var(--color-doux)' : 'var(--color-herbe)' }}>
-                          {euros(montre, false)}
-                        </span>
-                        {' / '}{euros(e.plafond_cents)}
-                      </span>
-                    </div>
-                    <Jauge part={e.plafond_cents === 0 ? 0 : montre / e.plafond_cents}
-                           depasse={depasse} prevision={seulementPrevu} />
-                    {seulementPrevu && (
-                      <p className="mt-1.5 text-[14px] text-doux">
-                        {depasse
-                          ? 'Ce que tu as mis dedans dépasse déjà le plafond — avant la moindre dépense.'
-                          : 'Prévu, pas encore dépensé — le vrai montant se dit en fin de mois.'}
-                      </p>
-                    )}
-                  </div>
-                )
-              })}
-            </Surface>
-          </>
-        )}
-        {/* La navigation EN BAS. Entre « à verser » et « à confirmer », ces
-            trois boutons coupaient la lecture de ce qui compte pour proposer
-            d'aller ailleurs. */}
-        <nav aria-label="Le reste du budget" className="mt-10 flex flex-col gap-2">
-          <div className="flex gap-2">
-            <button onClick={() => va('/budget-reglages')}
-                    className="flex-1 min-h-11 rounded-[14px] border border-brume text-[15px]">
-              Revenus et comptes
-            </button>
-            <button onClick={() => va('/epargne')}
-                    className="flex-1 min-h-11 rounded-[14px] border border-brume text-[15px]">
-              L’épargne
-            </button>
-          </div>
-        </nav>
       </div>
+
+      {ouverte?.geste === 'choix' && (
+        <ChoixDeLaLigne etat={etat} lignes={auFil} saisies={dites} fermer={fermer}
+                        choisir={l => setOuverte({ geste: 'declarer', id: l.id })} />
+      )}
+      {choisie && ouverte?.geste === 'declarer' && (
+        <FeuilleDeclarer ligne={choisie} categorie={categorieDe(choisie)} mois={mois} moi={userId}
+                         foyerId={foyer?.id ?? ''} saisies={dites} membres={membres} fermer={fermer} />
+      )}
+      {choisie && ouverte?.geste === 'facture' && (
+        <FeuilleFactureMois ligne={choisie} categorie={categorieDe(choisie)} fermer={fermer} />
+      )}
+      {choisie && ouverte?.geste === 'mise' && choisie.charge_id && parCharge.has(choisie.charge_id) && (
+        <FeuilleMiseDeCote charge={parCharge.get(choisie.charge_id)!} fermer={fermer} />
+      )}
     </main>
   )
 }
