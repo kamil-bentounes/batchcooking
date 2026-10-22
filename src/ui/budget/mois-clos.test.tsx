@@ -13,7 +13,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Choix } from '../../lib/donnees/budget.ts'
-import { FINE, OCT, charge, cloture, depense, ecranDuMois, membre, saisie, texte, tout }
+import { FINE, OCT, bouton, charge, cloture, depense, ecranDuMois, membre, saisie, texte, tout }
   from '../../pages/budget-banc.tsx'
 import type { Reste } from '../../lib/budget/mois.ts'
 import { FeuillesDuMois, type Ouverte } from './FeuillesDuMois.tsx'
@@ -151,6 +151,18 @@ describe('Les feuilles sur un mois clôturé : AUCUN geste d’écriture', () =>
   it('une ligne qui n’est plus au mois n’ouvre rien', () => {
     expect(feuilles({ geste: 'declarer', id: 'inconnue' }, true)).toBe('')
     expect(feuilles(null, true)).toBe('')
+  })
+})
+
+describe('« Revenir dessus » sans total connu', () => {
+  it('le total pas lu (null) : le geste est éteint, il n’annonce rien de faux', () => {
+    const h = dansUnClient(<MoisClos mois={OCT} misDeCote={null} />)
+    expect(/(^|\s)disabled=""/.test(bouton(h, 'Revenir dessus') ?? '')).toBe(true)
+  })
+
+  it('le total lu : le geste est ouvert', () => {
+    const h = dansUnClient(<MoisClos mois={OCT} misDeCote={200_00} />)
+    expect(/(^|\s)disabled=""/.test(bouton(h, 'Revenir dessus') ?? '')).toBe(false)
   })
 })
 

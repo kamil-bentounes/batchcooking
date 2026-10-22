@@ -191,7 +191,12 @@ describe('misDeCoteDuFoyer — ce que « Revenir dessus » retire de l’épargn
     ({ user_profile_id: qui, reste_cents: 1000_00, mis_de_cote_cents: cents, poche_id: null, versement_id: null })
 
   it('la base rouvre pour TOUT le foyer : le total, pas ma part seule', () => {
-    expect(misDeCoteDuFoyer([c('u1', 300_00), c('u2', 120_50)], undefined)).toBe(420_50)
+    expect(misDeCoteDuFoyer([c('u1', 300_00), c('u2', 120_50)], ['u1', 'u2'])).toBe(420_50)
+  })
+
+  it('le foyer pas lu : null — on ne sait pas qui est parti, donc on n’annonce aucun total', () => {
+    expect(misDeCoteDuFoyer([c('u1', 300_00), c('parti', 120_50)], undefined)).toBeNull()
+    expect(misDeCoteDuFoyer([], undefined)).toBeNull()
   })
 
   it('un membre parti garde son versement dans la poche : il ne compte pas', () => {
@@ -199,7 +204,7 @@ describe('misDeCoteDuFoyer — ce que « Revenir dessus » retire de l’épargn
   })
 
   it('aucun choix : 0', () => {
-    expect(misDeCoteDuFoyer([], undefined)).toBe(0)
+    expect(misDeCoteDuFoyer([], ['u1'])).toBe(0)
   })
 })
 

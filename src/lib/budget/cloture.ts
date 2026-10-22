@@ -97,12 +97,14 @@ export function envoiDeLaCloture(o: {
 /**
  * Ce que « Revenir dessus » retire de l'épargne : le versement de TOUS les membres encore
  * dans le foyer (`rouvre_le_mois` les efface tous), pas ma part seule. Un membre parti
- * garde le sien dans la poche. `presents` à `undefined` : le foyer n'est pas lu, on compte
- * tout le monde.
+ * garde le sien dans la poche. `presents` à `undefined` : le foyer n'est pas lu — on ne sait
+ * pas qui est parti, donc on ne chiffre rien (`null`) : compter tout le monde annonçait un
+ * total trop grand à qui a un membre parti, le temps de la lecture.
  */
-export function misDeCoteDuFoyer(choix: Choix[], presents: string[] | undefined): number {
+export function misDeCoteDuFoyer(choix: Choix[], presents: string[] | undefined): number | null {
+  if (presents === undefined) return null
   return choix
-    .filter(c => presents === undefined || presents.includes(c.user_profile_id))
+    .filter(c => presents.includes(c.user_profile_id))
     .reduce((t, c) => t + c.mis_de_cote_cents, 0)
 }
 

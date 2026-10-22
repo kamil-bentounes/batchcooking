@@ -16,7 +16,7 @@ export function Recap({ mois, reste, segments, cloture, va }: {
   /** Lot 3 : le mois est clôturé, et voici ce que le choix de clôture en a retenu.
       `duFoyer` : ce que « Revenir dessus » retirera de l'épargne — le total des membres,
       que `rouvre_le_mois` efface tous ; à défaut, ma part. */
-  cloture?: { reste: number | null; misDeCote: number; duFoyer?: number } | null
+  cloture?: { reste: number | null; misDeCote: number; duFoyer?: number | null } | null
   va: (v: string) => void
 }) {
   const teinte = (s: Segment) =>
@@ -38,7 +38,7 @@ export function Recap({ mois, reste, segments, cloture, va }: {
           {cloture.misDeCote > 0 && (
             <p className="mt-3 text-[15px] opacity-80">dont {montant(cloture.misDeCote)} mis de côté</p>
           )}
-          <RevenirDessus mois={mois} misDeCote={cloture.duFoyer ?? cloture.misDeCote} clair />
+          <RevenirDessus mois={mois} misDeCote={cloture.duFoyer === undefined ? cloture.misDeCote : cloture.duFoyer} clair />
         </>
       ) : reste.revenu === null || reste.reste === null ? (
         <>

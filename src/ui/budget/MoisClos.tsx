@@ -6,7 +6,7 @@
 import { capitale, nomDuMois } from '../../lib/budget/mois.ts'
 import { RevenirDessus } from './RevenirDessus.tsx'
 
-export function MoisClos({ mois, misDeCote }: { mois: string; misDeCote: number }) {
+export function MoisClos({ mois, misDeCote }: { mois: string; misDeCote: number | null }) {
   return (
     <div className="mt-5 rounded-[18px] bg-sable p-4">
       <p className="text-[15px]">{capitale(nomDuMois(mois))} est clôturé.</p>

@@ -7,7 +7,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../ui/budget/RevenirDessus.tsx', () => ({
-  RevenirDessus: ({ misDeCote }: { misDeCote: number }) => <i data-sonde={misDeCote} />,
+  RevenirDessus: ({ misDeCote }: { misDeCote: number | null }) =>
+    <i data-sonde={misDeCote === null ? 'non-lu' : misDeCote} />,
 }))
 
 const { OCT, cloture, ecranDeLaCloture, ecranDuMois, foyer, membre, tout, depense, charge, revenu, poche } =
@@ -53,6 +54,16 @@ describe('« Revenir dessus » annonce le total du foyer', () => {
     const h = ecranDuMois(tout({ foyer: undefined,
       clotures: [k(choix('u1', 1000_00, 300_00), choix('u2', 900_00, 120_50))] }),
       { depart: OCT })
+    expect(sondes(h)).toEqual([])
+  })
+
+  it('la page de clôture d’un mois clos, le foyer pas lu : aucun total annoncé (« non-lu »)', () => {
+    const h = ecranDeLaCloture({
+      foyer: undefined, depenses: [depense({ mois: '2026-10-01' })], saisies: [], charges: [charge()],
+      revenus: [revenu()], poches: [poche()], apercu: [],
+      clotures: [k(choix('u1', 1000_00, 300_00), choix('parti', 900_00, 120_50))],
+    }, { mois: OCT })
+    expect(h).toContain('data-sonde="non-lu"')
     expect(sondes(h)).toEqual([])
   })
 

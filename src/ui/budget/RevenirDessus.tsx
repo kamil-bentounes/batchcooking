@@ -15,8 +15,10 @@ import { Erreur } from '../coque.tsx'
 
 export function RevenirDessus({ mois, misDeCote, apres, clair = false }: {
   mois: string
-  /** Ce que la base retirera de l'épargne : le total du foyer (`misDeCoteDuFoyer`). */
-  misDeCote: number
+  /** Ce que la base retirera de l'épargne : le total du foyer (`misDeCoteDuFoyer`). `null` :
+      le foyer n'est pas lu, le total n'est pas connu — le geste attend plutôt que d'annoncer
+      un chiffre faux. */
+  misDeCote: number | null
   apres?: () => void
   /** Sur la carte encre, le bouton s'éclaircit. */
   clair?: boolean
@@ -27,12 +29,12 @@ export function RevenirDessus({ mois, misDeCote, apres, clair = false }: {
      si le bouton a disparu entre-temps — et, sur la page de clôture, il disparaît dès que
      la relecture des clôtures revient, avant la fin de la mutation. On ne reviendrait pas au mois. */
   const revenir = () => revenirSiConfirme({
-    garde, question: questionPourRevenir(mois, misDeCote), confirmer: q => confirm(q),
+    garde, question: questionPourRevenir(mois, misDeCote ?? 0), confirmer: q => confirm(q),
     rouvrir: () => rouvre.mutateAsync(mois), apres,
   })
   return (
     <>
-      <button disabled={rouvre.isPending} onClick={revenir}
+      <button disabled={rouvre.isPending || misDeCote === null} onClick={revenir}
               className={`mt-4 min-h-11 px-5 rounded-full text-[15px] font-semibold disabled:opacity-50
                           ${clair ? 'bg-fond text-encre' : 'bg-piste text-encre'}`}>
         Revenir dessus

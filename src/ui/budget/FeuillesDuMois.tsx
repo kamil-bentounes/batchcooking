@@ -28,7 +28,7 @@ type Membre = { id: string; display_name: string | null }
 
 export function FeuillesDuMois({ ouverte, clos, misDeCote, etat, lignes, auFil, saisies, charges,
                                  mois, moi, foyerId, membres, fermer, choisir }: {
-  ouverte: Ouverte; clos: boolean; misDeCote: number; etat: EtatDeLEcran
+  ouverte: Ouverte; clos: boolean; misDeCote: number | null; etat: EtatDeLEcran
   lignes: Depense[]; auFil: Depense[]; saisies: Saisie[]; charges: Map<string, Charge>
   mois: string; moi: string; foyerId: string; membres: Membre[]
   fermer: () => void; choisir: (l: Depense) => void
