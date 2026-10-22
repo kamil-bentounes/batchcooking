@@ -28,7 +28,7 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 const foyer = () => ({ id: 'f1', nom: 'Chez nous', plafondLlmEur: 0,
-  membres: [{ id: 'u1', display_name: 'Kamil' }] }) as unknown as Foyer
+  membres: [{ id: 'u1', display_name: 'Kamil', objectif: { kcal: 2200 } }] }) as unknown as Foyer
 const depense = (p: Partial<Depense> = {}): Depense => ({
   id: 'd1', charge_id: 'c1', libelle: 'Courses', mois: OCT, montant_cents: 800_00,
   montant_prevu_cents: 800_00, nature: 'estimee', source: 'charge', facon: 'au_fil',
@@ -102,6 +102,21 @@ describe('Hub — la carte Budget', () => {
     expect(carte(h)).not.toContain('Ajoute ton revenu')
     expect(carte(h)).toContain('Je n’ai pas pu lire le budget')
     expect(texte(h)).not.toContain('Complète ton profil')
+  })
+
+  it('revenu posé mais aucun objectif : « Fixe tes objectifs », sans rien sur le revenu', () => {
+    const sans = { id: 'f1', nom: 'Chez nous', plafondLlmEur: 0,
+                   membres: [{ id: 'u1', display_name: 'Kamil', objectif: null }] } as unknown as Foyer
+    const t = texte(hub(tout({ foyer: sans })))
+    expect(t).toContain('Fixe tes objectifs.')
+    expect(t).toContain('aucune barquette ne t’est dressée')
+    expect(t).not.toContain('Complète ton profil')
+  })
+
+  it('revenu ET objectifs posés : aucun bandeau', () => {
+    const t = texte(hub(tout()))
+    expect(t).not.toContain('Fixe tes objectifs')
+    expect(t).not.toContain('Complète ton profil')
   })
 
   it('le foyer pas encore revenu ne fait pas dire « Complète ton profil »', () => {

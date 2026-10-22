@@ -126,6 +126,43 @@ export function prenomDe(nom: string | null | undefined): string {
   return n === '' ? 'Sans prénom' : n
 }
 
+/**
+ * A-t-il fixé ses objectifs ? Sans eux, `objectifDe` rend 0 kcal : le dressage ne lui compte aucune
+ * barquette, sans un mot. L'arrivante dans le foyer est dans ce cas jusqu'à ce qu'elle les fixe.
+ */
+export function aDesObjectifs(m: { objectif?: { kcal?: unknown } | null }): boolean {
+  return Number(m.objectif?.kcal ?? 0) > 0
+}
+
+/**
+ * Le bandeau du hub, sur ce qui manque à MON profil : prénom ou revenu (le partage se fait alors à
+ * parts égales), objectifs (aucune barquette ne m'est dressée). `null` : rien ne manque. Les
+ * objectifs seuls mènent à leur écran, le reste au profil.
+ */
+export function bandeauDuProfil(o: { prenom: boolean; revenu: boolean; objectifs: boolean }):
+  { titre: string; texte: string; vers: '/profil' | '/objectifs' } | null {
+  const sansRevenu = !o.prenom || !o.revenu
+  if (!sansRevenu && o.objectifs) return null
+  const texteRevenu = 'Sans ton revenu, le partage se fait à parts égales.'
+  const texteObjectifs = 'Sans tes objectifs, aucune barquette ne t’est dressée.'
+  if (sansRevenu) {
+    return { titre: 'Complète ton profil.', vers: '/profil',
+             texte: o.objectifs ? texteRevenu : `${texteRevenu} ${texteObjectifs}` }
+  }
+  return { titre: 'Fixe tes objectifs.', texte: texteObjectifs, vers: '/objectifs' }
+}
+
+/**
+ * Ce que le dressage dit de ceux qui n'ont pas d'objectifs : ils sont omis de la liste des
+ * barquettes, et personne ne l'expliquait. `null` : tout le monde en a.
+ */
+export function phraseSansObjectifs(prenoms: string[]): string | null {
+  if (prenoms.length === 0) return null
+  return prenoms.length === 1
+    ? `${prenoms[0]} n’a pas encore fixé ses objectifs : aucune barquette ne lui est dressée.`
+    : `${prenoms.join(' et ')} n’ont pas encore fixé leurs objectifs : aucune barquette ne leur est dressée.`
+}
+
 /** « Dans le foyer : Kamil, Thauba » : la seule liste des membres hors des écrans du budget. */
 export function ceuxDuFoyer(membres: { display_name: string | null }[] | undefined): string | null {
   if (!membres || membres.length === 0) return null

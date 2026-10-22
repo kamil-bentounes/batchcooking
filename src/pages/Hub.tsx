@@ -19,7 +19,7 @@
 import { Marque } from '../ui/coque.tsx'
 import { useCycle, GESTE } from '../lib/donnees/cycle.ts'
 import { useBarquettes } from '../lib/donnees/barquettes.ts'
-import { useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
+import { aDesObjectifs, bandeauDuProfil, useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
 import { useClotures, useMois, useRevenus, useSaisies, moisDe, eurosRonds } from '../lib/donnees/budget.ts'
 import {
   aDire, ligneDuHub, moisVoisin, montant, nomDuMois, resteDuMois, revenuDuMois, sousLEuro,
@@ -88,6 +88,9 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
   const suite = clotures.data === undefined ? null
     : ligneDuHub({ aCloturer, aDire: aDire(depenses, saisies.data ?? [], false) })
   const geste = GESTE[cycle?.state ?? 'vide']
+  const leBandeauDuProfil = !profilLu ? null
+    : bandeauDuProfil({ prenom: !!moi?.display_name, revenu: revenuPose,
+                        objectifs: moi !== undefined && aDesObjectifs(moi) })
 
   return (
     <main className="min-h-dvh px-6 pt-4 pb-16">
@@ -172,14 +175,14 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
         {/* Le bandeau n'est pas un reproche : il MÈNE quelque part. Tant que le
             revenu manque, `parts_du_foyer` partage à parts égales — autant le
             dire, et offrir le chemin dans la même phrase. */}
-        {profilLu && (!moi?.display_name || !revenuPose) && (
-          <button onClick={() => va('/profil')}
+        {leBandeauDuProfil && (
+          <button onClick={() => va(leBandeauDuProfil.vers)}
                   className="mt-4 w-full text-left bg-surface border border-dashed
                              border-brume rounded-[18px] p-4 transition-colors
                              hover:bg-brume/20 hover:border-doux/40">
             <p className="text-[15px] leading-[23px] text-doux">
-              <strong className="text-encre font-semibold">Complète ton profil.</strong>{' '}
-              Sans ton revenu, le partage se fait à parts égales.
+              <strong className="text-encre font-semibold">{leBandeauDuProfil.titre}</strong>{' '}
+              {leBandeauDuProfil.texte}
             </p>
           </button>
         )}

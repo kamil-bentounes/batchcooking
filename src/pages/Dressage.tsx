@@ -12,7 +12,7 @@
 import { useMemo, useState } from 'react'
 import { Attente, Chiffre, Erreur, Passage, Vide } from '../ui/coque.tsx'
 import { useChangeEtat, useCycle } from '../lib/donnees/cycle.ts'
-import { useFoyer, objectifDe, prenomDe } from '../lib/donnees/foyer.ts'
+import { useFoyer, aDesObjectifs, objectifDe, phraseSansObjectifs, prenomDe } from '../lib/donnees/foyer.ts'
 import { useRecettesMesurees } from '../lib/donnees/recettes.ts'
 import type { RecetteMesuree } from '../lib/donnees/recettes.ts'
 import { useDresse, useDistribue, repartitionAuto, jour } from '../lib/donnees/barquettes.ts'
@@ -24,7 +24,7 @@ import { supabase, ou } from '../lib/supabase.ts'
 /** Au-delà de quatre jours, une barquette ne tient pas au frigo (D40). */
 const JOURS_AU_FRAIS = 4
 
-export function Dressage({ va, retour }: { va: (v: string) => void; retour: () => void }) {
+export function Dressage({ va, retour, userId }: { va: (v: string) => void; retour: () => void; userId?: string }) {
   const { data: cycle } = useCycle()
   const { data: foyer } = useFoyer()
   const { data: recettes = [], isPending } = useRecettesMesurees(cycle?.id)
@@ -140,6 +140,9 @@ export function Dressage({ va, retour }: { va: (v: string) => void; retour: () =
 
   const total = decoupes.reduce(
     (s, d) => s + d.repartition.parts.reduce((n, p) => n + p.nombre, 0), 0)
+  /* Quelqu'un sans objectifs n'a aucune part à dresser : il était omis de la liste, sans un mot. */
+  const sansObjectifs = (membres ?? []).filter(m => !aDesObjectifs(m))
+  const phraseSans = phraseSansObjectifs(sansObjectifs.map(m => prenomDe(m.display_name)))
   const jourDemain = new Date()
   jourDemain.setDate(jourDemain.getDate() + 1)
 
@@ -153,6 +156,18 @@ export function Dressage({ va, retour }: { va: (v: string) => void; retour: () =
         Pèse-les : c’est la seule pesée de la semaine, et c’est elle qui rend
         tout le reste juste.
       </p>
+
+      {phraseSans && (
+        <div className="mt-5 rounded-[14px] border border-fond/25 p-4">
+          <p className="text-[15px] leading-snug">{phraseSans}</p>
+          {sansObjectifs.some(m => m.id === userId) && (
+            <button onClick={() => va('/objectifs')}
+                    className="mt-3 min-h-11 px-5 rounded-full bg-safran text-encre text-[15px] font-semibold">
+              Fixe tes objectifs
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="mt-9 space-y-8">
         {decoupes.map(({ recette, repartition }) => (

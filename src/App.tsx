@@ -245,7 +245,7 @@ export default function App() {
     case '/magasin': return <Magasin retour={sortie} va={va} />
     case '/plan': return <Plan retour={sortie} va={va} />
     case '/cuisine': return <Cuisine userId={moi} va={va} />
-    case '/dressage': return <Dressage retour={sortie} va={va} />
+    case '/dressage': return <Dressage retour={sortie} va={va} userId={moi} />
     case '/inventer': return <Inventer userId={moi} retour={sortie} va={va} />
     case '/photo': return <Photo retour={sortie} va={va} />
     case '/ticket': return <Ticket retour={sortie} va={va} />
