@@ -22,6 +22,10 @@ import {
   goulot, useAppareilsDeLaSession, useChoisitAppareils, useEnregistrePlan, useSimule,
 } from '../lib/donnees/session.ts'
 import type { Plan as PlanCalcule, TachePlanifiee } from '../lib/plan/types.ts'
+import { placeEtiquettes } from '../lib/plan/etiquettes.ts'
+
+/** Hauteur d'un libellé de geste : le nom sur deux lignes, puis la durée. */
+const HAUTEUR_GESTE = 54
 
 /** Pixels par minute. 3,2 tient une session de deux heures sur un écran. */
 const ECHELLE = 3.2
@@ -182,7 +186,10 @@ function Frise({ plan, nomAppareil }:
   const appareils = useMemo(
     () => [...new Set(plan.taches.map(t => t.appareil).filter((a): a is string => !!a))],
     [plan])
-  const hauteur = Math.max(220, plan.dureeMin * ECHELLE)
+  const gestes = useMemo(() => plan.taches.filter(t => t.actif), [plan])
+  const { tops, hauteur: hauteurGestes } = useMemo(
+    () => placeEtiquettes(gestes, ECHELLE, HAUTEUR_GESTE), [gestes])
+  const hauteur = Math.max(220, plan.dureeMin * ECHELLE, hauteurGestes + 8)
   const largeurRail = Math.max(26, appareils.length * 14)
   const critiques = new Set(plan.chemin)
 
@@ -229,8 +236,8 @@ function Frise({ plan, nomAppareil }:
 
         {/* Les gestes. */}
         <div className="absolute right-0" style={{ left: 40 + largeurRail + 10, top: 0 }}>
-          {plan.taches.filter(t => t.actif).map(t => (
-            <Geste key={t.id} tache={t} critique={critiques.has(t.id)} />
+          {gestes.map(t => (
+            <Geste key={t.id} tache={t} top={tops.get(t.id) ?? 0} critique={critiques.has(t.id)} />
           ))}
         </div>
       </div>
@@ -238,15 +245,15 @@ function Frise({ plan, nomAppareil }:
   )
 }
 
-function Geste({ tache, critique }: { tache: TachePlanifiee; critique: boolean }) {
+function Geste({ tache, top, critique }: { tache: TachePlanifiee; top: number; critique: boolean }) {
   return (
-    <div className="absolute left-0 right-0" style={{ top: tache.debutMin * ECHELLE - 2 }}>
+    <div className="absolute left-0 right-0" style={{ top }}>
       <p className={`text-[14px] leading-snug ${critique ? 'text-encre' : 'text-encre/85'}`}>
         {critique && <span aria-hidden="true" className="text-ocre mr-1">•</span>}
         {tache.label}
       </p>
       <p className="text-[12px] text-doux mt-0.5">
-        {duree(tache.dureeMin)}
+        {duree(tache.dureeMin)}{' · '}{tache.debutMin < 1 ? 'dès le début' : `à ${duree(tache.debutMin)}`}
         {tache.recettes.length > 1 && ` · pour ${tache.recettes.length} recettes`}
       </p>
     </div>
@@ -292,7 +299,7 @@ function Equipement({ catalogue, capacites, surValide }: {
                      onChange={e => setChoix(c => ({
                        ...c, [a.code]: Math.max(1, Number(e.target.value) || 1),
                      }))}
-                     className="w-14 rounded-lg border border-brume bg-fond px-2 py-1
+                     className="w-14 min-h-11 rounded-lg border border-brume bg-fond px-2 py-1
                                 text-right outline-none focus:border-herbe" />
             )}
           </li>
