@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, callFunction, deconnecte } from '../lib/supabase'
 import { lienDeploye } from '../lib/route.ts'
-import { useCreeMagasin, useFoyer, useMagasins, useSupprimeMagasin } from '../lib/donnees/foyer.ts'
+import { ceuxDuFoyer, useCreeMagasin, useFoyer, useMagasins, useSupprimeMagasin } from '../lib/donnees/foyer.ts'
 import { useAmis, useInviteAmi, useRompAmitie } from '../lib/donnees/amis.ts'
 import { Attente, Erreur } from '../ui/coque.tsx'
 import { Page, Groupe, Bouton, Champ, Message } from '../ui/kit'
@@ -10,6 +10,7 @@ import { Page, Groupe, Bouton, Champ, Message } from '../ui/kit'
 type Zone = 'plafond' | 'courses' | 'inviter' | 'deconnexion' | 'donnees'
 
 export function Settings({ va }: { va: (v: string) => void }) {
+  const { data: foyer } = useFoyer()
   const [plafond, setPlafond] = useState(5)
   /** Vide = pas de budget fixé. Ne pas s'en fixer est un choix légitime. */
   const [courses, setCourses] = useState('')
@@ -151,6 +152,9 @@ export function Settings({ va }: { va: (v: string) => void }) {
 
       <section className="mt-12">
         <h2 className="titre text-xl text-herbe">Inviter</h2>
+        {ceuxDuFoyer(foyer?.membres) && (
+          <p className="mt-1 text-[15px] font-semibold">{ceuxDuFoyer(foyer?.membres)}</p>
+        )}
         <p className="mt-1 text-doux text-[15px]">
           Tu obtiens un lien à lui envoyer, par SMS, WhatsApp ou mail. Il vaut
           trente jours et sert une fois : elle y choisit son mot de passe et

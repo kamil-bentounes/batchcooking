@@ -126,6 +126,12 @@ export function prenomDe(nom: string | null | undefined): string {
   return n === '' ? 'Sans prénom' : n
 }
 
+/** « Dans le foyer : Kamil, Thauba » : la seule liste des membres hors des écrans du budget. */
+export function ceuxDuFoyer(membres: { display_name: string | null }[] | undefined): string | null {
+  if (!membres || membres.length === 0) return null
+  return `Dans le foyer : ${membres.map(m => prenomDe(m.display_name)).join(', ')}`
+}
+
 /** L'initiale de l'avatar : `?` tant que le prénom est vide, jamais un rond vide. */
 export function initialeDe(nom: string | null | undefined): string {
   return ((nom ?? '').trim().slice(0, 1) || '?').toUpperCase()
