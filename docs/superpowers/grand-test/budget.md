@@ -87,3 +87,19 @@ Firefox / Safari ; une vraie expiration de jeton ; un foyer de plusieurs années
 - `npx vitest run src` : 1 352 verts. `npm run build` vert, `npm run lint` : 11 avertissements, les mêmes qu'à `dd024d6` (aucun nouveau).
 - Attention : `npm run build` sans `--mode development` fait pointer `dist/` vers la production ; ne pas le lancer pendant que `vite preview` sert le banc.
 - Horloge de la base : `show popote.maintenant` → « unrecognized configuration parameter ».
+
+## Derniers écarts du front (22/10/2026, après le parcours)
+
+| Point | Cause | Correctif |
+|---|---|---|
+| Dérive de 6 centimes après « Revenir dessus » (1 272,02 € au lieu de 1 272,08 €) | `prorata` lisait la proportion sur les centimes des parts figées du réel (47,90 €), arrondis ; recompter le prévu (800 €) multipliait cet arrondi par ×16,7. La base répartit sur les points de base. Pas un défaut de base | `8b7a3db` : l'écran répartit comme `confirme_depense` (points de base, plancher + plus forts restes) |
+| « Mes charges » comptait une charge de 2031 | le total sommait toute la liste | `eee46d2` : seules les charges en vigueur ce mois-ci comptent ; la charge à venir dit « commence en janvier 2031 » |
+| `/budget/2026-13`, `/cloture/abc` : le hub sous l'adresse fautive | aucune route ne les reconnaissait | `11da700` : `Redirige` remplace par `/budget` |
+| Clôture à deux : tiret chez celui qui n'a pas clôturé | un seul `cloture_choix` | `551de1e` : son reste calculé (lignes gelées) + « clôturé par Thauba » ; « chacun clôture sa part » reste le lot 4 |
+| Réglages : aucune liste des membres | — | `efcf868` : « Dans le foyer : Kamil, Thauba » sous « Inviter » |
+| Arrivante sans objectifs omise sans un mot | — | `b005873` : « Fixe tes objectifs » au bandeau du hub, et le dressage nomme celui qui est omis |
+| « 2 montants à dire » vague | — | `45b9dd6` : les lignes sont nommées (trois, puis « et N autres ») |
+| Choisir : la carte encre grossit de 150 px par recette | — | `125d941` : au-delà de trois, « + N autres » se déplie (parts réglables en dépliant) |
+| `ordonnance.test.ts` rouge sous charge | plafond de 400 ms absolus | `4e2ce66` : borne relative au coût d'une évaluation mesuré au même instant (plancher 1 s) |
+
+Banc : `e2e/dernieres-corrections.spec.ts` (5 tests).
