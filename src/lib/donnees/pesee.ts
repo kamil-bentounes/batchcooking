@@ -86,6 +86,8 @@ export function usePesees(foodId: string) {
       .select('id, qty_observed, unit_observed, grams, at')
       .eq('food_id', foodId).order('at', { ascending: false })),
     staleTime: 10_000,
+    /* Sans aliment choisi (`''`), la requête partait quand même : 400 de la base. */
+    enabled: foodId !== '',
   })
 }
 
