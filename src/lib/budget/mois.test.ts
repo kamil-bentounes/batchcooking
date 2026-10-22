@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { aDire, bandeau, estLaCeMois, finDePhrase, membresSansRevenu, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
-         maPart, partDesSoldes, montant, montantCompte, moisDemande, moisVoisin, nomDuMois, nomDuMoisDate, parCategorie,
+         maPart, partDesSoldes, montant, montantCompte, moisDemande, adresseDeMoisFausse, moisVoisin, nomDuMois, nomDuMoisDate, parCategorie,
          partSur, pourcentages, recapCloture, resteDuMois, revenuDuMois, sousLEuro, totauxDuFiltre, type Ligne,
          type Saisie } from './mois.ts'
 
@@ -482,6 +482,15 @@ describe('nomDuMoisDate — l’année dès qu’elle n’est pas la courante', 
     expect(nomDuMoisDate('2025-09-01', '2026-10-01')).toBe('septembre 2025')
     expect(nomDuMoisDate('2030-05-01', '2026-10-01')).toBe('mai 2030')
   })
+})
+
+describe('adresseDeMoisFausse — une adresse de mois qui ne se lit pas quitte l’adresse', () => {
+  it.each(['/budget/2026-13', '/budget/2026-00', '/budget/abc', '/budget/2026-1', '/budget/2026-10-01',
+           '/budget/', '/cloture/abc', '/cloture/2026-13', '/cloture/', '/cloture/2026-10/x'])(
+    '%s est fausse', a => expect(adresseDeMoisFausse(a)).toBe(true))
+  it.each(['/budget', '/budget/2026-10', '/budget/2030-05', '/cloture/2026-09', '/charges',
+           '/budget-reglages', '/', '/choisir', '/invite/abc'])(
+    '%s n’en est pas une', a => expect(adresseDeMoisFausse(a)).toBe(false))
 })
 
 describe('moisDemande — le mois que l’adresse demande', () => {

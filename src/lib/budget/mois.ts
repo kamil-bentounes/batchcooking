@@ -335,6 +335,16 @@ export function moisDemande(depart: string | undefined, courant: string): { mois
   return depart <= courant ? { mois: depart, futur: false } : { mois: courant, futur: true }
 }
 
+/**
+ * `/budget/…` ou `/cloture/…` dont la suite n'est pas un mois (`2026-13`, `abc`, `2026-1`) : l'écran
+ * ne sait pas la lire, et affichait le hub sous cette adresse, qui ne se corrigeait pas. Un mois
+ * entier (`AAAA-MM`, même à venir) n'est PAS fausse : `moisDemande` s'occupe du futur.
+ */
+export function adresseDeMoisFausse(chemin: string): boolean {
+  const m = chemin.match(/^\/(?:budget|cloture)\/(.*)$/)
+  return m !== null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(m[1])
+}
+
 export function capitale(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }

@@ -14,6 +14,7 @@ import { AcceptInvite } from './pages/AcceptInvite'
 import { Rejoindre } from './pages/Rejoindre'
 import { Hub } from './pages/Hub.tsx'
 import { Budget } from './pages/Budget.tsx'
+import { adresseDeMoisFausse } from './lib/budget/mois.ts'
 import { Cloture } from './pages/Cloture.tsx'
 import { Charges } from './pages/Charges.tsx'
 import { BudgetReglages } from './pages/BudgetReglages.tsx'
@@ -205,6 +206,7 @@ export default function App() {
   /* Un mois donné du budget : la clôture y ramène, sur le mois qu'elle vient de
      fermer. `key` : sans elle, React garderait l'écran déjà monté, et son mois
      d'avant. */
+  if (adresseDeMoisFausse(ici)) return <Redirige vers="/budget" remplace={remplace} />
   const moisVu = ici.match(/^\/budget\/(\d{4})-(0[1-9]|1[0-2])$/)
   if (moisVu) {
     return <Budget key={ici} userId={moi} va={va} remplace={remplace}
@@ -263,4 +265,14 @@ export default function App() {
 
     default: return <Hub userId={moi} va={va} />
   }
+}
+
+/**
+ * Quitte une adresse qui ne se lit pas (`/budget/2026-13`, `/cloture/abc`) pour `vers`, sans
+ * l'ajouter à l'historique : sans cela, le hub s'affichait sous l'adresse fautive, qui restait
+ * telle quelle (comme un mois à venir, que `Budget` ramène déjà à `/budget`).
+ */
+function Redirige({ vers, remplace }: { vers: string; remplace: (v: string) => void }) {
+  useEffect(() => { remplace(vers) }, [vers, remplace])
+  return null
 }

@@ -127,3 +127,12 @@ test('le titre de la page de clôture ne porte pas d’anneau de focus', async (
   await expect(titre).toBeFocused({ timeout: 15_000 })
   expect(await titre.evaluate(e => getComputedStyle(e).outlineStyle)).toBe('none')
 })
+
+test('une adresse de mois qui ne se lit pas quitte l’adresse pour /budget', async ({ page }) => {
+  await connecte(page)
+  for (const fausse of ['/budget/2026-13', '/cloture/abc', '/budget/abc', '/cloture/2026-00']) {
+    await page.goto(fausse)
+    await expect(page).toHaveURL(/\/budget$/, { timeout: 15_000 })
+    expect(new URL(page.url()).pathname, `${fausse} est restée dans la barre d'adresse`).toBe('/budget')
+  }
+})
