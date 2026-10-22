@@ -22,6 +22,8 @@ import {
   euros, enCentimes, moisDe,
 } from '../lib/donnees/budget.ts'
 import { revenuDuMois } from '../lib/budget/mois.ts'
+import { questionRevenu, revenuAConfirmer } from '../lib/budget/revenu.ts'
+import { Confirmation } from '../ui/Confirmation.tsx'
 
 /**
  * Ce qu'on propose, plutôt qu'un champ vide.
@@ -88,6 +90,8 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
   const rangeCompte = useRangeCompte()
 
   const [monRevenu, setMonRevenu] = useState('')
+  /* Le revenu en attente de réponse à « C'est bien ça ? » : rien n'est écrit tant qu'il est là. */
+  const [aConfirmer, setAConfirmer] = useState<number | null>(null)
   const [nomCompte, setNomCompte] = useState('')
   const [genreCompte, setGenreCompte] = useState<'commun' | 'perso' | 'epargne'>('commun')
 
@@ -167,16 +171,30 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
 
           <div className="mt-4 space-y-3">
             <Champ label="Mon net mensuel (€)" type="text" inputMode="decimal"
-                   value={monRevenu} onChange={e => setMonRevenu(e.target.value)} />
+                   value={monRevenu}
+                   onChange={e => { setMonRevenu(e.target.value); setAConfirmer(null) }} />
             <button disabled={!lus || !cRevenu || cRevenu <= 0 || poseRevenu.isPending}
-                    onClick={() => poseRevenu.mutate(
-                      { foyerId, userId, cents: cRevenu! },
-                      { onSuccess: () => setMonRevenu('') })}
+                    onClick={() => {
+                      if (revenuAConfirmer(cRevenu)) { setAConfirmer(cRevenu); return }
+                      poseRevenu.mutate({ foyerId, userId, cents: cRevenu! },
+                                        { onSuccess: () => setMonRevenu('') })
+                    }}
                     className="w-full min-h-11 rounded-[14px] bg-herbe text-fond text-[15px]
                                font-medium disabled:bg-brume disabled:text-encre">
               {!lus ? 'Mon revenu…'
                 : enVigueur(userId) !== null ? 'Mettre à jour mon revenu' : 'Enregistrer mon revenu'}
             </button>
+            {aConfirmer !== null && (
+              <Confirmation titre={questionRevenu(aConfirmer)}
+                            oui="Oui, c’est ça" non="Non, je corrige"
+                            enCours={poseRevenu.isPending}
+                            surNon={() => setAConfirmer(null)}
+                            surOui={() => {
+                              setAConfirmer(null)
+                              poseRevenu.mutate({ foyerId, userId, cents: aConfirmer },
+                                                { onSuccess: () => setMonRevenu('') })
+                            }} />
+            )}
             {lus && enVigueur(userId) !== null && (
               <p className="text-[14px] text-doux">
                 Le précédent est gardé : les mois déjà partagés ne bougent pas.

@@ -18,6 +18,8 @@ import { supabase, ou, deconnecte } from '../lib/supabase.ts'
 import { CLE, useFoyer } from '../lib/donnees/foyer.ts'
 import { usePoseRevenu, useRevenus, enCentimes, euros } from '../lib/donnees/budget.ts'
 import { aujourdhui } from '../lib/horloge.ts'
+import { questionRevenu, revenuAConfirmer } from '../lib/budget/revenu.ts'
+import { Confirmation } from '../ui/Confirmation.tsx'
 
 export function Profil({ userId, onFini, retour }: {
   userId: string; onFini: () => void; retour: () => void
@@ -39,6 +41,8 @@ export function Profil({ userId, onFini, retour }: {
   const [revenuSaisi, setRevenuSaisi] = useState<string | null>(null)
   const [entreeSaisie, setEntreeSaisie] = useState<string | null>(null)
   const [msg, setMsg] = useState('')
+  /* « Tu déclares 0,50 € par mois. C'est bien ça ? » : rien n'est écrit tant qu'on n'a pas répondu. */
+  const [question, setQuestion] = useState(false)
   const [envoi, setEnvoi] = useState(false)
   const [sortie, setSortie] = useState(false)
   const [msgSortie, setMsgSortie] = useState('')
@@ -116,7 +120,8 @@ export function Profil({ userId, onFini, retour }: {
 
         <div>
           <Champ label="Ton revenu net mensuel (€)" type="text" inputMode="decimal"
-                 value={revenu} onChange={e => setRevenu(e.target.value)} />
+                 value={revenu}
+                 onChange={e => { setRevenu(e.target.value); setQuestion(false) }} />
           <p className="mt-1.5 text-[14px] leading-[21px] text-doux">
             Après impôt. Il ne sert qu’à calculer votre partage
             {autre ? <> — aujourd’hui avec {autre.display_name}</> : null}, et le foyer
@@ -158,9 +163,16 @@ export function Profil({ userId, onFini, retour }: {
         )}
 
         <Message texte={msg} erreur />
-        <Bouton onClick={enregistre} disabled={!pret || envoi}>
+        <Bouton onClick={() => { if (revenuAConfirmer(cents)) setQuestion(true); else enregistre() }}
+                disabled={!pret || envoi}>
           {envoi ? 'J’enregistre…' : 'Enregistrer'}
         </Bouton>
+        {question && cents !== null && (
+          <Confirmation titre={questionRevenu(cents)} oui="Oui, c’est ça" non="Non, je corrige"
+                        enCours={envoi}
+                        surNon={() => setQuestion(false)}
+                        surOui={() => { setQuestion(false); void enregistre() }} />
+        )}
         </div>
 
         {/* L'avatar du hub mène ici, côté Cuisine comme côté Budget : c'est là
