@@ -7,7 +7,7 @@
  */
 import { useMemo, useState } from 'react'
 import {
-  Attente, Erreur, Passage, Principal, Secondaire, Surface, Vide,
+  Attente, BarreAction, Erreur, Passage, Principal, Secondaire, Surface, Vide,
 } from '../ui/coque.tsx'
 import { useChangeEtat, useCycle } from '../lib/donnees/cycle.ts'
 import { useCreeMagasin, useMagasins } from '../lib/donnees/foyer.ts'
@@ -68,9 +68,19 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
   }
 
   return (
-    <Passage retour={retour}>
+    <Passage retour={retour} barre={echec && (
+      /* ⚠️ Dans la barre du bas, pas sous le titre : cocher un article en bas d'une longue liste qui
+         échoue faisait tomber l'alerte hors de l'écran, tout en haut (le même défaut que `Retenues`
+         dans `Choisir`). La barre reste sous les yeux. */
+      <BarreAction>
+        <div className="flex items-start gap-2">
+          <div className="grow -mt-3"><Erreur de={echec} /></div>
+          <button onClick={() => setEchec(null)}
+                  className="min-h-11 px-2 text-[14px] text-doux shrink-0">Fermer</button>
+        </div>
+      </BarreAction>
+    )}>
       <h1 className="titre text-[40px]">La liste</h1>
-      <Erreur de={echec} />
       <p className="mt-3 text-[15px] text-doux">
         {restants === 0
           ? 'Tout est coché.'
