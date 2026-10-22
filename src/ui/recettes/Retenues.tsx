@@ -8,7 +8,7 @@
  */
 import { useState } from 'react'
 import type { RecetteChoisie } from '../../lib/donnees/cycle.ts'
-import { PARTS_MAX_CYCLE, PARTS_MAX_RECETTE, parts } from '../../lib/recettes/parts.ts'
+import { PARTS_MAX_CYCLE, PARTS_MAX_RECETTE, parts, repliees } from '../../lib/recettes/parts.ts'
 import { ChampParts } from './ChampParts.tsx'
 import { Photo } from './Photo.tsx'
 
@@ -29,6 +29,9 @@ export function Retenues({
   surRetire: (id: string) => void
 }) {
   const [regle, setRegle] = useState(false)
+  /* Au-delà de trois, les plus anciennes se plient : la carte ne repousse plus le catalogue hors de l'écran. */
+  const [deplie, setDeplie] = useState(false)
+  const { visibles, cachees } = repliees(choisies, deplie)
   const prises = choisies.reduce((s, c) => s + c.servings, 0)
   const manque = cible - prises
 
@@ -69,7 +72,15 @@ export function Retenues({
 
       {choisies.length > 0 && (
         <ul className="mt-3.5 space-y-2">
-          {choisies.map(c => (c.recipe === null ? (
+          {cachees > 0 && (
+            <li>
+              <button type="button" onClick={() => setDeplie(d => !d)} aria-expanded={deplie}
+                      className="w-full min-h-11 rounded-[16px] bg-fond/7 px-3 text-left text-[14px] text-brume">
+                {deplie ? 'Replier' : `+ ${cachees} autre${cachees > 1 ? 's' : ''}`}
+              </button>
+            </li>
+          )}
+          {visibles.map(c => (c.recipe === null ? (
             /*
              * La recette d'un ami, retenue puis devenue illisible — amitié rompue,
              * ou partage retiré. La ligne du cycle survit ; sans ce cas, elle

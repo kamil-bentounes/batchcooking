@@ -44,3 +44,16 @@ export function lireSaisie(
   if (l.etat === 'vide' || l.valeur === courant) return { commit: null, refus: null }
   return { commit: l.valeur, refus: null }
 }
+
+/** Au-delà, la carte encre se plie : chaque recette retenue y coûte 150 px. */
+export const RETENUES_VISIBLES = 3
+
+/**
+ * Les recettes retenues que la carte montre. Repliée, seules les `RETENUES_VISIBLES` dernières
+ * (celles qu'on vient d'ajouter, et dont on règle les parts) ; dépliée, toutes. `cachees` : combien
+ * se plient — le « + N autres » du bouton.
+ */
+export function repliees<T>(choisies: T[], deplie: boolean): { visibles: T[]; cachees: number } {
+  const cachees = Math.max(0, choisies.length - RETENUES_VISIBLES)
+  return { visibles: deplie || cachees === 0 ? choisies : choisies.slice(cachees), cachees }
+}
