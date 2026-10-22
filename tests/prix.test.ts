@@ -264,7 +264,9 @@ describe('ce qui a déjà servi ne se supprime plus', () => {
     }).select().single()
 
     await alice.client.from('shopping_item').delete()
-      .eq('cycle_id', cycleAlice).eq('source', 'recette').is('checked_at', null)
+      .eq('cycle_id', cycleAlice).eq('source', 'recette')
+      // 0117 : supprimer une ligne cochée ou payée LÈVE ; la régénération ne vise que les neuves.
+      .is('checked_at', null).is('paid_price_eur', null)
 
     const { data } = await admin().from('shopping_item').select('id').eq('id', a!.id)
     expect(data ?? [], 'une ligne neuve n’a pas pu être régénérée').toHaveLength(0)

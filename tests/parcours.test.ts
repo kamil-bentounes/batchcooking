@@ -139,7 +139,8 @@ describe('le parcours complet', () => {
     const { data: stock } = await kamil.client.from('stock_item')
       .select('label').eq('household_id', kamil.householdId)
     expect(stock!.map(s => s.label).sort(), 'l’inventaire n’a pas été rempli')
-      .toEqual(['Lessive', 'Oignons', 'Poulet'])
+      // 0117 : la lessive (rayon Entretien) se coche, mais ne se range pas au frigo.
+      .toEqual(['Oignons', 'Poulet'])
 
     const { data: rayons } = await kamil.client.from('aisle_order').select('aisle')
     expect(rayons!.length, 'aucun ordre de rayon appris').toBe(3)

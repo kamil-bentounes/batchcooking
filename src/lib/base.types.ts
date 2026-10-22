@@ -3384,6 +3384,7 @@ export type Database = {
       create_household: { Args: { p_name: string }; Returns: string }
       current_cycle: { Args: never; Returns: string }
       current_household: { Args: never; Returns: string }
+      cycle_a_reprendre: { Args: never; Returns: string }
       de_mois: { Args: { d: string }; Returns: string }
       delete_my_account: { Args: never; Returns: undefined }
       en_euros: { Args: { cents: number }; Returns: string }
