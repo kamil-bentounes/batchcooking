@@ -170,3 +170,131 @@ test('le hub : « Tout est à jour » quand chaque ligne au fil du mois a sa dé
   await expect(carte.getByText('Tout est à jour')).toBeVisible({ timeout: 15_000 })
   await prend(page, '06-hub-a-jour')
 })
+
+/* ── Les gestes d'une clôture qui tourne mal, joués avec de vrais clics (1er décembre : novembre
+      est fini). Chaque test remet novembre dans l'état où il l'a pris. ─────────────────────── */
+
+const NOVEMBRE = `/cloture/${A}-11`
+
+async function ouvreNovembre(page: Page) {
+  await joue(page, `${A}-12-01T10:00:00Z`)
+  await connecte(page)
+  await page.goto(NOVEMBRE)
+}
+
+test('« Réessayer la lecture du mois » relit pour de bon, au clic', async ({ page }) => {
+  /* TanStack réessaie trois fois (1 s, 2 s, 4 s) avant de déclarer la panne. */
+  test.setTimeout(60_000)
+  await joue(page, `${A}-12-01T10:00:00Z`)
+  await connecte(page)
+  /* Les clôtures en panne : la page n'ose ni « Clôturer » ni « Ajoute ton revenu ». */
+  await page.route('**/rest/v1/cloture?*', route => route.fulfill({
+    status: 400, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' },
+    body: JSON.stringify({ message: 'Lecture en panne.', code: 'P0001' }) }))
+  await page.goto(NOVEMBRE)
+  const reessayer = page.getByRole('button', { name: 'Réessayer la lecture du mois' })
+  await expect(reessayer).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('button', { name: 'Clôturer novembre' })).toHaveCount(0)
+  await prend(page, '07-lecture-en-panne')
+
+  await page.unroute('**/rest/v1/cloture?*')
+  await reessayer.click()
+  await expect(page.getByRole('button', { name: 'Clôturer novembre' })).toBeVisible({ timeout: 15_000 })
+  await expect(reessayer).toHaveCount(0)
+})
+
+test('« Rien dépensé » se coche et se décoche, et l’écart suit chaque clic', async ({ page }) => {
+  /* Le test du hub a déclaré 10 € sur chaque ligne de novembre : une ligne sans saisie, il n'y
+     en aurait aucune à basculer. */
+  const { error } = await db.from('saisie').delete().eq('household_id', foyer.householdId)
+    .gte('fait_le', `${A}-11-01`).lte('fait_le', `${A}-11-30`)
+  expect(error).toBeNull()
+  await ouvreNovembre(page)
+  const depenses = page.getByRole('region', { name: 'Tes dépenses du mois' })
+  const rien = depenses.getByRole('switch', { name: /^Rien dépensé : / }).first()
+  await expect(rien).toHaveAttribute('aria-checked', 'false', { timeout: 15_000 })
+  await expect(depenses.getByText('Tu as dépensé ce qui était prévu.')).toBeVisible()
+
+  await rien.click()
+  await expect(rien).toHaveAttribute('aria-checked', 'true')
+  await expect(depenses.getByText(/^Tu as dépensé .* de moins que prévu\.$/)).toBeVisible()
+
+  await rien.click()
+  await expect(rien).toHaveAttribute('aria-checked', 'false')
+  await expect(depenses.getByText('Tu as dépensé ce qui était prévu.')).toBeVisible()
+})
+
+test('une clôture dont la réponse se perd : la base l’a faite, la page le relit (jamais « déjà clôturé »)',
+  async ({ page }) => {
+    await ouvreNovembre(page)
+    const bouton = page.getByRole('button', { name: 'Clôturer novembre' })
+    await expect(bouton).toBeVisible({ timeout: 15_000 })
+    /* La requête PART et la base la valide ; seule la réponse est perdue. */
+    await page.route('**/rest/v1/rpc/cloture_le_mois', async route => {
+      await route.fetch()
+      await route.abort('connectionreset')
+    })
+    await bouton.click()
+    await expect(page.getByText(/^Novembre est clôturé le/)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/déjà clôturé/)).toHaveCount(0)
+    const { data } = await db.from('cloture').select('mois').eq('household_id', foyer.householdId)
+      .eq('mois', `${A}-11-01`)
+    expect(data, 'la base a bien clos novembre').toHaveLength(1)
+    await page.unroute('**/rest/v1/rpc/cloture_le_mois')
+  })
+
+test('« Revenir dessus » dont la réponse se perd : le mois est rouvert, la page le relit',
+  async ({ page }) => {
+    await ouvreNovembre(page)
+    const revenir = page.getByRole('button', { name: 'Revenir dessus, Novembre' })
+    await expect(revenir).toBeVisible({ timeout: 15_000 })
+    await page.route('**/rest/v1/rpc/rouvre_le_mois', async route => {
+      await route.fetch()
+      await route.abort('connectionreset')
+    })
+    page.once('dialog', d => { void d.accept() })
+    await revenir.click()
+    await expect(page.getByRole('button', { name: 'Clôturer novembre' })).toBeVisible({ timeout: 15_000 })
+    const { data } = await db.from('cloture').select('mois').eq('household_id', foyer.householdId)
+      .eq('mois', `${A}-11-01`)
+    expect(data, 'la base a bien rouvert novembre').toHaveLength(0)
+    await page.unroute('**/rest/v1/rpc/rouvre_le_mois')
+  })
+
+test('une clôture refusée par la base se dit, et « Clôturer » reste utilisable : le clic suivant passe',
+  async ({ page }) => {
+    await ouvreNovembre(page)
+    const bouton = page.getByRole('button', { name: 'Clôturer novembre' })
+    await expect(bouton).toBeVisible({ timeout: 15_000 })
+    let refus = true
+    await page.route('**/rest/v1/rpc/cloture_le_mois', route => refus
+      ? route.fulfill({ status: 400, contentType: 'application/json',
+          headers: { 'access-control-allow-origin': '*' },
+          body: JSON.stringify({ message: 'Panne simulée.', code: 'P0001' }) })
+      : route.continue())
+    await bouton.click()
+    await expect(page.getByText('Panne simulée.')).toBeVisible({ timeout: 10_000 })
+    await expect(bouton).toBeEnabled()
+    refus = false
+    await bouton.click()
+    await expect(page.getByText(/^Novembre est clôturé le/)).toBeVisible({ timeout: 15_000 })
+    // Remet novembre ouvert pour les bancs suivants.
+    page.once('dialog', d => { void d.accept() })
+    await page.getByRole('button', { name: 'Revenir dessus, Novembre' }).click()
+    await expect(page.getByRole('button', { name: 'Clôturer novembre' })).toBeVisible({ timeout: 15_000 })
+    await page.unroute('**/rest/v1/rpc/cloture_le_mois')
+  })
+
+test('/budget/<mois à venir> quitte son adresse pour /budget ; /cloture/<année passée> nomme l’année',
+  async ({ page }) => {
+    await joue(page, `${A}-12-01T10:00:00Z`)
+    await connecte(page)
+    await page.goto(`/budget/${A + 4}-05`)
+    await expect(page).toHaveURL(/\/budget$/, { timeout: 15_000 })
+    await expect(page.getByRole('heading', { name: 'Décembre' })).toBeVisible()
+
+    await page.goto(`/cloture/${A - 1}-09`)
+    await expect(page.getByRole('heading', { name: `Clôturer septembre ${A - 1}` })).toBeVisible({ timeout: 15_000 })
+    /* Le titre reçoit le focus à l'arrivée. */
+    await expect(page.getByRole('heading', { name: `Clôturer septembre ${A - 1}` })).toBeFocused()
+  })

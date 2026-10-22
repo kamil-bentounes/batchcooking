@@ -226,7 +226,7 @@ export function Cloture({ userId, mois, va, retour }: {
         <p className="mt-4 text-[13px] font-semibold uppercase tracking-[0.08em] text-doux">
           {dateLongue(maintenant())}
         </p>
-        <h1 ref={titre} tabIndex={-1} className="titre text-[40px] leading-tight mt-1 outline-none">
+        <h1 ref={titre} tabIndex={-1} className="titre text-[40px] leading-tight mt-1 focus:outline-none">
           {porte === 'close' ? capitale(nom) : `Clôturer ${nom}`}
         </h1>
         {corps}
