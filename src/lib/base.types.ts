@@ -3521,10 +3521,6 @@ export type Database = {
         Args: { foyer: string; le_mois: string }
         Returns: undefined
       }
-      regularise_annuel: {
-        Args: { annee: number; la_charge: string; reel_cents: number }
-        Returns: string
-      }
       repartit_les_lignes: {
         Args: { foyer: string; le_mois: string }
         Returns: undefined

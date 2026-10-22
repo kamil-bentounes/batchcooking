@@ -4,24 +4,15 @@
  * au lieu d'écrire.
  */
 import { describe, expect, it } from 'vitest'
-import { admin } from './helpers/db'
-import { foyerSolo, ouvre, poseCharge } from './helpers/budget'
+import { foyerSolo, poseCharge } from './helpers/budget'
 
 describe('l’ancien paquet', () => {
-  it('« Le relevé est arrivé ? » : regularise_annuel refuse tout, et n’écrit rien', async () => {
+  it('regularise_annuel n’existe plus', async () => {
     const f = await foyerSolo('ancien-releve')
-    const taxe = await poseCharge(f, { libelle: 'Taxe foncière', cents: 145_000,
-                                       mode: 'mis_de_cote' })
-    await ouvre(f, '2026-10-01')
-    const avant = (await admin().from('depense').select('id').eq('charge_id', taxe)).data!.length
     const { error } = await f.client.rpc('regularise_annuel',
-      { la_charge: taxe, annee: 2026, reel_cents: 0 })
-    expect(error?.message)
-      .toBe('Le relevé annuel se saisit désormais facture par facture. Recharge la page.')
-    expect((await admin().from('depense').select('id').eq('charge_id', taxe)).data)
-      .toHaveLength(avant)
-    expect((await admin().from('releve_annuel').select('id').eq('charge_id', taxe)).data)
-      .toEqual([])
+      { la_charge: '00000000-0000-0000-0000-000000000000', annee: 2026, reel_cents: 0 })
+    /* PGRST202 : PostgREST ne trouve pas la fonction. */
+    expect(error?.code).toBe('PGRST202')
   })
 
   it('ses lectures tournent encore', async () => {
