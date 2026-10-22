@@ -8,6 +8,7 @@
  */
 import type { ReactNode } from 'react'
 import { motion } from 'motion/react'
+import { enFrancais } from '../lib/reseau.ts'
 
 export type Destination = 'accueil' | 'semaine' | 'stock' | 'bilan'
 
@@ -253,7 +254,9 @@ export function Attente() {
  */
 export function Erreur({ de }: { de: unknown }) {
   if (!de) return null
-  const texte = de instanceof Error ? de.message : String(de)
+  /* Une panne de `fetch` se dit en français : les écritures du budget relancent `error.message`
+     tel quel, et « TypeError: Failed to fetch » arrivait à l'écran (grand test, parcours budget). */
+  const texte = enFrancais(de instanceof Error ? de.message : String(de))
   return (
     <p role="alert"
        className="mt-4 text-[15px] text-groseille in-[.bg-encre]:text-current">{texte}</p>
