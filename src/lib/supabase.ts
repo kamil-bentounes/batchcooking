@@ -3,7 +3,7 @@ import type { PostgrestSingleResponse } from '@supabase/supabase-js'
 import type { Database } from './base.types.ts'
 import { fragmentRepare } from './lien.ts'
 import { SESSION_PERDUE, sessionPerdue } from './session-perdue.ts'
-import { PAS_DE_RESEAU, enFrancais } from './reseau.ts'
+import { PAS_DE_RESEAU, enFrancais, estUnePanneDeReseau } from './reseau.ts'
 
 /* ⚠️ AVANT `createClient` : c'est lui qui lit l'URL pour y chercher la session.
    Un lien empoisonné (`#error=…#access_token=…`, voir `fragmentRepare`) y
@@ -99,8 +99,12 @@ export async function deconnecte(vers: string = import.meta.env.BASE_URL): Promi
 }
 
 export async function callFunction<T = unknown>(name: string, body: unknown): Promise<T> {
-  const { data } = await supabase.auth.getSession()
+  const { data, error } = await supabase.auth.getSession()
   if (!data.session) {
+    /* ⚠️ Pas de session ne veut pas dire « session perdue ». Jeton de plus d'une heure + réseau
+       coupé : auth-js ne peut pas le rafraîchir et rend `session: null` AVEC une erreur de réseau.
+       C'était une simple panne, et « Ta session a expiré » renvoyait à la connexion. */
+    if (error && estUnePanneDeReseau(error)) throw new ErreurDeFonction(PAS_DE_RESEAU, 'reseau', 0)
     window.dispatchEvent(new Event(SESSION_PERDUE))
     throw new Error('Connecte-toi d’abord.')
   }
