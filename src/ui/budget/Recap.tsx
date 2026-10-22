@@ -9,11 +9,14 @@
  */
 import { infoCategorie } from '../../lib/budget/categories.ts'
 import { capitale, montant, nomDuMois, type Reste, type Segment } from '../../lib/budget/mois.ts'
+import { RevenirDessus } from './RevenirDessus.tsx'
 
 export function Recap({ mois, reste, segments, cloture, va }: {
   mois: string; reste: Reste; segments: Segment[]
-  /** Lot 3 : le mois est clôturé, et voici ce que le choix de clôture en a retenu. */
-  cloture?: { reste: number | null; misDeCote: number } | null
+  /** Lot 3 : le mois est clôturé, et voici ce que le choix de clôture en a retenu.
+      `duFoyer` : ce que « Revenir dessus » retirera de l'épargne — le total des membres,
+      que `rouvre_le_mois` efface tous ; à défaut, ma part. */
+  cloture?: { reste: number | null; misDeCote: number; duFoyer?: number } | null
   va: (v: string) => void
 }) {
   const teinte = (s: Segment) =>
@@ -32,6 +35,7 @@ export function Recap({ mois, reste, segments, cloture, va }: {
           {cloture.misDeCote > 0 && (
             <p className="mt-3 text-[15px] opacity-80">dont {montant(cloture.misDeCote)} mis de côté</p>
           )}
+          <RevenirDessus mois={mois} misDeCote={cloture.duFoyer ?? cloture.misDeCote} clair />
         </>
       ) : reste.revenu === null || reste.reste === null ? (
         <>

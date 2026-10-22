@@ -8,6 +8,7 @@
  * Rendu en chaîne (le dépôt n'a ni jsdom ni Testing Library) : les feuilles se rendent
  * par `FeuillesDuMois`, qui porte la décision « que montre-t-on sur ce mois ? ».
  */
+import type { ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -52,10 +53,22 @@ function feuilles(ouverte: Ouverte, clos: boolean) {
     </QueryClientProvider>)
 }
 
+/** « Revenir dessus » lit le client de requêtes : tout ce qui le porte se rend dans un fournisseur. */
+const dansUnClient = (el: ReactElement) =>
+  renderToStaticMarkup(<QueryClientProvider client={new QueryClient()}>{el}</QueryClientProvider>)
+const nRevenir = (h: string) => (h.match(/Revenir dessus/g) ?? []).length
+
 describe('MoisClos', () => {
   it('dit que le mois est clôturé, avec son nom', () => {
-    expect(texte(renderToStaticMarkup(<MoisClos mois={OCT} misDeCote={0} />)))
+    expect(texte(dansUnClient(<MoisClos mois={OCT} misDeCote={0} />)))
       .toContain('Octobre est clôturé.')
+  })
+
+  it('porte « Revenir dessus », le seul geste d’un mois clôturé', () => {
+    const h = dansUnClient(<MoisClos mois={OCT} misDeCote={200_00} />)
+    expect(nRevenir(h)).toBe(1)
+    expect(h).toMatch(/<button[^>]*>Revenir dessus<\/button>/)
+    expect(h).not.toContain('<input')
   })
 })
 
@@ -144,8 +157,8 @@ describe('Les feuilles sur un mois clôturé : AUCUN geste d’écriture', () =>
 describe('Recap d’un mois clôturé', () => {
   const reste: Reste = { revenu: 4325_00, reste: 99_00, charges: 1 }
   const rend = (cl: { reste: number | null; misDeCote: number } | null) =>
-    texte(renderToStaticMarkup(<Recap mois={OCT} reste={reste} segments={[]} va={() => {}}
-                                      cloture={cl} />))
+    texte(dansUnClient(<Recap mois={OCT} reste={reste} segments={[]} va={() => {}}
+                              cloture={cl} />))
 
   it('« Octobre est clôturé. Il t’est resté X », dont Y mis de côté', () => {
     const t = rend({ reste: 1234_00, misDeCote: 200_00 })
@@ -230,5 +243,53 @@ describe('L’écran du mois, clôturé', () => {
 
   it('aucun bandeau de clôture sur un mois clôturé', () => {
     expect(texte(clos())).not.toContain('on le clôture')
+  })
+})
+
+describe('L’écran du mois : « Revenir dessus » et ce qui n’a pas pu être soldé', () => {
+  const clos = (p = {}) => tout({ clotures: [cloturee()], ...p })
+  const nonSoldee = { charge: 'c3', libelle: 'Taxe foncière', annee: 2025, raison: 'x' }
+
+  it('« Revenir dessus » est sur la carte encre d’un mois clôturé, une fois', () => {
+    expect(nRevenir(ecranDuMois(clos()))).toBe(1)
+  })
+
+  it('et dans la feuille en lecture seule : deux, la carte et la feuille', () => {
+    const h = ecranDuMois(clos(), { ouverte: { geste: 'declarer', id: 'd1' } })
+    expect(nRevenir(h)).toBe(2)
+  })
+
+  it('un mois ouvert n’a rien à rouvrir : aucun « Revenir dessus », nulle part', () => {
+    expect(nRevenir(ecranDuMois(tout()))).toBe(0)
+    expect(nRevenir(ecranDuMois(tout(), { ouverte: { geste: 'declarer', id: 'd1' } }))).toBe(0)
+  })
+
+  it('sur un mois clôturé, aucun champ, aucun « Clôturer », aucun « Déclarer » : seul « Revenir dessus » écrit', () => {
+    const h = ecranDuMois(clos())
+    expect(h).not.toContain('<input')
+    expect(h).not.toContain('Clôturer')
+    expect(h).not.toContain('Déclarer')
+    expect(h).not.toContain('C’est ça')
+  })
+
+  it('ce que la clôture n’a pas pu solder se dit sous le chiffre du mois', () => {
+    const t = texte(ecranDuMois(clos({ nonSoldees: [nonSoldee] })))
+    expect(t).toContain('Taxe foncière : 2025 n’a pas pu être soldée. Elle le sera à la prochaine clôture.')
+    expect(t.indexOf('Il t’est resté')).toBeLessThan(t.indexOf('Taxe foncière : 2025'))
+  })
+
+  it('une ligne par année non soldée, chacune sous sa charge', () => {
+    const t = texte(ecranDuMois(clos({ nonSoldees: [nonSoldee, { ...nonSoldee, annee: 2024 }] })))
+    expect(t).toContain('Taxe foncière : 2025 n’a pas pu être soldée.')
+    expect(t).toContain('Taxe foncière : 2024 n’a pas pu être soldée.')
+  })
+
+  it('rien de non soldé : aucune ligne', () => {
+    expect(texte(ecranDuMois(clos({ nonSoldees: [] })))).not.toContain('n’a pas pu être soldée')
+    expect(texte(ecranDuMois(clos()))).not.toContain('n’a pas pu être soldée')
+  })
+
+  it('un mois rouvert ne garde pas la ligne d’une clôture qui n’existe plus', () => {
+    expect(texte(ecranDuMois(tout({ nonSoldees: [nonSoldee] })))).not.toContain('n’a pas pu être soldée')
   })
 })

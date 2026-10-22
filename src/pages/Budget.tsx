@@ -25,12 +25,13 @@ import { Attente, Erreur, Marque, Vide } from '../ui/coque.tsx'
 import { etatDeLEcran, messageDeLecture, videDuMois } from '../lib/budget/ecran.ts'
 import { initialeDe, prenomDe, useFoyer } from '../lib/donnees/foyer.ts'
 import {
-  moisDe, useCharges, useClotures, useComptes, useMois, useRevenus, useSaisies,
+  moisDe, useCharges, useClotures, useComptes, useMois, useNonSoldees, useRevenus, useSaisies,
 } from '../lib/donnees/budget.ts'
 import {
   bandeau, barre, capitale, joursRestants, moisVoisin, nomDuMois, parCategorie,
   resteDuMois, revenuDuMois, totauxDuFiltre, type Filtre,
 } from '../lib/budget/mois.ts'
+import { misDeCoteDuFoyer } from '../lib/budget/cloture.ts'
 import { aujourdhui } from '../lib/horloge.ts'
 import { Bandeau } from '../ui/budget/Bandeau.tsx'
 import { CarteEpargne } from '../ui/budget/CarteEpargne.tsx'
@@ -82,9 +83,12 @@ export function Budget({ userId, va, mois: depart, ouverteAuDepart = null }: {
   const clos = estClos(mois)
   /* Le chiffre d'un mois clôturé vient de la clôture : `cloture_choix.reste_cents`,
      celui du jour où on l'a fermé (§ 3.1.1). */
-  const monChoix = (clotures.data ?? []).find(k => k.mois === mois)?.choix
-    .find(c => c.user_profile_id === userId)
+  const cetteCloture = (clotures.data ?? []).find(k => k.mois === mois)
+  const monChoix = cetteCloture?.choix.find(c => c.user_profile_id === userId)
   const misDeCote = monChoix?.mis_de_cote_cents ?? 0
+  /* « Revenir dessus » rouvre pour tout le foyer : c'est ce total qu'il annonce. */
+  const misDeCoteFoyer = misDeCoteDuFoyer(cetteCloture?.choix ?? [], foyer?.membres.map(m => m.id))
+  const nonSoldees = useNonSoldees(mois)
   /* Rien tant que les clôtures ne sont pas lues : un mois clôturé s'annonçait
      « à clôturer » le temps d'un aller-retour. */
   const leBandeau = clotures.isPending ? null : bandeau({
@@ -209,7 +213,17 @@ export function Budget({ userId, va, mois: depart, ouverteAuDepart = null }: {
         ) : (
           <>
             <Recap mois={mois} reste={reste} segments={segments} va={va}
-                   cloture={clos ? { reste: monChoix?.reste_cents ?? null, misDeCote } : null} />
+                   cloture={clos ? { reste: monChoix?.reste_cents ?? null, misDeCote,
+                                     duFoyer: misDeCoteFoyer } : null} />
+            {/* Ce que la clôture n'a pas pu solder se dit sous son chiffre, jusqu'au
+                rechargement (choix 20). Sur un mois clôturé seulement : rouvert, il n'a
+                plus de clôture à qui l'imputer. */}
+            {clos && (nonSoldees.data ?? []).map(n => (
+              <p key={`${n.charge}-${n.annee}`} className="mt-3 text-[15px] leading-snug"
+                 style={{ color: 'var(--color-ocre)' }}>
+                {n.libelle} : {n.annee} n’a pas pu être soldée. Elle le sera à la prochaine clôture.
+              </p>
+            ))}
             {sansRevenu.length > 0 && (
               <p className="mt-3 text-[15px] leading-snug" style={{ color: 'var(--color-ocre)' }}>
                 {sansRevenu.length === 1
@@ -235,7 +249,7 @@ export function Budget({ userId, va, mois: depart, ouverteAuDepart = null }: {
         )}
       </div>
 
-      <FeuillesDuMois ouverte={ouverte} clos={clos} misDeCote={misDeCote} etat={etat}
+      <FeuillesDuMois ouverte={ouverte} clos={clos} misDeCote={misDeCoteFoyer} etat={etat}
                       lignes={lignes} auFil={auFil} saisies={dites} charges={parCharge}
                       mois={mois} moi={userId} foyerId={foyer?.id ?? ''} membres={membres}
                       fermer={fermer}

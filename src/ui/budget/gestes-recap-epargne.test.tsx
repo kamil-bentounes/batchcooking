@@ -65,8 +65,11 @@ describe('Recap', () => {
   ]
   const avecReste = (reste: Partial<Reste> = {}): Reste =>
     ({ revenu: 4325_00, charges: 1200_00, reste: 3125_00, ...reste })
+  /* Un mois clôturé porte « Revenir dessus », qui lit le client de requêtes. */
   const rendsRecap = (reste: Reste, plus: { cloture?: { reste: number | null; misDeCote: number } | null } = {}) =>
-    rends(<Recap mois="2026-10-01" reste={reste} segments={segments} va={() => {}} {...plus} />)
+    rends(<QueryClientProvider client={new QueryClient()}>
+      <Recap mois="2026-10-01" reste={reste} segments={segments} va={() => {}} {...plus} />
+    </QueryClientProvider>)
 
   it('le mois ouvert : « Il te reste », le chiffre, les charges, le revenu', () => {
     const t = texte(rendsRecap(avecReste()))
