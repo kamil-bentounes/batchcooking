@@ -9,7 +9,6 @@
 import { useState } from 'react'
 import type { RecetteChoisie } from '../../lib/donnees/cycle.ts'
 import { PARTS_MAX_CYCLE, PARTS_MAX_RECETTE, parts } from '../../lib/recettes/parts.ts'
-import { Erreur } from '../coque.tsx'
 import { ChampParts } from './ChampParts.tsx'
 import { Photo } from './Photo.tsx'
 
@@ -17,12 +16,10 @@ import { Photo } from './Photo.tsx'
 const enGrand = (texte: string) => texte.replace(' ', ' ')
 
 export function Retenues({
-  cible, choisies, erreur, reprise = 0, surRefus, surCible, surParts, surRetire,
+  cible, choisies, reprise = 0, surRefus, surCible, surParts, surRetire,
 }: {
   cible: number
   choisies: RecetteChoisie[]
-  /** Ce qui a raté (retirer, parts, cible), dit en français ; `null` après un succès. */
-  erreur?: string | null
   /** Change quand un réglage a raté : les champs repartent de la base. */
   reprise?: number
   /** Le motif d'un refus de saisie (« 2.5 », « 21 »), ou `null` quand elle est valide. */
@@ -123,7 +120,9 @@ export function Retenues({
           )))}
         </ul>
       )}
-      <Erreur de={erreur} />
+      {/* Le message d'un réglage refusé ou raté n'est PAS ici : sous six recettes il tombait hors
+          de l'écran, loin du champ qu'on venait de toucher. Il s'affiche dans la barre du bas
+          (`Choisir`), qui reste sous les yeux. */}
     </section>
   )
 }

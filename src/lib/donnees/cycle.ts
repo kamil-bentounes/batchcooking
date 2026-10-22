@@ -153,7 +153,11 @@ export function useRecettesDuCycle(cycleId: string | undefined) {
     queryFn: async (): Promise<RecetteChoisie[]> => ou(
       await supabase.from('cycle_recipe')
         .select('*, recipe:recipe_id(id, title, yield_servings, total_time_min, source_name, image_url)')
-        .eq('cycle_id', cycleId!).order('position')) as unknown as RecetteChoisie[],
+        .eq('cycle_id', cycleId!)
+        /* `position` vaut 0 pour toutes les lignes : seule, elle laisse la base rendre l'ordre
+           de son tas, et un `upsert` de parts (un UPDATE) déplaçait la recette réglée en bas
+           de la liste — la ligne qu'on venait de toucher changeait de place sous le pouce. */
+        .order('position').order('created_at').order('id')) as unknown as RecetteChoisie[],
   })
 }
 

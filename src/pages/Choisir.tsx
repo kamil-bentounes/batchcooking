@@ -195,7 +195,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
             {genere.isPending ? 'Je prépare…' : 'Faire la liste'}
           </button>
         </div>
-        <Erreur de={genere.error ?? change.error} />
+        <Erreur de={echecCarte ?? genere.error ?? change.error} />
       </BarreAction>
     }>
       <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-doux">
@@ -203,7 +203,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
       </p>
       <h1 className="titre-fort text-[46px] mt-1">Choisir</h1>
 
-      <Retenues cible={cible} choisies={choisies} erreur={echecCarte}
+      <Retenues cible={cible} choisies={choisies}
                 reprise={reprise} surRefus={setEchecCarte}
                 surCible={reglePartsDeLaCible} surParts={reglePartsDeLaRecette}
                 surRetire={id => retire.mutate(id, issue('retirer', setEchecCarte))} />
