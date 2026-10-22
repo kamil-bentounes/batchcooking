@@ -3,6 +3,8 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { lienDeploye, useRoute } from './lib/route.ts'
 import { SESSION_PERDUE } from './lib/session-perdue.ts'
+import { estUnePanneDeReseau } from './lib/reseau.ts'
+import { HorsLigne } from './pages/HorsLigne'
 import { SignIn } from './pages/SignIn'
 import { Password } from './pages/Password'
 import { Onboarding } from './pages/Onboarding'
@@ -46,6 +48,8 @@ export default function App() {
   const [prenomRemis, setPrenomRemis] = useState(false)
   const [mdpPose, setMdpPose] = useState(true)
   const [pret, setPret] = useState(false)
+  /** Le réseau (ou le serveur) ne répond pas : on ne sait PAS si la personne a un foyer. */
+  const [horsLigne, setHorsLigne] = useState(false)
   /** Sur un lien d'invitation : elle a dit avoir déjà un compte. */
   const [connexionDemandee, setConnexionDemandee] = useState(false)
   /** La session a disparu en cours de route (jeton retiré, compte supprimé ailleurs) : on le dit. */
@@ -70,14 +74,23 @@ export default function App() {
        réinitialisation l'avait retiré. */
     let hh: string | null = null
     let p: { password_set: boolean; display_name: string | null } | null = null
+    let panne = false
     if (data.session) {
-      hh = (await supabase.rpc('current_household')).data ?? null
+      /* ⚠️ Une panne n'est pas « pas de foyer ». Le `data` nul d'un `fetch` raté était lu comme
+         « aucun foyer » : ouverte sans réseau, l'appli finissait, après vingt secondes d'« Un
+         instant… », sur « Il te faut une invitation » — à quelqu'un qui a un foyer. */
+      const f = await supabase.rpc('current_household')
+      if (f.error && estUnePanneDeReseau(f.error)) panne = true
+      hh = f.data ?? null
       // Tant que le mot de passe n'est pas posé, on n'entre pas : sinon la
       // personne repart sur un lien par mail à chaque connexion.
-      p = (await supabase.from('user_profile')
-        .select('password_set, display_name').eq('id', data.session.user.id).maybeSingle()).data
+      const pr = await supabase.from('user_profile')
+        .select('password_set, display_name').eq('id', data.session.user.id).maybeSingle()
+      if (pr.error && estUnePanneDeReseau(pr.error)) panne = true
+      p = pr.data
     }
     if (ceTour !== tour.current) return
+    setHorsLigne(panne)
     sessionRef.current = data.session
     setSession(data.session)
     setFoyer(hh)
@@ -151,6 +164,7 @@ export default function App() {
       : <SignIn redirectTo={lienDeploye(ici)}
                 info={perdue ? 'Ta session a expiré : reconnecte-toi.' : undefined} />
   }
+  if (horsLigne) return <HorsLigne reessayer={relire} />
   if (invitation) {
     return <AcceptInvite token={invitation[1]} dejaChezToi={!!foyer} va={va}
                          compte={session.user.email ?? ''} />
