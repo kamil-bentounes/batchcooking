@@ -3,6 +3,7 @@ import type { PostgrestSingleResponse } from '@supabase/supabase-js'
 import type { Database } from './base.types.ts'
 import { fragmentRepare } from './lien.ts'
 import { SESSION_PERDUE, sessionPerdue } from './session-perdue.ts'
+import { PAS_DE_RESEAU, enFrancais } from './reseau.ts'
 
 /* ⚠️ AVANT `createClient` : c'est lui qui lit l'URL pour y chercher la session.
    Un lien empoisonné (`#error=…#access_token=…`, voir `fragmentRepare`) y
@@ -55,7 +56,7 @@ export type Insertion<T extends keyof Database['public']['Tables']> =
  * avec « la requête a échoué » est la façon la plus sûre de masquer un bug.
  */
 export function ou<T>({ data, error }: PostgrestSingleResponse<T>): T {
-  if (error) throw new Error(error.message)
+  if (error) throw new Error(enFrancais(error.message))
   if (data === null) throw new Error('La base n’a rien rendu.')
   return data
 }
@@ -63,7 +64,7 @@ export function ou<T>({ data, error }: PostgrestSingleResponse<T>): T {
 /* `maybeSingle()` porte déjà le null dans son type : on le laisse passer plutôt
    que de le redéclarer, ce que l'inférence ne saurait pas démêler. */
 export function ouNul<T>({ data, error }: PostgrestSingleResponse<T>): T {
-  if (error) throw new Error(error.message)
+  if (error) throw new Error(enFrancais(error.message))
   return data
 }
 
@@ -126,6 +127,7 @@ export class ErreurDeFonction extends Error {
 }
 
 async function appelle<T>(name: string, body: unknown, jeton: string): Promise<T> {
+  /* Réseau coupé : `fetch` lève « Failed to fetch », que l'écran affichait tel quel. */
   const res = await fetch(fn(name), {
     method: 'POST',
     headers: {
@@ -134,7 +136,7 @@ async function appelle<T>(name: string, body: unknown, jeton: string): Promise<T
       Authorization: `Bearer ${jeton}`,
     },
     body: JSON.stringify(body),
-  })
+  }).catch(() => { throw new ErreurDeFonction(PAS_DE_RESEAU, 'reseau', 0) })
   if (!res.ok) {
     /* Le corps d'erreur est du JSON : le jeter tel quel affichait
        `{"erreur":"Quota atteint : 20 dictées…","restantes":0}` à l'écran.

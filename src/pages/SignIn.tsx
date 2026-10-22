@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { erreurDeLien } from '../lib/lien.ts'
+import { PAS_DE_RESEAU, estUnePanneDeReseau } from '../lib/reseau.ts'
 import { Page, Bouton, Champ, Message } from '../ui/kit'
 
 type Mode = 'mdp' | 'premiere' | 'oubli'
@@ -99,7 +100,7 @@ export function SignIn({ redirectTo: cible, info }: {
     try {
       if (mode === 'mdp') {
         const { error } = await supabase.auth.signInWithPassword({ email, password: mdp })
-        if (error) dire('E-mail ou mot de passe incorrect.', true)
+        if (error) dire(estUnePanneDeReseau(error) ? PAS_DE_RESEAU : 'E-mail ou mot de passe incorrect.', true)
         else entre = true
         return
       }
@@ -107,6 +108,7 @@ export function SignIn({ redirectTo: cible, info }: {
         const { error } = await supabase.auth.signInWithOtp({
           email, options: { emailRedirectTo: cible },
         })
+        if (estUnePanneDeReseau(error)) return dire(PAS_DE_RESEAU, true)
         dire(sansFuite(error,
           `Lien envoyé à ${email}. Ouvre-le depuis cet appareil : tu choisiras `
           + `ton mot de passe juste après.`), false)
@@ -121,6 +123,8 @@ export function SignIn({ redirectTo: cible, info }: {
        *    était reconnecté sans qu'on lui demande rien — le défaut d'origine.
        */
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: cible })
+      /* Une panne n'apprend rien sur l'adresse : on ne dit PAS « le lien vient de partir ». */
+      if (estUnePanneDeReseau(error)) return dire(PAS_DE_RESEAU, true)
       dire(sansFuite(error,
         `Si un compte existe pour ${email}, le lien vient de partir. `
         + `Il est valable une heure.`), false)
