@@ -11,6 +11,22 @@ import type { Retrait } from '../donnees/budget.ts'
 export type Rythme = 'trimestriel' | 'annuel'
 
 /**
+ * La charge pèse-t-elle dans ce mois ? Son départ ne dépasse pas le mois : l'écran du mois n'a
+ * aucune ligne pour une charge qui démarre plus tard. « Mes charges » la comptait pourtant dans
+ * « … par mois pour le foyer » : 3 988,57 € là où le mois en lisait 3 978,57 €, pour une charge
+ * qui ne démarre qu'en 2031.
+ */
+export function enVigueur(c: { debut: string }, mois: string): boolean {
+  return c.debut.slice(0, 7) <= mois.slice(0, 7)
+}
+
+/** Ce que la liste dit d'une charge qui ne court pas encore : son mois de départ. Null si elle court. */
+export function departDeLaCharge(c: { debut: string }, mois: string): string | null {
+  if (enVigueur(c, mois)) return null
+  return `commence en ${nomDuMois(c.debut)} ${c.debut.slice(0, 4)}`
+}
+
+/**
  * Que faire de la réponse de « Retirer » (0111). Une saisie ne part pas sans
  * qu'on l'ait vue : la base refuse d'abord avec le total, on le demande, puis on
  * rappelle. Un refus de l'utilisateur ne rappelle JAMAIS — sinon les dépenses

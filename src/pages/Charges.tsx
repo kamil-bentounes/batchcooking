@@ -25,7 +25,7 @@ import {
 } from '../lib/donnees/budget.ts'
 import { CATEGORIES, NOM_DU_MODE, categorieDeLArticle, infoCategorie, modeDeLArticle,
          type Categorie, type Mode } from '../lib/budget/categories.ts'
-import { ceQuiChange, communeDeLaCharge, debutDuChamp, ditLaCorrection, peutCorriger, peutPoser, periodiciteDeLaFacon,
+import { ceQuiChange, communeDeLaCharge, departDeLaCharge, enVigueur, debutDuChamp, ditLaCorrection, peutCorriger, peutPoser, periodiciteDeLaFacon,
          plancherDuDebut, retireesEncoreAReg, sousTitreDeLaFacon, suiteDuRetrait, texteDeLaRetiree,
          type Rythme } from '../lib/budget/charges.ts'
 import { maintenant } from '../lib/horloge.ts'
@@ -507,14 +507,18 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
     c.periodicite === 'mensuel' ? c.montant_cents
     : c.periodicite === 'annuel' ? Math.round(c.montant_cents / 12)
     : Math.round(c.montant_cents / 3)
-  const total = vues.reduce((s, c) => s + parMois(c), 0)
+  /* Le total ne compte que ce qui est en vigueur CE mois-ci, comme l'écran du mois :
+     une charge qui démarre en 2031 apparaît dans la liste, avec sa date, hors du total. */
+  const ceMois = moisDe()
+  const enCours = vues.filter(c => enVigueur(c, ceMois))
+  const total = enCours.reduce((s, c) => s + parMois(c), 0)
   /* Ce que le MOIS ne demandera pas de virer : une charge qu'on paie depuis son
      propre compte ne crée pas de dette — `virements()` l'écarte, à raison.
      Mais les deux écrans affichaient alors deux totaux différents sans qu'un
      mot ne l'explique : 2 964 € ici, 2 878 € là, et on cherche l'erreur. */
   const sienPropre = new Set((comptes.data ?? [])
     .filter(c => c.genre === 'perso' && c.titulaire_id === userId).map(c => c.id))
-  const avance = vues
+  const avance = enCours
     .filter(c => c.compte_id && sienPropre.has(c.compte_id)
                  && c.participants.length === 1 && c.participants[0] === userId)
     .reduce((s, c) => s + parMois(c), 0)
@@ -654,6 +658,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                     {c.cle === 'moitie' && ' · moitié-moitié'}
                     {c.cle === 'prorata' && ' · au prorata'}
                     {sousTitreDeLaFacon(c)}
+                    {departDeLaCharge(c, ceMois) && ` · ${departDeLaCharge(c, ceMois)}`}
                     {!c.compte_id && ' · sans compte'}
                     {/* « en attente du foyer » ne dit pas ce qui est attendu.
                         C'est une charge marquée commune alors qu'on est encore

@@ -1,8 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ceQuiChange, communeDeLaCharge, debutDuChamp, ditLaCorrection, lisLeDebut, peutCorriger, peutPoser,
+import { departDeLaCharge, enVigueur, ceQuiChange, communeDeLaCharge, debutDuChamp, ditLaCorrection, lisLeDebut, peutCorriger, peutPoser,
          periodiciteDeLaFacon, plancherDuDebut, retireesEncoreAReg, sousTitreDeLaFacon,
          suiteDuRetrait, texteDeLaRetiree } from './charges.ts'
 import { montant } from './mois.ts'
+
+describe('enVigueur : une charge qui ne démarre pas encore ne pèse pas dans le mois', () => {
+  it('en vigueur dès le mois de son départ, pas avant', () => {
+    expect(enVigueur({ debut: '2026-10-01' }, '2026-10-01')).toBe(true)
+    expect(enVigueur({ debut: '2026-09-01' }, '2026-10-01')).toBe(true)
+    expect(enVigueur({ debut: '2026-11-01' }, '2026-10-01')).toBe(false)
+    expect(enVigueur({ debut: '2031-01-01' }, '2026-10-15')).toBe(false)
+  })
+  it('une charge à venir dit sa date de début, une charge en vigueur ne dit rien', () => {
+    expect(departDeLaCharge({ debut: '2031-01-01' }, '2026-10-01')).toBe('commence en janvier 2031')
+    expect(departDeLaCharge({ debut: '2026-12-01' }, '2026-10-01')).toBe('commence en décembre 2026')
+    expect(departDeLaCharge({ debut: '2026-10-01' }, '2026-10-01')).toBeNull()
+  })
+})
 
 describe('suiteDuRetrait : « Retirer » demande d’abord quand des dépenses sont déclarées', () => {
   it('la base accepte : on le dit, sans rien demander', () => {
