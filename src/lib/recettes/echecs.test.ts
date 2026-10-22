@@ -13,6 +13,17 @@ describe('messageEchec', () => {
       .toBe('Je n’ai pas pu changer les parts visées. Réessaie dans un instant.')
   })
 
+  it('dit aussi les gestes de la liste de courses', () => {
+    expect(messageEchec('cocher', new Error('boom')))
+      .toBe('Je n’ai pas pu cocher cet article. Réessaie dans un instant.')
+    expect(messageEchec('supprimer', new Error('boom')))
+      .toBe('Je n’ai pas pu supprimer cet article. Réessaie dans un instant.')
+    expect(messageEchec('prix', new Error('violates check constraint "shopping_item_paid_price_eur_check"')))
+      .toBe('Je n’ai pas pu noter ce prix. Réessaie dans un instant.')
+    expect(messageEchec('article', new TypeError('Failed to fetch')))
+      .toBe('Je n’ai pas pu ajouter cet article. Tu n’as plus de connexion.')
+  })
+
   it('ne recopie jamais le message technique de la base', () => {
     expect(messageEchec('retenir', new Error('PGRST301 JWT expired'))).not.toMatch(/JWT|PGRST/)
   })

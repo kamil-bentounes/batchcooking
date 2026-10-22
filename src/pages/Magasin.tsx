@@ -18,6 +18,11 @@ import {
 import { useEstimeListe } from '../lib/donnees/prix.ts'
 import type { Article } from '../lib/donnees/courses.ts'
 import { RAYONS, rayonDe } from '../lib/rayons.ts'
+import { messageEchec } from '../lib/recettes/echecs.ts'
+import type { Geste } from '../lib/recettes/echecs.ts'
+
+/** Le prix payé d'un article : au-delà, c'est une faute de frappe, pas un ticket. */
+const PRIX_MAX = 10_000
 
 export function Magasin({ retour, va }: { retour: () => void; va: (v: string) => void }) {
   const { data: cycle } = useCycle()
@@ -33,6 +38,13 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
   const estime = useEstimeListe()
   const [ouvert, setOuvert] = useState<'ajout' | 'completer' | null>(null)
   const [detaille, setDetaille] = useState<string | null>(null)
+  /* Ce qui a raté, dit près des gestes : cocher, supprimer, noter un prix, ajouter échouaient
+     sans un mot (réseau coupé, base qui refuse) et la ligne restait comme elle était. */
+  const [echec, setEchec] = useState<string | null>(null)
+  const issue = (geste: Geste) => ({
+    onSuccess: () => setEchec(null),
+    onError: (e: unknown) => setEchec(messageEchec(geste, e)),
+  })
 
   const sorties = useMemo(
     () => organise(articles, ordres, magasins), [articles, ordres, magasins])
@@ -57,6 +69,7 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
   return (
     <Passage retour={retour}>
       <h1 className="titre text-[40px]">La liste</h1>
+      <Erreur de={echec} />
       <p className="mt-3 text-[15px] text-doux">
         {restants === 0
           ? 'Tout est coché.'
@@ -91,9 +104,10 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
                            ouvert={detaille === a.id}
                            magasins={magasins}
                            surOuvre={() => setDetaille(detaille === a.id ? null : a.id)}
-                           surCoche={v => coche.mutate({ article: a, coche: v })}
-                           surMaj={c => maj.mutate({ id: a.id, ...c })}
-                           surSupprime={() => supprime.mutate(a.id)} />
+                           surCoche={v => coche.mutate({ article: a, coche: v }, issue('cocher'))}
+                           surMaj={c => maj.mutate({ id: a.id, ...c }, issue('prix'))}
+                           surRefus={setEchec}
+                           surSupprime={() => supprime.mutate(a.id, issue('supprimer'))} />
                   ))}
                 </ul>
               </div>
@@ -117,7 +131,7 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
 
       {ouvert === 'ajout' && (
         <FormulaireAjout magasins={magasins} surAjoute={a => {
-          ajoute.mutate({ cycleId: cycle.id, ...a })
+          ajoute.mutate({ cycleId: cycle.id, ...a }, issue('article'))
           setOuvert(null)
         }} />
       )}
@@ -126,7 +140,7 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
                    surAjoute={(label, rayon) => ajoute.mutate({
                      cycleId: cycle.id, label, rayon, source: 'suggestion',
                      storeId: magasins.find(m => m.is_default)?.id ?? null,
-                   })} />
+                   }, issue('article'))} />
       )}
 
       {/* Une liste faite AVANT qu'on connaisse les prix n'a pas d'estimation,
@@ -164,13 +178,15 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
   )
 }
 
-function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surSupprime }: {
+function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surRefus, surSupprime }: {
   article: Article
   ouvert: boolean
   magasins: { id: string; name: string }[]
   surOuvre: () => void
   surCoche: (v: boolean) => void
   surMaj: (c: Partial<Article>) => void
+  /** Le motif d'un prix refusé avant d'écrire, ou `null`. */
+  surRefus: (message: string | null) => void
   surSupprime: () => void
 }) {
   const pris = !!article.checked_at
@@ -231,19 +247,37 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surSuppr
             ))}
           </div>
           <div className="flex gap-2 items-center">
-            <label className="text-[13px] text-doux">Prix payé</label>
-            <input type="number" step="0.01" min="0"
+            <label htmlFor={`prix-${article.id}`} className="text-[13px] text-doux">Prix payé</label>
+            <input type="number" step="0.01" min="0" max={PRIX_MAX} id={`prix-${article.id}`}
+                   aria-label="Prix payé"
                    defaultValue={article.paid_price_eur ?? ''}
-                   onBlur={e => surMaj({
-                     paid_price_eur: e.target.value === '' ? null : Number(e.target.value),
-                   })}
-                   className="w-24 rounded-lg border border-brume bg-fond px-2.5 py-1.5
+                   onBlur={e => {
+                     const v = e.target.value
+                     const n = Number(v)
+                     // Refusé avant la base : « -3 » faisait un 400 muet, « 99999999999 » passait.
+                     if (v !== '' && (!Number.isFinite(n) || n < 0 || n > PRIX_MAX)) {
+                       surRefus(`Un prix payé va de 0 à ${PRIX_MAX.toLocaleString('fr-FR')} €.`)
+                       e.target.value = article.paid_price_eur === null ? '' : String(article.paid_price_eur)
+                       return
+                     }
+                     surRefus(null)
+                     surMaj({ paid_price_eur: v === '' ? null : n })
+                   }}
+                   className="w-24 min-h-11 rounded-lg border border-brume bg-fond px-2.5 py-1.5
                               text-right outline-none focus:border-herbe" />
             <span className="text-[13px] text-doux">€</span>
-            <button onClick={surSupprime}
-                    className="ml-auto text-groseille text-[14px] px-2 min-h-11">
-              Supprimer
-            </button>
+            {/* La base refuse d'effacer une ligne cochée ou payée (0031) : « Supprimer » ne
+                faisait alors rien, sans un mot. On ne l'offre pas, et on dit pourquoi. */}
+            {pris || article.paid_price_eur !== null ? (
+              <span className="ml-auto text-[13px] text-doux text-right">
+                {pris ? 'Décoche-le pour le supprimer.' : 'Efface le prix pour le supprimer.'}
+              </span>
+            ) : (
+              <button onClick={surSupprime}
+                      className="ml-auto text-groseille text-[14px] px-2 min-h-11">
+                Supprimer
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -280,7 +314,10 @@ function FormulaireAjout({ magasins, surAjoute }: {
   surAjoute: (a: { label: string; rayon: string; storeId: string | null; prix: number | null }) => void
 }) {
   const [label, setLabel] = useState('')
-  const [rayon, setRayon] = useState<string>(RAYONS[0])
+  /* Le rayon se déduit du libellé tant qu'on n'a pas choisi : « Sel » ou « Papier toilette »
+     tombaient sous « Fruits et légumes », premier de la liste, parce qu'il était pré-sélectionné. */
+  const [rayonChoisi, setRayon] = useState<string | null>(null)
+  const rayon = rayonChoisi ?? rayonDe({ libelle: label })
   const [storeId, setStoreId] = useState<string | null>(
     magasins.find(m => m.is_default)?.id ?? null)
   const [prix, setPrix] = useState('')
@@ -303,7 +340,7 @@ function FormulaireAjout({ magasins, surAjoute }: {
                              outline-none focus:border-herbe">
             {RAYONS.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
-          <input type="number" step="0.01" min="0" value={prix} aria-label="Prix estimé"
+          <input type="number" step="0.01" min="0" max={PRIX_MAX} value={prix} aria-label="Prix estimé"
                  onChange={e => setPrix(e.target.value)} placeholder="€"
                  className="w-24 rounded-xl border border-brume bg-fond px-3 py-2.5
                             text-right outline-none focus:border-herbe" />
