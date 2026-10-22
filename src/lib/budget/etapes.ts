@@ -18,6 +18,13 @@ export type ChoixDuReste = {
   poche: string | null
   /** null : « tout ce qui reste ». Sinon, ce qu'on a tapé. */
   combien: string | null
+  /**
+   * « Tout ce qui reste » CHOISI, du bout du doigt. Seulement utile quand le reste est
+   * `incertain` : `combien: null` y envoie « tout » à la base SANS que la personne ait vu de
+   * montant, et si les soldes d'année sont positifs, un versement partait vers la poche qu'elle
+   * n'avait pas chiffré. Là, ce geste ne se devine pas du défaut.
+   */
+  tout?: boolean
 }
 
 /** Y, sous la liste de l'étape 2. */
@@ -75,6 +82,8 @@ export type ResteChoisi = {
   vide: boolean
   /** Ce qu'on a tapé dépasse ce qui reste. */
   rogne: boolean
+  /** Reste incertain, et rien de choisi : ni montant tapé, ni « Tout ce qui reste ». Rien ne part. */
+  aChoisir: boolean
 }
 
 /** Ce que l'étape 3 montre et ce que la clôture enverra, d'une seule lecture du choix. */
@@ -82,7 +91,9 @@ export type ResteChoisi = {
  * `incertain` : le reste est « avant les soldes d'année » (`partDesSoldes`) — le vrai se lira à
  * la clôture. On n'en tire alors aucun chiffre (`mis` null : ni « passe à », ni « Au plus »),
  * et un reste ≤ 0 ne ferme pas « Le mettre de côté » : les soldes peuvent le relever. Au lieu
- * d'envoyer 0, on envoie « tout ce qui reste » et la base juge.
+ * d'envoyer 0, on envoie « tout ce qui reste » et la base juge — mais seulement si la personne l'a
+ * CHOISI (`choix.tout`) : « tout » envoyé sans qu'elle ait vu de montant, c'est un versement vers
+ * la poche qu'elle n'a pas chiffré (`aChoisir`).
  */
 export function leReste(o: { reste: number; poches: Poche[]; choix: ChoixDuReste; incertain?: boolean }):
   ResteChoisi {
@@ -92,21 +103,25 @@ export function leReste(o: { reste: number; poches: Poche[]; choix: ChoixDuReste
   const possible = raison === null
   const mettre = possible && !choix.garder
   if (!mettre) {
-    return { possible, raison, mettre, poche: null, tape: null, mis: 0, vide: false, rogne: false }
+    return { possible, raison, mettre, poche: null, tape: null, mis: 0, vide: false, rogne: false,
+             aChoisir: false }
   }
   const poche = pocheDuChoix(poches, choix.poche)
   if (choix.combien === null) {
     return { possible, raison, mettre, poche, tape: null, mis: incertain ? null : reste, vide: false,
-             rogne: false }
+             rogne: false, aChoisir: incertain && !choix.tout }
   }
   const tape = lisLeMontant(choix.combien, { zeroOk: true })
   if (!tape.valide) {
     return { possible, raison, mettre, poche, tape, mis: null, vide: choix.combien.trim() === '',
-             rogne: false }
+             rogne: false, aChoisir: false }
   }
-  if (incertain) return { possible, raison, mettre, poche, tape, mis: null, vide: false, rogne: false }
+  if (incertain) {
+    return { possible, raison, mettre, poche, tape, mis: null, vide: false, rogne: false,
+             aChoisir: false }
+  }
   return { possible, raison, mettre, poche, tape, mis: Math.min(tape.cents, reste), vide: false,
-           rogne: tape.cents > reste }
+           rogne: tape.cents > reste, aChoisir: false }
 }
 
 export type EnvoiDuReste = { valide: boolean; misDeCote: number | null; poche: string | null }
@@ -128,6 +143,8 @@ export function envoiDuReste(o: { reste: number; poches: Poche[]; choix: ChoixDu
   const r = leReste(o)
   if (!r.mettre) return { valide: true, misDeCote: 0, poche: null }
   const poche = r.poche?.id ?? null
+  /* Reste incertain et rien de choisi : jamais « tout » sans que la personne l'ait voulu. */
+  if (r.aChoisir) return { valide: false, misDeCote: null, poche }
   if (o.choix.combien === null) return { valide: true, misDeCote: null, poche }
   if (!r.tape?.valide) return { valide: false, misDeCote: null, poche }
   return { valide: true, misDeCote: r.tape.cents, poche }

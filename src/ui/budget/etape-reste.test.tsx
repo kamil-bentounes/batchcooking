@@ -175,11 +175,30 @@ describe('les soldes d’année à deux — ta part n’est pas lisible, donc pa
     expect(texte(inc({ choix: choix({ combien: '5000' }) }))).not.toContain('Au plus')
   })
 
-  it('le champ ne pré-remplit pas un chiffre estimé : « Tout ce qui reste » en filigrane', () => {
+  it('le champ ne pré-remplit pas un chiffre estimé, et ne dit pas « Tout ce qui reste » qu’on n’a pas choisi', () => {
     const h = inc()
     expect(h).toContain('value=""')
     expect(h).not.toContain('value="1556,70"')
+    expect(h).toContain('placeholder="Un montant"')
+    expect(h).not.toContain('placeholder="Tout ce qui reste"')
+    expect(texte(h)).toContain('Écris un montant, ou touche « Tout ce qui reste ».')
+  })
+
+  it('« Tout ce qui reste » CHOISI : le filigrane le dit, et plus rien n’est à choisir', () => {
+    const h = inc({ choix: choix({ tout: true }) })
     expect(h).toContain('placeholder="Tout ce qui reste"')
+    expect(texte(h)).not.toContain('Écris un montant, ou touche')
+  })
+
+  it('un montant tapé : plus rien à choisir', () => {
+    expect(texte(inc({ choix: choix({ combien: '5000' }) }))).not.toContain('Écris un montant, ou touche')
+  })
+
+  it('le bouton « Tout ce qui reste » est offert d’emblée (c’est LE geste), sûr ou pas', () => {
+    const aLeBouton = (h: string) => texte(h).includes('Tout ce qui reste')
+    expect(aLeBouton(inc())).toBe(true)
+    // Sûr, par défaut, « tout » est déjà ce qui est annoncé : le bouton n'a rien à faire.
+    expect(/<button[^>]*>Tout ce qui reste<\/button>/.test(vue({ soldes: [entretien] }))).toBe(false)
   })
 
   it('un reste à 0 ou négatif avant les soldes ne ferme pas « Le mettre de côté »', () => {
@@ -453,7 +472,15 @@ describe('les gestes', () => {
     const e = trouve(VueReste(props({ changer, choix: choix({ combien: '5' }) })),
                      x => x.type === 'button' && JSON.stringify(x.props.children).includes('Tout ce qui reste'))
     ;(e!.props.onClick as () => void)()
-    expect(changer).toHaveBeenCalledWith({ garder: false, poche: 'p1', combien: null })
+    expect(changer).toHaveBeenCalledWith({ garder: false, poche: 'p1', combien: null, tout: true })
+  })
+
+  it('taper un montant retire le choix « Tout ce qui reste »', () => {
+    const changer = vi.fn()
+    const e = trouve(VueReste(props({ changer, choix: choix({ tout: true }) })),
+                     x => x.type === 'input')
+    ;(e!.props.onChange as (ev: unknown) => void)({ target: { value: '12' } })
+    expect(changer).toHaveBeenCalledWith({ garder: false, poche: 'p1', combien: '12', tout: false })
   })
 
   it('les flèches passent d’un choix à l’autre, et le focus suit', () => {

@@ -326,7 +326,10 @@ describe('les trois étapes, tout lu', () => {
     expect(t).toContain('Il te reste, avant les soldes d’année')
     expect(t).not.toContain('Il te reste ce mois-ci')
     expect(t).not.toContain('passe à')
-    expect(eteint(clore(page({ foyer: deux, apercu: soldes })))).toBe(false)
+    /* ⚠️ « Clôturer » attend un CHOIX : `combien: null` enverrait « tout ce qui reste » à la base
+       sans que la personne ait vu de montant — vers la poche, si les soldes sont positifs. */
+    expect(eteint(clore(page({ foyer: deux, apercu: soldes })))).toBe(true)
+    expect(t).toContain('Écris un montant, ou touche « Tout ce qui reste ».')
   })
 
   it('le foyer pas lu, avec un solde : on ne sait pas si l’on est seul, donc pas de part annoncée', () => {

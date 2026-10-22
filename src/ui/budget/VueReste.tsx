@@ -159,15 +159,15 @@ export function VueReste({ recap, soldes, mois, poches, choix, changer, panne, d
             <span className="text-[14px] text-doux">Combien mettre de côté</span>
             <span className="mt-1.5 flex items-center rounded-[16px] border-2 border-herbe bg-surface px-4">
               <input value={choix.combien ?? (incertain ? '' : saisiDe(reste))}
-                     placeholder={incertain ? 'Tout ce qui reste' : undefined}
-                     onChange={e => changer({ ...choix, combien: e.target.value })}
+                     placeholder={incertain ? (choix.tout ? 'Tout ce qui reste' : 'Un montant') : undefined}
+                     onChange={e => changer({ ...choix, combien: e.target.value, tout: false })}
                      inputMode="decimal" aria-label="Combien mettre de côté"
                      className="champ-montant chiffre grow min-w-0 bg-transparent py-3 text-[28px] outline-none" />
               <span aria-hidden="true" className="chiffre text-[24px] text-doux">€</span>
             </span>
           </label>
-          {choix.combien !== null && (
-            <button onClick={() => changer({ ...choix, combien: null })}
+          {(choix.combien !== null || r.aChoisir) && (
+            <button onClick={() => changer({ ...choix, combien: null, tout: true })}
                     className="mt-1 min-h-11 text-[14px] font-semibold text-herbe">
               Tout ce qui reste
             </button>
@@ -175,6 +175,13 @@ export function VueReste({ recap, soldes, mois, poches, choix, changer, panne, d
           {r.tape?.refus && (
             <p role="alert" className="mt-1 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
               {r.tape.refus}
+            </p>
+          )}
+          {r.aChoisir && (
+            /* Le reste n'est pas chiffrable avant les soldes : rien ne part tant que la personne n'a
+               ni tapé un montant ni choisi « Tout ce qui reste ». */
+            <p role="status" className="mt-1 text-[14px] text-doux">
+              Écris un montant, ou touche « Tout ce qui reste ».
             </p>
           )}
           {r.vide && (

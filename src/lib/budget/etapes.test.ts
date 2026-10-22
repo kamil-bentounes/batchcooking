@@ -173,10 +173,23 @@ describe('leReste — le reste incertain (soldes d’année à deux)', () => {
   const inc = (reste: number, c: Partial<ChoixDuReste> = {}) =>
     leReste({ reste, poches: [poche()], choix: choix(c), incertain: true })
 
-  it('« tout ce qui reste » : aucun chiffre à annoncer (mis null)', () => {
-    const r = inc(793_39)
+  it('« tout ce qui reste » choisi : aucun chiffre à annoncer (mis null)', () => {
+    const r = inc(793_39, { tout: true })
     expect(r.mettre).toBe(true)
     expect(r.mis).toBeNull()
+    expect(r.aChoisir).toBe(false)
+  })
+  it('rien choisi (ni montant ni « Tout ce qui reste ») : à choisir, aucun chiffre', () => {
+    const r = inc(793_39)
+    expect(r.aChoisir).toBe(true)
+    expect(r.mis).toBeNull()
+  })
+  it('un montant tapé, ou « garder » : plus rien à choisir', () => {
+    expect(inc(793_39, { combien: '100' }).aChoisir).toBe(false)
+    expect(inc(793_39, { garder: true }).aChoisir).toBe(false)
+  })
+  it('sûr (pas incertain) : « tout » est déjà ce que l’écran annonce, rien à choisir', () => {
+    expect(leReste({ reste: 793_39, poches: [poche()], choix: choix() }).aChoisir).toBe(false)
   })
   it('un montant tapé au-dessus du reste ne « rogne » pas : on ne connaît pas le reste', () => {
     const r = inc(793_39, { combien: '5000' })
@@ -195,12 +208,39 @@ describe('leReste — le reste incertain (soldes d’année à deux)', () => {
   it('garder sur le compte : 0, sûr', () => {
     expect(inc(793_39, { garder: true }).mis).toBe(0)
   })
-  it('l’envoi suit : un reste ≤ 0 avant les soldes envoie « tout ce qui reste » (null), la base juge', () => {
-    expect(envoiDuReste({ reste: -5_00, poches: [poche()], choix: choix(), incertain: true }))
+  it('l’envoi suit : un reste ≤ 0 avant les soldes envoie « tout ce qui reste » (null) QUAND la personne l’a choisi', () => {
+    expect(envoiDuReste({ reste: -5_00, poches: [poche()], choix: choix({ tout: true }), incertain: true }))
       .toEqual({ valide: true, misDeCote: null, poche: 'p1' })
     // Sûr, il envoyait 0 : rien à mettre de côté.
     expect(envoiDuReste({ reste: -5_00, poches: [poche()], choix: choix() }))
       .toEqual({ valide: true, misDeCote: 0, poche: null })
+  })
+})
+
+describe('envoiDuReste — reste incertain : jamais « tout » sans que la personne l’ait choisi', () => {
+  /* `misDeCote: null` veut dire « tout ce qui reste » à la base : si les soldes d'année sont
+     positifs, un versement partait vers la poche SANS montant vu. */
+  const inc = (c: Partial<ChoixDuReste> = {}, reste = 793_39) =>
+    envoiDuReste({ reste, poches: [poche()], choix: choix(c), incertain: true })
+
+  it('par défaut, rien ne part : le bouton « Clôturer » attend un choix', () => {
+    expect(inc().valide).toBe(false)
+    expect(inc().misDeCote).toBeNull()
+    expect(inc({}, -5_00).valide).toBe(false)
+  })
+  it('« Tout ce qui reste » choisi : part en null, la base juge', () => {
+    expect(inc({ tout: true })).toEqual({ valide: true, misDeCote: null, poche: 'p1' })
+  })
+  it('un montant tapé part tel quel, 0 compris', () => {
+    expect(inc({ combien: '120' })).toEqual({ valide: true, misDeCote: 120_00, poche: 'p1' })
+    expect(inc({ combien: '0' })).toEqual({ valide: true, misDeCote: 0, poche: 'p1' })
+  })
+  it('« garder sur le compte » part en 0, sans rien à choisir', () => {
+    expect(inc({ garder: true })).toEqual({ valide: true, misDeCote: 0, poche: null })
+  })
+  it('sûr : le défaut reste « tout » (l’écran annonce le montant), comme avant', () => {
+    expect(envoiDuReste({ reste: 793_39, poches: [poche()], choix: choix() }))
+      .toEqual({ valide: true, misDeCote: null, poche: 'p1' })
   })
 })
 
