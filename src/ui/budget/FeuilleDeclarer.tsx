@@ -17,7 +17,7 @@ import { useRef, useState, type ReactNode } from 'react'
 import { useAjouteSaisie, useRetireSaisie, type Depense, type Saisie } from '../../lib/donnees/budget.ts'
 import { prenomDe } from '../../lib/donnees/foyer.ts'
 import { jourDeParis } from '../../lib/horloge.ts'
-import { capitale, dateCourte, declare, joursProposes, montant, nomDuMois, prevu }
+import { capitale, dateCourte, finDePhrase, declare, joursProposes, montant, nomDuMois, prevu }
   from '../../lib/budget/mois.ts'
 import { envoiPermis, envoiPour, jourAccepte, lisLeMontant, type Envoi, type MontantTape }
   from '../../lib/budget/feuilles.ts'
@@ -115,7 +115,7 @@ export function VueDeclarer({
           {/* `min` et `max` n'empêchent pas la frappe : on le dit, et le bouton reste éteint. */}
           {autre && !jourOk && (
             <p role="alert" className="mt-1.5 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
-              Un jour entre le {dateCourte(jours.min)} et le {dateCourte(jours.max)}.
+              Un jour entre le {dateCourte(jours.min)} et le {finDePhrase(dateCourte(jours.max))}
             </p>
           )}
 

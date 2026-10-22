@@ -339,6 +339,11 @@ export function dateCourte(iso: string): string {
   return `${JOURS_COURTS[new Date(a, m - 1, j).getDay()]} ${j} ${MOIS_COURTS[m - 1]}`
 }
 
+/** Ferme une phrase par un point, sans doubler celui d'une abréviation : « …et le Jeu. 15 oct.. » */
+export function finDePhrase(s: string): string {
+  return s.endsWith('.') ? s : `${s}.`
+}
+
 function veille(iso: string): string {
   const [a, m, j] = iso.split('-').map(Number)
   const d = new Date(a, m - 1, j - 1)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aDire, bandeau, estLaCeMois, membresSansRevenu, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
+import { aDire, bandeau, estLaCeMois, finDePhrase, membresSansRevenu, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
          maPart, partDesSoldes, montant, montantCompte, moisDemande, moisVoisin, nomDuMois, nomDuMoisDate, parCategorie,
          partSur, pourcentages, recapCloture, resteDuMois, revenuDuMois, sousLEuro, totauxDuFiltre, type Ligne,
          type Saisie } from './mois.ts'
@@ -493,5 +493,12 @@ describe('qui est là, quel mois', () => {
   it('octobre : elle est là, sans revenu, et on le dit — à deux seulement', () => {
     expect(membresSansRevenu([kamil, thauba], revenus, '2026-10-01')).toEqual([thauba])
     expect(membresSansRevenu([kamil], [], '2026-10-01')).toEqual([])
+  })
+})
+
+describe('finDePhrase', () => {
+  it('ne double pas le point d’une abréviation (« oct.. » lisait mal sous le champ du jour)', () => {
+    expect(finDePhrase('Jeu. 15 oct.')).toBe('Jeu. 15 oct.')
+    expect(finDePhrase('Sam. 3 mars')).toBe('Sam. 3 mars.')
   })
 })
