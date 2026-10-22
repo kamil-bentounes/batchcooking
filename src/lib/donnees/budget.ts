@@ -487,7 +487,11 @@ export function useVerse() {
       household_id: v.foyerId, poche_id: v.pocheId, user_profile_id: v.userId,
       montant_cents: v.cents, motif: v.motif ?? (v.cents < 0 ? 'retrait' : 'mensuel'),
     }).select().single()),
-    onSuccess: (_d, v) => Promise.all([
+    /* ⚠️ `onSettled`, pas `onSuccess` : une réponse perdue (le réseau coupe après que la base a
+       écrit) finit en erreur côté écran alors que le versement EST là. Sans relecture, le solde
+       restait périmé (30 s) et un second retrait passait la garde du front (`refusDuRetrait`)
+       sur un solde qui n'existait plus. */
+    onSettled: (_d, _e, v) => Promise.all([
       qc.invalidateQueries({ queryKey: CLE.soldes(v.pocheId) }),
       qc.invalidateQueries({ queryKey: CLE.poches }),
     ]),

@@ -27,7 +27,8 @@ import {
  * plus — c'est l'engendrement mensuel de D61 avec une fin.
  */
 function Projet({ poche, foyerId, deja }: {
-  poche: Poche; foyerId: string; deja: number
+  /** `null` : le solde n'est pas lu — on ne dit rien de chiffré sur ce qu'il y a dessus. */
+  poche: Poche; foyerId: string; deja: number | null
 }) {
   const postes = usePostes(poche.id)
   const pose = usePosePoste()
@@ -39,7 +40,7 @@ function Projet({ poche, foyerId, deja }: {
 
   const cents = enCentimes(montant)
   const somme = (postes.data ?? []).reduce((s, p) => s + p.montant_cents, 0)
-  const effort = effortMensuel(poche.objectif_cents, poche.echeance, deja)
+  const effort = effortMensuel(poche.objectif_cents, poche.echeance, deja ?? 0)
 
   return (
     <div className="mt-4 pt-4 border-t border-brume">
@@ -65,11 +66,13 @@ function Projet({ poche, foyerId, deja }: {
                      « Vous êtes à l'heure tant que vous versez ça » s'affichait
                      sur une poche où rien n'avait encore été versé, et c'est la
                      seule chose que l'œil retient. On dit où on en est. */}
-                {deja >= (poche.objectif_cents ?? 0)
-                  ? 'C’est déjà atteint.'
-                  : deja === 0
-                    ? 'Rien n’y est encore versé.'
-                    : `Il y a ${euros(deja)} dessus pour l’instant.`}
+                {deja === null
+                  ? ''
+                  : deja >= (poche.objectif_cents ?? 0)
+                    ? 'C’est déjà atteint.'
+                    : deja === 0
+                      ? 'Rien n’y est encore versé.'
+                      : `Il y a ${euros(deja)} dessus pour l’instant.`}
               </>}
         </p>
       )}
@@ -136,7 +139,13 @@ function Poche_({ poche, userId, foyerId, prenoms }: {
   const total = cumul.reduce((s, c) => s + c.cents, 0)
   const cents = enCentimes(montant)
   const monSolde = cumul.find(c => c.userId === userId)?.cents ?? 0
-  const part = poche.objectif_cents ? Math.min(1, total / poche.objectif_cents) : null
+  /* ⚠️ `solde.data` absent (pas encore revenu, ou en panne) n'est PAS zéro : `monSolde` valait 0,
+     et « Je retire » répondait « Tu n'as rien versé ici » à quelqu'un qui a 380 € dans la poche.
+     Pendant une relecture le chiffre est périmé aussi (une réponse perdue, puis un second retrait
+     qui passerait la garde) : le retrait attend le solde frais. */
+  const soldeLu = solde.data !== undefined
+  const soldeFrais = soldeLu && !solde.isFetching
+  const part = soldeLu && poche.objectif_cents ? Math.min(1, total / poche.objectif_cents) : null
 
   return (
     <Surface className="mt-4">
@@ -151,7 +160,7 @@ function Poche_({ poche, userId, foyerId, prenoms }: {
       </div>
 
       <p className="mt-3 flex items-baseline gap-2.5">
-        <span className="chiffre text-[32px] text-herbe">{euros(total)}</span>
+        <span className="chiffre text-[32px] text-herbe">{soldeLu ? euros(total) : '…'}</span>
         {poche.objectif_cents && (
           <span className="text-[15px] text-doux">sur {euros(poche.objectif_cents)}</span>
         )}
@@ -190,7 +199,7 @@ function Poche_({ poche, userId, foyerId, prenoms }: {
                            disabled:border disabled:border-brume">
           Je verse
         </button>
-        <button disabled={!cents || verse.isPending}
+        <button disabled={!cents || verse.isPending || !soldeFrais}
                 onClick={() => {
                   /* Jamais plus que ce qu'on a versé : la table n'a aucun plancher. */
                   const non = refusDuRetrait(cents!, monSolde)
@@ -212,7 +221,7 @@ function Poche_({ poche, userId, foyerId, prenoms }: {
       <Erreur de={verse.error ?? solde.error} />
 
       {poche.genre === 'projet' && (
-        <Projet poche={poche} foyerId={foyerId} deja={total} />
+        <Projet poche={poche} foyerId={foyerId} deja={soldeLu ? total : null} />
       )}
     </Surface>
   )

@@ -148,3 +148,26 @@ describe('une clôture ou une réouverture qui échoue relit quand même', () =>
     expect(clefsRelues(client).filter(k => k === 'cloture')).toHaveLength(1)
   })
 })
+
+/**
+ * Un versement (ou un retrait) dont la RÉPONSE se perd a pourtant été écrit : sans relecture, le
+ * solde de la poche restait périmé, et un second « Je retire » passait la garde du front
+ * (`refusDuRetrait`) sur un solde qui n'existait plus.
+ */
+describe('useVerse : une réponse perdue relit quand même le solde', () => {
+  it('en erreur, le solde de la poche et les poches sont relus, et la mutation les attend', async () => {
+    const client = clientEnAttente()
+    faux.qc = client.qc
+    const options = (budget.useVerse as () => Options)()
+    let fini = false
+    void finDeLaMutation(options, new Error('Failed to fetch')).then(() => { fini = true })
+    await tour()
+    expect(fini).toBe(false)
+    const cles = client.invalidateQueries.mock.calls
+      .map(a => ((a as unknown[])[0] as { queryKey: string[] }).queryKey[0])
+    expect(cles).toContain('budget-solde')
+    client.libere()
+    await tour()
+    expect(fini).toBe(true)
+  })
+})
