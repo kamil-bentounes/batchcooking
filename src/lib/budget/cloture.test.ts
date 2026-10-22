@@ -27,6 +27,14 @@ const porte = (p: Partial<Parameters<typeof porteDeLaCloture>[0]> = {}) =>
   porteDeLaCloture({ mois: SEPT, courant: OCT, ...pret, ...p }).porte
 
 describe('porteDeLaCloture — ce que la page ouvre', () => {
+  it('quelqu’un qui n’était pas encore dans le foyer ce mois-là n’a ni revenu à ajouter ni mois à clore', () => {
+    /* Thauba entre le 1er octobre : « Ajoute ton revenu de septembre » était un cul-de-sac. */
+    expect(porte({ revenu: null, present: false })).toBe('pas-encore-la')
+    expect(porte({ revenu: null, present: true })).toBe('sans-revenu')
+    /* Un mois déjà clos se lit toujours. */
+    expect(porte({ present: false, clotures: lu([k()]) })).toBe('close')
+  })
+
   it('un mois passé, tout lu, un revenu : on clôture', () => {
     expect(porte()).toBe('a-clore')
   })

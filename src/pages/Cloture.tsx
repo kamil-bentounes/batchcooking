@@ -26,7 +26,7 @@ import {
   useRevenus, useSaisies,
 } from '../lib/donnees/budget.ts'
 import {
-  capitale, moisVoisin, nomDuMoisDate, partDesSoldes, montant, recapCloture, revenuDuMois,
+  capitale, estLaCeMois, moisVoisin, nomDuMoisDate, partDesSoldes, montant, recapCloture, revenuDuMois,
 } from '../lib/budget/mois.ts'
 import {
   cloreUneFois, deMois, envoiDeLaCloture, misDeCoteDuFoyer, porteDeLaCloture, rienEffectif,
@@ -79,8 +79,10 @@ export function Cloture({ userId, mois, va, retour }: {
   useEffect(() => { titre.current?.focus() }, [])
 
   const revenu = revenus.data ? revenuDuMois(revenus.data, userId, mois) : null
+  const moi = foyer?.membres.find(m => m.id === userId)
   const { porte, fermee } = porteDeLaCloture({
     mois, courant, clotures, lectures: [depenses, saisies, revenus], revenu,
+    present: moi ? estLaCeMois(moi, mois) : true,
   })
   /* Les soldes d'année ne se lisent que pour un mois qu'on va clôturer. */
   const apercu = useApercuDesSoldes(mois, porte === 'a-clore')
@@ -168,6 +170,21 @@ export function Cloture({ userId, mois, va, retour }: {
         <RevenirDessus mois={mois}
                        misDeCote={misDeCoteDuFoyer(fermee.choix, foyer?.membres.map(m => m.id))}
                        apres={() => va(dansLeMois)} />
+      </>
+    )
+  } else if (porte === 'pas-encore-la') {
+    /* Arrivée après ce mois : ni revenu à ajouter, ni part à choisir. Un « Ajoute ton revenu
+       de septembre » était un cul-de-sac (grand test du 22/10). */
+    corps = (
+      <>
+        <p className="mt-4 text-[17px] leading-snug">
+          Tu n’étais pas encore dans le foyer en {nom} : ce mois-là ne te concerne pas.
+          Les autres peuvent le clôturer.
+        </p>
+        <button onClick={() => retour()}
+                className="mt-5 min-h-11 px-5 rounded-full bg-herbe text-fond text-[15px] font-semibold">
+          Revenir au budget
+        </button>
       </>
     )
   } else if (porte === 'sans-revenu') {

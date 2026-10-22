@@ -9,7 +9,7 @@ import { etatDeLEcran, type Lecture } from './ecran.ts'
 import { envoiDuReste, type ChoixDuReste } from './etapes.ts'
 import { aDesSaisies, montant, nomDuMois, nomDuMoisDate, type Saisie } from './mois.ts'
 
-export type Porte = 'trop-tot' | 'chargement' | 'erreur' | 'close' | 'sans-revenu' | 'a-clore'
+export type Porte = 'trop-tot' | 'chargement' | 'erreur' | 'close' | 'pas-encore-la' | 'sans-revenu' | 'a-clore'
 
 /**
  * Ce que la page ouvre.
@@ -20,6 +20,7 @@ export type Porte = 'trop-tot' | 'chargement' | 'erreur' | 'close' | 'sans-reven
  *   est déjà clos, et lui offrir « Clôturer » serait offrir ce que la base refuse.
  *   Pas lues, c'est « Un instant » ; en panne, c'est la panne.
  * - Un mois clos se lit, même si le reste n'est pas revenu : seul « Revenir dessus » agit.
+ * - Pas encore dans le foyer ce mois-là : rien à ajouter, rien à clore (grand test du 22/10).
  * - Sans revenu on ne clôture pas (§ 4.5) — mais seulement quand les revenus sont LUS :
  *   « Ajoute ton revenu » dit à qui l'a posé qu'il ne l'a pas fait.
  */
@@ -30,6 +31,9 @@ export function porteDeLaCloture(o: {
   lectures: Lecture[]
   /** Mon revenu de ce mois ; null s'il n'y en a pas (ou pas encore lu). */
   revenu: number | null
+  /** Je suis déjà dans le foyer ce mois-là (`estLaCeMois`) ; par défaut oui. Celle qui arrive
+      en octobre n'a pas de revenu de septembre à ajouter : ce mois-là n'est pas le sien. */
+  present?: boolean
 }): { porte: Porte; fermee: Cloture | null } {
   if (o.mois >= o.courant) return { porte: 'trop-tot', fermee: null }
   if (o.clotures.data === undefined) {
@@ -39,6 +43,7 @@ export function porteDeLaCloture(o: {
   if (fermee) return { porte: 'close', fermee }
   const etat = etatDeLEcran(o.lectures)
   if (etat !== 'pret') return { porte: etat, fermee: null }
+  if (o.present === false) return { porte: 'pas-encore-la', fermee: null }
   return { porte: o.revenu === null ? 'sans-revenu' : 'a-clore', fermee: null }
 }
 

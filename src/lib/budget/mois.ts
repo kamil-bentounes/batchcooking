@@ -141,6 +141,27 @@ export function revenuDuMois(revenus: Revenu[], qui: string, mois: string): numb
   return retenu ? retenu.net_mensuel_cents : null
 }
 
+/**
+ * Le membre habite déjà là ce mois-là : son `entre_le` ne dépasse pas le dernier jour du mois.
+ * Avant, il ne porte aucune part (la base ne lui en donne pas) et on ne lui demande rien.
+ */
+export function estLaCeMois(m: { entre_le?: string | null }, mois: string): boolean {
+  /* Une arrivée inconnue ne cache personne : on ne dit « pas encore là » que sur une date. */
+  return !m.entre_le || m.entre_le <= dernierJour(mois)
+}
+
+/**
+ * Ceux qui sont là ce mois-là et n'ont pas de revenu : le partage bascule alors en
+ * moitié-moitié. Seul (ou presque : une seule personne présente), il n'y a rien à partager.
+ * Celle qui arrive en octobre ne « manque » pas de revenu en septembre.
+ */
+export function membresSansRevenu<M extends { id: string; entre_le?: string | null }>(
+  membres: M[], revenus: Revenu[], mois: string,
+): M[] {
+  const presents = membres.filter(m => estLaCeMois(m, mois))
+  return presents.length < 2 ? [] : presents.filter(m => revenuDuMois(revenus, m.id, mois) === null)
+}
+
 export type Reste = { revenu: number | null; charges: number; reste: number | null }
 
 /** « Il te reste » : mon revenu du mois, moins ma part de chaque ligne. */

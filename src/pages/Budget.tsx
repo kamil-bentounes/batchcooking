@@ -28,8 +28,8 @@ import {
   moisDe, useCharges, useClotures, useComptes, useMois, useNonSoldees, useRevenus, useSaisies,
 } from '../lib/donnees/budget.ts'
 import {
-  bandeau, barre, capitale, joursRestants, moisDemande, moisVoisin, nomDuMois, parCategorie,
-  resteDuMois, revenuDuMois, totauxDuFiltre, type Filtre,
+  bandeau, barre, capitale, estLaCeMois, joursRestants, membresSansRevenu, moisDemande, moisVoisin,
+  nomDuMois, parCategorie, resteDuMois, revenuDuMois, totauxDuFiltre, type Filtre,
 } from '../lib/budget/mois.ts'
 import { choixAFermer, misDeCoteDuFoyer } from '../lib/budget/cloture.ts'
 import { jourDeParis } from '../lib/horloge.ts'
@@ -120,9 +120,11 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
      réglages, là où l'on ne revient jamais : quelqu'un qui arrivait sans avoir
      posé son revenu lisait « au prorata » et payait 50/50. Seul, il n'y a rien
      à partager, et ce qui reste dit déjà « Ajoute ton revenu ». */
-  const sansRevenu = membres.length < 2 ? []
-    : membres.filter(m => revenuDuMois(revenus.data ?? [], m.id, mois) === null)
-             .map(m => prenomDe(m.display_name))
+  const sansRevenu = membresSansRevenu(foyer?.membres ?? [], revenus.data ?? [], mois)
+    .map(m => prenomDe(m.display_name))
+  /* Celle qui arrive en octobre n'a ni revenu ni part en septembre : on le lui dit, au lieu de
+     « Ajoute ton revenu pour voir ce qu'il te reste » sur un mois qui n'est pas le sien. */
+  const pasEncoreLa = moi !== undefined && !!moi.entre_le && !estLaCeMois(moi, mois)
 
   const fermer = () => setOuverte(null)
   /* Le mois se clôt (relecture, autre appareil) pendant que la feuille « choix » est ouverte : elle
@@ -225,9 +227,18 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
           </>
         ) : (
           <>
-            <Recap mois={mois} reste={reste} segments={segments} va={va}
-                   cloture={clos ? { reste: monChoix?.reste_cents ?? null, misDeCote,
-                                     duFoyer: misDeCoteFoyer } : null} />
+            {pasEncoreLa && !clos ? (
+              <section aria-label="Ce qui reste" className="mt-7 rounded-[28px] bg-encre text-fond p-5">
+                <p className="text-[17px] leading-snug">
+                  Tu n’étais pas encore dans le foyer : tu y entres en {nomDuMois(`${moi!.entre_le!.slice(0, 7)}-01`)}.
+                  Ce mois-là ne te compte aucune part.
+                </p>
+              </section>
+            ) : (
+              <Recap mois={mois} reste={reste} segments={segments} va={va}
+                     cloture={clos ? { reste: monChoix?.reste_cents ?? null, misDeCote,
+                                       duFoyer: misDeCoteFoyer } : null} />
+            )}
             {/* Ce que la clôture n'a pas pu solder se dit sous son chiffre, jusqu'au
                 rechargement (choix 20). Sur un mois clôturé seulement : rouvert, il n'a
                 plus de clôture à qui l'imputer. */}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aDire, bandeau, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
+import { aDire, bandeau, estLaCeMois, membresSansRevenu, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
          maPart, partDesSoldes, montant, montantCompte, moisDemande, moisVoisin, nomDuMois, nomDuMoisDate, parCategorie,
          partSur, pourcentages, recapCloture, resteDuMois, revenuDuMois, sousLEuro, totauxDuFiltre, type Ligne,
          type Saisie } from './mois.ts'
@@ -466,5 +466,32 @@ describe('moisDemande — le mois que l’adresse demande', () => {
   it('une adresse illisible : le courant, sans « futur » (rien à rediriger)', () => {
     expect(moisDemande('2026-13-01', courant)).toEqual({ mois: courant, futur: false })
     expect(moisDemande('n’importe quoi', courant)).toEqual({ mois: courant, futur: false })
+  })
+})
+
+describe('qui est là, quel mois', () => {
+  /* Grand test, parcours « nouveau venu » (22/10) : Thauba entre le 1er octobre.
+     En septembre, Kamil lisait « Thauba n'a pas encore dit son revenu : le
+     partage se fait à parts égales » — alors qu'elle n'était pas là et que
+     la base ne lui donne aucune part —, et elle, « Ajoute ton revenu de
+     septembre pour clôturer septembre ». */
+  const kamil = { id: 'K', display_name: 'Kamil', entre_le: '2026-01-01' }
+  const thauba = { id: 'T', display_name: 'Thauba', entre_le: '2026-10-01' }
+  const revenus = [{ user_profile_id: 'K', net_mensuel_cents: 370_000, valid_from: '2026-01-01' }]
+
+  it('on est là le mois de son arrivée, pas avant', () => {
+    expect(estLaCeMois(thauba, '2026-09-01')).toBe(false)
+    expect(estLaCeMois(thauba, '2026-10-01')).toBe(true)
+    expect(estLaCeMois({ ...thauba, entre_le: '2026-10-15' }, '2026-10-01')).toBe(true)
+    expect(estLaCeMois(thauba, '2026-11-01')).toBe(true)
+  })
+
+  it('septembre : celle qui n’est pas encore là ne manque de revenu à personne', () => {
+    expect(membresSansRevenu([kamil, thauba], revenus, '2026-09-01')).toEqual([])
+  })
+
+  it('octobre : elle est là, sans revenu, et on le dit — à deux seulement', () => {
+    expect(membresSansRevenu([kamil, thauba], revenus, '2026-10-01')).toEqual([thauba])
+    expect(membresSansRevenu([kamil], [], '2026-10-01')).toEqual([])
   })
 })
