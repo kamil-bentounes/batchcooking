@@ -311,3 +311,27 @@ Arrivée au 01/09, revenu 2 500 € : reste d'octobre de Kamil 316,80 → 850,75
 septembre 426,76 → 462,55 € (ses 3 lignes confirmées restent à lui). Si Kamil clôt septembre AVANT : le mois reste clos,
 et Thauba y lit « Le mois de septembre a été clôturé avant que ton revenu soit posé. Il ne te compte aucune part. »
 (`clotureSansMoi`, `src/lib/budget/mois.ts`). Avec l'arrivée par défaut (1er novembre), rien ne bouge avant novembre.
+
+## Remise à zéro du budget de la prod, et début en novembre (22/10, soir, à la demande de Kamil)
+- **Demande de Kamil :** « tout me supprimer et faire en sorte que le budget commence en novembre ».
+  Lue comme : vider TOUT le budget (pas la cuisine, pas les recettes). Sauvegarde complète avant :
+  `~/PERSO/sauvegardes-popote/2026-10-22-avant-remise-a-zero/` (31 899 lignes, chmod go-rwx).
+- **Fait en prod, en UNE transaction** (essai à blanc d'abord, rien n'a bougé ; puis réel) : `saisie`, `depense`
+  (+ parts), `facture`, `releve_annuel`, `charge` (+ participants), `poche_epargne` (+ versements, postes),
+  `enveloppe`, `compte`, `revenu`, `regle_partage`, `cloture` (+ choix) : tout à 0. Ne bougent pas : le catalogue
+  de charges (52), les recettes (1 426), le cycle de cuisine, le profil, le foyer. Le script n'est pas versionné
+  (`scratchpad/prod/remise-a-zero.sql`).
+- **`entre_le` de Kamil : 2022-11-17 → 2026-11-01.** Sans cela son premier revenu aurait été remonté à novembre 2022
+  par `tg_revenu_premier` (`least(…)` : il remonte à l'arrivée, jamais plus tard).
+- **Code (commit 0d008eb, en ligne ensuite) :** `moisDeDepart` (`src/lib/budget/mois.ts`) : un revenu ou une charge
+  posés avant l'arrivée prennent effet à l'arrivée ; hub « Commence en novembre » ; écran du mois « Pas encore »
+  sans porte « Commencer » ; porte « Inviter quelqu'un » sur le hub quand on est seul (Kamil ne trouvait pas
+  « Réglages » : l'avatar mène au profil, pas aux réglages). Banc : `e2e/inviter-et-novembre.spec.ts`.
+- **Revue adverse neuve, avant l'arrivée de Thauba** : rien de bloquant ; deux défauts réels d'affichage (le hub lisait
+  « Il te reste 2 400 € en octobre » à une invitée qui arrive le 1er novembre ; « Octobre est à clôturer » sur un mois
+  qui n'est pas le sien), tous deux corrigés ci-dessus parce que son revenu n'est plus daté d'octobre. Reste, non
+  corrigé : la phrase « n'étais pas encore » (corrigée au présent), la liste « manquants » des réglages du budget
+  (cosmétique), et la page `/cloture/<mois clos>` d'une personne sans revenu ni part (atteignable par URL seulement).
+- **Piège pour la suite :** le premier revenu qu'il pose AVANT le 1er novembre prend effet en novembre (bon) ; une
+  charge posée avant aussi. Mais `tg_revenu_premier` garde `least(valid_from, arrivée)` : une arrivée à venir ET un
+  revenu daté du passé reste daté du passé (le front ne le fait plus, la base l'accepterait encore).
