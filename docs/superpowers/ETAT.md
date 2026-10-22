@@ -242,17 +242,21 @@ avant l'arrivée, md5 des égalités, focus…) ; **à vérifier à son retour**
 
 ## Côté Kamil
 
-- **Réinviter Thauba : feu vert.**
-  - Le geste : Réglages → Inviter → son e-mail → « Partager », ou « Copier le lien ».
-  - Son compte existe déjà, depuis l'ancien mail du 17/09 : le lien lui fait choisir son
-    mot de passe et la fait entrer.
-  - Sa date d'arrivée sera réglée au 1er novembre par défaut. Si elle habite déjà là,
-    elle la corrige sur son profil.
-- **Les mails de connexion et de réinitialisation** sont encore les modèles anglais de
-  Supabase, avec l'expéditeur « Batch cooking ». Ils ne servent plus à l'invitation.
-  - Le contrôle de sécurité a bloqué leur modification par l'API.
-  - Il faut donc son accord explicite (« vas-y pour les mails »), ou qu'il les change
-    lui-même dans le tableau de bord (Authentication → Emails).
+- **Réinviter Thauba : PAS de feu vert tant que je ne l'ai pas dit.**
+  - Décision de Kamil du 22/10 : il ne la réinvite qu'une fois que j'ai confirmé avoir testé tous les
+    recoins avec le front, la base et de vraies actions. Elle a déjà buté trois fois avant même la
+    page de création de compte.
+  - Ce que je dois donc jouer APRÈS la mise en ligne, sur la vraie prod : tout le chemin d'une invitée
+    (lien → mot de passe → foyer → écrans), en Chromium mobile ET en WebKit (Safari), avec un foyer
+    jetable que je supprime ensuite, sans toucher au foyer de Kamil.
+  - Le geste, plus tard : Réglages → Inviter → son e-mail → « Partager », ou « Copier le lien ».
+  - Son compte orphelin de prod est nettoyé au moment de D1 (autorisé le 22/10, après sauvegarde) : le
+    lien neuf lui fait créer son compte.
+- **Les mails d'authentification sont en français** (commit 3a7d802, `supabase/templates/`). Kamil l'a
+  demandé le 22/10 (« Fais-les en français non ? ») : lu comme le « vas-y pour les mails ». À D1, les
+  envoyer en production (API de gestion, `PATCH /config/auth`, modèles + objets + nom d'expéditeur
+  « Popote »). Si le contrôle de sécurité refuse encore, le dire à Kamil (tableau de bord :
+  Authentication → Emails).
 
 ## Repères
 
