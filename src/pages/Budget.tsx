@@ -29,10 +29,11 @@ import {
   type Depense,
 } from '../lib/donnees/budget.ts'
 import {
-  barre, capitale, joursRestants, moisVoisin, nomDuMois, parCategorie,
+  bandeau, barre, capitale, joursRestants, moisVoisin, nomDuMois, parCategorie,
   resteDuMois, revenuDuMois, totauxDuFiltre, type Filtre,
 } from '../lib/budget/mois.ts'
 import { aujourdhui } from '../lib/horloge.ts'
+import { Bandeau } from '../ui/budget/Bandeau.tsx'
 import { CarteEpargne } from '../ui/budget/CarteEpargne.tsx'
 import { Categorie } from '../ui/budget/Categorie.tsx'
 import { ChoixDeLaLigne } from '../ui/budget/ChoixDeLaLigne.tsx'
@@ -84,7 +85,14 @@ export function Budget({ userId, va, mois: depart }: {
   const parCharge = new Map((charges.data ?? []).map(c => [c.id, c]))
   /* Un mois clôturé se lit tel que la clôture l'a laissé : ses montants en base,
      plus de « max(prévu, déclaré) » (§ 3.1.1). */
-  const clos = (clotures.data ?? []).some(k => k.mois === mois)
+  const estClos = (m: string) => (clotures.data ?? []).some(k => k.mois === m)
+  const clos = estClos(mois)
+  /* Rien tant que les clôtures ne sont pas lues : un mois clôturé s'annonçait
+     « à clôturer » le temps d'un aller-retour. */
+  const leBandeau = clotures.isPending ? null : bandeau({
+    mois, aujourdhui: aujourdhui(), clos: estClos,
+    aRevenu: m => revenuDuMois(revenus.data ?? [], userId, m) !== null,
+  })
   const reste = resteDuMois({ lignes, saisies: dites, moi: userId, revenus: revenus.data ?? [],
                              mois, clos })
   const segments = reste.revenu === null ? []
@@ -220,7 +228,7 @@ export function Budget({ userId, va, mois: depart }: {
               <span className="text-[14px] text-doux">{nLignes} ligne{nLignes > 1 ? 's' : ''}</span>
             </div>
             <FiltreDuMois filtre={filtre} totaux={totaux} choisir={setFiltre} />
-            {/* (lot 3) Le bandeau du mois vient ici, entre le filtre et les catégories. */}
+            <Bandeau bandeau={leBandeau} va={va} />
             <div className="mt-4 flex flex-col gap-3">
               {categories.map(c => (
                 <Categorie key={c.cle} categorie={c} saisies={dites} charges={parCharge} clos={clos}
