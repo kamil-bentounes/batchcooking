@@ -46,8 +46,8 @@ function Etape({ n, titre, children }: { n: number; titre: string; children: Rea
     <section aria-label={titre} className="mt-8">
       <h2 className="flex items-center gap-3">
         <span aria-hidden="true"
-              className="w-8 h-8 shrink-0 rounded-full bg-herbe text-fond grid place-items-center
-                         text-[15px] font-semibold">
+              className="w-[34px] h-[34px] shrink-0 rounded-full bg-encre text-safran grid place-items-center
+                         titre text-[18px]">
           {n}
         </span>
         <span className="titre text-[24px]">{titre}</span>
