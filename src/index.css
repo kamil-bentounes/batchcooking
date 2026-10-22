@@ -106,6 +106,14 @@ body {
 }
 
 /*
+ * Un titre qu'on ne fait que RECEVOIR le focus (`tabIndex={-1}`, pour annoncer la page) n'est pas
+ * un contrôle : l'anneau qui l'encadrait à chaque ouverture de « Clôturer … » se lisait comme un
+ * défaut (grand test, parcours budget). `focus:outline-none` de Tailwind ne l'emportait pas sur
+ * `:focus-visible` ci-dessus.
+ */
+:is(h1, h2)[tabindex="-1"]:focus-visible { outline: none; }
+
+/*
  * Sur la carte encre, l'anneau `herbe` ne fait que 1,9:1 : il disparaît (il en faut 3).
  * `.sur-encre` en repeint la COULEUR seulement, en `fond` (12:1) — c'est le même et
  * unique anneau, pas un second. Une classe de plus que `:focus-visible` ci-dessus

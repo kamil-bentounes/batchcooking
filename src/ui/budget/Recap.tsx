@@ -68,13 +68,15 @@ export function Recap({ mois, reste, segments, cloture, va }: {
                     style={{ flexGrow: Math.max(s.pourcent, 1), background: teinte(s) }} />
             ))}
           </div>
-          <ul className="mt-4 grid grid-cols-2 gap-x-5 gap-y-2">
+          <ul className="mt-4 grid grid-cols-2 gap-x-5 max-[380px]:gap-x-3 gap-y-2">
             {segments.map(s => (
-              <li key={s.cle} className="flex items-center gap-2 text-[14px]">
+              <li key={s.cle} className="flex items-center gap-2 text-[14px] max-[380px]:text-[13px]">
                 <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ background: teinte(s) }} />
-                <span className="grow truncate">{s.nom}</span>
-                <span className="tabular-nums opacity-80">{s.pourcent} %</span>
+                {/* À 360 px, « Vie coura… » et « 17 / % » sur deux lignes : le nom passe à la ligne
+                    plutôt que de se tronquer, et le pourcentage ne se coupe jamais. */}
+                <span className="grow min-w-0 leading-tight">{s.nom}</span>
+                <span className="tabular-nums opacity-80 whitespace-nowrap shrink-0">{s.pourcent} %</span>
               </li>
             ))}
           </ul>

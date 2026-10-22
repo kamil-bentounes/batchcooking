@@ -101,3 +101,29 @@ test('« Je retire » ne retire pas plus que ce qu’on a versé', async ({ page
   await expect(page.getByText(/Tu n’as versé que .* ici : tu ne peux pas en retirer plus\./)).toBeVisible()
   expect(await somme(), 'la poche a été entamée').toBe(avant)
 })
+
+test('à 360 px, la légende et les catégories ne coupent ni un nom ni un pourcentage', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 })
+  await connecte(page)
+  await page.goto('/budget')
+  const recap = page.getByRole('region', { name: 'Ce qui reste' })
+  await expect(recap.getByText('Il te reste')).toBeVisible({ timeout: 15_000 })
+  const coupes = await page.evaluate(() => {
+    const noms = [...document.querySelectorAll('section[aria-label="Ce qui reste"] li span, section[aria-label^="Catégorie"] button .font-semibold')]
+    return noms.filter(e => (e as HTMLElement).scrollWidth > (e as HTMLElement).clientWidth + 1
+      || getComputedStyle(e).textOverflow === 'ellipsis').map(e => e.textContent)
+  })
+  expect(coupes, 'un nom est tronqué à 360 px').toEqual([])
+  // « 17 % » tient sur une seule ligne : sa boîte ne dépasse pas une ligne de texte.
+  const hauteurs = await page.evaluate(() => [...document.querySelectorAll('section[aria-label="Ce qui reste"] li span.tabular-nums')]
+    .map(e => Math.round(e.getBoundingClientRect().height)))
+  expect(Math.max(...hauteurs), 'un pourcentage passe sur deux lignes').toBeLessThan(24)
+})
+
+test('le titre de la page de clôture ne porte pas d’anneau de focus', async ({ page }) => {
+  await connecte(page)
+  await page.goto('/cloture/2026-08')
+  const titre = page.getByRole('heading', { level: 1 })
+  await expect(titre).toBeFocused({ timeout: 15_000 })
+  expect(await titre.evaluate(e => getComputedStyle(e).outlineStyle)).toBe('none')
+})
