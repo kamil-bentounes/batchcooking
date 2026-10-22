@@ -124,6 +124,8 @@ test.describe('la cuisine, jouée au clic', () => {
     await page.getByLabel('Aliment').fill('X'.repeat(80))
     await page.getByRole('spinbutton', { name: 'Quantité' }).fill('2')
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click()
+    // La ligne doit être là avant de mesurer : sinon on mesure la page d'avant l'ajout.
+    await expect(page.getByText('X'.repeat(80))).toBeVisible()
     const debord = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
     expect(debord, 'un libellé sans espace fait déborder la page').toBe(0)
   })

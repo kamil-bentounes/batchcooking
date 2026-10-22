@@ -133,6 +133,11 @@ test('celle qui arrive ce mois-ci ne manque de revenu à personne le mois d’av
   await connecte(page, foyer.email)
   await page.goto(urlAvant)
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  /* ⚠️ Le `h1` s'affiche PENDANT le chargement : asserter une absence juste après passait aussi sur
+     le code d'avant. On attend ce qui n'arrive qu'une fois TOUT lu (la carte du reste, puis les
+     catégories) avant de dire que le message n'est pas là. */
+  await expect(page.getByRole('region', { name: 'Ce qui reste' })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('heading', { name: 'Par catégorie' })).toBeVisible()
   await expect(page.getByText(/n’a pas encore dit son revenu/),
     'on réclame un revenu à quelqu’un qui n’était pas là').toHaveCount(0)
 })

@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js'
 import { expect, test, type Page } from '@playwright/test'
 import { MOT_DE_PASSE, amorce, db, efface } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
+import { montant } from '../src/lib/budget/mois.ts'
 import { remetLHeure } from './horloge.ts'
 
 let foyer: Foyer
@@ -125,7 +126,18 @@ test('un mois clôturé par Thauba : le reste de Kamil est calculé, avec « cl�
   const recap = page.getByRole('region', { name: 'Ce qui reste' })
   await expect(recap.getByText(/est clôturé par Thauba\./)).toBeVisible({ timeout: 15_000 })
   const t = await recap.innerText()
-  expect(t).toContain('Il t’est resté')
+  /* Le montant, recalculé depuis les tables brutes : mon revenu en vigueur À LA FIN de ce mois-là,
+     moins mes parts figées des lignes du mois. */
+  const fin = new Date(prec.getFullYear(), prec.getMonth() + 1, 0).getDate()
+  const { data: revenus } = await db.from('revenu').select('net_mensuel_cents')
+    .eq('user_profile_id', foyer.userId).lte('valid_from', `${mois.slice(0, 8)}${fin}`)
+    .order('valid_from', { ascending: false }).limit(1)
+  const { data: parts } = await db.from('depense_part').select('part_cents, depense!inner(mois)')
+    .eq('user_profile_id', foyer.userId).eq('depense.mois', mois)
+  const attendu = revenus![0].net_mensuel_cents - parts!.reduce((s, p) => s + p.part_cents, 0)
+  expect(parts!.length, 'aucune part de Kamil ce mois-là : le montant ne prouverait rien').toBeGreaterThan(0)
+  expect(t).toContain(attendu < 0 ? 'Il te manque' : 'Il t’est resté')
+  expect(t, 'le reste affiché n’est pas celui de ses tables').toContain(montant(Math.abs(attendu)))
   expect(t).not.toContain('—')
   expect(t, 'le reste de Thauba ne devient pas le mien').not.toContain('999')
   expect(t).toContain('Calculé sur tes parts')
