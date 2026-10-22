@@ -317,7 +317,8 @@ describe('cloreUneFois — « Clôturer septembre »', () => {
     const garde = unSeulEnvoi()
     const cloturer = vi.fn(reponse)
     const apres = vi.fn()
-    return { cloturer, apres, clic: () => cloreUneFois({ garde, envoi, cloturer, apres }) }
+    /* `corrige` : l'envoi tel que l'écran le recompose après une correction. */
+    return { cloturer, apres, clic: (corrige = envoi) => cloreUneFois({ garde, envoi: corrige, cloturer, apres }) }
   }
 
   it('envoie l’appel tel que composé, puis va au mois', async () => {
@@ -334,10 +335,13 @@ describe('cloreUneFois — « Clôturer septembre »', () => {
     expect(t.cloturer).toHaveBeenCalledTimes(1)
   })
 
-  it('une saisie illisible n’envoie rien — et ne verrouille pas le bouton', () => {
+  it('une saisie illisible n’envoie rien — et ne verrouille pas le bouton : corrigée, la clôture part', () => {
     const t = monter({ valide: false, appel: null })
     t.clic(); t.clic()
     expect(t.cloturer).not.toHaveBeenCalled()
+    t.clic({ valide: true, appel })
+    expect(t.cloturer).toHaveBeenCalledTimes(1)
+    expect(t.cloturer).toHaveBeenCalledWith(appel)
   })
 
   it('refusée par la base : pas d’aller au mois, et on peut renvoyer', async () => {
