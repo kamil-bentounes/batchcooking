@@ -166,7 +166,7 @@ export function useGenereListe() {
       ou(await supabase.from('shopping_item').delete()
         .eq('cycle_id', cycleId).eq('source', 'recette').select())
       // Ce que la base a refusé d'effacer (coché, payé : 0031) est resté : on n'y ajoute pas un double.
-      const gardees = ou(await supabase.from('shopping_item').select('food_id, label')
+      const gardees = ou(await supabase.from('shopping_item').select('food_id, label, quantity, unit')
         .eq('cycle_id', cycleId).eq('source', 'recette'))
 
       // Ce que le foyer a déjà payé pour ces produits (lot 5). C'est la seule
@@ -180,7 +180,7 @@ export function useGenereListe() {
       }))
 
       const magasin = magasinDefaut ? magasinDefaut.id : null
-      const lignes = sansLesDejaPrises([...cumuls.values()].map(c => {
+      const aPrendre = sansLesDejaPrises([...cumuls.values()].map(c => {
         const quantite = c.grammes ?? c.quantite ?? null
         const unite = c.grammes !== null ? 'g' : c.unite
         // Un compte qu'on n'a su ni convertir ni additionner ne DISPARAÎT pas :
@@ -196,23 +196,31 @@ export function useGenereListe() {
         const note = reste >= 0.5
           ? `+ ${Math.round(reste)} ${c.unite ?? 'à l’unité'} à compter`
           : null
+        return {
+          food_id: c.food_id, label: c.label, note, groupe: c.groupe,
+          quantity: quantite, unit: unite,
+        }
+      }).filter(l => l.label.trim().length > 0), gardees)
+      /* Le prix s'estime APRÈS le tri : il dépend de la quantité, et `sansLesDejaPrises` la change
+         (le manque d'une ligne déjà prise, pas le besoin entier). */
+      const lignes = aPrendre.map(l => {
         const prix = connus.length === 0 ? null : estimation(
-          { label: c.label, food_id: c.food_id, quantity: quantite, unit: unite },
+          { label: l.label, food_id: l.food_id, quantity: l.quantity, unit: l.unit },
           connus, magasin)
         return {
           cycle_id: cycleId,
           household_id: foyer,
           store_id: magasin,
-          food_id: c.food_id,
-          label: c.label,
-          note,
-          aisle: rayonDe({ groupe: c.groupe, libelle: c.label }),
-          quantity: quantite,
-          unit: unite,
+          food_id: l.food_id,
+          label: l.label,
+          note: l.note,
+          aisle: rayonDe({ groupe: l.groupe, libelle: l.label }),
+          quantity: l.quantity,
+          unit: l.unit,
           est_price_eur: prix?.euros ?? null,
           source: 'recette' as const,
         }
-      }).filter(l => l.label.trim().length > 0), gardees)
+      })
 
       return ou(await supabase.from('shopping_item').insert(lignes).select())
     },

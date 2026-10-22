@@ -157,6 +157,8 @@ describe('le budget', () => {
 
 describe('régénérer la liste', () => {
   const ligne = (label: string, food_id: string | null = null) => ({ label, food_id })
+  const q = (label: string, food_id: string | null, quantity: number | null, unit: string | null = 'g') =>
+    ({ label, food_id, quantity, unit })
 
   it('ne redouble pas un aliment déjà gardé (coché ou payé)', () => {
     const neuves = [ligne('Oignon, cru', 'o'), ligne('Carotte, crue', 'c')]
@@ -171,5 +173,53 @@ describe('régénérer la liste', () => {
   it('garde tout quand rien n’a été pris', () => {
     const neuves = [ligne('Beurre'), ligne('Sel')]
     expect(sansLesDejaPrises(neuves, [])).toEqual(neuves)
+  })
+
+  /* Le défaut : « Beurre 200 g » coché, une recette de plus, besoin 400 g — les 200 g qui
+     manquent ne revenaient jamais. Ces tests assertent des QUANTITÉS. */
+  describe('les quantités : le manque reste à prendre', () => {
+    it('besoin 400 g, 200 g déjà pris : reste une ligne de 200 g', () => {
+      const r = sansLesDejaPrises([q('Beurre', 'b', 400)], [q('Beurre', 'b', 200)])
+      expect(r).toHaveLength(1)
+      expect(r[0].quantity).toBe(200)
+      expect(r[0].unit).toBe('g')
+    })
+
+    it('besoin 200 g, 200 g déjà pris : rien à reprendre', () => {
+      expect(sansLesDejaPrises([q('Beurre', 'b', 200)], [q('Beurre', 'b', 200)])).toEqual([])
+    })
+
+    it('besoin 150 g, 200 g déjà pris (la recette a rétréci) : rien à reprendre, jamais une quantité négative', () => {
+      expect(sansLesDejaPrises([q('Beurre', 'b', 150)], [q('Beurre', 'b', 200)])).toEqual([])
+    })
+
+    it('plusieurs lignes déjà prises du même aliment s’additionnent', () => {
+      const r = sansLesDejaPrises([q('Beurre', 'b', 500)], [q('Beurre', 'b', 200), q('Beurre', 'b', 100)])
+      expect(r.map(l => l.quantity)).toEqual([200])
+    })
+
+    it('sans aliment rattaché, le manque se calcule aussi, par le libellé', () => {
+      const r = sansLesDejaPrises([q('Beurre', null, 400)], [q(' beurre ', null, 150)])
+      expect(r.map(l => l.quantity)).toEqual([250])
+    })
+
+    it('le manque ne traîne pas de centièmes flottants', () => {
+      const r = sansLesDejaPrises([q('Lait', 'l', 0.3, 'l')], [q('Lait', 'l', 0.1, 'l')])
+      expect(r.map(l => l.quantity)).toEqual([0.2])
+    })
+
+    it('une unité différente n’est pas comparable : « déjà dans la liste », comme avant', () => {
+      expect(sansLesDejaPrises([q('Beurre', 'b', 2, null)], [q('Beurre', 'b', 200, 'g')])).toEqual([])
+    })
+
+    it('une ligne déjà prise sans quantité n’est pas comparable non plus', () => {
+      expect(sansLesDejaPrises([q('Beurre', 'b', 400)], [q('Beurre', 'b', null)])).toEqual([])
+    })
+
+    it('les autres champs de la ligne neuve restent intacts, seule la quantité change', () => {
+      const neuve = { ...q('Beurre', 'b', 400), note: '+ 1 à compter', aisle: 'Crèmerie' }
+      expect(sansLesDejaPrises([neuve], [q('Beurre', 'b', 200)]))
+        .toEqual([{ ...neuve, quantity: 200 }])
+    })
   })
 })

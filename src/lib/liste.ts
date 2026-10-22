@@ -97,18 +97,36 @@ export function budget(
   }
 }
 
+type Prise = { food_id: string | null; label: string; quantity?: number | null; unit?: string | null }
+
 /**
- * Régénérer la liste ne redouble pas ce qui est déjà pris.
+ * Régénérer la liste ne redouble pas ce qui est déjà pris — et n'en perd pas non plus le manque.
  *
  * Une ligne cochée ou payée ne se supprime plus (migration 0031) : elle survit à la
  * régénération, et la ligne neuve du même produit s'ajoutait à côté — « Beurre » coché,
  * puis « Beurre » à prendre. Un article déjà dans la liste (même aliment, ou à défaut même
- * libellé) n'est pas réinséré.
+ * libellé) n'est donc pas réinséré tel quel.
+ *
+ * ⚠️ Mais l'écarter en bloc perdait des QUANTITÉS : 200 g de beurre cochés, une recette de plus,
+ * on régénère — le besoin est de 400 g, la liste gardait « 200 g pris » et les 200 g qui manquent
+ * ne revenaient jamais (on rentrait du magasin sans). Quand les deux portent une quantité dans la
+ * même unité, la ligne neuve devient le MANQUE (besoin − déjà pris), ou disparaît s'il n'y en a
+ * plus. Sans quantité comparable de part ou d'autre, on ne sait pas dire ce qui manque : on s'en
+ * tient à « déjà dans la liste ».
  */
-export function sansLesDejaPrises<T extends { food_id: string | null; label: string }>(
-  neuves: T[], gardees: { food_id: string | null; label: string }[],
-): T[] {
-  const aliments = new Set(gardees.map(g => g.food_id).filter((x): x is string => !!x))
-  const libelles = new Set(gardees.map(g => g.label.trim().toLowerCase()))
-  return neuves.filter(n => !(n.food_id ? aliments.has(n.food_id) : libelles.has(n.label.trim().toLowerCase())))
+export function sansLesDejaPrises<T extends Prise>(neuves: T[], gardees: Prise[]): T[] {
+  const libelle = (x: { label: string }) => x.label.trim().toLowerCase()
+  const lesMemes = (n: Prise) => gardees.filter(g => n.food_id ? g.food_id === n.food_id : libelle(g) === libelle(n))
+  const resultat: T[] = []
+  for (const n of neuves) {
+    const memes = lesMemes(n)
+    if (memes.length === 0) { resultat.push(n); continue }
+    const comparables = memes.filter(g =>
+      g.quantity != null && n.quantity != null && (g.unit ?? null) === (n.unit ?? null))
+    if (comparables.length === 0) continue
+    const pris = comparables.reduce((s, g) => s + Number(g.quantity), 0)
+    const manque = Math.round((Number(n.quantity) - pris) * 100) / 100
+    if (manque > 0) resultat.push({ ...n, quantity: manque })
+  }
+  return resultat
 }
