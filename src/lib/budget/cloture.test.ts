@@ -157,7 +157,7 @@ describe('envoiDeLaCloture — l’appel de cloture_le_mois', () => {
   it('« Tout ce qui reste » part tel quel (null) : la base met de côté son propre reste', () => {
     expect(envoiDeLaCloture({ mois: SEPT, reste: 793_40, poches: [poche()], choix: ch(),
                               rien: new Set(['c2']) }))
-      .toEqual({ valide: true, appel: { mois: SEPT, factures: [], rien: ['c2'], misDeCote: null, poche: 'p1' } })
+      .toEqual({ valide: true, appel: { mois: SEPT, rien: ['c2'], misDeCote: null, poche: 'p1' } })
   })
 
   it('garder : 0 et aucune poche', () => {
@@ -311,7 +311,7 @@ describe('revenirSiConfirme — « Revenir dessus »', () => {
 })
 
 describe('cloreUneFois — « Clôturer septembre »', () => {
-  const appel: AppelDeCloture = { mois: SEPT, factures: [], rien: [], misDeCote: null, poche: 'p1' }
+  const appel: AppelDeCloture = { mois: SEPT, rien: [], misDeCote: null, poche: 'p1' }
   const monter = (envoi = { valide: true, appel } as { valide: boolean; appel: AppelDeCloture | null },
                   reponse: () => Promise<unknown> = () => Promise.resolve()) => {
     const garde = unSeulEnvoi()

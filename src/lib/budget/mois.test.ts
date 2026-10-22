@@ -368,13 +368,13 @@ describe('le récap de la clôture', () => {
     ]
     const saisies = [saisie('courses', 64_230), saisie('resto', 45_000)]
     const r = recapCloture({ revenu: 432_500, lignes, saisies, moi: K,
-      factures: new Map([['elec', 6_200]]), rien: new Set(['sorties']), soldes: 0 })
-    // Prévu : 80 000 + 40 000 + 10 000 + 6 200 + 3 700 = 139 900.
-    expect(r.prevus).toBe(432_500 - 139_900)
+      rien: new Set(['sorties']), soldes: 0 })
+    // Prévu : 80 000 + 40 000 + 10 000 + 5 000 (la facture, à son montant : la clôture la confirme telle quelle) + 3 700.
+    expect(r.prevus).toBe(432_500 - 138_700)
     // Écart : +15 770 (courses) − 5 000 (resto) + 10 000 (sorties, rien dépensé).
     expect(r.ecart).toBe(20_770)
     expect(r.reste).toBe(r.prevus + r.ecart)
-    expect(r.reste).toBe(432_500 - (64_230 + 45_000 + 0 + 6_200 + 3_700))
+    expect(r.reste).toBe(432_500 - (64_230 + 45_000 + 0 + 5_000 + 3_700))
   })
   it('les soldes entrent dans X : ils comptent contre le revenu, X + Y fait toujours le chiffre', () => {
     const lignes = [
@@ -382,8 +382,7 @@ describe('le récap de la clôture', () => {
       ligne({ id: 'internet', charge_id: 'internet', facon: 'fixe', montant_cents: 3_700 }),
     ]
     const saisies = [saisie('courses', 70_000)]
-    const base = { revenu: 432_500, lignes, saisies, moi: K, factures: new Map<string, number>(),
-                   rien: new Set<string>() }
+    const base = { revenu: 432_500, lignes, saisies, moi: K, rien: new Set<string>() }
     const sans = recapCloture({ ...base, soldes: 0 })
     // Un solde négatif (de l'argent qui revient) allège X ; un positif (à payer) l'alourdit.
     const rend = recapCloture({ ...base, soldes: -16_668 })
@@ -412,8 +411,7 @@ describe('le récap de la clôture', () => {
   })
   it('un récap sans part des soldes est « avant les soldes » : X + Y fait ce chiffre, marqué incertain', () => {
     const lignes = [ligne({ id: 'courses', charge_id: 'courses', montant_cents: 80_000 })]
-    const base = { revenu: 432_500, lignes, saisies: [], moi: K, factures: new Map<string, number>(),
-                   rien: new Set<string>() }
+    const base = { revenu: 432_500, lignes, saisies: [], moi: K, rien: new Set<string>() }
     const sur = recapCloture({ ...base, soldes: 0 })
     const inc = recapCloture({ ...base, soldes: null })
     expect(sur.incertain).toBeUndefined()

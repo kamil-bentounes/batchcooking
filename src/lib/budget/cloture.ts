@@ -77,14 +77,14 @@ export function rienEffectif(lignes: Depense[], saisies: Saisie[], choisi: Set<s
 }
 
 export type AppelDeCloture = {
-  mois: string; factures: never[]; rien: string[]
+  mois: string; rien: string[]
   misDeCote: number | null; poche: string | null
 }
 
 /**
- * L'appel de `cloture_le_mois` pour ce que l'écran montre. `factures: []` : « C'est ça »
- * et « Modifier » valident tout de suite (choix 17), la base confirme le reste à son
- * montant. `valide` à faux : une saisie illisible — rien ne part.
+ * L'appel de `cloture_le_mois` pour ce que l'écran montre. Aucune facture n'y est
+ * jointe : « C'est ça » et « Modifier » valident tout de suite (choix 17), la base confirme
+ * le reste à son montant (`clotureLeMois` envoie `factures: []`). `valide` à faux : une saisie illisible — rien ne part.
  */
 export function envoiDeLaCloture(o: {
   mois: string; reste: number; poches: Poche[]; choix: ChoixDuReste; rien: Set<string>
@@ -93,7 +93,7 @@ export function envoiDeLaCloture(o: {
 }): { valide: boolean; appel: AppelDeCloture | null } {
   const e = envoiDuReste({ reste: o.reste, poches: o.poches, choix: o.choix, incertain: o.incertain })
   if (!e.valide) return { valide: false, appel: null }
-  return { valide: true, appel: { mois: o.mois, factures: [], rien: [...o.rien],
+  return { valide: true, appel: { mois: o.mois, rien: [...o.rien],
                                   misDeCote: e.misDeCote, poche: e.poche } }
 }
 

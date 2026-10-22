@@ -41,7 +41,7 @@ const dite = (cents: number): Saisie[] =>
 
 const recapDe = (revenu: number, soldes = 0): RecapCloture => recapCloture({
   revenu, lignes: [loyer, courses], saisies: dite(642_30), moi: 'u1',
-  factures: new Map(), rien: new Set(), soldes,
+  rien: new Set(), soldes,
 })
 
 const choix = (c: Partial<ChoixDuReste> = {}): ChoixDuReste =>
@@ -71,7 +71,7 @@ describe('l’argent de la carte encre — centimes impairs', () => {
 
   it('un écart négatif : « moins Y dépensés en plus », et X + Y fait toujours le chiffre', () => {
     const recap = recapCloture({ revenu: 3_000_01, lignes: [loyer, courses], saisies: dite(900_02),
-      moi: 'u1', factures: new Map(), rien: new Set(), soldes: 0 })
+      moi: 'u1', rien: new Set(), soldes: 0 })
     expect(recap).toEqual({ prevus: 1_398_99, ecart: -100_01, reste: 1_298_98 })
     const t = texte(vue({ recap }))
     expect(t).toContain(`1${FINE}298,98 €`)

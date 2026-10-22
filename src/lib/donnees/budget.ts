@@ -845,11 +845,13 @@ export function useClotures() {
 
 export type NonSoldee = { charge: string; libelle: string; annee: number; raison: string }
 export async function clotureLeMois(c: {
-  mois: string; factures: { depense: string; montant_cents: number }[]
+  mois: string
   rien: string[]; misDeCote: number | null; poche: string | null
 }): Promise<{ cloture: string; non_soldees: NonSoldee[] }> {
   const { data, error } = await supabase.rpc('cloture_le_mois', {
-    le_mois: c.mois, factures: c.factures, rien: c.rien,
+    /* `factures: []` : « C'est ça » et « Modifier » valident tout de suite (choix 17) ; la base
+       confirme ce qui reste à son montant. */
+    le_mois: c.mois, factures: [], rien: c.rien,
     /* `undefined`, pas `null` : la clé ne part pas, et la base prend son défaut —
        `null`, c'est-à-dire « tout ce qui reste », et aucune poche. Les types
        générés n'acceptent pas `null` pour un paramètre à défaut. */

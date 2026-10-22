@@ -33,7 +33,6 @@ import {
   unSeulEnvoi,
 } from '../lib/budget/cloture.ts'
 import { messageDeLecture } from '../lib/budget/ecran.ts'
-import { pocheParDefaut } from '../lib/budget/etapes.ts'
 import { maintenant } from '../lib/horloge.ts'
 import { EtapeDepenses } from '../ui/budget/EtapeDepenses.tsx'
 import { EtapeFactures } from '../ui/budget/EtapeFactures.tsx'
@@ -69,7 +68,8 @@ export function Cloture({ userId, mois, va, retour }: {
   const revenus = useRevenus()
   const poches = usePoches()
   const cloture = useClotureLeMois()
-  const garde = useRef(unSeulEnvoi()).current
+  /* Initialisation paresseuse : `useRef(unSeulEnvoi())` fabriquait un garde neuf, jeté, à chaque rendu. */
+  const [garde] = useState(unSeulEnvoi)
   const [rien, setRien] = useState<Set<string> | null>(null)
   const [choix, setChoix] = useState<ChoixDuReste | null>(null)
   const [declarer, setDeclarer] = useState<string | null>(null)
@@ -94,13 +94,12 @@ export function Cloture({ userId, mois, va, retour }: {
   /* Le récap attend TOUT : lignes, saisies, revenu et soldes. Calculé sur un morceau, il
      ment (« 0 € » de soldes pendant leur lecture, un faux écart sans les saisies). */
   const recap = porte === 'a-clore' && lignes && dites && apercu.data && revenu !== null
-    ? recapCloture({ revenu, lignes, saisies: dites, moi: userId, factures: new Map(), rien: rienEff,
+    ? recapCloture({ revenu, lignes, saisies: dites, moi: userId, rien: rienEff,
                      soldes: soldes.incertain ? null : soldes.cents })
     : null
-  /* Par défaut, la poche d'urgence s'il y en a une, sinon la première (§ 3.5). */
-  const leChoix: ChoixDuReste = choix ?? {
-    garder: false, poche: (poches.data && pocheParDefaut(poches.data)?.id) ?? null, combien: null,
-  }
+  /* Par défaut, la poche d'urgence s'il y en a une, sinon la première (§ 3.5) : `pocheDuChoix`
+     retombe sur elle quand `poche` est `null` — pas besoin de la chercher ici. */
+  const leChoix: ChoixDuReste = choix ?? { garder: false, poche: null, combien: null }
   const envoi = recap && poches.data
     ? envoiDeLaCloture({ mois, reste: recap.reste, poches: poches.data, choix: leChoix, rien: rienEff,
                       incertain: recap.incertain })

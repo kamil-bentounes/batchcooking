@@ -408,7 +408,7 @@ export type RecapCloture = { prevus: number; ecart: number; reste: number; incer
  */
 export function recapCloture(o: {
   revenu: number; lignes: Ligne[]; saisies: Saisie[]; moi: string
-  factures: Map<string, number>; rien: Set<string>
+  rien: Set<string>
   /** Ma part des soldes ; `null` quand elle n'est pas lisible (`partDesSoldes`) : le récap est alors « avant les soldes ». */
   soldes: number | null
 }): RecapCloture {
@@ -421,8 +421,6 @@ export function recapCloture(o: {
         : l.charge_id && o.rien.has(l.charge_id) ? 0 : p
       prevus -= partSur(l, o.moi, p)
       ecart += partSur(l, o.moi, p) - partSur(l, o.moi, reel)
-    } else if (l.facon === 'facture' && o.factures.has(l.id)) {
-      prevus -= partSur(l, o.moi, o.factures.get(l.id)!)
     } else {
       prevus -= l.parts.find(p => p.user_profile_id === o.moi)?.part_cents ?? 0
     }

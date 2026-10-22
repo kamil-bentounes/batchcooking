@@ -8,7 +8,7 @@
  * base ait répondu, ne repose pas la question : rouvrir deux fois ferait refuser
  * le second (« n'est pas clôturé ») sous un message d'erreur pour une réussite.
  */
-import { useRef } from 'react'
+import { useState } from 'react'
 import { useRouvreLeMois } from '../../lib/donnees/budget.ts'
 import { questionPourRevenir, revenirSiConfirme, unSeulEnvoi } from '../../lib/budget/cloture.ts'
 import { capitale, nomDuMoisDate } from '../../lib/budget/mois.ts'
@@ -26,7 +26,8 @@ export function RevenirDessus({ mois, misDeCote, apres, clair = false }: {
   clair?: boolean
 }) {
   const rouvre = useRouvreLeMois()
-  const garde = useRef(unSeulEnvoi()).current
+  /* Paresseux : `useRef(unSeulEnvoi())` fabriquait un garde neuf, jeté, à chaque rendu. */
+  const [garde] = useState(unSeulEnvoi)
   /* `mutateAsync`, pas `mutate(…, { onSuccess })` : les rappels de `mutate` ne partent plus
      si le bouton a disparu entre-temps — et, sur la page de clôture, il disparaît dès que
      la relecture des clôtures revient, avant la fin de la mutation. On ne reviendrait pas au mois. */
