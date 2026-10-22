@@ -54,17 +54,21 @@ describe('un membre part, le foyer reste', () => {
         .eq('household_id', f.householdId)) as { montant_cents: number }[])
         .reduce((s, l) => s + l.montant_cents, 0)
       const avant = await total()
+      const pharmacieDOctobre = (await ligne(pharmacie, '2026-10-01'))!.montant_cents
 
       const { error } = await thauba.client.rpc('delete_my_account')
       expect(error, `départ refusé : ${error?.message}`).toBeNull()
-      // Le départ n'efface ni ne crée un centime sur les lignes : seul le détail part.
-      expect(await total(), 'un centime perdu ou créé par le départ').toBe(avant)
+      /* Sa pharmacie, charge à elle seule, s'en va avec elle : sa ligne d'octobre,
+         encore ouverte, disparaît. Rien d'autre ne bouge : un centime de plus ou de
+         moins serait une ligne de Kamil touchée. */
+      expect(await total(), 'un centime perdu ou créé par le départ')
+        .toBe(avant - pharmacieDOctobre)
+      expect(await ligne(pharmacie, '2026-10-01'), 'sa ligne d’octobre est restée').toBeFalsy()
 
-      for (const m of ['2026-09-01', '2026-10-01']) {
-        const l = (await ligne(pharmacie, m))!
-        expect((await admin().from('saisie').select('id').eq('depense_id', l.id)).data,
-          `ses achats de ${m} se lisent encore`).toEqual([])
-      }
+      // Septembre est clôturé : la ligne reste (l'historique), mais ses achats partent.
+      const septembre = (await ligne(pharmacie, '2026-09-01'))!
+      expect((await admin().from('saisie').select('id').eq('depense_id', septembre.id)).data,
+        'ses achats de septembre se lisent encore').toEqual([])
       expect((await ligne(pharmacie, '2026-09-01'))!.montant_cents).toBe(2_000)
       const { data: partagee } = await admin().from('saisie').select('saisi_par, montant_cents')
         .eq('depense_id', (await ligne(courses, '2026-10-01'))!.id)
@@ -81,6 +85,39 @@ describe('un membre part, le foyer reste', () => {
       expect(choix).toEqual([{ reste_cents: null, versement_id: v.id }])
       expect((await admin().from('compte').select('id').eq('titulaire_id', thauba.userId)).data)
         .toEqual([])
+    })
+
+  it('sa charge perso s’archive si elle a une histoire, se supprime sinon ; celles de Kamil restent',
+    async () => {
+      const f = await foyerSolo('dep-charge-perso', { revenu: 300_000 })
+      const thauba = await membre(f, 'Thauba', { revenu: 300_000 })
+      const pharmacie = await poseCharge(f, { libelle: 'Pharmacie', cents: 3_000, mode: 'au_fil',
+                                              participants: [thauba.userId] })
+      const sport = await poseCharge(f, { libelle: 'Sport de Kamil', cents: 2_500, mode: 'fixe',
+                                          participants: [f.userId] })
+      const courses = await poseCharge(f, { libelle: 'Courses', cents: 80_000, mode: 'au_fil',
+        commun: true, participants: [f.userId, thauba.userId] })
+      await ouvre(f, '2026-09-01')
+      await ouvre(f, '2026-10-01')
+      ou(await declare(thauba, (await ligne(pharmacie, '2026-09-01'))!.id, '2026-09-12', 1_200))
+      await clos(f, '2026-09-01')
+      // Posée après la clôture de septembre : aucune ligne clôturée, donc aucune histoire.
+      const neuve = await poseCharge(f, { libelle: 'Abonnement neuf', cents: 1_500, mode: 'fixe',
+                                          participants: [thauba.userId] })
+      const restantes = async () => ((ou(await admin().from('depense').select('id, charge_id')
+        .in('charge_id', [sport, courses])) as { id: string }[]).map(l => l.id).sort())
+      const avant = await restantes()
+
+      ou(await thauba.client.rpc('delete_my_account'))
+
+      const { data: p } = await admin().from('charge').select('archive_le').eq('id', pharmacie)
+      expect(p, 'la pharmacie a une histoire : elle s’arrête, elle ne disparaît pas').toHaveLength(1)
+      expect(p![0].archive_le, 'la pharmacie est restée active').not.toBeNull()
+      expect((await admin().from('charge').select('id').eq('id', neuve)).data,
+        'une charge sans histoire part tout à fait').toEqual([])
+      const { data: k } = await admin().from('charge').select('archive_le').in('id', [sport, courses])
+      expect(k!.map(c => c.archive_le), 'une charge de Kamil a été archivée').toEqual([null, null])
+      expect(await restantes(), 'une ligne de Kamil a bougé').toEqual(avant)
     })
 
   it('le départ du seul membre qui avait un revenu recale les années ouvertes', async () => {
@@ -100,9 +137,13 @@ describe('un membre part, le foyer reste', () => {
 
 /**
  * Une charge perso annuelle de Thauba, dont elle a porté septembre et octobre
- * (2 × 41,67 € = 83,34 €), puis qui part. Ce qu'elle avait mis de côté est parti
- * avec elle : `recale_l_annee` ne le rend pas à Kamil. Mais ce que Kamil a posé
- * LUI-MÊME après son départ lui revient, retirer sa facture comprise.
+ * (2 × 41,67 € = 83,34 €), dont plus aucun participant n'est présent. Ce qu'elle
+ * avait mis de côté est parti avec elle : `recale_l_annee` ne le rend pas à Kamil.
+ * Mais ce que Kamil a posé LUI-MÊME ensuite lui revient, retirer sa facture comprise.
+ *
+ * `delete_my_account` retire désormais ces charges avec le partant : l'état n'est
+ * plus produit par un départ. On retire donc le compte SANS passer par elle, pour
+ * garder éprouvée la garde de `recale_l_annee` (une base peut encore le contenir).
  */
 describe('une charge perso de la membre partie', () => {
   let c: pg.Client
@@ -118,7 +159,7 @@ describe('une charge perso de la membre partie', () => {
       ou(await f.client.rpc('ouvre_la_charge', { la_charge: entretien, foyer: f.householdId,
                                                  le_mois: m }))
     }
-    ou(await thauba.client.rpc('delete_my_account'))
+    ou(await admin().auth.admin.deleteUser(thauba.userId))
     return { f, entretien }
   }
   const somme = async (charge: string) =>

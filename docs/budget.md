@@ -73,6 +73,13 @@ bénéfice nul entre deux personnes qui partagent un compte.
 **Ce qui protège, c'est l'entrée :** on ne rejoint pas un foyer sans qu'un de
 ses membres l'ait décidé. Voir le parcours d'invitation, §4.
 
+**Ce qui part avec un membre (choix de Kamil, 22/10) :** quand un membre supprime
+son compte, ses charges à lui seul s'en vont avec lui, car plus personne ne les
+porte. Les lignes des mois ouverts et leurs saisies partent ; la charge part avec,
+ou s'arrête si elle a une histoire. Les mois clôturés, confirmés ou payés restent
+tels quels. Ses saisies sur les lignes communes partent (le total reste), son
+revenu et ses comptes perso aussi. Voir `delete_my_account` (0112).
+
 ### D64 — l'épargne commune se suit en cumul par personne
 
 Une dépense est consommée ; une épargne persiste. Si l'un verse 61 % et l'autre
