@@ -17,7 +17,7 @@ export function HorsLigne({ reessayer }: { reessayer: () => void }) {
   return (
     <main className="min-h-dvh grid place-items-center px-6 text-center">
       <div className="max-w-sm">
-        <h1 className="titre text-[34px]">Pas de réseau</h1>
+        <h1 className="titre text-[34px]">Hors ligne</h1>
         <p role="alert" className="mt-3.5 text-[15px] text-doux">{PAS_DE_RESEAU}</p>
         <button onClick={reessayer}
                 className="mt-8 w-full h-[52px] rounded-[16px] bg-herbe text-fond text-[16px] font-medium">

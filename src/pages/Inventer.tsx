@@ -201,13 +201,22 @@ function Reglage({ label, valeur, unite, min, max, pas, surChange }: {
   label: string; valeur: number; unite: string
   min: number; max: number; pas: number; surChange: (v: number) => void
 }) {
+  /* Un brouillon : le champ peut être vidé, puis retapé. `|| min` à chaque frappe remettait la
+     borne dès qu'on l'effaçait (« 200 », puis « 6 » donnait « 2006 »), et rien ne bornait le haut. */
+  const [brouillon, setBrouillon] = useState<string | null>(null)
+  const borne = (n: number) => Math.min(max, Math.max(min, Math.round(n)))
   return (
     <label className="flex items-center gap-3">
       <span className="text-[15px] grow">{label}</span>
-      <input type="number" value={valeur} min={min} max={max} step={pas}
-             onChange={e => surChange(Number(e.target.value) || min)}
+      <input type="number" value={brouillon ?? valeur} min={min} max={max} step={pas}
+             onChange={e => {
+               setBrouillon(e.target.value)
+               const n = Number(e.target.value)
+               if (e.target.value !== '' && Number.isFinite(n)) surChange(borne(n))
+             }}
+             onBlur={() => setBrouillon(null)}
              aria-label={`${label} ${unite}`}
-             className="w-20 rounded-lg border border-brume bg-fond px-2.5 py-1.5
+             className="w-20 min-h-11 rounded-lg border border-brume bg-fond px-2.5 py-1.5
                         text-right chiffre outline-none focus:border-herbe" />
       <span className="text-[14px] text-doux w-[110px]">{unite}</span>
     </label>
