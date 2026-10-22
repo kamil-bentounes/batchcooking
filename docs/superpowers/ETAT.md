@@ -43,9 +43,7 @@ high** : c'est sa demande, notée en mémoire sous `agents-en-sonnet-high`.
    front du lot 3 et ses 9 constats corrigés). Reste le chantier 4 : le grand test (parcours A nouveau
    venu, B cuisine, C budget, joués par des agents l'un après l'autre : consignes dans le dossier de
    travail, rapports dans `docs/superpowers/grand-test/`), puis la mise en ligne D1+D2.
-6. Deux `git stash` sont devenus inutiles (« wip recettes tâche 6 » et « tâche 7 » : le travail est
-   refait et livré). Les retirer avec `git stash drop` deux fois ; l'effacement a été refusé le 20/10
-   par le contrôle de sécurité, donc à lui de le faire.
+6. Les deux anciens `git stash` ont été supprimés le 22/10 (à la demande de Kamil).
 
 ## Chantier 1 · Inscription et invitation — FERMÉ le 19/10
 
@@ -228,18 +226,34 @@ de `cuisine.md` (session interrompue, ligne protégée, non-alimentaire, positio
 constats confiés à un agent (réseau coupé : mutations en pause et jeton expiré, courses, épargne, mois clos
 avant l'arrivée, md5 des égalités, focus…) ; **à vérifier à son retour** (`git log`, rapport).
 
-**Restent avant la mise en ligne** :
-1. Cueillir le rapport de l'agent des 11 constats ; `npm run build -- --mode development`, `npm run lint`,
-   `npx vitest run src`, `npm test` (série, base), `npx playwright test` en entier.
-2. Rejouer `bash scripts/banc-migration-budget.sh --tout` (0093 à 0117 ; remet la base locale à zéro) puis
-   `npx supabase db reset --local && npm run seed`.
-3. **Mise en ligne D1+D2 en une fois** (migrations 0093 à 0117, fonctions `importer` ET `invite` avec
-   `--use-api`, puis le site) : relire la prod (mêmes chiffres ?), sauvegarde en lecture seule, nettoyer le
-   compte de Thauba (voir « Décision du 22/10 »), merge de `feat/budget-refait` dans `main` par
-   fast-forward, `npm run deploy`, fumée prod.
-4. Compte rendu du Budget (page Artifact) avec les points à dire à Kamil (ci-dessus, plus : clôture à deux =
-   lot 4 non planifié, l'autre membre lit son reste calculé ; mails d'auth toujours en anglais en attente de
-   « vas-y pour les mails » ; défauts de base hors plage 0013/0018/0021/0028/0031 notés dans `cuisine.md`).
+**MISE EN LIGNE DU BUDGET — faite le 22/10 (D1 + D2 en une fois).**
+- Avant : prod relue (mêmes chiffres que le 21/10 : octobre 22 lignes / 389 820, septembre 23 / 389 824,
+  1 foyer, 1 membre, aucun arrêt de 0114), sauvegarde complète en lecture seule dans
+  `~/PERSO/sauvegardes-popote/2026-10-22-budget/` (31 883 lignes, 13 Mo), atomicité de l'API de requête
+  prouvée (`create table …; select 1/0;` n'a rien laissé).
+- Migrations **0093 à 0117 en une seule transaction** (script hors dépôt, `prod/applique.py` du dossier de
+  travail : il lit le jeton de gestion, donc non versionné). Après : mêmes chiffres, 13 charges migrées
+  avec le bon mode et la bonne catégorie, 3 charges nouvelles (Coiffeur, Droguerie, Pharmacie), 2 relevés
+  devenus factures, 0 clôture, propriétaire `postgres`, positions des recettes du cycle 0, 1, 2.
+- Compte orphelin de Thauba (créé le 22/09, jamais de profil) et invitation expirée du 17/09 : supprimés
+  (accord de Kamil du 22/10, sauvegarde faite avant). Prod : 1 compte, 1 profil, 1 foyer, 0 invitation.
+- Fonction `invite` déployée (`--use-api`) ; `importer` l'était depuis le 21/10.
+- Mails d'authentification en français poussés (PATCH `config/auth` : objets, modèles, expéditeur
+  « Popote ») ; le modèle d'invitation de la prod, déjà français, n'a pas été touché.
+- `main` poussé à 08d2cdd (fast-forward de `feat/budget-refait`), `npm run deploy` (bundle
+  `index-BZBfibp7.js`). GitHub Pages a mis plus de dix minutes à servir le nouveau bundle (travail de
+  déploiement resté en file d'attente chez GitHub) : un site « pas encore à jour » juste après `deploy`
+  n'est pas une panne.
+- Fumée prod : trois OK, aucune erreur.
+
+**Contrôles avant la mise en ligne** : Vitest en série 156 fichiers / 2 828 tests, Playwright 166/166,
+`vitest run src` 1 524, build, lint (11 avertissements anciens, 0 erreur), banc de migration `--tout` vert
+(copie nue, 9 arrêts, 5 variantes), base locale rejouée de 0001 à 0117 sur un `db reset` neuf.
+
+**Reste** :
+1. Le parcours d'une invitée sur la VRAIE prod (voir « Côté Kamil »), avec un foyer jetable.
+2. Le compte rendu du Budget (page Artifact) avec les points à dire à Kamil.
+3. Safari/WebKit ne se joue pas sur ce poste (bibliothèques système absentes, `sudo` demande un mot de passe).
 
 ## Côté Kamil
 
