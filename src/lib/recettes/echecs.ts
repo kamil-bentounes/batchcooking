@@ -7,7 +7,7 @@
  * rien : on dit le geste, et si c'est le réseau, on le dit.
  */
 export type Geste = 'retenir' | 'retirer' | 'parts' | 'cible'
-  | 'cocher' | 'supprimer' | 'prix' | 'article'
+  | 'cocher' | 'supprimer' | 'prix' | 'article' | 'stock'
 
 const CE_QUI_A_RATE: Record<Geste, string> = {
   retenir: 'Je n’ai pas pu retenir cette recette.',
@@ -19,6 +19,7 @@ const CE_QUI_A_RATE: Record<Geste, string> = {
   supprimer: 'Je n’ai pas pu supprimer cet article.',
   prix: 'Je n’ai pas pu noter ce prix.',
   article: 'Je n’ai pas pu ajouter cet article.',
+  stock: 'Je n’ai pas pu l’ajouter à ce que tu as.',
 }
 
 /** Le `fetch` du navigateur rate avec un texte qui dépend du navigateur. */

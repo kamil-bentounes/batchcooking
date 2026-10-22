@@ -18,6 +18,7 @@ import { FormulaireAjout } from './AjoutManuel.tsx'
 import type { Barquette } from '../lib/donnees/barquettes.ts'
 import type { Ligne as LigneTable } from '../lib/supabase.ts'
 import { parUrgence, urgence } from '../lib/peremption.ts'
+import { ecritQuantite } from '../lib/quantite.ts'
 
 type Onglet = 'frigo' | 'congelateur' | 'placard'
 
@@ -151,8 +152,8 @@ function LigneBarquette({ barquette, ouverte, surOuvre, surDeplace, surJette, su
       <button onClick={surOuvre} className="w-full flex items-center gap-3 text-left py-2.5">
         <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full shrink-0"
               style={{ background: u.pastille }} />
-        <span className="grow">
-          <span className="block text-[15px]">{barquette.label}</span>
+        <span className="grow min-w-0">
+          <span className="block text-[15px] [overflow-wrap:anywhere]">{barquette.label}</span>
           <span className="block text-[13px] text-doux mt-0.5">
             {Math.round(Number(barquette.grams))} g ·{' '}
             {Math.round(Number(barquette.kcal))} kcal ·{' '}
@@ -210,14 +211,14 @@ function LigneStock({ item, surSupprime }:
   { item: LigneTable<'stock_item'>; surSupprime: () => void }) {
   return (
     <li className="flex items-center gap-3 py-3">
-      <span className="grow text-[15px]">{item.label}</span>
+      <span className="grow min-w-0 text-[15px] [overflow-wrap:anywhere]">{item.label}</span>
       {item.quantity !== null && (
-        <span className="text-[13px] text-doux">
-          {Math.round(Number(item.quantity))} {item.unit ?? ''}
+        <span className="text-[13px] text-doux shrink-0">
+          {ecritQuantite(Number(item.quantity))} {item.unit ?? ''}
         </span>
       )}
       <button onClick={surSupprime} aria-label={`Supprimer ${item.label}`}
-              className="text-doux hover:text-groseille w-11 h-11 grid place-items-center">
+              className="text-doux hover:text-groseille w-11 h-11 grid place-items-center shrink-0">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
              strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
           <path d="M4 4l8 8M12 4l-8 8" />

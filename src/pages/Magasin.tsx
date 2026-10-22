@@ -19,6 +19,7 @@ import { useEstimeListe } from '../lib/donnees/prix.ts'
 import type { Article } from '../lib/donnees/courses.ts'
 import { RAYONS, rayonDe } from '../lib/rayons.ts'
 import { messageEchec } from '../lib/recettes/echecs.ts'
+import { ecritQuantite } from '../lib/quantite.ts'
 import type { Geste } from '../lib/recettes/echecs.ts'
 
 /** Le prix payé d'un article : au-delà, c'est une faute de frappe, pas un ticket. */
@@ -191,7 +192,7 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surRefus
 }) {
   const pris = !!article.checked_at
   const quantite = article.quantity !== null
-    ? `${Math.round(Number(article.quantity))} ${article.unit ?? ''}`.trim()
+    ? `${ecritQuantite(Number(article.quantity))} ${article.unit ?? ''}`.trim()
     : null
   // Ce que la génération n'a pas su convertir. Dans la note, pas dans le
   // libellé : celui-ci sert de clé au rapprochement des tickets.
@@ -215,7 +216,7 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surRefus
           </span>
         </button>
 
-        <button onClick={surOuvre} className="grow text-left py-2.5">
+        <button onClick={surOuvre} className="grow min-w-0 text-left py-2.5 [overflow-wrap:anywhere]">
           <span className={`text-[15px] ${pris ? 'text-doux line-through' : ''}`}>
             {article.label}
           </span>
@@ -329,7 +330,7 @@ function FormulaireAjout({ magasins, surAjoute }: {
         if (!label.trim()) return
         surAjoute({ label, rayon, storeId, prix: prix === '' ? null : Number(prix) })
       }}>
-        <input value={label} onChange={e => setLabel(e.target.value)} autoFocus
+        <input value={label} onChange={e => setLabel(e.target.value)} autoFocus maxLength={80}
                placeholder="Ce qu’il faut prendre"
                className="w-full rounded-xl border border-brume bg-fond px-4 py-2.5
                           outline-none focus:border-herbe" />

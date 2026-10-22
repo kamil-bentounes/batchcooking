@@ -24,6 +24,11 @@ describe('messageEchec', () => {
       .toBe('Je n’ai pas pu ajouter cet article. Tu n’as plus de connexion.')
   })
 
+  it('dit l’ajout à l’inventaire sans recopier la contrainte de la base', () => {
+    expect(messageEchec('stock', new Error('new row for relation "stock_item" violates check constraint')))
+      .toBe('Je n’ai pas pu l’ajouter à ce que tu as. Réessaie dans un instant.')
+  })
+
   it('ne recopie jamais le message technique de la base', () => {
     expect(messageEchec('retenir', new Error('PGRST301 JWT expired'))).not.toMatch(/JWT|PGRST/)
   })

@@ -23,6 +23,8 @@ import { BoutonPhoto, Erreur, Surface } from '../ui/coque.tsx'
 import { callFunction } from '../lib/supabase.ts'
 import { prepare } from '../lib/photo.ts'
 import { useAjouteBarquette, useAjouteStock } from '../lib/donnees/barquettes.ts'
+import { lireQuantite } from '../lib/quantite.ts'
+import { messageEchec } from '../lib/recettes/echecs.ts'
 
 type Lieu = 'frigo' | 'congelateur' | 'placard'
 
@@ -106,6 +108,7 @@ function Produit({ lieu, surFini }: { lieu: Lieu; surFini: () => void }) {
   const [unite, setUnite] = useState('g')
   const [congele, setCongele] = useState(jour(new Date()))
   const [perime, setPerime] = useState(dansTroisMois(jour(new Date())))
+  const [refus, setRefus] = useState<string | null>(null)
 
   const auFroid = lieu === 'congelateur'
 
@@ -113,21 +116,24 @@ function Produit({ lieu, surFini }: { lieu: Lieu; surFini: () => void }) {
     <form className="space-y-3" onSubmit={e => {
       e.preventDefault()
       if (!label.trim()) return
+      const q = lireQuantite(quantite)
+      if (q.etat === 'refus') { setRefus(q.message); return }
+      setRefus(null)
       ajoute.mutate({
         label, lieu,
-        quantite: quantite === '' ? null : Number(quantite),
-        unite: quantite === '' ? null : unite,
+        quantite: q.etat === 'ok' ? q.valeur : null,
+        unite: q.etat === 'ok' ? unite : null,
         congeleLe: auFroid ? new Date(`${congele}T12:00:00`).toISOString() : null,
         perimeLe: auFroid ? new Date(`${perime}T12:00:00`).toISOString() : null,
       }, { onSuccess: () => { setLabel(''); setQuantite(''); surFini() } })
     }}>
       <div className="flex gap-2">
-        <input value={label} onChange={e => setLabel(e.target.value)} autoFocus
+        <input value={label} onChange={e => setLabel(e.target.value)} autoFocus maxLength={80}
                placeholder="Ce qu’il y a" aria-label="Aliment"
                className="grow min-w-0 rounded-xl border border-brume bg-fond px-4 py-2.5
                           outline-none focus:border-herbe" />
         <input value={quantite} onChange={e => setQuantite(e.target.value)} type="number"
-               min="0" placeholder="0" aria-label="Quantité"
+               step="any" min="0" placeholder="0" aria-label="Quantité"
                className="w-20 rounded-xl border border-brume bg-fond px-3 py-2.5
                           text-right outline-none focus:border-herbe" />
         <select value={unite} onChange={e => setUnite(e.target.value)} aria-label="Unité"
@@ -149,7 +155,7 @@ function Produit({ lieu, surFini }: { lieu: Lieu; surFini: () => void }) {
                          font-medium">
         Ajouter
       </button>
-      <Erreur de={ajoute.error} />
+      <Erreur de={refus ?? (ajoute.error ? messageEchec('stock', ajoute.error) : null)} />
     </form>
   )
 }
@@ -356,7 +362,7 @@ function Plat({ lieu, surFini }: { lieu: 'frigo' | 'congelateur'; surFini: () =>
         {erreur && <p className="mt-2.5 text-[13px] text-groseille">{erreur}</p>}
       </div>
 
-      <input value={nom} onChange={e => setNom(e.target.value)}
+      <input value={nom} onChange={e => setNom(e.target.value)} maxLength={80}
              placeholder="Le plat" aria-label="Nom du plat"
              className="w-full rounded-xl border border-brume bg-fond px-4 py-2.5
                         outline-none focus:border-herbe" />
