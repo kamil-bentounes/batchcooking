@@ -172,7 +172,11 @@ export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCou
                     </span>
                   ) : null}
                 </h3>
-                <ul className="px-4 rounded-[22px] bg-surface shadow-carte">
+                {fiche.ingredients.length === 0 && (
+                  <p className="text-[15px] text-doux">Aucun ingrédient relevé sur le site.</p>
+                )}
+                <ul className={`px-4 rounded-[22px] bg-surface shadow-carte
+                  ${fiche.ingredients.length === 0 ? 'hidden' : ''}`}>
                   {fiche.ingredients.map(i => {
                     const { qte, nom } = ingredientEnDeux(i.raw_text)
                     return (
@@ -195,6 +199,9 @@ export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCou
                       : 'Gestes non comptés'}
                   </span>
                 </h3>
+                {fiche.etapes.length === 0 && (
+                  <p className="text-[15px] text-doux">Aucune étape relevée sur le site.</p>
+                )}
                 <ol className="flex flex-col gap-2.5">
                   {fiche.etapes.map(e => <Etape key={e.ordinal} etape={e} />)}
                 </ol>
