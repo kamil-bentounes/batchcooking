@@ -108,7 +108,7 @@ function Projet({ poche, foyerId, deja }: {
           <Champ label="€" type="text" inputMode="decimal" value={montant}
                  onChange={e => setMontant(e.target.value)} />
         </div>
-        <button disabled={libelle.trim() === '' || !cents || pose.isPending}
+        <button disabled={libelle.trim() === '' || !cents || pose.isPending} aria-label="Ajouter ce poste"
                 onClick={() => pose.mutate({
                   foyerId, pocheId: poche.id, libelle: libelle.trim(), cents: cents!,
                   ordre: (postes.data ?? []).length,
