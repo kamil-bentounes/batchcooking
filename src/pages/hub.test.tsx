@@ -13,7 +13,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Depense, Revenu, Saisie } from '../lib/donnees/budget.ts'
+import type { Cloture, Depense, Revenu, Saisie } from '../lib/donnees/budget.ts'
 import { CLE } from '../lib/donnees/budget.ts'
 import { CLE as CLE_FOYER, type Foyer } from '../lib/donnees/foyer.ts'
 import { Hub } from './Hub.tsx'
@@ -46,13 +46,15 @@ const saisie = (cents: number): Saisie => ({
   saisi_par: 'u1', created_at: '2026-10-05T10:00:00Z',
 })
 
-type Lectures = { foyer?: Foyer | null; depenses?: Depense[]; saisies?: Saisie[]; revenus?: Revenu[] }
+type Lectures = { foyer?: Foyer | null; depenses?: Depense[]; saisies?: Saisie[]; revenus?: Revenu[]
+                  clotures?: Cloture[] }
 /** Ce qui est revenu de la base, et ce qui est en panne (`rate`). Une clé absente : pas revenue. */
 function hub(lues: Lectures, rate: Partial<Record<keyof Lectures, unknown>> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: {
     retry: false, retryOnMount: false, staleTime: Infinity } } })
   const clefs = {
     foyer: CLE_FOYER.foyer, depenses: CLE.mois(OCT), saisies: ['saisies', OCT], revenus: CLE.revenus,
+    clotures: ['cloture'],
   } as const
   for (const k of Object.keys(clefs) as (keyof Lectures)[]) {
     if (k in rate) {
@@ -64,7 +66,8 @@ function hub(lues: Lectures, rate: Partial<Record<keyof Lectures, unknown>> = {}
     <QueryClientProvider client={qc}><Hub userId="u1" va={() => {}} /></QueryClientProvider>)
 }
 const tout = (p: Lectures = {}): Lectures => ({
-  foyer: foyer(), depenses: [depense()], saisies: [], revenus: [revenu()], ...p,
+  foyer: foyer(), depenses: [depense()], saisies: [], revenus: [revenu()], clotures: [],
+  ...p,
 })
 /** Le texte de la carte Budget (le bouton qui porte le titre « Budget »). */
 function carte(h: string): string {
@@ -156,5 +159,55 @@ describe('Hub — un manque que l’arrondi ferait disparaître se dit au centim
 
   it('0 € exactement : « Il te reste 0 € »', () => {
     expect(carte(hub(tout({ depenses: [fixe(4325_00)] })))).toContain('Il te reste 0 €')
+  })
+})
+
+describe('Hub — « … est à clôturer » (3.8, § 3.6)', () => {
+  const septembre = (): Cloture =>
+    ({ id: 'cl1', mois: '2026-09-01', cloture_le: '2026-10-01T08:00:00Z', choix: [] })
+
+  it('le mois d’avant, pas clôturé, avec un revenu : « Septembre est à clôturer »', () => {
+    expect(carte(hub(tout()))).toContain('Septembre est à clôturer')
+  })
+
+  it('elle passe DEVANT les montants à dire', () => {
+    // Une ligne au fil sans saisie : « 1 montant à dire » si la clôture ne passait pas devant.
+    const t = carte(hub(tout()))
+    expect(t).toContain('Septembre est à clôturer')
+    expect(t).not.toContain('à dire')
+  })
+
+  it('septembre clôturé : les montants à dire reprennent la ligne', () => {
+    const t = carte(hub(tout({ clotures: [septembre()] })))
+    expect(t).not.toContain('à clôturer')
+    expect(t).toContain('1 montant à dire')
+  })
+
+  it('septembre clôturé et rien à dire : « Tout est à jour »', () => {
+    const t = carte(hub(tout({ clotures: [septembre()], depenses: [fixe(800_00)] })))
+    expect(t).toContain('Tout est à jour')
+  })
+
+  it('sans revenu en septembre, rien ne se clôture : la ligne ne le propose pas', () => {
+    const t = carte(hub(tout({ revenus: [{ ...revenu(), valid_from: '2026-10-01' }] })))
+    expect(t).not.toContain('à clôturer')
+  })
+
+  it('les clôtures pas encore lues : ni « à clôturer » ni « Tout est à jour » (un faux « à jour » ment)', () => {
+    const lues = tout({ depenses: [fixe(800_00)] })
+    delete lues.clotures
+    const t = carte(hub(lues))
+    expect(t).toContain('Il te reste')
+    expect(t).not.toContain('à clôturer')
+    expect(t).not.toContain('Tout est à jour')
+  })
+
+  it('les clôtures en panne : pas de « à clôturer » inventé, pas de « Tout est à jour » non plus', () => {
+    const lues = tout({ depenses: [fixe(800_00)] })
+    delete lues.clotures
+    const t = carte(hub(lues, { clotures: new Error('boom') }))
+    expect(t).not.toContain('à clôturer')
+    expect(t).not.toContain('Tout est à jour')
+    expect(t).toContain('Il te reste')
   })
 })

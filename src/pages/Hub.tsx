@@ -20,8 +20,10 @@ import { Marque } from '../ui/coque.tsx'
 import { useCycle, GESTE } from '../lib/donnees/cycle.ts'
 import { useBarquettes } from '../lib/donnees/barquettes.ts'
 import { useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
-import { useMois, useRevenus, useSaisies, moisDe, eurosRonds } from '../lib/donnees/budget.ts'
-import { aDire, ligneDuHub, montant, nomDuMois, resteDuMois, sousLEuro } from '../lib/budget/mois.ts'
+import { useClotures, useMois, useRevenus, useSaisies, moisDe, eurosRonds } from '../lib/donnees/budget.ts'
+import {
+  aDire, ligneDuHub, moisVoisin, montant, nomDuMois, resteDuMois, revenuDuMois, sousLEuro,
+} from '../lib/budget/mois.ts'
 import { etatDeLEcran, messageDeLecture } from '../lib/budget/ecran.ts'
 
 function Carte({ titre, onClick, children }:
@@ -71,7 +73,20 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
      n'est jamais clôturé (D78) : `clos` vaut faux. */
   const reste = resteDuMois({ lignes: depenses, saisies: saisies.data ?? [], moi: userId,
                              revenus, mois, clos: false })
-  const suite = ligneDuHub({ aCloturer: null, aDire: aDire(depenses, saisies.data ?? [], false) })
+  const clotures = useClotures()
+  const precedent = moisVoisin(mois, -1)
+  /* Le mois précédent attend sa clôture si j'y avais un revenu (§ 3.6) : de
+     janvier à août 2026, sans revenu, rien ne se clôture et rien ne le propose.
+     Rien tant que les clôtures ne sont pas LUES (`data`, pas `isPending` : une
+     lecture en échec n'a pas de données non plus, et `?? []` la lirait « rien de
+     clôturé », donc « à clôturer »). */
+  const aCloturer = clotures.data !== undefined
+    && !clotures.data.some(k => k.mois === precedent)
+    && revenuDuMois(revenus, userId, precedent) !== null ? precedent : null
+  /* Pas de ligne du tout tant qu'on ne sait pas : « Tout est à jour » dit avant d'avoir
+     lu les clôtures aurait menti à qui a un mois à clôturer. */
+  const suite = clotures.data === undefined ? null
+    : ligneDuHub({ aCloturer, aDire: aDire(depenses, saisies.data ?? [], false) })
   const geste = GESTE[cycle?.state ?? 'vide']
 
   return (
@@ -148,7 +163,7 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
                     <span className="text-[15px]">en {nomDuMois(mois)}</span>
                   </p>
                 )}
-                <p className="mt-2.5 text-[15px] text-doux">{suite}</p>
+                {suite && <p className="mt-2.5 text-[15px] text-doux">{suite}</p>}
               </>
             )}
           </Carte>
