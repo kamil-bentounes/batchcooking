@@ -8,7 +8,8 @@
  */
 import { MutationObserver, QueryClient, QueryObserver, onlineManager } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { creeLeClient } from './client-requetes.ts'
+import { creeLeClient, relancer } from './client-requetes.ts'
+import { PAS_DE_RESEAU } from './reseau.ts'
 
 beforeEach(() => onlineManager.setOnline(false))
 afterEach(() => onlineManager.setOnline(true))
@@ -40,12 +41,21 @@ describe('le client de l’appli, réseau coupé', () => {
 
   it('une lecture part et échoue : elle ne reste pas « en attente » sans fin', async () => {
     const client = creeLeClient()
-    const lit = vi.fn(async () => { throw new Error('Failed to fetch') })
-    const obs = new QueryObserver(client, { queryKey: ['x'], queryFn: lit, retry: false })
-    const r = obs.refetch()
-    await r
+    const lit = vi.fn(async () => { throw new Error(PAS_DE_RESEAU) })
+    const obs = new QueryObserver(client, { queryKey: ['x'], queryFn: lit })
+    await obs.refetch()
     expect(lit).toHaveBeenCalledTimes(1)
     expect(obs.getCurrentResult().fetchStatus).toBe('idle')
-    expect(obs.getCurrentResult().error?.message).toBe('Failed to fetch')
+    expect(obs.getCurrentResult().error?.message).toBe(PAS_DE_RESEAU)
+  })
+
+  it('hors ligne, une lecture ne se relance pas (supabase-js a déjà réessayé) ; en ligne, trois relances', () => {
+    expect(relancer(0, new Error(PAS_DE_RESEAU))).toBe(false)
+    expect(relancer(0, new Error('autre'))).toBe(false)
+    onlineManager.setOnline(true)
+    expect(relancer(0, new Error('boom'))).toBe(true)
+    expect(relancer(2, new Error('boom'))).toBe(true)
+    expect(relancer(3, new Error('boom'))).toBe(false)
+    expect(relancer(0, new Error(PAS_DE_RESEAU))).toBe(false)
   })
 })

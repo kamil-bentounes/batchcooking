@@ -1,4 +1,5 @@
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient, onlineManager } from '@tanstack/react-query'
+import { PAS_DE_RESEAU } from './reseau.ts'
 
 /**
  * Le client de requêtes de l'appli.
@@ -11,8 +12,20 @@ import { QueryClient } from '@tanstack/react-query'
  * recommencer. Les lectures, de même : une lecture en pause laissait « Un instant… » indéfiniment,
  * alors qu'une lecture qui échoue dit « tu n'as plus de connexion » (`messageDeLecture`).
  */
+/**
+ * Une lecture qui échoue pour cause de réseau ne se relance pas ici : supabase-js a déjà réessayé
+ * (jusqu'à sept secondes), et trois relances de plus faisaient attendre une demi-minute avant de
+ * dire « Pas de réseau ». Les autres erreurs gardent les trois relances d'usage.
+ */
+export function relancer(echecs: number, e: unknown): boolean {
+  if (!onlineManager.isOnline()) return false
+  if (e instanceof Error && e.message === PAS_DE_RESEAU) return false
+  return echecs < 3
+}
+
 export const OPTIONS_DU_CLIENT = {
-  queries: { staleTime: 30_000, refetchOnWindowFocus: false, networkMode: 'always' as const },
+  queries: { staleTime: 30_000, refetchOnWindowFocus: false, networkMode: 'always' as const,
+             retry: relancer },
   mutations: { networkMode: 'always' as const },
 }
 
