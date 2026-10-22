@@ -59,15 +59,34 @@ const INDICES: [RegExp, Rayon][] = [
   [/\bsurgel|congel/i, 'Surgelés'],
   [/\bglace\b|sorbet/i, 'Surgelés'],
   [/\bconserve|\bboîte\b|bocal/i, 'Épicerie salée'],
-  [/\bsec(s|he|hes)?\b|\bséché/i, 'Épicerie salée'],
+  // « sèche » porte un accent : `\bsec(s|he|hes)?\b` ne la reconnaissait pas (les lentilles allaient
+  // au rayon fruits et légumes).
+  [/\bs[eè]ches?\b|\bsecs?\b|\bséché/i, 'Épicerie salée'],
 ]
 
+/**
+ * Sous-catégorie CIQUAL → rayon, quand le groupe est trop gros pour trancher : « viandes, œufs,
+ * poissons » met les œufs à la boucherie, « fruits, légumes, légumineuses » les lentilles au
+ * rayon frais. Les INDICES du libellé (surgelé, conserve, sec) passent avant.
+ */
+const PAR_SOUS_GROUPE: Record<string, Rayon> = {
+  'œufs': 'Frais',
+  'légumineuses': 'Épicerie salée',
+  'fruits à coque et graines oléagineuses': 'Épicerie salée',
+  'charcuteries et assimilés': 'Frais',
+  'pommes de terre et autres tubercules': 'Fruits et légumes',
+}
+
 export function rayonDe(
-  { groupe, categorie, libelle }:
-  { groupe?: string | null; categorie?: string | null; libelle?: string | null },
+  { groupe, sousGroupe, categorie, libelle }:
+  { groupe?: string | null; sousGroupe?: string | null; categorie?: string | null; libelle?: string | null },
 ): Rayon {
   if (categorie && PAR_CATEGORIE[categorie]) return PAR_CATEGORIE[categorie]
   if (libelle) for (const [motif, rayon] of INDICES) if (motif.test(libelle)) return rayon
+  if (sousGroupe) {
+    if (sousGroupe === 'herbes') return /\bfrais\b|\bfraîche/i.test(libelle ?? '') ? 'Fruits et légumes' : 'Épicerie salée'
+    if (PAR_SOUS_GROUPE[sousGroupe]) return PAR_SOUS_GROUPE[sousGroupe]
+  }
   if (groupe && PAR_GROUPE[groupe]) return PAR_GROUPE[groupe]
   return 'Autre'
 }
