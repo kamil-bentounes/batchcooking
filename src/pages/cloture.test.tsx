@@ -59,7 +59,7 @@ describe('les gardes', () => {
 
   it('un mois à venir non plus, même quand aucune lecture n’est revenue', () => {
     const h = ecranDeLaCloture({}, { mois: '2026-12-01' })
-    expect(texte(h)).toContain('On clôture décembre une fois fini, à partir du 1er janvier.')
+    expect(texte(h)).toContain('On clôture décembre une fois fini, à partir du 1er janvier 2027.')
     expect(bouton(h, 'Clôturer décembre')).toBeNull()
   })
 
@@ -102,6 +102,65 @@ describe('les gardes', () => {
     const h = ecranDeLaCloture({ clotures: [cloturee()] })
     expect(texte(h)).toContain('Septembre est clôturé le 01/10.')
     expect(bouton(h, 'Revenir dessus')).not.toBeNull()
+  })
+})
+
+describe('une adresse d’une autre année : le titre nomme l’année', () => {
+  const An = '2025-09-01'
+  const sept25 = depense({ id: 'a1', mois: An })
+  const revenu25 = { ...revenu(), valid_from: '2025-01-01' }
+
+  it('/cloture/2025-09 : « Clôturer septembre 2025 », titre et bouton', () => {
+    const h = ecranDeLaCloture({ ...tout(), depenses: [sept25], revenus: [revenu25] }, { mois: An })
+    expect(h).toContain('>Clôturer septembre 2025</h1>')
+    expect(bouton(h, 'Clôturer septembre 2025')).not.toBeNull()
+  })
+
+  it('sans revenu : « Ajoute ton revenu de septembre 2025 pour clôturer septembre 2025 »', () => {
+    const h = ecranDeLaCloture({ ...tout(), depenses: [sept25], revenus: [] }, { mois: An })
+    expect(texte(h)).toContain('Ajoute ton revenu de septembre 2025 pour clôturer septembre 2025.')
+  })
+
+  it('clôturé : « Septembre 2025 est clôturé le … », titre daté', () => {
+    const h = ecranDeLaCloture({ ...tout(), depenses: [sept25], revenus: [revenu25],
+      clotures: [{ ...cloturee(), mois: An }] }, { mois: An })
+    expect(h).toContain('>Septembre 2025</h1>')
+    expect(texte(h)).toContain('Septembre 2025 est clôturé le')
+  })
+
+  it('un mois à venir d’une autre année : « mai 2030 », « à partir du 1er juin 2030 »', () => {
+    const h = ecranDeLaCloture({}, { mois: '2030-05-01' })
+    expect(texte(h)).toContain('On clôture mai 2030 une fois fini, à partir du 1er juin 2030.')
+  })
+
+  it('l’année courante ne s’écrit pas (le titre de septembre 2026 reste « Clôturer septembre »)', () => {
+    expect(page()).toContain('>Clôturer septembre</h1>')
+  })
+})
+
+describe('le mois courant est celui de la base (Paris), pas celui de l’appareil', () => {
+  /* 31/10 23:30 UTC = 01/11 00:30 à Paris : octobre est FINI pour la base, qui le clôture. Un
+     appareil à Los Angeles (UTC-7 : le 31 à 16:30) croyait octobre encore en cours. */
+  it('à minuit passé à Paris, octobre se clôture — quel que soit le fuseau de l’appareil', () => {
+    const avant = process.env.TZ
+    process.env.TZ = 'America/Los_Angeles'
+    try {
+      vi.setSystemTime(new Date('2026-10-31T23:30:00Z'))
+      expect(new Date().getDate(), 'le fuseau du test n’a pas pris').toBe(31)
+      const h = ecranDeLaCloture(tout({ depenses: [depense({ id: 'o1', mois: OCT })],
+        revenus: [revenu()] }), { mois: OCT })
+      expect(texte(h)).not.toContain('On clôture octobre une fois fini')
+      expect(bouton(h, 'Clôturer octobre')).not.toBeNull()
+    } finally {
+      if (avant === undefined) delete process.env.TZ
+      else process.env.TZ = avant
+    }
+  })
+
+  it('avant minuit à Paris, octobre est encore en cours', () => {
+    vi.setSystemTime(new Date('2026-10-31T22:30:00Z'))
+    const h = ecranDeLaCloture({}, { mois: OCT })
+    expect(texte(h)).toContain('On clôture octobre une fois fini, à partir du 1er novembre.')
   })
 })
 

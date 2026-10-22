@@ -70,7 +70,13 @@ export function useRoute() {
     window.scrollTo(0, 0)
   }, [])
 
+  /* Sans nouvelle entrée d'historique : « Précédent » ne ramène pas à l'adresse qu'on quitte. */
+  const remplace = useCallback((vers: string) => {
+    window.history.replaceState(null, '', href(vers))
+    previens()
+  }, [])
+
   const retour = useCallback(() => window.history.back(), [])
 
-  return { ici, va, retour, href }
+  return { ici, va, remplace, retour, href }
 }

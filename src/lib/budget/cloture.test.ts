@@ -93,6 +93,12 @@ describe('deMois — « d’octobre », « de mars »', () => {
     ['2026-04-01', 'd’avril'], ['2026-02-01', 'de février'], ['2026-12-01', 'de décembre'],
     ['2026-06-01', 'de juin'],
   ])('%s', (mois, attendu) => expect(deMois(mois)).toBe(attendu))
+
+  it('avec le mois courant : l’année dès qu’elle n’est pas la courante', () => {
+    expect(deMois('2025-09-01', '2026-10-01')).toBe('de septembre 2025')
+    expect(deMois('2025-10-01', '2026-10-01')).toBe('d’octobre 2025')
+    expect(deMois('2026-09-01', '2026-10-01')).toBe('de septembre')
+  })
 })
 
 const ligne = (p: Partial<Depense> = {}): Depense => ({

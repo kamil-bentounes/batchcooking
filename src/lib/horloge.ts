@@ -32,3 +32,23 @@ export function aujourdhui(d: Date = maintenant()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${
     String(d.getDate()).padStart(2, '0')}`
 }
+
+const PARIS = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit',
+})
+
+/**
+ * « 2026-11-01 », en heure de PARIS : c'est celle de la base (`mois_courant()`, `maintenant()`).
+ * L'heure locale de l'appareil ne convient pas : entre minuit et 2 h à Paris, un navigateur à un
+ * autre fuseau voit encore le mois d'avant, propose « Clôturer » trop tôt et la base le refuse.
+ * L'horloge jouée du banc (`maintenant`) est respectée.
+ */
+export function jourDeParis(d: Date = maintenant()): string {
+  const p = Object.fromEntries(PARIS.formatToParts(d).map(x => [x.type, x.value]))
+  return `${p.year}-${p.month}-${p.day}`
+}
+
+/** « 2026-11-01 » : le premier jour du mois en cours à Paris. */
+export function moisCourantDeParis(d: Date = maintenant()): string {
+  return `${jourDeParis(d).slice(0, 7)}-01`
+}

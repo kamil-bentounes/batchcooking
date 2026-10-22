@@ -13,7 +13,7 @@
  */
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
-import { maintenant } from '../horloge.ts'
+import { maintenant, moisCourantDeParis } from '../horloge.ts'
 import { dernierJour, type Saisie as SaisieDuMois } from '../budget/mois.ts'
 import type { Categorie, Mode } from '../budget/categories.ts'
 import { cleNonSoldees, oublieNonSoldees, retientNonSoldees } from '../budget/non-soldees.ts'
@@ -27,9 +27,9 @@ export const CLE = {
   revenus: ['budget-revenus'] as const,
 }
 
-/** Le premier jour du mois d'une date, en heure LOCALE. */
-export function moisDe(d = maintenant()): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+/** Le premier jour du mois d'une date, en heure de PARIS — celle de la base (`mois_courant()`). */
+export function moisDe(d: Date = maintenant()): string {
+  return moisCourantDeParis(d)
 }
 
 /** Des centimes vers « 1 618,53 € ». Jamais l'inverse ailleurs qu'ici. */

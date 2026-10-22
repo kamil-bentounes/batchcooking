@@ -16,7 +16,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { useAjouteSaisie, useRetireSaisie, type Depense, type Saisie } from '../../lib/donnees/budget.ts'
 import { prenomDe } from '../../lib/donnees/foyer.ts'
-import { aujourdhui } from '../../lib/horloge.ts'
+import { jourDeParis } from '../../lib/horloge.ts'
 import { capitale, dateCourte, declare, joursProposes, montant, nomDuMois, prevu }
   from '../../lib/budget/mois.ts'
 import { envoiPermis, envoiPour, jourAccepte, lisLeMontant, type Envoi, type MontantTape }
@@ -166,7 +166,7 @@ export function FeuilleDeclarer({ ligne, categorie, mois, moi, foyerId, saisies,
 }) {
   const ajoute = useAjouteSaisie()
   const retire = useRetireSaisie()
-  const jours = joursProposes(mois, aujourdhui())
+  const jours = joursProposes(mois, jourDeParis())
   const [saisi, setSaisi] = useState('')
   const [jour, setJour] = useState(jours.choix[0].date)
   const [autre, setAutre] = useState(false)

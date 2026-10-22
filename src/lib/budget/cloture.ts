@@ -7,7 +7,7 @@
 import type { Choix, Cloture, Depense, Poche } from '../donnees/budget.ts'
 import { etatDeLEcran, type Lecture } from './ecran.ts'
 import { envoiDuReste, type ChoixDuReste } from './etapes.ts'
-import { aDesSaisies, montant, nomDuMois, type Saisie } from './mois.ts'
+import { aDesSaisies, montant, nomDuMois, nomDuMoisDate, type Saisie } from './mois.ts'
 
 export type Porte = 'trop-tot' | 'chargement' | 'erreur' | 'close' | 'sans-revenu' | 'a-clore'
 
@@ -42,9 +42,10 @@ export function porteDeLaCloture(o: {
   return { porte: o.revenu === null ? 'sans-revenu' : 'a-clore', fermee: null }
 }
 
-/** « d'octobre », « de mars » : la base dit la même chose (`de_mois`, 0094). */
-export function deMois(mois: string): string {
-  const nom = nomDuMois(mois)
+/** « d'octobre », « de mars » : la base dit la même chose (`de_mois`, 0094). Avec `courant`,
+    l'année quand ce n'est pas la courante : « de septembre 2025 ». */
+export function deMois(mois: string, courant?: string): string {
+  const nom = courant === undefined ? nomDuMois(mois) : nomDuMoisDate(mois, courant)
   return /^[aeiouyéè]/.test(nom) ? `d’${nom}` : `de ${nom}`
 }
 

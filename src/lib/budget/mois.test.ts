@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { aDire, bandeau, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
-         maPart, partDesSoldes, montant, montantCompte, moisVoisin, nomDuMois, parCategorie,
+         maPart, partDesSoldes, montant, montantCompte, moisDemande, moisVoisin, nomDuMois, nomDuMoisDate, parCategorie,
          partSur, pourcentages, recapCloture, resteDuMois, revenuDuMois, sousLEuro, totauxDuFiltre, type Ligne,
          type Saisie } from './mois.ts'
 
@@ -439,5 +439,34 @@ describe('sousLEuro', () => {
     expect(sousLEuro(50)).toBe(false)
     expect(sousLEuro(-50)).toBe(false)
     expect(sousLEuro(-3_000)).toBe(false)
+  })
+})
+
+describe('nomDuMoisDate — l’année dès qu’elle n’est pas la courante', () => {
+  it('l’année courante : le nom seul', () => {
+    expect(nomDuMoisDate('2026-09-01', '2026-10-01')).toBe('septembre')
+  })
+  it('une autre année : le nom et l’année — « septembre » seul ne dit pas lequel', () => {
+    expect(nomDuMoisDate('2025-09-01', '2026-10-01')).toBe('septembre 2025')
+    expect(nomDuMoisDate('2030-05-01', '2026-10-01')).toBe('mai 2030')
+  })
+})
+
+describe('moisDemande — le mois que l’adresse demande', () => {
+  const courant = '2026-10-01'
+  it('sans adresse de mois : le mois courant', () => {
+    expect(moisDemande(undefined, courant)).toEqual({ mois: courant, futur: false })
+  })
+  it('un mois passé ou le courant : tel quel', () => {
+    expect(moisDemande('2025-09-01', courant)).toEqual({ mois: '2025-09-01', futur: false })
+    expect(moisDemande(courant, courant)).toEqual({ mois: courant, futur: false })
+  })
+  it('un mois à venir : le courant — et « futur », pour que l’écran quitte cette adresse fausse', () => {
+    expect(moisDemande('2030-05-01', courant)).toEqual({ mois: courant, futur: true })
+    expect(moisDemande('2026-11-01', courant)).toEqual({ mois: courant, futur: true })
+  })
+  it('une adresse illisible : le courant, sans « futur » (rien à rediriger)', () => {
+    expect(moisDemande('2026-13-01', courant)).toEqual({ mois: courant, futur: false })
+    expect(moisDemande('n’importe quoi', courant)).toEqual({ mois: courant, futur: false })
   })
 })

@@ -26,7 +26,7 @@ import {
   useRevenus, useSaisies,
 } from '../lib/donnees/budget.ts'
 import {
-  capitale, moisVoisin, partDesSoldes, montant, nomDuMois, recapCloture, revenuDuMois,
+  capitale, moisVoisin, nomDuMoisDate, partDesSoldes, montant, recapCloture, revenuDuMois,
 } from '../lib/budget/mois.ts'
 import {
   cloreUneFois, deMois, envoiDeLaCloture, misDeCoteDuFoyer, porteDeLaCloture, rienEffectif,
@@ -103,7 +103,7 @@ export function Cloture({ userId, mois, va, retour }: {
     : { valide: false, appel: null }
   const panneDuReste = apercu.error ?? poches.error ?? null
 
-  const nom = nomDuMois(mois)
+  const nom = nomDuMoisDate(mois, courant)
   const laLigne = lignes?.find(l => l.id === declarer)
   const membres = (foyer?.membres ?? []).map(m => ({ id: m.id, display_name: m.display_name }))
   const dansLeMois = `/budget/${mois.slice(0, 7)}`
@@ -124,7 +124,7 @@ export function Cloture({ userId, mois, va, retour }: {
     corps = (
       <>
         <p className="mt-4 text-[17px] leading-snug">
-          On clôture {nom} une fois fini, à partir du 1er {nomDuMois(moisVoisin(mois, 1))}.
+          On clôture {nom} une fois fini, à partir du 1er {nomDuMoisDate(moisVoisin(mois, 1), courant)}.
         </p>
         <button onClick={retour}
                 className="mt-5 min-h-11 px-5 rounded-full bg-piste text-[15px] font-semibold">
@@ -173,7 +173,7 @@ export function Cloture({ userId, mois, va, retour }: {
     corps = (
       <>
         <p className="mt-4 text-[17px] leading-snug">
-          Ajoute ton revenu {deMois(mois)} pour clôturer {nom}.
+          Ajoute ton revenu {deMois(mois, courant)} pour clôturer {nom}.
         </p>
         <button onClick={() => va('/budget-reglages')}
                 className="mt-5 min-h-11 px-5 rounded-full bg-herbe text-fond text-[15px] font-semibold">

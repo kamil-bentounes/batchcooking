@@ -20,7 +20,7 @@ import {
   moisDe, useCorrigeLeReleve, useEtatDeLAnnee, useFactures, usePaieFacture, useRetireFacture,
   type Charge, type EtatAnnee, type Facture,
 } from '../../lib/donnees/budget.ts'
-import { aujourdhui } from '../../lib/horloge.ts'
+import { jourDeParis } from '../../lib/horloge.ts'
 import { dateCourte, montant, nomDuMois } from '../../lib/budget/mois.ts'
 import {
   anneePlausible, apercuFacture, apercuReleve, depuisLe, envoiPermis, envoiPour, jourAccepte, lisLeMontant,
@@ -191,7 +191,7 @@ export function VueMiseDeCote({
 }
 
 export function FeuilleMiseDeCote({ charge, fermer }: { charge: Charge; fermer: () => void }) {
-  const jour = aujourdhui()
+  const jour = jourDeParis()
   const moisEnCours = nomDuMois(moisDe())
   const [payeLe, setPayeLe] = useState(jour)
   const [autre, setAutre] = useState(false)

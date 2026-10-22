@@ -274,6 +274,23 @@ export function nomDuMois(iso: string): string {
   return NOMS_DES_MOIS[Number(iso.slice(5, 7)) - 1]
 }
 
+/** « septembre » pour l'année courante, « septembre 2025 » sinon : un mois d'une autre année
+    se nomme avec son année, ou l'adresse `/cloture/2025-09` lisait « Clôturer septembre ». */
+export function nomDuMoisDate(mois: string, courant: string): string {
+  return mois.slice(0, 4) === courant.slice(0, 4) ? nomDuMois(mois) : `${nomDuMois(mois)} ${mois.slice(0, 4)}`
+}
+
+/**
+ * Le mois que `/budget/AAAA-MM` demande. Jamais au-delà du mois courant : l'ouvrir créerait ses
+ * lignes avec la clé du jour, figée. Un mois à venir rend le courant ET `futur` : l'écran quitte
+ * alors l'adresse, au lieu d'afficher le mois courant sous une adresse 2030. Une adresse qui ne
+ * se lit pas retombe sur le courant, sans rien à rediriger.
+ */
+export function moisDemande(depart: string | undefined, courant: string): { mois: string; futur: boolean } {
+  if (!depart || !/^\d{4}-(0[1-9]|1[0-2])-01$/.test(depart)) return { mois: courant, futur: false }
+  return depart <= courant ? { mois: depart, futur: false } : { mois: courant, futur: true }
+}
+
 export function capitale(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }

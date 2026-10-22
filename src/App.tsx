@@ -47,7 +47,7 @@ export default function App() {
   const [pret, setPret] = useState(false)
   /** Sur un lien d'invitation : elle a dit avoir déjà un compte. */
   const [connexionDemandee, setConnexionDemandee] = useState(false)
-  const { ici, va, retour } = useRoute()
+  const { ici, va, remplace, retour } = useRoute()
 
   /* Le numéro de la DERNIÈRE relecture : une plus ancienne qui répond après
      elle n'a plus rien à dire. */
@@ -178,7 +178,8 @@ export default function App() {
      d'avant. */
   const moisVu = ici.match(/^\/budget\/(\d{4})-(0[1-9]|1[0-2])$/)
   if (moisVu) {
-    return <Budget key={ici} userId={moi} va={va} mois={`${moisVu[1]}-${moisVu[2]}-01`} />
+    return <Budget key={ici} userId={moi} va={va} remplace={remplace}
+                   mois={`${moisVu[1]}-${moisVu[2]}-01`} />
   }
 
   /* La clôture d'un mois (§ 3.5). Comme `/invite/`, avant le `switch` : elle porte son

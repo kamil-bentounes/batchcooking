@@ -20,7 +20,7 @@
  *    recomptaient un mois clos comme un mois ouvert. Et une lecture en ÉCHEC,
  *    `isPending` faux et données vides, se lisait « Rien de posé ».
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Attente, Erreur, Marque, Vide } from '../ui/coque.tsx'
 import { etatDeLEcran, messageDeLecture, videDuMois } from '../lib/budget/ecran.ts'
 import { initialeDe, prenomDe, useFoyer } from '../lib/donnees/foyer.ts'
@@ -28,11 +28,11 @@ import {
   moisDe, useCharges, useClotures, useComptes, useMois, useNonSoldees, useRevenus, useSaisies,
 } from '../lib/donnees/budget.ts'
 import {
-  bandeau, barre, capitale, joursRestants, moisVoisin, nomDuMois, parCategorie,
+  bandeau, barre, capitale, joursRestants, moisDemande, moisVoisin, nomDuMois, parCategorie,
   resteDuMois, revenuDuMois, totauxDuFiltre, type Filtre,
 } from '../lib/budget/mois.ts'
 import { misDeCoteDuFoyer } from '../lib/budget/cloture.ts'
-import { aujourdhui } from '../lib/horloge.ts'
+import { jourDeParis } from '../lib/horloge.ts'
 import { Bandeau } from '../ui/budget/Bandeau.tsx'
 import { CarteEpargne } from '../ui/budget/CarteEpargne.tsx'
 import { Categorie } from '../ui/budget/Categorie.tsx'
@@ -41,8 +41,10 @@ import { FiltreDuMois } from '../ui/budget/Filtre.tsx'
 import { Gestes } from '../ui/budget/Gestes.tsx'
 import { Recap } from '../ui/budget/Recap.tsx'
 
-export function Budget({ userId, va, mois: depart, ouverteAuDepart = null }: {
+export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = null }: {
   userId: string; va: (v: string) => void
+  /** Quitte une adresse fausse (`/budget/2030-05`) sans la laisser dans l'historique. */
+  remplace?: (v: string) => void
   /** `/budget/AAAA-MM` : le mois qu'on vient de clôturer, ou de rouvrir. */
   mois?: string
   /** Pour le banc : le rendu en chaîne ne touche rien, il lui faut une feuille déjà ouverte
@@ -50,11 +52,13 @@ export function Budget({ userId, va, mois: depart, ouverteAuDepart = null }: {
   ouverteAuDepart?: Ouverte
 }) {
   const courant = moisDe()
-  /* Jamais au-delà du mois courant, même par l'adresse : l'ouvrir créerait ses
-     lignes avec la clé du jour, figée. Et un mois qui n'existe pas (`2026-13`)
-     retombe sur le courant, au lieu de requêter la base avec une date fausse. */
-  const [mois, setMois] = useState(() =>
-    (depart && /^\d{4}-(0[1-9]|1[0-2])-01$/.test(depart) && depart <= courant ? depart : courant))
+  /* Jamais au-delà du mois courant, même par l'adresse (`moisDemande`) : l'ouvrir créerait ses
+     lignes avec la clé du jour, figée. Un mois à venir quitte son adresse pour `/budget` : sans
+     cela, le mois courant s'affichait sous « /budget/2030-05 ». Un mois qui n'existe pas
+     (`2026-13`) retombe sur le courant, au lieu de requêter la base avec une date fausse. */
+  const demande = moisDemande(depart, courant)
+  const [mois, setMois] = useState(demande.mois)
+  useEffect(() => { if (demande.futur) remplace?.('/budget') }, [demande.futur, remplace])
   const [filtre, setFiltre] = useState<Filtre>('tout')
   const [ouverte, setOuverte] = useState<Ouverte>(ouverteAuDepart)
   const lecteurFoyer = useFoyer()
@@ -92,7 +96,7 @@ export function Budget({ userId, va, mois: depart, ouverteAuDepart = null }: {
   /* Rien tant que les clôtures ne sont pas lues : un mois clôturé s'annonçait
      « à clôturer » le temps d'un aller-retour. */
   const leBandeau = clotures.isPending ? null : bandeau({
-    mois, aujourdhui: aujourdhui(), clos: estClos,
+    mois, aujourdhui: jourDeParis(), clos: estClos,
     aRevenu: m => revenuDuMois(revenus.data ?? [], userId, m) !== null,
   })
   const reste = resteDuMois({ lignes, saisies: dites, moi: userId, revenus: revenus.data ?? [],
@@ -105,7 +109,7 @@ export function Budget({ userId, va, mois: depart, ouverteAuDepart = null }: {
   const nLignes = categories.reduce((t, c) => t + c.lignes.length, 0)
   const membres = (foyer?.membres ?? []).map(m => ({ id: m.id, display_name: m.display_name }))
   const moi = foyer?.membres.find(m => m.id === userId)
-  const jours = joursRestants(mois, aujourdhui())
+  const jours = joursRestants(mois, jourDeParis())
   const precedent = moisVoisin(mois, -1)
   const suivant = moisVoisin(mois, 1)
   /* L'année, dès qu'elle n'est pas la nôtre : « Décembre » seul ne dit pas lequel. */
