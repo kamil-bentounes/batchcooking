@@ -52,7 +52,11 @@ export function euros(cents: number, avecUnite = true): string {
  */
 export function enCentimes(saisi: string): number | null {
   const net = saisi.replace(/[\s\u00A0\u202F]/g, '').replace(',', '.')
-  if (!/^\d{1,9}(\.\d{0,2})?$/.test(net)) return null
+  /* ⚠️ Sept chiffres, pas neuf : les colonnes de montant sont des `integer` (2 147 483 647
+     centimes, soit 21 M€). Neuf chiffres laissaient passer « 999 999 999 € », que la base
+     refusait en anglais (« out of range for type integer ») après avoir écrit le prénom.
+     Moins de dix millions d'euros : plus que n'importe quel foyer, et ça tient. */
+  if (!/^\d{1,7}(\.\d{0,2})?$/.test(net)) return null
   const [entier, decimales = ''] = net.split('.')
   return Number(entier) * 100 + Number(decimales.padEnd(2, '0'))
 }

@@ -110,7 +110,9 @@ export function Profil({ userId, onFini, retour }: {
         </p>
 
         <div className="mt-6 space-y-5">
-        <Champ label="Ton prénom" value={prenom} onChange={e => setPrenom(e.target.value)} />
+        {/* Quarante caractères : un prénom plus long déborde chaque ligne de charge où il se lit. */}
+        <Champ label="Ton prénom" value={prenom} maxLength={40} autoComplete="given-name"
+               onChange={e => setPrenom(e.target.value)} />
 
         <div>
           <Champ label="Ton revenu net mensuel (€)" type="text" inputMode="decimal"
@@ -145,6 +147,13 @@ export function Profil({ userId, onFini, retour }: {
         {cents !== null && cents > 0 && (
           <p className="text-[15px] text-doux">
             {euros(cents)} par mois, noté.
+          </p>
+        )}
+        {/* Un bouton grisé sans un mot laisse deviner : « abc », « 12,345 » ou « 0 »
+            ne disaient pas ce qu'on attendait. */}
+        {revenu.trim() !== '' && (cents === null || cents === 0) && (
+          <p role="status" className="text-[15px] text-groseille">
+            Un montant en euros, au-dessus de zéro : par exemple 2 400 ou 2 400,50.
           </p>
         )}
 

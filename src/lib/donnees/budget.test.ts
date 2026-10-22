@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { effortMensuel } from './budget.ts'
+import { effortMensuel, enCentimes } from './budget.ts'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -25,5 +25,25 @@ describe('l’effort mensuel', () => {
   it('sans objectif ou sans échéance, rien à tenir', () => {
     expect(effortMensuel(null, '2027-03-01', 0)).toBeNull()
     expect(effortMensuel(100_000, null, 0)).toBeNull()
+  })
+})
+
+describe('enCentimes : la borne du champ est celle de la colonne', () => {
+  /* Grand test, parcours « nouveau venu » (22/10) : « 999 999 999 » € passait
+     le champ du revenu, et la base répondait en anglais « value "99999999900"
+     is out of range for type integer » — après avoir écrit le prénom, sous un
+     « 999 999 999,00 € par mois, noté. ». Les colonnes sont des `integer` : le
+     champ refuse ce qu'elles refusent. */
+  it('refuse dix millions d’euros et plus (bien avant l’entier de la base), accepte le plus grand qui tient', () => {
+    expect(enCentimes('9 999 999,99')).toBe(999_999_999)
+    expect(enCentimes('10000000')).toBeNull()
+    expect(enCentimes('999999999')).toBeNull()
+  })
+
+  it('lit les montants ordinaires', () => {
+    expect(enCentimes('2 400,50')).toBe(240_050)
+    expect(enCentimes('12,3')).toBe(1_230)
+    expect(enCentimes('abc')).toBeNull()
+    expect(enCentimes('-5')).toBeNull()
   })
 })
