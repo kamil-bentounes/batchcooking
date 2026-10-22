@@ -269,17 +269,18 @@ export function Cuisine({ userId, va, cycleId }:
       )}
 
       {/*
-        * Interrompre est SANS RETOUR depuis l'application : un cycle interrompu n'est plus « le
-        * cycle courant » (`current_cycle()` l'écarte), donc plus aucun écran n'y ramène. Un seul
-        * toucher, en bas, à 46 px sous le pouce, suffisait à perdre la session — une confirmation
-        * dit ce que le geste coûte. Quitter, pour un convive, ne coûte rien à l'hôte.
+        * Interrompre ferme la semaine : un cycle interrompu n'est plus « le cycle courant »
+        * (`current_cycle()` l'écarte) et `open_cycle` refuse de rouvrir la même semaine — seul
+        * « Reprendre », à l'accueil, y ramène. Un seul toucher, en bas, sous le pouce, suffisait
+        * à le déclencher : une confirmation dit ce que le geste coûte. Quitter, pour un convive,
+        * ne coûte rien à l'hôte.
         */}
       {confirmeLaSortie ? (
         <div role="alertdialog" aria-label="Interrompre la session ?"
              className="mt-12 rounded-[18px] bg-fond/8 p-4">
           <p className="text-[15px]">Interrompre la session ?</p>
           <p className="mt-1.5 text-[13px] opacity-70">
-            Le plan et les gestes déjà faits ne se reprennent pas depuis l’application.
+            Tu pourras la reprendre depuis l’accueil ; la semaine n’aura pas d’autre session.
           </p>
           <div className="mt-3.5 flex gap-2.5">
             <button onClick={() => setConfirmeLaSortie(false)}
