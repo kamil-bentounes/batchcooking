@@ -111,6 +111,15 @@ export function misDeCoteDuFoyer(choix: Choix[], presents: string[] | undefined)
     .reduce((t, c) => t + c.mis_de_cote_cents, 0)
 }
 
+/**
+ * La feuille « choix » (« Déclarer ») restée ouverte au moment où le mois se clôt : elle
+ * disparaît, et le focus avec elle — il retombait sur le corps de la page. L'écran la ferme alors
+ * lui-même et rend le focus au geste qui reste, « Revenir dessus ».
+ */
+export function choixAFermer(ouverte: { geste: string } | null, clos: boolean): boolean {
+  return clos && ouverte?.geste === 'choix'
+}
+
 /** La question posée avant de rouvrir un mois : l'épargne en perd le versement. */
 export function questionPourRevenir(mois: string, misDeCote: number): string {
   return misDeCote > 0

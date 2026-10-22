@@ -7,7 +7,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import type { Choix, Cloture, Depense, Poche } from '../donnees/budget.ts'
 import {
-  deMois, envoiDeLaCloture, misDeCoteDuFoyer, porteDeLaCloture, questionPourRevenir, rienDOffice,
+  choixAFermer, deMois, envoiDeLaCloture, misDeCoteDuFoyer, porteDeLaCloture, questionPourRevenir, rienDOffice,
   rienEffectif, revenirSiConfirme, unSeulEnvoi, cloreUneFois, type AppelDeCloture,
 } from './cloture.ts'
 import { oublieNonSoldees, retientNonSoldees } from './non-soldees.ts'
@@ -347,5 +347,18 @@ describe('cloreUneFois — « Clôturer septembre »', () => {
     expect(t.apres).not.toHaveBeenCalled()
     t.clic()
     expect(t.cloturer).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('choixAFermer — la feuille « choix » ouverte quand le mois se clôt', () => {
+  it('le mois se clôt, la feuille « choix » est ouverte : à fermer (et rendre le focus)', () => {
+    expect(choixAFermer({ geste: 'choix' }, true)).toBe(true)
+  })
+  it('mois ouvert : la feuille reste', () => {
+    expect(choixAFermer({ geste: 'choix' }, false)).toBe(false)
+  })
+  it('une autre feuille (déclarer…) ou aucune : rien à fermer — elles se lisent seulement sur un mois clos', () => {
+    expect(choixAFermer({ geste: 'declarer' }, true)).toBe(false)
+    expect(choixAFermer(null, true)).toBe(false)
   })
 })

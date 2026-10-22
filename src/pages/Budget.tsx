@@ -31,7 +31,7 @@ import {
   bandeau, barre, capitale, joursRestants, moisDemande, moisVoisin, nomDuMois, parCategorie,
   resteDuMois, revenuDuMois, totauxDuFiltre, type Filtre,
 } from '../lib/budget/mois.ts'
-import { misDeCoteDuFoyer } from '../lib/budget/cloture.ts'
+import { choixAFermer, misDeCoteDuFoyer } from '../lib/budget/cloture.ts'
 import { jourDeParis } from '../lib/horloge.ts'
 import { Bandeau } from '../ui/budget/Bandeau.tsx'
 import { CarteEpargne } from '../ui/budget/CarteEpargne.tsx'
@@ -125,6 +125,15 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
              .map(m => prenomDe(m.display_name))
 
   const fermer = () => setOuverte(null)
+  /* Le mois se clôt (relecture, autre appareil) pendant que la feuille « choix » est ouverte : elle
+     disparaît, et le focus avec elle. On la ferme pour de bon — sinon elle se rouvrirait à
+     « Revenir dessus » — et le focus va au geste qui reste. */
+  const aFermer = choixAFermer(ouverte, clos)
+  useEffect(() => {
+    if (!aFermer) return
+    setOuverte(null)
+    document.querySelector<HTMLElement>('[data-revenir-dessus]')?.focus()
+  }, [aFermer])
   const auFil = lignes.filter(l => l.facon === 'au_fil')
     .sort((a, b) => a.libelle.localeCompare(b.libelle, 'fr'))
   const vide = videDuMois({ mois, courant, nComptes })

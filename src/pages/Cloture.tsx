@@ -18,7 +18,7 @@
  * Toute la décision (la porte, l'appel, le double clic) vit dans `lib/budget/cloture.ts`,
  * où le test la fige ; la page ne fait que lire et dessiner.
  */
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Attente, Erreur, dateLongue } from '../ui/coque.tsx'
 import { useFoyer } from '../lib/donnees/foyer.ts'
 import {
@@ -73,6 +73,10 @@ export function Cloture({ userId, mois, va, retour }: {
   const [rien, setRien] = useState<Set<string> | null>(null)
   const [choix, setChoix] = useState<ChoixDuReste | null>(null)
   const [declarer, setDeclarer] = useState<string | null>(null)
+  /* Le focus arrive sur le titre : au clavier ou au lecteur d'écran, la page s'annonce au lieu de
+     laisser le focus sur la page d'où l'on vient. */
+  const titre = useRef<HTMLHeadingElement>(null)
+  useEffect(() => { titre.current?.focus() }, [])
 
   const revenu = revenus.data ? revenuDuMois(revenus.data, userId, mois) : null
   const { porte, fermee } = porteDeLaCloture({
@@ -143,7 +147,7 @@ export function Cloture({ userId, mois, va, retour }: {
         <Erreur de={new Error(messageDeLecture(enPanne[0]?.error))} />
         <button onClick={() => enPanne.forEach(q => { void q.refetch() })}
                 className="mt-4 min-h-11 px-5 rounded-full bg-piste text-[15px] font-semibold">
-          Réessayer
+          Réessayer la lecture du mois
         </button>
       </>
     )
@@ -199,7 +203,7 @@ export function Cloture({ userId, mois, va, retour }: {
           {panneDuReste && (
             <button onClick={() => { void apercu.refetch(); void poches.refetch() }}
                     className="mt-3 min-h-11 px-5 rounded-full bg-piste text-[15px] font-semibold">
-              Réessayer
+              Réessayer la lecture du reste
             </button>
           )}
         </Etape>
@@ -223,7 +227,7 @@ export function Cloture({ userId, mois, va, retour }: {
         <p className="mt-4 text-[13px] font-semibold uppercase tracking-[0.08em] text-doux">
           {dateLongue(maintenant())}
         </p>
-        <h1 className="titre text-[40px] leading-tight mt-1">
+        <h1 ref={titre} tabIndex={-1} className="titre text-[40px] leading-tight mt-1 outline-none">
           {porte === 'close' ? capitale(nom) : `Clôturer ${nom}`}
         </h1>
         {corps}

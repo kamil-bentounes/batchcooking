@@ -164,6 +164,31 @@ describe('le mois courant est celui de la base (Paris), pas celui de l’apparei
   })
 })
 
+describe('l’accessibilité de la page', () => {
+  it('les deux « Réessayer » ont chacun leur nom — un lecteur d’écran les liste, il doit les distinguer', () => {
+    const noms = new Set([
+      ...[...page({ clotures: undefined }, { rate: { clotures: 'x' } })
+        .matchAll(/<button[^>]*>(.*?)<\/button>/gs)].map(m => texte(m[1])),
+      ...[...page({ apercu: undefined }, { rate: { apercu: 'x' } })
+        .matchAll(/<button[^>]*>(.*?)<\/button>/gs)].map(m => texte(m[1])),
+    ])
+    expect(noms.has('Réessayer la lecture du mois')).toBe(true)
+    expect(noms.has('Réessayer la lecture du reste')).toBe(true)
+    expect(noms.has('Réessayer')).toBe(false)
+  })
+
+  it('« Revenir dessus » dit de quel mois il parle : « Revenir dessus, Septembre »', () => {
+    const h = page({ clotures: [cloturee()] })
+    expect(h).toMatch(/<button[^>]*aria-label="Revenir dessus, Septembre"[^>]*>Revenir dessus<\/button>/)
+  })
+
+  it('le titre reçoit le focus à l’arrivée : il est focalisable (tabindex -1) — rien ne le décrit sinon', () => {
+    for (const h of [page(), page({ clotures: [cloturee()] }), ecranDeLaCloture({}, { mois: OCT })]) {
+      expect(h).toMatch(/<h1[^>]*tabindex="-1"/)
+    }
+  })
+})
+
 describe('rien avant d’avoir tout lu', () => {
   it('les clôtures pas revenues : « Un instant… », ni formulaire ni « Clôturer » (le mois est peut-être clos)', () => {
     const h = page({ clotures: undefined })
@@ -175,7 +200,7 @@ describe('rien avant d’avoir tout lu', () => {
   it('les clôtures en panne : la panne et « Réessayer », jamais « Clôturer »', () => {
     const h = page({ clotures: undefined }, { rate: { clotures: 'permission denied' } })
     expect(texte(h)).toContain('Je n’ai pas pu lire le budget : permission denied')
-    expect(bouton(h, 'Réessayer')).not.toBeNull()
+    expect(bouton(h, 'Réessayer la lecture du mois')).not.toBeNull()
     expect(clore(h)).toBeNull()
   })
 
@@ -197,7 +222,7 @@ describe('rien avant d’avoir tout lu', () => {
   it('les lignes en panne : la panne, de quoi réessayer', () => {
     const h = page({ depenses: undefined }, { rate: { depenses: 'coupure' } })
     expect(texte(h)).toContain('Je n’ai pas pu lire le budget : coupure')
-    expect(bouton(h, 'Réessayer')).not.toBeNull()
+    expect(bouton(h, 'Réessayer la lecture du mois')).not.toBeNull()
     expect(clore(h)).toBeNull()
   })
 
@@ -215,7 +240,7 @@ describe('rien avant d’avoir tout lu', () => {
   it('les soldes d’année en panne : la panne, « Réessayer », et « Clôturer » reste éteint', () => {
     const h = page({ apercu: undefined }, { rate: { apercu: 'pas de réponse' } })
     expect(texte(h)).toContain('Je n’ai pas pu lire le budget : pas de réponse')
-    expect(bouton(h, 'Réessayer')).not.toBeNull()
+    expect(bouton(h, 'Réessayer la lecture du reste')).not.toBeNull()
     expect(eteint(clore(h))).toBe(true)
   })
 

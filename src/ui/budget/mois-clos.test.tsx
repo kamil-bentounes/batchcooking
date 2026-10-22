@@ -56,7 +56,7 @@ function feuilles(ouverte: Ouverte, clos: boolean) {
 /** « Revenir dessus » lit le client de requêtes : tout ce qui le porte se rend dans un fournisseur. */
 const dansUnClient = (el: ReactElement) =>
   renderToStaticMarkup(<QueryClientProvider client={new QueryClient()}>{el}</QueryClientProvider>)
-const nRevenir = (h: string) => (h.match(/Revenir dessus/g) ?? []).length
+const nRevenir = (h: string) => (h.match(/>Revenir dessus</g) ?? []).length
 
 describe('MoisClos', () => {
   it('dit que le mois est clôturé, avec son nom', () => {
@@ -69,6 +69,19 @@ describe('MoisClos', () => {
     expect(nRevenir(h)).toBe(1)
     expect(h).toMatch(/<button[^>]*>Revenir dessus<\/button>/)
     expect(h).not.toContain('<input')
+  })
+
+  it('« Revenir dessus » dit de quel mois il parle (aria-label), avec l’année quand ce n’est pas la courante', () => {
+    expect(dansUnClient(<MoisClos mois={OCT} misDeCote={0} />)).toContain('aria-label="Revenir dessus, Octobre"')
+    expect(dansUnClient(<MoisClos mois="2025-09-01" misDeCote={0} />))
+      .toContain('aria-label="Revenir dessus, Septembre 2025"')
+  })
+
+  it('la carte encre du mois clôturé : même nom de contexte', () => {
+    expect(texte(dansUnClient(<Recap mois={OCT} reste={{ revenu: 1, reste: 1, charges: 1 }} segments={[]}
+      va={() => {}} cloture={{ reste: 1, misDeCote: 0 }} />))).toContain('Revenir dessus')
+    expect(dansUnClient(<Recap mois={OCT} reste={{ revenu: 1, reste: 1, charges: 1 }} segments={[]}
+      va={() => {}} cloture={{ reste: 1, misDeCote: 0 }} />)).toContain('aria-label="Revenir dessus, Octobre"')
   })
 })
 

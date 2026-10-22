@@ -11,6 +11,8 @@
 import { useRef } from 'react'
 import { useRouvreLeMois } from '../../lib/donnees/budget.ts'
 import { questionPourRevenir, revenirSiConfirme, unSeulEnvoi } from '../../lib/budget/cloture.ts'
+import { capitale, nomDuMoisDate } from '../../lib/budget/mois.ts'
+import { moisCourantDeParis } from '../../lib/horloge.ts'
 import { Erreur } from '../coque.tsx'
 
 export function RevenirDessus({ mois, misDeCote, apres, clair = false }: {
@@ -34,7 +36,11 @@ export function RevenirDessus({ mois, misDeCote, apres, clair = false }: {
   })
   return (
     <>
-      <button disabled={rouvre.isPending || misDeCote === null} onClick={revenir}
+      {/* `aria-label` : deux « Revenir dessus » sans contexte, la carte et la feuille, ne se
+          distinguent pas dans la liste des boutons d'un lecteur d'écran. `data-revenir-dessus` :
+          là où le focus retombe quand la feuille « choix » disparaît (`choixAFermer`). */}
+      <button disabled={rouvre.isPending || misDeCote === null} onClick={revenir} data-revenir-dessus
+              aria-label={`Revenir dessus, ${capitale(nomDuMoisDate(mois, moisCourantDeParis()))}`}
               className={`mt-4 min-h-11 px-5 rounded-full text-[15px] font-semibold disabled:opacity-50
                           ${clair ? 'bg-fond text-encre' : 'bg-piste text-encre'}`}>
         Revenir dessus
