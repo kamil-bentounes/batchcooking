@@ -39,7 +39,8 @@ high** : c'est sa demande, notée en mémoire sous `agents-en-sonnet-high`.
    est dans `~/PERSO/sauvegardes-popote/2026-10-21/`.
 4. Pour les bancs : relancer `npx supabase start` si la pile locale est arrêtée, et `npx supabase
    functions serve` en fond (sans lui, les tests d'invitation échouent : 503).
-5. Ensuite, chantier 3 (Budget) : son plan est prêt.
+5. Chantier 3 (Budget) : codé sur `feat/budget-refait` ; voir « Chantier 3 » plus bas pour ce qui reste
+   (3.5, 3.9, passe d'accessibilité, puis le chantier 4 et la mise en ligne).
 6. Deux `git stash` sont devenus inutiles (« wip recettes tâche 6 » et « tâche 7 » : le travail est
    refait et livré). Les retirer avec `git stash drop` deux fois ; l'effacement a été refusé le 20/10
    par le contrôle de sécurité, donc à lui de le faire.
@@ -151,33 +152,56 @@ La clé de service de la prod n'est pas dans `.env.production` : la lire par l'A
 - **Une tâche qui touche la base passe seule**, dans le dépôt principal.
 - **Après chaque tâche, une relecture** : la conformité à la spec d'abord, la qualité ensuite.
 
-## Chantier 3 · Budget — plan écrit et relu, pas commencé
+## Chantier 3 · Budget — CODÉ sur `feat/budget-refait` (21–22/10), pas encore en prod
 
-Le plan est `docs/superpowers/plans/2026-10-19-budget.md`, en 56 tâches, avec les
-migrations 0093 à 0115.
+Le plan est `docs/superpowers/plans/2026-10-19-budget.md` (56 tâches, migrations 0093 à 0115).
+La branche est LOCALE (non poussée) : 120 commits environ devant `main`.
 
-- **D1** met en ligne les lots 1 et 2 : le modèle et l'écran du mois.
-- **D2** met en ligne le lot 3 : la clôture.
-- **Le lot 4**, à deux, n'est pas planifié : sa spec viendra quand Thauba sera dans le
-  foyer.
+**Fait** (chaque tâche : un agent Sonnet high en worktree, puis cherry-pick ; des revues adverses
+après chaque groupe, leurs défauts corrigés en place puisque rien n'est en prod) :
+- **Lot 1, le modèle (1.1 à 1.27)** : migrations 0093 à 0114, bancs `tests/budget-*.test.ts`, types,
+  `docs/budget.md`. 0114 est la migration des DONNÉES de prod : ses arrêts, son banc
+  (`scripts/banc-migration-budget.sh --tout`, qui remet la base locale à zéro) et ses variantes
+  (`tests/fixtures/`) ont été durcis après revue. La copie de la prod
+  (`tests/fixtures/budget-prod.local.sql`, gitignorée, budget réel de Kamil) est refaite par
+  `scripts/copie-budget-prod.sql` lu en lecture seule par l'API de gestion.
+- **Lot 2, l'écran du mois (2.1 à 2.19)** : `src/lib/budget/*`, `src/ui/budget/*`, `Budget.tsx`,
+  `Hub.tsx`, `Charges.tsx`, `BudgetReglages.tsx`, bancs `e2e/budget.spec.ts` (110 bancs
+  navigateur verts à la 2.19).
+- **Lot 3, la clôture** : 3.1 (e2e rouge `e2e/cloture.spec.ts`), 3.2, 3.3, 3.4, 3.6, 3.7 (partielle), 3.8,
+  3.10 (0115, `regularise_annuel` s'en va) faites. **Restent : 3.5** (la page `Cloture.tsx`,
+  `RevenirDessus`, `useNonSoldees`, plus les deux branchements de 3.7 : « Revenir dessus » dans
+  `Recap`/`MoisClos` et les lignes « n'a pas pu être soldée ») — un agent y travaillait au
+  moment de cette note — puis **3.9** (le parcours de la clôture vert, captures).
+- Les contextes et la liste des défauts relevés par les revues : `docs/superpowers/budget-agents/`.
 
-Le plan liste à sa fin les 24 choix faits en l'écrivant. Trois sont à montrer à Kamil
-le moment venu :
+**Chiffres de la prod relus le 21/10** (identiques à ceux du plan § 5, rien n'a bougé depuis le 01/10) :
+1 foyer, 1 membre, octobre 22 lignes / 389 820, septembre 23 / 389 824, relevés Taxe foncière 145 000/4
+et copropriété 120 000/0, trois lignes confirmées en septembre, revenu 432 500 depuis 2026-09-01.
 
-- « Il te manque » sera en safran et non en ocre : l'ocre ne fait que 2,4:1 sur la carte
-  encre ;
-- les photos santé, impôts et autre se choisissent pendant le code, sauf s'il veut les
-  choisir lui-même ;
-- avant D1 :
-  - 0092 doit déjà être en prod (le script de D1 refuse sinon), donc les recettes partent
-    d'abord ;
-  - si ses données ont bougé depuis le 01/10, les chiffres attendus de la migration
-    changent : les lui montrer avant de la lancer.
+**Décisions de Kamil du 21/10** : tout finir seul, puis le test final, puis pousser en prod en UNE fois.
+Donc **D1 et D2 se jouent ensemble** : migrations 0093 à 0115 d'un seul coup, le site une fois.
+Avant D1 : relire la prod (mêmes chiffres ? sinon recalculer `ATTENDU` et le dire), sauvegarde
+en lecture seule, banc de migration `--tout` vert sur une copie du jour. Voir D1 et D2 dans le plan.
+
+**À dire à Kamil dans le compte rendu** :
+- « Il te manque » est en safran et non en ocre (contraste, noté dans le code) ;
+- les photos santé, impôts et autre ont été choisies pendant le code (`public/budget/SOURCES.md`) ;
+- départ partiel d'un membre : un remboursement porté par un partant ET un présent revient entier au
+  présent (conforme à la lettre de la spec) ;
+- le premier revenu d'un membre remonte à son arrivée (`entre_le`) : poser celui de Thauba en octobre
+  rend « suivis » les mois depuis son arrivée ;
+- `delete_my_account` : la charge perso du partant et ses lignes ouvertes restent (décision à prendre) ;
+- 0114 s'arrête (et dit quoi faire) sur ce qu'elle ne sait pas migrer : ligne confirmée à 0 €, ligne
+  confirmée du mois en cours, plusieurs foyers, enveloppes ambiguës, ligne `modele` sans charge.
 
 ## Chantier 4 · Le grand test final
 
 Il passe par tous les parcours de l'app et compare les captures aux maquettes
-(`docs/superpowers/maquettes/captures/`).
+(`docs/superpowers/maquettes/captures/`). **Consigne de Kamil du 21/10** : lancer le front ET la base
+en local, cliquer sur TOUS les parcours, regarder ce que répondent le front et la base, lister tous
+les bugs, tout corriger, puis tout pousser en prod. Le parcours complet d'un nouveau venu (invitation,
+création de compte, foyer, écrans) en fait partie, ainsi que la comparaison aux maquettes.
 
 ## Côté Kamil
 
