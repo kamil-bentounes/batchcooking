@@ -59,7 +59,7 @@ type LigneRecette = {
   qty: number | null
   unit: string | null
   grams_reference: number | null
-  food: { name: string; ciqual_group: string | null } | null
+  food: { name: string; ciqual_group: string | null; ciqual_subgroup: string | null } | null
 }
 
 /**
@@ -85,7 +85,7 @@ export function useGenereListe() {
         .eq('is_default', true).maybeSingle())
 
       const ingredients = ou(await supabase.from('recipe_ingredient')
-        .select('recipe_id, food_id, raw_text, qty, unit, grams_reference, food:food_id(name, ciqual_group)')
+        .select('recipe_id, food_id, raw_text, qty, unit, grams_reference, food:food_id(name, ciqual_group, ciqual_subgroup)')
         .in('recipe_id', choisies.map(c => c.recipe_id))) as unknown as LigneRecette[]
 
       /*
@@ -112,7 +112,9 @@ export function useGenereListe() {
       // Regroupement : même aliment = une ligne, quantités additionnées. À
       // défaut d'aliment rattaché, on regroupe sur le texte brut normalisé.
       type Cumul = {
-        label: string; food_id: string | null; groupe: string | null
+        label: string; food_id: string | null; groupe: string | null; sousGroupe: string | null
+        /** Le nom CIQUAL entier : le rayon se devine sur lui (« surgelé », « sèche »), pas sur le nom court. */
+        nomComplet: string | null
         grammes: number | null; unite: string | null; quantite: number | null
         /**
          * ⚠️ `unite: null` est une VALEUR légitime — un compte nu, « 2 persil ».
@@ -129,13 +131,25 @@ export function useGenereListe() {
       for (const i of ingredients) {
         const f = facteur.get(i.recipe_id) ?? 1
         const nom = libelleDeCourse(i.food?.name, i.raw_text)
-        /* Sans aliment reconnu, on regroupe sur le NOM sans sa quantité : « 10 g de beurre » et
-           « 20 g de beurre » (deux recettes) faisaient deux lignes « Beurre ». */
-        const cle = i.food_id ?? `brut:${nom.toLowerCase().trim()}`
+        /* On regroupe sur le NOM, court et sans sa quantité : « 10 g de beurre » et « 20 g de beurre »
+           (deux recettes) faisaient deux lignes « Beurre », et « Tomate, crue » + « Tomate, rôtie »
+           deux lignes « Tomate ». Les quantités s'additionnent comme avant (même unité), le reste va
+           dans la note : rien ne se perd. */
+        const cle = nom.toLowerCase().trim()
         const c = cumuls.get(cle) ?? {
           label: nom, food_id: i.food_id, groupe: i.food?.ciqual_group ?? null,
+          sousGroupe: i.food?.ciqual_subgroup ?? null, nomComplet: i.food?.name ?? null,
           grammes: null, unite: null, quantite: null,
           uniteFixee: false, nonConverti: 0,
+        }
+        /* Deux aliments sous un même nom : celui d'identifiant le plus petit parle pour la ligne
+           (prix appris, rapprochement avec une ligne déjà prise) — l'ordre des lignes lues par la
+           base n'est pas garanti, le résultat ne doit pas en dépendre (D50). */
+        if (i.food_id && (!c.food_id || i.food_id < c.food_id)) {
+          c.food_id = i.food_id
+          c.groupe = i.food?.ciqual_group ?? null
+          c.sousGroupe = i.food?.ciqual_subgroup ?? null
+          c.nomComplet = i.food?.name ?? null
         }
         // Le poids appris par le foyer, quand il en a un : c'est LUI qui fait
         // qu'« 2 oignons » vaut quelque chose.
@@ -164,8 +178,11 @@ export function useGenereListe() {
       // On repart de zéro sur les lignes issues des recettes, jamais sur celles
       // ajoutées à la main : les effacer serait perdre le travail de quelqu'un.
       ou(await supabase.from('shopping_item').delete()
-        .eq('cycle_id', cycleId).eq('source', 'recette').select())
-      // Ce que la base a refusé d'effacer (coché, payé : 0031) est resté : on n'y ajoute pas un double.
+        .eq('cycle_id', cycleId).eq('source', 'recette')
+        // La base REFUSE d'effacer une ligne cochée ou payée (0031, et elle lève depuis 0117) : on ne
+        // vise donc que les lignes qui n'ont jamais servi.
+        .is('checked_at', null).is('paid_price_eur', null).select())
+      // Les lignes prises (cochées, payées) sont restées : on n'y ajoute pas un double.
       const gardees = ou(await supabase.from('shopping_item').select('food_id, label, quantity, unit')
         .eq('cycle_id', cycleId).eq('source', 'recette'))
 
@@ -198,6 +215,7 @@ export function useGenereListe() {
           : null
         return {
           food_id: c.food_id, label: c.label, note, groupe: c.groupe,
+          sousGroupe: c.sousGroupe, nomComplet: c.nomComplet,
           quantity: quantite, unit: unite,
         }
       }).filter(l => l.label.trim().length > 0), gardees)
@@ -214,7 +232,7 @@ export function useGenereListe() {
           food_id: l.food_id,
           label: l.label,
           note: l.note,
-          aisle: rayonDe({ groupe: l.groupe, libelle: l.label }),
+          aisle: rayonDe({ groupe: l.groupe, sousGroupe: l.sousGroupe, libelle: l.nomComplet ?? l.label }),
           quantity: l.quantity,
           unit: l.unit,
           est_price_eur: prix?.euros ?? null,
