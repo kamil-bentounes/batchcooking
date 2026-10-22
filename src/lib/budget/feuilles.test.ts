@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { enCentimes, type Charge, type EtatAnnee } from '../donnees/budget.ts'
 import {
   apercuFacture, apercuReleve, depuisLe, envoiPermis, envoiPour, jourAccepte, lisLeMontant,
-  anneePlausible, montantPropose, plancherDuJour, provisionParMois, questionDeRetrait, saisiDe,
+  anneePlausible, montantPropose, plancherDuJour, provisionParMois, questionDeRetrait, refusDuRetrait, saisiDe,
 } from './feuilles.ts'
 import type { Ligne } from './mois.ts'
 
@@ -309,5 +309,22 @@ describe('anneePlausible — la lecture d’une année ne part pas à chaque tou
   it('au-delà de 5 ans, non', () => {
     expect(anneePlausible('2020-10-21', '2026-10-21')).toBe(false)
     expect(anneePlausible('2032-10-21', '2026-10-21')).toBe(false)
+  })
+})
+
+describe('refusDuRetrait — on ne retire pas plus que ce qu\u2019on a versé', () => {
+  it('un retrait dans la limite passe, jusqu\u2019au dernier centime', () => {
+    expect(refusDuRetrait(30_00, 380_00)).toBeNull()
+    expect(refusDuRetrait(380_00, 380_00)).toBeNull()
+  })
+
+  it('100 000 € sur 380 € est refusé, en disant combien il y a', () => {
+    expect(refusDuRetrait(100_000_00, 380_00)).toBe(`Tu n\u2019as versé que 380 € ici : tu ne peux pas en retirer plus.`)
+    expect(refusDuRetrait(380_01, 380_00)).not.toBeNull()
+  })
+
+  it('sans rien versé (ou un solde négatif hérité), il n\u2019y a rien à retirer', () => {
+    expect(refusDuRetrait(1, 0)).toBe('Tu n\u2019as rien versé ici : il n\u2019y a rien à retirer.')
+    expect(refusDuRetrait(1, -5_00)).toBe('Tu n\u2019as rien versé ici : il n\u2019y a rien à retirer.')
   })
 })

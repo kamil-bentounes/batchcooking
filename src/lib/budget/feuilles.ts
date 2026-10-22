@@ -171,3 +171,16 @@ export function apercuReleve(ancien: number, corrige: number, mois: string): str
   return d > 0 ? `${montant(d)} de plus que le relevé : ils s’ajoutent à ${mois}.`
                : `${montant(-d)} de moins que le relevé : ils reviennent à ${mois}.`
 }
+
+/**
+ * Retirer de l'épargne : jamais plus que ce que CETTE personne y a versé (« ce qui est versé
+ * appartient à qui l'a versé »). Grand test, parcours budget : « Je retire 100 000 € » sur une
+ * poche d'urgence de 380 € était accepté, et la poche affichait −99 620 € (la table n'a aucun
+ * plancher : la garde est ici). `null` : le retrait passe.
+ */
+export function refusDuRetrait(cents: number, monSolde: number): string | null {
+  if (cents <= monSolde) return null
+  return monSolde <= 0
+    ? 'Tu n’as rien versé ici : il n’y a rien à retirer.'
+    : `Tu n’as versé que ${montant(monSolde)} ici : tu ne peux pas en retirer plus.`
+}

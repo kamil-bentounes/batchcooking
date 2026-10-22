@@ -12,6 +12,7 @@
 import { useState } from 'react'
 import { Surface, Vide, Attente, Erreur } from '../ui/coque.tsx'
 import { Champ } from '../ui/kit.tsx'
+import { refusDuRetrait } from '../lib/budget/feuilles.ts'
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
   usePoches, useSolde, usePosePoche, useVerse, usePostes, usePosePoste,
@@ -128,10 +129,13 @@ function Poche_({ poche, userId, foyerId, prenoms }: {
   const solde = useSolde(poche.id)
   const verse = useVerse()
   const [montant, setMontant] = useState('')
+  /* Le refus d'un retrait trop gros : dit sous les boutons, effacé dès qu'on retape. */
+  const [refus, setRefus] = useState<string | null>(null)
 
   const cumul = solde.data ?? []
   const total = cumul.reduce((s, c) => s + c.cents, 0)
   const cents = enCentimes(montant)
+  const monSolde = cumul.find(c => c.userId === userId)?.cents ?? 0
   const part = poche.objectif_cents ? Math.min(1, total / poche.objectif_cents) : null
 
   return (
@@ -170,7 +174,7 @@ function Poche_({ poche, userId, foyerId, prenoms }: {
       <div className="mt-4 flex gap-2">
         <div className="grow">
           <Champ label="Verser (€)" type="text" inputMode="decimal" value={montant}
-                 onChange={e => setMontant(e.target.value)} />
+                 onChange={e => { setMontant(e.target.value); setRefus(null) }} />
         </div>
       </div>
       <div className="mt-2 flex gap-2">
@@ -188,6 +192,9 @@ function Poche_({ poche, userId, foyerId, prenoms }: {
         </button>
         <button disabled={!cents || verse.isPending}
                 onClick={() => {
+                  /* Jamais plus que ce qu'on a versé : la table n'a aucun plancher. */
+                  const non = refusDuRetrait(cents!, monSolde)
+                  if (non) { setRefus(non); return }
                   if (!confirm(`Retirer ${euros(cents!)} de « ${poche.libelle} » ?`)) return
                   verse.mutate({ foyerId, pocheId: poche.id, userId, cents: -cents!,
                                  motif: 'retrait' },
@@ -201,6 +208,7 @@ function Poche_({ poche, userId, foyerId, prenoms }: {
           Je retire
         </button>
       </div>
+      {refus && <p role="alert" className="mt-2 text-[14px]" style={{ color: 'var(--color-ocre)' }}>{refus}</p>}
       <Erreur de={verse.error ?? solde.error} />
 
       {poche.genre === 'projet' && (
