@@ -358,19 +358,27 @@ export function ligneDuHub(o: { aCloturer: string | null; aDire: number }): stri
   return 'Tout est à jour'
 }
 
-/** Ma part des soldes que la clôture posera (`apercu_des_soldes`) : au prorata de mes
-    parts sur la ligne du mois de la même charge ; tout, si elle n'en a pas. La base
-    reste juge (`reste_cents`) : à deux, l'aperçu peut différer de quelques centimes. */
-export function maPartDesSoldes(apercu: { charge: string; cents: number }[], lignes: Ligne[],
-                                moi: string): number {
-  return apercu.reduce((t, s) => {
-    const l = lignes.find(x => x.charge_id === s.charge && x.facon !== null && x.parts.length > 0)
-    if (!l) return t + s.cents
-    return t + prorata(l, moi, s.cents)
-  }, 0)
+/**
+ * Ma part des soldes d'année que la clôture posera (`apercu_des_soldes`).
+ *
+ * Seul au foyer, tout le solde est le mien. À deux, elle n'est PAS lisible : l'aperçu ne rend
+ * que le total de la charge, et la base répartit l'ajustement selon ce que chacun a porté sur
+ * l'année (`recale_l_annee`, `porte_par`) — pas selon les parts de la ligne du mois. Au prorata
+ * de décembre, Kamil lisait −83,34 € là où la base lui posait −125 € (Thauba arrivée en
+ * novembre : `tests/budget-solde-part.test.ts`). Plutôt qu'un faux chiffre, on n'en donne pas :
+ * `incertain` dit que le reste est « avant les soldes ». Foyer pas lu : on ne sait pas si l'on
+ * est seul, donc incertain aussi. Sans solde, rien à répartir : sûr.
+ */
+export function partDesSoldes(apercu: { cents: number }[], membres: number | undefined):
+  { cents: number; incertain: boolean } {
+  if (apercu.length === 0) return { cents: 0, incertain: false }
+  if (membres === 1) return { cents: apercu.reduce((t, s) => t + s.cents, 0), incertain: false }
+  return { cents: 0, incertain: true }
 }
 
-export type RecapCloture = { prevus: number; ecart: number; reste: number }
+/** `incertain` : le reste est « avant les soldes d'année » — leur part dans mon chiffre n'est pas
+    lisible à deux (`partDesSoldes`). Absent quand le chiffre est sûr. */
+export type RecapCloture = { prevus: number; ecart: number; reste: number; incertain?: true }
 
 /**
  * Le récap de la clôture (§ 3.5, étape 3). X (`prevus`) : ce qui resterait si
@@ -383,9 +391,11 @@ export type RecapCloture = { prevus: number; ecart: number; reste: number }
  */
 export function recapCloture(o: {
   revenu: number; lignes: Ligne[]; saisies: Saisie[]; moi: string
-  factures: Map<string, number>; rien: Set<string>; soldes: number
+  factures: Map<string, number>; rien: Set<string>
+  /** Ma part des soldes ; `null` quand elle n'est pas lisible (`partDesSoldes`) : le récap est alors « avant les soldes ». */
+  soldes: number | null
 }): RecapCloture {
-  let prevus = o.revenu - o.soldes
+  let prevus = o.revenu - (o.soldes ?? 0)
   let ecart = 0
   for (const l of o.lignes) {
     if (l.facon === 'au_fil') {
@@ -400,7 +410,7 @@ export function recapCloture(o: {
       prevus -= l.parts.find(p => p.user_profile_id === o.moi)?.part_cents ?? 0
     }
   }
-  return { prevus, ecart, reste: prevus + ecart }
+  return { prevus, ecart, reste: prevus + ecart, ...(o.soldes === null ? { incertain: true as const } : {}) }
 }
 
 export { CATEGORIES }

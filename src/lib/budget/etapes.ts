@@ -78,10 +78,17 @@ export type ResteChoisi = {
 }
 
 /** Ce que l'étape 3 montre et ce que la clôture enverra, d'une seule lecture du choix. */
-export function leReste(o: { reste: number; poches: Poche[]; choix: ChoixDuReste }): ResteChoisi {
-  const { reste, poches, choix } = o
+/**
+ * `incertain` : le reste est « avant les soldes d'année » (`partDesSoldes`) — le vrai se lira à
+ * la clôture. On n'en tire alors aucun chiffre (`mis` null : ni « passe à », ni « Au plus »),
+ * et un reste ≤ 0 ne ferme pas « Le mettre de côté » : les soldes peuvent le relever. Au lieu
+ * d'envoyer 0, on envoie « tout ce qui reste » et la base juge.
+ */
+export function leReste(o: { reste: number; poches: Poche[]; choix: ChoixDuReste; incertain?: boolean }):
+  ResteChoisi {
+  const { reste, poches, choix, incertain = false } = o
   const raison = poches.length === 0 ? 'Il n’y a pas encore de poche d’épargne.'
-    : reste <= 0 ? 'Il ne reste rien à mettre de côté ce mois-ci.' : null
+    : reste <= 0 && !incertain ? 'Il ne reste rien à mettre de côté ce mois-ci.' : null
   const possible = raison === null
   const mettre = possible && !choix.garder
   if (!mettre) {
@@ -89,13 +96,15 @@ export function leReste(o: { reste: number; poches: Poche[]; choix: ChoixDuReste
   }
   const poche = pocheDuChoix(poches, choix.poche)
   if (choix.combien === null) {
-    return { possible, raison, mettre, poche, tape: null, mis: reste, vide: false, rogne: false }
+    return { possible, raison, mettre, poche, tape: null, mis: incertain ? null : reste, vide: false,
+             rogne: false }
   }
   const tape = lisLeMontant(choix.combien, { zeroOk: true })
   if (!tape.valide) {
     return { possible, raison, mettre, poche, tape, mis: null, vide: choix.combien.trim() === '',
              rogne: false }
   }
+  if (incertain) return { possible, raison, mettre, poche, tape, mis: null, vide: false, rogne: false }
   return { possible, raison, mettre, poche, tape, mis: Math.min(tape.cents, reste), vide: false,
            rogne: tape.cents > reste }
 }
@@ -114,7 +123,8 @@ export type EnvoiDuReste = { valide: boolean; misDeCote: number | null; poche: s
  * Garder l'argent, ou n'avoir rien à mettre de côté : 0 — la clôture ne bloque
  * jamais. Seule une saisie illisible, quand on met de côté, bloque l'envoi.
  */
-export function envoiDuReste(o: { reste: number; poches: Poche[]; choix: ChoixDuReste }): EnvoiDuReste {
+export function envoiDuReste(o: { reste: number; poches: Poche[]; choix: ChoixDuReste; incertain?: boolean }):
+  EnvoiDuReste {
   const r = leReste(o)
   if (!r.mettre) return { valide: true, misDeCote: 0, poche: null }
   const poche = r.poche?.id ?? null

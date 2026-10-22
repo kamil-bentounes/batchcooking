@@ -143,6 +143,63 @@ describe('les soldes d’année — avant le chiffre, et dans X', () => {
   })
 })
 
+describe('les soldes d’année à deux — ta part n’est pas lisible, donc pas de chiffre faux', () => {
+  /* `apercu_des_soldes` ne rend que le total du foyer ; la base répartit selon ce que chacun a
+     porté sur l'année. Le récap est « avant les soldes » et le dit. */
+  const entretien: Solde = { charge: 'ce', libelle: 'Entretien auto', annee: 2026, cents: -166_68 }
+  const incertain = () => ({ ...recapDe(3_000_01), incertain: true as const })
+  const inc = (p: Partial<Props> = {}) =>
+    vue({ recap: incertain(), soldes: [entretien], dessus: 800_01, ...p })
+
+  it('le chiffre se dit « avant les soldes d’année », avec une phrase sur ce qui s’y ajoute', () => {
+    const t = texte(inc())
+    expect(t).toContain('Il te reste, avant les soldes d’année')
+    expect(t).not.toContain('Il te reste ce mois-ci')
+    expect(t).toContain(`1${FINE}556,70 €`)
+    expect(t).toContain('selon ce que chacun a mis de côté')
+  })
+
+  it('les lignes de solde (le total du foyer, ce que la base dit) restent', () => {
+    expect(texte(inc())).toContain('Entretien auto : 166,68 € non dépensés en 2026 reviennent.')
+  })
+
+  it('reste négatif avant les soldes : « Il te manque, avant les soldes d’année »', () => {
+    const t = texte(inc({ recap: { ...recapDe(500_01), incertain: true } }))
+    expect(t).toContain('Il te manque, avant les soldes d’année')
+  })
+
+  it('aucun « passe à » ni « Au plus » : leur chiffre dépendrait de ta part', () => {
+    const t = texte(inc())
+    expect(t).not.toContain('passe à')
+    expect(t).not.toContain('Au plus')
+    expect(texte(inc({ choix: choix({ combien: '5000' }) }))).not.toContain('Au plus')
+  })
+
+  it('le champ ne pré-remplit pas un chiffre estimé : « Tout ce qui reste » en filigrane', () => {
+    const h = inc()
+    expect(h).toContain('value=""')
+    expect(h).not.toContain('value="1556,70"')
+    expect(h).toContain('placeholder="Tout ce qui reste"')
+  })
+
+  it('un reste à 0 ou négatif avant les soldes ne ferme pas « Le mettre de côté »', () => {
+    const h = inc({ recap: { prevus: 100_00, ecart: -100_00, reste: 0, incertain: true } })
+    expect(eteint(bouton(h, 'radio', 'Le mettre de côté'))).toBe(false)
+    expect(texte(h)).not.toContain('Il ne reste rien à mettre de côté')
+  })
+
+  it('« le garder » ne promet pas « Il reste disponible » : on ne sait pas s’il reste quelque chose', () => {
+    expect(texte(inc({ choix: choix({ garder: true }) }))).not.toContain('Il reste disponible')
+  })
+
+  it('sûr (pas incertain), rien ne change : « Il te reste ce mois-ci », le champ pré-rempli', () => {
+    const h = vue({ soldes: [entretien] })
+    expect(texte(h)).toContain('Il te reste ce mois-ci')
+    expect(h).toContain('value="1556,70"')
+    expect(texte(h)).not.toContain('avant les soldes')
+  })
+})
+
 describe('avant que tout soit lu — aucun faux chiffre', () => {
   const FAUX = /Il te reste|Il te manque|0 €|passe à|prévus|Le mettre de côté|Clôtur/
 

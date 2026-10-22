@@ -87,8 +87,10 @@ export type AppelDeCloture = {
  */
 export function envoiDeLaCloture(o: {
   mois: string; reste: number; poches: Poche[]; choix: ChoixDuReste; rien: Set<string>
+  /** Le reste est « avant les soldes d'année » : voir `leReste`. */
+  incertain?: boolean
 }): { valide: boolean; appel: AppelDeCloture | null } {
-  const e = envoiDuReste({ reste: o.reste, poches: o.poches, choix: o.choix })
+  const e = envoiDuReste({ reste: o.reste, poches: o.poches, choix: o.choix, incertain: o.incertain })
   if (!e.valide) return { valide: false, appel: null }
   return { valide: true, appel: { mois: o.mois, factures: [], rien: [...o.rien],
                                   misDeCote: e.misDeCote, poche: e.poche } }

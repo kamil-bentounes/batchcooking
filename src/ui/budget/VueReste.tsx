@@ -70,7 +70,8 @@ export function VueReste({ recap, soldes, mois, poches, choix, changer, panne, d
     return <>{INTRO}<LectureDeLEtape etat={panne ? 'erreur' : 'chargement'} panne={panne} /></>
   }
   const reste = recap.reste
-  const r = leReste({ reste, poches, choix })
+  const incertain = recap.incertain === true
+  const r = leReste({ reste, poches, choix, incertain })
   const { mettre, poche } = r
   /* Un solde à 0 ne dit rien : « 0 € reviennent » serait du bruit. */
   const lignesDeSolde = soldes.flatMap(s => {
@@ -87,12 +88,17 @@ export function VueReste({ recap, soldes, mois, poches, choix, changer, panne, d
         ))}
         <div aria-live="polite">
           <p className="text-[15px] opacity-80">
-            {reste < 0 ? 'Il te manque ce mois-ci' : 'Il te reste ce mois-ci'}
+            {reste < 0 ? 'Il te manque' : 'Il te reste'}{incertain ? ', avant les soldes d’année' : ' ce mois-ci'}
           </p>
           <p className="chiffre mt-0.5 text-[54px] leading-[1.05] text-safran tabular-nums">
             {montant(Math.abs(reste))}
           </p>
           <p className="mt-1.5 text-[14px] opacity-80">{phraseDesPrevus(recap)}</p>
+          {incertain && (
+            <p className="mt-1.5 text-[14px] opacity-80">
+              Les soldes d’année s’y ajoutent, selon ce que chacun a mis de côté : ta part exacte se lira une fois le mois clôturé.
+            </p>
+          )}
         </div>
       </div>
 
@@ -122,7 +128,7 @@ export function VueReste({ recap, soldes, mois, poches, choix, changer, panne, d
           <Pastille actif={!mettre} />
           <span className="grow min-w-0">
             <span className="block text-[16px] font-semibold">Le garder sur le compte</span>
-            {!mettre && reste > 0 && (
+            {!mettre && reste > 0 && !incertain && (
               <span className="block mt-0.5 text-[14px] text-doux">
                 Il reste disponible pour {nomDuMois(moisVoisin(mois, 1))}.
               </span>
@@ -152,7 +158,8 @@ export function VueReste({ recap, soldes, mois, poches, choix, changer, panne, d
           <label className="mt-4 block">
             <span className="text-[14px] text-doux">Combien mettre de côté</span>
             <span className="mt-1.5 flex items-center rounded-[16px] border-2 border-herbe bg-surface px-4">
-              <input value={choix.combien ?? saisiDe(reste)}
+              <input value={choix.combien ?? (incertain ? '' : saisiDe(reste))}
+                     placeholder={incertain ? 'Tout ce qui reste' : undefined}
                      onChange={e => changer({ ...choix, combien: e.target.value })}
                      inputMode="decimal" aria-label="Combien mettre de côté"
                      className="champ-montant chiffre grow min-w-0 bg-transparent py-3 text-[28px] outline-none" />

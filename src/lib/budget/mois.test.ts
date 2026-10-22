@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { aDire, bandeau, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
-         maPart, maPartDesSoldes, montant, montantCompte, moisVoisin, nomDuMois, parCategorie,
+         maPart, partDesSoldes, montant, montantCompte, moisVoisin, nomDuMois, parCategorie,
          partSur, pourcentages, recapCloture, resteDuMois, revenuDuMois, sousLEuro, totauxDuFiltre, type Ligne,
          type Saisie } from './mois.ts'
 
@@ -394,18 +394,36 @@ describe('le récap de la clôture', () => {
     expect(doit.prevus).toBe(sans.prevus - 8_334)
     expect(doit.reste).toBe(sans.reste - 8_334)
   })
-  it('ma part des soldes que la clôture posera', () => {
-    const lignes = [ligne({ id: 'e', charge_id: 'entretien', facon: 'mis_de_cote',
-                            montant_cents: 4_167, parts: [[K, 2_084], [T, 2_083]] })]
-    expect(maPartDesSoldes([{ charge: 'entretien', cents: -16_668 }], lignes, K))
-      .toBe(Math.round(-16_668 * 2_084 / 4_167))
-    expect(maPartDesSoldes([{ charge: 'autre', cents: -1_000 }], [], K)).toBe(-1_000)
+  it('seul au foyer, tout le solde est le mien : le chiffre est sûr', () => {
+    expect(partDesSoldes([{ cents: -16_668 }, { cents: 8_334 }], 1)).toEqual({ cents: -8_334, incertain: false })
+  })
+  it('sans solde, rien à répartir : sûr, à deux comme seul (onze mois sur douze)', () => {
+    expect(partDesSoldes([], 2)).toEqual({ cents: 0, incertain: false })
+    expect(partDesSoldes([], undefined)).toEqual({ cents: 0, incertain: false })
+  })
+  /* La base répartit le solde selon ce que CHACUN a porté sur l'année (`recale_l_annee`) et
+     `apercu_des_soldes` ne rend que le total : à deux, ma part n'est pas lisible. Un prorata
+     des parts de décembre annonçait −83,34 € à Kamil pour −125 € posés (`tests/budget-solde-part`). */
+  it('à deux, ma part n’est pas connue : on ne chiffre rien (0) et on le dit (incertain)', () => {
+    expect(partDesSoldes([{ cents: -16_668 }], 2)).toEqual({ cents: 0, incertain: true })
+  })
+  it('le foyer pas lu : on ne sait pas si l’on est seul, donc incertain', () => {
+    expect(partDesSoldes([{ cents: -16_668 }], undefined)).toEqual({ cents: 0, incertain: true })
+  })
+  it('un récap sans part des soldes est « avant les soldes » : X + Y fait ce chiffre, marqué incertain', () => {
+    const lignes = [ligne({ id: 'courses', charge_id: 'courses', montant_cents: 80_000 })]
+    const base = { revenu: 432_500, lignes, saisies: [], moi: K, factures: new Map<string, number>(),
+                   rien: new Set<string>() }
+    const sur = recapCloture({ ...base, soldes: 0 })
+    const inc = recapCloture({ ...base, soldes: null })
+    expect(sur.incertain).toBeUndefined()
+    expect(inc.incertain).toBe(true)
+    expect({ ...inc, incertain: undefined }).toEqual(sur)
   })
   it('une ligne aux parts nulles se partage sur ses points de base, comme partSur', () => {
     // Une provision à 0 € : les parts en centimes sont nulles, les points de base restent.
     const lignes = [ligne({ id: 'e', charge_id: 'entretien', facon: 'mis_de_cote',
                             montant_cents: 0, montant_prevu_cents: 0, parts: [[K, 0], [T, 0]] })]
-    expect(maPartDesSoldes([{ charge: 'entretien', cents: -1_000 }], lignes, K)).toBe(-500)
     expect(partSur(lignes[0], K, -1_000)).toBe(-500)
   })
 })

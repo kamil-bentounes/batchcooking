@@ -167,6 +167,43 @@ describe('leReste — ce que « Le mettre de côté » permet', () => {
   })
 })
 
+describe('leReste — le reste incertain (soldes d’année à deux)', () => {
+  /* `incertain` : le reste est « avant les soldes », le vrai se lira à la clôture. On n'en tire
+     ni « passe à X », ni « Au plus X », ni « il ne reste rien ». */
+  const inc = (reste: number, c: Partial<ChoixDuReste> = {}) =>
+    leReste({ reste, poches: [poche()], choix: choix(c), incertain: true })
+
+  it('« tout ce qui reste » : aucun chiffre à annoncer (mis null)', () => {
+    const r = inc(793_39)
+    expect(r.mettre).toBe(true)
+    expect(r.mis).toBeNull()
+  })
+  it('un montant tapé au-dessus du reste ne « rogne » pas : on ne connaît pas le reste', () => {
+    const r = inc(793_39, { combien: '5000' })
+    expect(r.rogne).toBe(false)
+    expect(r.mis).toBeNull()
+    expect(r.tape?.cents).toBe(500_000)
+  })
+  it('un reste ≤ 0 avant les soldes ne ferme pas « Le mettre de côté » : les soldes peuvent le relever', () => {
+    const r = inc(-5_00)
+    expect(r.possible).toBe(true)
+    expect(r.raison).toBeNull()
+  })
+  it('sans poche, c’est toujours grisé : cela ne dépend pas du reste', () => {
+    expect(leReste({ reste: 793_39, poches: [], choix: choix(), incertain: true }).possible).toBe(false)
+  })
+  it('garder sur le compte : 0, sûr', () => {
+    expect(inc(793_39, { garder: true }).mis).toBe(0)
+  })
+  it('l’envoi suit : un reste ≤ 0 avant les soldes envoie « tout ce qui reste » (null), la base juge', () => {
+    expect(envoiDuReste({ reste: -5_00, poches: [poche()], choix: choix(), incertain: true }))
+      .toEqual({ valide: true, misDeCote: null, poche: 'p1' })
+    // Sûr, il envoyait 0 : rien à mettre de côté.
+    expect(envoiDuReste({ reste: -5_00, poches: [poche()], choix: choix() }))
+      .toEqual({ valide: true, misDeCote: 0, poche: null })
+  })
+})
+
 describe('envoiDuReste — ce que la page envoie à cloture_le_mois', () => {
   const envoi = (reste: number, poches: Poche[], c: ChoixDuReste) =>
     envoiDuReste({ reste, poches, choix: c })

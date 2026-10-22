@@ -26,7 +26,7 @@ import {
   useRevenus, useSaisies,
 } from '../lib/donnees/budget.ts'
 import {
-  capitale, maPartDesSoldes, moisVoisin, montant, nomDuMois, recapCloture, revenuDuMois,
+  capitale, moisVoisin, partDesSoldes, montant, nomDuMois, recapCloture, revenuDuMois,
 } from '../lib/budget/mois.ts'
 import {
   cloreUneFois, deMois, envoiDeLaCloture, misDeCoteDuFoyer, porteDeLaCloture, rienEffectif,
@@ -83,19 +83,23 @@ export function Cloture({ userId, mois, va, retour }: {
 
   const lignes = depenses.data
   const dites = saisies.data
+  /* Ma part des soldes : sûre seul au foyer ; à deux, la base la répartit autrement que ne le ferait
+     l'écran, qui n'en annonce donc aucune (`partDesSoldes`). */
+  const soldes = partDesSoldes(apercu.data ?? [], foyer?.membres.length)
   const rienEff = lignes && dites ? rienEffectif(lignes, dites, rien) : new Set<string>()
   /* Le récap attend TOUT : lignes, saisies, revenu et soldes. Calculé sur un morceau, il
      ment (« 0 € » de soldes pendant leur lecture, un faux écart sans les saisies). */
   const recap = porte === 'a-clore' && lignes && dites && apercu.data && revenu !== null
-    ? recapCloture({ revenu, lignes, saisies: dites, moi: userId, factures: new Map(),
-                     rien: rienEff, soldes: maPartDesSoldes(apercu.data, lignes, userId) })
+    ? recapCloture({ revenu, lignes, saisies: dites, moi: userId, factures: new Map(), rien: rienEff,
+                     soldes: soldes.incertain ? null : soldes.cents })
     : null
   /* Par défaut, la poche d'urgence s'il y en a une, sinon la première (§ 3.5). */
   const leChoix: ChoixDuReste = choix ?? {
     garder: false, poche: (poches.data && pocheParDefaut(poches.data)?.id) ?? null, combien: null,
   }
   const envoi = recap && poches.data
-    ? envoiDeLaCloture({ mois, reste: recap.reste, poches: poches.data, choix: leChoix, rien: rienEff })
+    ? envoiDeLaCloture({ mois, reste: recap.reste, poches: poches.data, choix: leChoix, rien: rienEff,
+                      incertain: recap.incertain })
     : { valide: false, appel: null }
   const panneDuReste = apercu.error ?? poches.error ?? null
 

@@ -234,6 +234,34 @@ describe('les trois étapes, tout lu', () => {
     expect(t).toContain(`3${FINE}195 €`)
   })
 
+  it('un solde d’année à deux : le total du foyer se dit, MA part non — « avant les soldes d’année »', () => {
+    const deux = foyer([membre('u1', 'Kamil'), membre('u2', 'Thauba')])
+    const soldes = [{ charge: 'c1', libelle: 'Entretien auto', annee: 2026, cents: -166_68 }]
+    const t = texte(page({ foyer: deux, apercu: soldes }))
+    expect(t).toContain('Entretien auto : 166,68 € non dépensés en 2026 reviennent.')
+    expect(t).toContain('Il te reste, avant les soldes d’année')
+    expect(t).not.toContain('Il te reste ce mois-ci')
+    expect(t).not.toContain('passe à')
+    expect(eteint(clore(page({ foyer: deux, apercu: soldes })))).toBe(false)
+  })
+
+  it('le foyer pas lu, avec un solde : on ne sait pas si l’on est seul, donc pas de part annoncée', () => {
+    const t = texte(page({ foyer: undefined,
+      apercu: [{ charge: 'c1', libelle: 'Taxe foncière', annee: 2025, cents: -120_00 }] }))
+    expect(t).toContain('Il te reste, avant les soldes d’année')
+  })
+
+  it('le même solde, seul au foyer : la part est sûre, rien ne change', () => {
+    const t = texte(page({ apercu: [{ charge: 'c1', libelle: 'Taxe foncière', annee: 2025, cents: -120_00 }] }))
+    expect(t).toContain('Il te reste ce mois-ci')
+    expect(t).not.toContain('avant les soldes')
+  })
+
+  it('à deux sans solde (onze mois sur douze) : « Il te reste ce mois-ci » comme avant', () => {
+    const deux = foyer([membre('u1', 'Kamil'), membre('u2', 'Thauba')])
+    expect(texte(page({ foyer: deux }))).toContain('Il te reste ce mois-ci')
+  })
+
   it('sans poche : « Le mettre de côté » est grisé, la clôture reste permise (elle ne bloque jamais)', () => {
     const h = page({ poches: [] })
     expect(texte(h)).toContain('Il n’y a pas encore de poche d’épargne.')

@@ -17,7 +17,7 @@ export function EtapeReste({ recap, soldes, mois, poches, choix, changer, panne 
 }) {
   /* Le cumul se lit pour la poche que la clôture VISERA, pas pour l'identifiant du
      choix, qui peut désigner une poche retirée. Hors « Le mettre de côté », on ne lit rien. */
-  const r = recap && poches ? leReste({ reste: recap.reste, poches, choix }) : null
+  const r = recap && poches ? leReste({ reste: recap.reste, poches, choix, incertain: recap.incertain }) : null
   const solde = useSolde(r?.mettre ? r.poche?.id : undefined)
   /* ⚠️ Un solde pas encore lu n'est pas un solde nul : `?? []` disait « passe à 793 € » à
      qui a 800 € de côté, le temps du chargement ou pour toujours après une panne. */
