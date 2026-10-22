@@ -26,7 +26,11 @@ vi.mock('@tanstack/react-query', async importOriginal => ({
 const budget = await import('./budget.ts')
 const { relisLeBudget } = budget
 
-type Options = { mutationFn?: unknown; onSuccess?: (d: unknown, v: unknown, c?: unknown) => unknown }
+type Options = {
+  mutationFn?: unknown
+  onSuccess?: (d: unknown, v: unknown, c?: unknown) => unknown
+  onSettled?: (d: unknown, e: unknown, v: unknown, c?: unknown) => unknown
+}
 
 /** Un client dont les relectures ne finissent que quand on les libère. */
 function clientEnAttente() {
@@ -40,6 +44,13 @@ const tour = () => new Promise<void>(r => setTimeout(r, 0))
 /** Des variables de mutation — et un résultat de la base — qui répondent n'importe quoi
     (`p.pocheId`, `v.id`, `r.non_soldees`…). */
 const variables = new Proxy({}, { get: () => 'x' })
+
+/** Ce que TanStack fait d'une mutation : `onSuccess` (attendu) puis `onSettled` (attendu), et
+    seulement après la mutation est finie. En erreur, `onSuccess` ne part pas. */
+async function finDeLaMutation(o: Options, erreur: unknown = null) {
+  if (!erreur) await o.onSuccess?.(variables, variables)
+  await o.onSettled?.(erreur ? undefined : variables, erreur, variables)
+}
 
 /** Toutes les mutations exportées : on appelle chaque `use…` et on garde ceux qui rendent un `mutationFn`. */
 function mutations(): { nom: string; options: Options; client: ReturnType<typeof clientEnAttente> }[] {
@@ -76,16 +87,64 @@ describe('les mutations du budget attendent leurs relectures', () => {
     expect(toutes.length).toBeGreaterThanOrEqual(20)
   })
 
-  it.each(toutes.map(m => [m.nom, m] as const))('%s : onSuccess rend les relectures, la mutation ne finit pas avant', async (_nom, m) => {
-    expect(m.options.onSuccess, 'une mutation sans onSuccess ne relit rien').toBeTypeOf('function')
+  it.each(toutes.map(m => [m.nom, m] as const))('%s : ses rappels rendent les relectures, la mutation ne finit pas avant', async (_nom, m) => {
+    expect(m.options.onSuccess ?? m.options.onSettled, 'une mutation sans rappel ne relit rien')
+      .toBeTypeOf('function')
     let fini = false
-    const r = m.options.onSuccess!(variables, variables)
-    void Promise.resolve(r).then(() => { fini = true })
+    void finDeLaMutation(m.options).then(() => { fini = true })
     await tour()
     expect(m.client.invalidateQueries.mock.calls.length).toBeGreaterThan(0)
-    expect(fini, 'onSuccess a rendu avant la fin des relectures').toBe(false)
+    expect(fini, 'la mutation a fini avant la fin des relectures').toBe(false)
     m.client.libere()
     await tour()
     expect(fini).toBe(true)
+  })
+})
+
+/**
+ * Une clôture (ou une réouverture) dont la RÉPONSE se perd — le réseau coupe après que la base a
+ * validé — finit en erreur côté page, alors que le mois EST clos. Sans relecture, `['cloture']`
+ * restait périmé (30 s, pas de relecture au retour d'onglet) et chaque clic répondait
+ * « Septembre est déjà clôturé ». La relecture ne peut donc pas dépendre de `onSuccess`.
+ */
+describe('une clôture ou une réouverture qui échoue relit quand même', () => {
+  const cas = [['useClotureLeMois', 'la clôture'], ['useRouvreLeMois', 'la réouverture']] as const
+  const clefsRelues = (c: ReturnType<typeof clientEnAttente>) =>
+    c.invalidateQueries.mock.calls.map(a => ((a as unknown[])[0] as { queryKey: string[] }).queryKey[0])
+
+  it.each(cas)('%s : en erreur, `cloture` et ce que l’argent touche sont relus (%s)', async nom => {
+    const client = clientEnAttente()
+    faux.qc = client.qc
+    const options = (budget[nom] as () => Options)()
+    const r = finDeLaMutation(options, new Error('Failed to fetch'))
+    await tour()
+    client.libere()
+    await r
+    expect(clefsRelues(client)).toContain('cloture')
+    expect(clefsRelues(client)).toContain('budget-mois')
+  })
+
+  it.each(cas)('%s : en erreur, la mutation n’est finie qu’après les relectures (%s)', async nom => {
+    const client = clientEnAttente()
+    faux.qc = client.qc
+    const options = (budget[nom] as () => Options)()
+    let fini = false
+    void finDeLaMutation(options, new Error('déjà clôturé')).then(() => { fini = true })
+    await tour()
+    expect(fini).toBe(false)
+    client.libere()
+    await tour()
+    expect(fini).toBe(true)
+  })
+
+  it('une clôture réussie relit une seule fois (pas de double relecture onSuccess + onSettled)', async () => {
+    const client = clientEnAttente()
+    faux.qc = client.qc
+    const options = (budget.useClotureLeMois as () => Options)()
+    const r = finDeLaMutation(options)
+    await tour()
+    client.libere()
+    await r
+    expect(clefsRelues(client).filter(k => k === 'cloture')).toHaveLength(1)
   })
 })

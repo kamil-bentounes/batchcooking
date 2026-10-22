@@ -861,12 +861,14 @@ export function useClotureLeMois() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: clotureLeMois,
-    onSuccess: (r, c) => {
-      /* Ce qui n'a pas pu être soldé se dit sous le chiffre du mois (§ 3.5) : la
-         page de clôture n'est plus là pour le dire. */
-      retientNonSoldees(qc, c.mois, r.non_soldees)
-      return relisLeBudget(qc)
-    },
+    /* Ce qui n'a pas pu être soldé se dit sous le chiffre du mois (§ 3.5) : la
+       page de clôture n'est plus là pour le dire. */
+    onSuccess: (r, c) => { retientNonSoldees(qc, c.mois, r.non_soldees) },
+    /* ⚠️ `onSettled`, pas `onSuccess` : une réponse perdue après que la base a clos le mois
+       finit en erreur ici, et `['cloture']` restait périmé — chaque clic répondait alors
+       « déjà clôturé », sans que la page sache jamais que le mois l'est. Réussie ou non, on
+       relit ; TanStack attend cette promesse avant de déclarer la mutation finie. */
+    onSettled: () => relisLeBudget(qc),
   })
 }
 
@@ -885,10 +887,10 @@ export function useRouvreLeMois() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: rouvreLeMois,
-    onSuccess: (_r, mois) => {
-      oublieNonSoldees(qc, mois)
-      return relisLeBudget(qc)
-    },
+    onSuccess: (_r, mois) => { oublieNonSoldees(qc, mois) },
+    /* `onSettled` : une réouverture dont la réponse se perd a pourtant rouvert le mois (voir
+       `useClotureLeMois`). */
+    onSettled: () => relisLeBudget(qc),
   })
 }
 
