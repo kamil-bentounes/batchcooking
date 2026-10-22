@@ -8,11 +8,14 @@
  */
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { Charge, Cloture, Compte, Depense, Revenu, Saisie } from '../lib/donnees/budget.ts'
+import type { Charge, Cloture, Compte, Depense, NonSoldee, Poche, Revenu, Saisie, Solde }
+  from '../lib/donnees/budget.ts'
 import { CLE } from '../lib/donnees/budget.ts'
+import { cleNonSoldees } from '../lib/budget/non-soldees.ts'
 import { CLE as CLE_FOYER, type Foyer } from '../lib/donnees/foyer.ts'
 import type { Ouverte } from '../ui/budget/FeuillesDuMois.tsx'
 import { Budget } from './Budget.tsx'
+import { Cloture as PageDeCloture } from './Cloture.tsx'
 
 export const OCT = '2026-10-01'
 export const SEPT = '2026-09-01'
@@ -50,6 +53,8 @@ export const cloture = (mois = OCT): Cloture => ({ id: 'cl1', mois,
 export type Lectures = {
   foyer?: Foyer | null; depenses?: Depense[]; saisies?: Saisie[]; charges?: Charge[]
   revenus?: Revenu[]; clotures?: Cloture[]; comptes?: Compte[]
+  /** Ce que la dernière clôture de ce mois n'a pas pu solder (rien en base ne le garde). */
+  nonSoldees?: NonSoldee[]
 }
 
 /** Tout est revenu, pour un foyer d'une personne avec ses courses. */
@@ -68,6 +73,7 @@ export function ecranDuMois(lues: Lectures,
   const clefs = {
     foyer: CLE_FOYER.foyer, depenses: CLE.mois(mois), saisies: ['saisies', mois],
     charges: CLE.charges, revenus: CLE.revenus, clotures: ['cloture'], comptes: CLE.comptes,
+    nonSoldees: cleNonSoldees(mois),
   } as const
   for (const k of Object.keys(clefs) as (keyof Lectures)[]) {
     if (k in lues) qc.setQueryData(clefs[k], lues[k])
@@ -77,4 +83,52 @@ export function ecranDuMois(lues: Lectures,
     <QueryClientProvider client={qc}>
       <Budget userId="u1" va={() => {}} mois={o.depart} ouverteAuDepart={o.ouverte ?? null} />
     </QueryClientProvider>)
+}
+
+export const poche = (p: Partial<Poche> = {}): Poche => ({
+  id: 'p1', libelle: 'Urgence', genre: 'urgence', objectif_cents: 4_000_00, echeance: null,
+  cle: null, ...p,
+})
+
+export type LecturesDeLaCloture = Lectures & {
+  poches?: Poche[]; apercu?: Solde[]
+  /** Ce que la poche porte déjà, par poche (`useSolde`). */
+  soldes?: Record<string, { userId: string; cents: number }[]>
+}
+
+/** La page de clôture du mois `mois` : ce qui est revenu de la base, et ce qui est en panne
+    (`rate`, par clé). Une clé absente des deux : la lecture n'est pas revenue. */
+export function ecranDeLaCloture(
+  lues: LecturesDeLaCloture,
+  o: { mois?: string; rate?: Partial<Record<'foyer' | 'depenses' | 'saisies' | 'charges' | 'revenus'
+                                           | 'clotures' | 'poches' | 'apercu', string>> } = {},
+) {
+  const mois = o.mois ?? SEPT
+  const qc = new QueryClient({ defaultOptions: { queries: {
+    retry: false, retryOnMount: false, staleTime: Infinity } } })
+  const clefs = {
+    foyer: CLE_FOYER.foyer, depenses: CLE.mois(mois), saisies: ['saisies', mois],
+    charges: CLE.charges, revenus: CLE.revenus, clotures: ['cloture'],
+    poches: CLE.poches, apercu: ['apercu-des-soldes', mois],
+  } as const
+  for (const k of Object.keys(clefs) as (keyof typeof clefs)[]) {
+    const panne = o.rate?.[k]
+    if (panne !== undefined) {
+      qc.getQueryCache().build(qc, { queryKey: clefs[k] })
+        .setState({ status: 'error', error: new Error(panne), data: undefined, fetchStatus: 'idle' })
+    } else if (k in lues) qc.setQueryData(clefs[k], lues[k])
+  }
+  for (const [id, solde] of Object.entries(lues.soldes ?? {})) qc.setQueryData(CLE.soldes(id), solde)
+  return renderToStaticMarkup(
+    <QueryClientProvider client={qc}>
+      <PageDeCloture userId="u1" mois={mois} va={() => {}} retour={() => {}} />
+    </QueryClientProvider>)
+}
+
+/** L'ouverture (les attributs) du premier bouton nommé `nom` — texte sans balises —, ou null. */
+export function bouton(html: string, nom: string): string | null {
+  for (const m of html.matchAll(/<button([^>]*)>(.*?)<\/button>/gs)) {
+    if (texte(m[2]) === nom) return m[1]
+  }
+  return null
 }

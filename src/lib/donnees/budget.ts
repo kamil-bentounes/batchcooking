@@ -16,6 +16,7 @@ import { ou, supabase } from '../supabase.ts'
 import { maintenant } from '../horloge.ts'
 import { dernierJour, type Saisie as SaisieDuMois } from '../budget/mois.ts'
 import type { Categorie, Mode } from '../budget/categories.ts'
+import { cleNonSoldees, oublieNonSoldees, retientNonSoldees } from '../budget/non-soldees.ts'
 
 export const CLE = {
   mois: (m: string) => ['budget-mois', m] as const,
@@ -858,7 +859,22 @@ export async function clotureLeMois(c: {
 }
 export function useClotureLeMois() {
   const qc = useQueryClient()
-  return useMutation({ mutationFn: clotureLeMois, onSuccess: () => relisLeBudget(qc) })
+  return useMutation({
+    mutationFn: clotureLeMois,
+    onSuccess: (r, c) => {
+      /* Ce qui n'a pas pu être soldé se dit sous le chiffre du mois (§ 3.5) : la
+         page de clôture n'est plus là pour le dire. */
+      retientNonSoldees(qc, c.mois, r.non_soldees)
+      return relisLeBudget(qc)
+    },
+  })
+}
+
+/** Les années qu'une clôture n'a pas pu solder, telles qu'elle les a rendues. Rien
+    en base ne les garde : la clôture suivante réessaie, et le redit. */
+export function useNonSoldees(mois: string) {
+  return useQuery({ queryKey: cleNonSoldees(mois), queryFn: () => [] as NonSoldee[],
+                    staleTime: Infinity })
 }
 
 export async function rouvreLeMois(mois: string) {
@@ -867,7 +883,13 @@ export async function rouvreLeMois(mois: string) {
 }
 export function useRouvreLeMois() {
   const qc = useQueryClient()
-  return useMutation({ mutationFn: rouvreLeMois, onSuccess: () => relisLeBudget(qc) })
+  return useMutation({
+    mutationFn: rouvreLeMois,
+    onSuccess: (_r, mois) => {
+      oublieNonSoldees(qc, mois)
+      return relisLeBudget(qc)
+    },
+  })
 }
 
 export type Solde = { charge: string; libelle: string; annee: number; cents: number }

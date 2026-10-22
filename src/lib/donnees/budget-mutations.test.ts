@@ -32,11 +32,13 @@ type Options = { mutationFn?: unknown; onSuccess?: (d: unknown, v: unknown, c?: 
 function clientEnAttente() {
   const enAttente: (() => void)[] = []
   const invalidateQueries = vi.fn(() => new Promise<void>(fin => { enAttente.push(fin) }))
-  return { qc: { invalidateQueries }, invalidateQueries, libere: () => enAttente.splice(0).forEach(f => f()) }
+  /* `setQueryData` : la clôture et sa réouverture posent ce qu'elle n'a pas pu solder. */
+  return { qc: { invalidateQueries, setQueryData: vi.fn() }, invalidateQueries, libere: () => enAttente.splice(0).forEach(f => f()) }
 }
 /** Laisse passer toutes les microtâches en attente. */
 const tour = () => new Promise<void>(r => setTimeout(r, 0))
-/** Des variables de mutation qui répondent n'importe quoi (`p.pocheId`, `v.id`…). */
+/** Des variables de mutation — et un résultat de la base — qui répondent n'importe quoi
+    (`p.pocheId`, `v.id`, `r.non_soldees`…). */
 const variables = new Proxy({}, { get: () => 'x' })
 
 /** Toutes les mutations exportées : on appelle chaque `use…` et on garde ceux qui rendent un `mutationFn`. */
@@ -77,7 +79,7 @@ describe('les mutations du budget attendent leurs relectures', () => {
   it.each(toutes.map(m => [m.nom, m] as const))('%s : onSuccess rend les relectures, la mutation ne finit pas avant', async (_nom, m) => {
     expect(m.options.onSuccess, 'une mutation sans onSuccess ne relit rien').toBeTypeOf('function')
     let fini = false
-    const r = m.options.onSuccess!(undefined, variables)
+    const r = m.options.onSuccess!(variables, variables)
     void Promise.resolve(r).then(() => { fini = true })
     await tour()
     expect(m.client.invalidateQueries.mock.calls.length).toBeGreaterThan(0)

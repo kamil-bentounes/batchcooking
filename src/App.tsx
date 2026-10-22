@@ -11,6 +11,7 @@ import { AcceptInvite } from './pages/AcceptInvite'
 import { Rejoindre } from './pages/Rejoindre'
 import { Hub } from './pages/Hub.tsx'
 import { Budget } from './pages/Budget.tsx'
+import { Cloture } from './pages/Cloture.tsx'
 import { Charges } from './pages/Charges.tsx'
 import { BudgetReglages } from './pages/BudgetReglages.tsx'
 import { Epargne } from './pages/Epargne.tsx'
@@ -178,6 +179,16 @@ export default function App() {
   const moisVu = ici.match(/^\/budget\/(\d{4})-(0[1-9]|1[0-2])$/)
   if (moisVu) {
     return <Budget key={ici} userId={moi} va={va} mois={`${moisVu[1]}-${moisVu[2]}-01`} />
+  }
+
+  /* La clôture d'un mois (§ 3.5). Comme `/invite/`, avant le `switch` : elle porte son
+     mois dans l'adresse. Seuls les mois qui existent : `2026-13` retombe sur le hub, au
+     lieu d'interroger la base avec une date fausse. `key` : sans elle, React garderait
+     la page déjà montée, et son mois d'avant. */
+  const aClore = ici.match(/^\/cloture\/(\d{4})-(0[1-9]|1[0-2])$/)
+  if (aClore) {
+    return <Cloture key={ici} userId={moi} va={va} mois={`${aClore[1]}-${aClore[2]}-01`}
+                    retour={() => (window.history.length > 1 ? retour() : va('/budget'))} />
   }
 
   switch (ici) {
