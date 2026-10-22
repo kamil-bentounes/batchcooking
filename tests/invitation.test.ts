@@ -404,4 +404,44 @@ describe('le lien suffit', () => {
     expect(r.envoye).toBe(false)
     expect(await compteDe(email), 'l’invitation a créé un compte à sa place').toBeNull()
   })
+
+  /* Grand test, parcours « nouveau venu » (22/10) : Kamil a tapé SA PROPRE
+     adresse, l'écran a répondu « Invitation créée, envoie-lui ce lien » — un
+     lien qui n'aurait mené qu'à « cette adresse a déjà un compte ». */
+  it('inviter quelqu’un qui est déjà dans le foyer est refusé, et ne pose aucune invitation', async () => {
+    const colocataire = await makeActor('deja-la')
+    await admin().from('user_profile').update({ household_id: hote.householdId })
+      .eq('id', colocataire.userId)
+    const res = await fetch(fn('invite'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json',
+                 Authorization: `Bearer ${await accessToken(hote.client)}` },
+      body: JSON.stringify({ email: colocataire.email.toUpperCase() }),
+    })
+    expect(res.status, 'une invitation inutile a été créée').toBe(409)
+    expect(await res.text()).toMatch(/déjà dans ton foyer/)
+    const { data } = await admin().from('invitation').select('id')
+      .eq('household_id', hote.householdId).eq('email', colocataire.email)
+    expect(data, 'l’invitation est restée en base').toHaveLength(0)
+  })
+
+  /* Le même parcours : un double clic sur « Créer l'invitation » partait en
+     deux requêtes ; la seconde heurtait `invitation_pending_unique` et
+     l'écran affichait « duplicate key value violates unique constraint »
+     sous un lien pourtant valide. */
+  it('deux demandes simultanées pour la même adresse rendent le même lien', async () => {
+    const email = `double-invite-${Date.now()}@fumee.test`
+    const jeton = await accessToken(hote.client)
+    const appelle = () => fetch(fn('invite'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton}` },
+      body: JSON.stringify({ email }),
+    })
+    const [a, b] = await Promise.all([appelle(), appelle()])
+    const corps = await Promise.all([a, b].map(async r => ({ statut: r.status, texte: await r.text() })))
+    expect(corps.map(c => c.statut), JSON.stringify(corps)).toEqual([200, 200])
+    expect(JSON.parse(corps[0].texte).token).toBe(JSON.parse(corps[1].texte).token)
+    const { data } = await admin().from('invitation').select('id').eq('email', email)
+    expect(data).toHaveLength(1)
+  })
 })

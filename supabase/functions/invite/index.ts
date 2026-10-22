@@ -34,6 +34,21 @@ Deno.serve(async (req) => {
     return reply('Adresse e-mail invalide', 400)
   }
 
+  /* ⚠️ Inviter quelqu'un qui est DÉJÀ dans le foyer n'a aucun sens : le lien
+     rendu n'aurait mené qu'à « cette adresse a déjà un compte » (grand test du
+     22/10 : Kamil a tapé sa propre adresse, l'écran a dit « Invitation créée,
+     envoie-lui ce lien »). On ne dit rien des comptes d'AUTRES foyers : ce
+     refus-là ne révèle que ce que l'hôte sait déjà de son propre foyer. */
+  const { data: comptes } = await admin.rpc('compte_pour_invitation', { adresse: email })
+  const compte = (comptes as { id: string; a_un_profil: boolean }[] | null)?.[0]
+  if (compte?.a_un_profil) {
+    const { data: sien } = await admin.from('user_profile')
+      .select('household_id').eq('id', compte.id).maybeSingle()
+    if (sien?.household_id === profile.household_id) {
+      return reply('Cette personne est déjà dans ton foyer.', 409)
+    }
+  }
+
   // Une invitation déjà en attente pour cette adresse n'est pas une erreur :
   // on rend le lien existant. L'index unique invitation_pending_unique garantit
   // qu'il n'y en a qu'une, et l'utilisateur veut le lien, pas un message.
@@ -65,8 +80,21 @@ Deno.serve(async (req) => {
     const { data: creee, error } = await admin.from('invitation')
       .insert({ household_id: profile.household_id, email, created_by: userRes.user.id })
       .select().single()
-    if (error) return reply(error.message, 409)
-    inv = creee
+    if (error?.code === '23505') {
+      /* ⚠️ Deux demandes simultanées pour la même adresse (un double clic) :
+         la seconde heurte `invitation_pending_unique`. Ce n'est pas un refus,
+         c'est la première qui a gagné : on rend SON lien, au lieu de laisser
+         l'écran afficher « duplicate key value violates unique constraint ». */
+      const { data: gagnante } = await admin.from('invitation')
+        .select('*').eq('household_id', profile.household_id)
+        .eq('email', email).is('accepted_at', null).maybeSingle()
+      if (!gagnante) return reply('L’invitation n’a pas pu être créée. Réessaie dans un instant.', 409)
+      inv = gagnante
+    } else if (error) {
+      return reply('L’invitation n’a pas pu être créée. Réessaie dans un instant.', 500)
+    } else {
+      inv = creee
+    }
   }
 
   const base = Deno.env.get('APP_BASE_URL') ?? ''

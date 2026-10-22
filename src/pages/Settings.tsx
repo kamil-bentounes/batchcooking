@@ -19,6 +19,8 @@ export function Settings({ va }: { va: (v: string) => void }) {
   const [msg, setMsg] = useState(''); const [err, setErr] = useState(false)
   const [zone, setZone] = useState<Zone>('plafond')
   const [sortie, setSortie] = useState(false)
+  /** Une invitation part : un second clic n'en lance pas une deuxième. */
+  const [invitant, setInvitant] = useState(false)
 
   async function charger() {
     const { data: h } = await supabase.from('household')
@@ -59,8 +61,11 @@ export function Settings({ va }: { va: (v: string) => void }) {
   }
 
   async function inviter() {
+    if (invitant) return
+    setInvitant(true)
+    const adresse = invite.trim()
     try {
-      const r = await callFunction<{ token: string }>('invite', { email: invite })
+      const r = await callFunction<{ token: string }>('invite', { email: adresse })
 
       /* ⚠️ Aucun mail ne part (décision du 19/10/2026) : c'est TOI qui envoies
          le lien. Le mail de Supabase portait un lien mort au bout d'une heure,
@@ -70,9 +75,10 @@ export function Settings({ va }: { va: (v: string) => void }) {
          ⚠️ `origin` seul perd le préfixe de déploiement : sur GitHub Pages le
             site est servi sous un sous-chemin, et le lien tombait sur une 404. */
       setLien(lienDeploye(`/invite/${r.token}`))
-      dire('inviter', `Invitation créée pour ${invite}. Envoie-lui ce lien.`)
+      dire('inviter', `Invitation créée pour ${adresse}. Envoie-lui ce lien.`)
     }
-    catch (e) { dire('inviter', String((e as Error).message), true) }
+    catch (e) { setLien(''); dire('inviter', String((e as Error).message), true) }
+    finally { setInvitant(false) }
   }
 
   async function exporter() {
@@ -153,7 +159,9 @@ export function Settings({ va }: { va: (v: string) => void }) {
         <div className="mt-4 space-y-4">
           <Champ label="Son e-mail" type="email" value={invite} placeholder="elle@exemple.fr"
                  onChange={e => setInvite(e.target.value)} />
-          <Bouton onClick={inviter} disabled={!invite}>Créer l’invitation</Bouton>
+          <Bouton onClick={inviter} disabled={!invite.trim() || invitant}>
+            {invitant ? 'Un instant…' : 'Créer l’invitation'}
+          </Bouton>
           {ici('inviter')}
           {lien && (
             <div className="rounded-xl border border-brume bg-surface p-4">
