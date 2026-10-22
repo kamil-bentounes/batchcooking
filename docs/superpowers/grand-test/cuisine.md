@@ -30,30 +30,45 @@ par relecture de la base.
 | P3 | Cuisine : « Ensuite » | lignes de 23 px | — | `e004b61` |
 | Banc | `e2e/amorce.ts` | chaque passage laisse 2 recettes au catalogue (44 « Dahl/Poulet » en double en local) | `efface` ne retire pas les recettes semées | `e254349` |
 
-Banc de non-régression : `e2e/cuisine.spec.ts` (8 tests, tous rouges sur le code d'avant, verts après).
+Banc de non-régression : `e2e/cuisine.spec.ts` (8 tests, tous rouges sur le code d'avant, verts après). Corrections de
+la base et de l'écran qui ont suivi : `tests/cuisine-corrections.test.ts`, `tests/cuisine-liste.test.ts`,
+`tests/cuisine-equipement.test.ts`, `e2e/cuisine-corrections.spec.ts`.
 
-## À arrêter : défauts de la base (migrations 0093–0115 non touchées)
+## Défauts de la base : corrigés par la migration 0117 (0093–0116 non touchées)
 
-Aucun dans la plage 0093–0115. Hors plage, contournés côté écran, à décider :
-1. **0013/0018 — une session interrompue est invisible** (`current_cycle()` l'écarte) et la semaine ne se rouvre pas
-   (`open_cycle` : « la semaine … a déjà son cycle, clos »). Recommandé : que `current_cycle()` rende aussi `interrompue`,
-   ou que `open_cycle` la remplace ; en attendant, « Reprendre » passe par un `select` sur `state = 'interrompue'`.
-2. **0031 — `shopping_item_protege` répond par « 0 ligne »** : le client ne peut pas distinguer. Recommandé : lever une exception.
-3. **0021/0028 — cocher remplit toujours le stock**, y compris le non-alimentaire (« Papier toilette » est rangé au frigo)
-   et sans fusion avec l'existant (« oignon 3 u » à côté de « Oignon, cru 183 g »).
-4. `cycle_recipe.position` n'est jamais renseignée (tout à 0).
+Aucun dans la plage 0093–0115. Les quatre hors plage, contournés côté écran puis **corrigés, 0117** :
+1. **0013/0018 — une session interrompue était invisible** : `cycle_a_reprendre()` rend la dernière session
+   interrompue de la semaine courante, de la dernière ou à venir (horloge de la base) ; `open_cycle` dit
+   « la semaine du … a une session interrompue : reprends-la ». L'écran n'a plus de date calculée sur le
+   téléphone (`plancherDeReprise` supprimée). **Corrigé, 0117.**
+2. **0031 — `shopping_item_protege` répondait « 0 ligne »** : il lève `restrict_violation` (« Cette ligne est
+   cochée ou payée : décoche-la et efface son prix pour la supprimer. ») sur une suppression directe. En
+   cascade, l'ancien `return null` laissait la ligne **orpheline** (une ligne cochée survivait à son cycle et à
+   son foyer effacés, `delete_my_account` compris) : la cascade passe maintenant. La régénération de la liste
+   ne vise que les lignes neuves. **Corrigé, 0117.**
+3. **0021/0028/0048 — cocher remplissait toujours le stock**, non-alimentaire compris : plus d'entrée pour les
+   rayons Entretien et Hygiène, ni pour « Autre » sans aliment. Pas de fusion avec une ligne existante
+   (« oignon 3 u » à côté de « Oignon, cru 183 g ») : elle casserait « décocher défait exactement ce que cocher
+   a fait » (lien `shopping_item_id`). **Corrigé, 0117** (la fusion reste non faite, volontairement).
+4. **`cycle_recipe.position` n'était jamais renseignée** : trigger `max + 1` par cycle, existant renuméroté
+   dans l'ordre d'ajout. **Corrigé, 0117.**
 
 ## À trancher par Kamil
 
 - Le rang de page et les filtres ne sont pas dans l'adresse : recharger remet la page 1 ; il n'existe pas de `/recette/<id>`
   (toute adresse inconnue ouvre le hub). Recommandé : `?page=` seulement si les liens profonds servent.
-- Libellés CIQUAL sur la liste de courses (« Poulet, cuisse, viande, rôti/cuit au four », « Tomate, crue ») : recommandé,
-  nom court (avant la première virgule). Rayons : lentilles en « Fruits et légumes », œufs en « Boucherie ».
+- ~~Libellés CIQUAL sur la liste de courses~~ **Corrigé** : `nomCourt` (« Poulet cuisse », « Tomate », « Lentille corail »),
+  regroupement par nom court (« Tomate, crue » + « Tomate, rôtie » = une ligne, quantités additionnées).
+  ~~Rayons : lentilles en « Fruits et légumes », œufs en « Boucherie »~~ **Corrigé** : `sèche` reconnue, sous-catégorie
+  CIQUAL (œufs, légumineuses, oléagineux, charcuterie, herbes, pommes de terre) ; le rayon se devine sur le nom entier.
 - La carte encre grossit de 150 px par recette retenue : à six, le catalogue sort de l'écran. Recommandé : la replier au-delà de trois.
 - Plan : la frise n'aligne plus les gestes sur les repères de temps quand ils se serrent. Recommandé, à terme : une liste chronologique.
 - Cuisine : l'écran ne montre que le verbe (« Émincer »), ni le texte de l'étape ni les quantités.
 - Stock : on ne peut ni modifier une ligne ni lui donner une péremption ; actions des barquettes sans message d'échec.
-- « oeuf » trouve « bœuf » (sous-chaîne) ; « Équipement du jour » arrive avec les huit appareils cochés.
+- « oeuf » trouve « bœuf » (sous-chaîne). ~~« Équipement du jour » arrive avec les huit appareils cochés~~ **Corrigé** : il part de la
+  dernière session du foyer qui en avait un, sinon du catalogue.
+- ~~Revenu de 0,50 €/mois accepté~~ **Corrigé** : au-dessous de 100 € par mois, « Tu déclares 0,50 € par mois. C’est bien ça ? »
+  (réglages du budget et profil) ; 0 € et ≥ 100 € comme avant.
 - Les recettes publiques laissées par `tests/catalogue-partage.test.ts` (« SECRET DU FOYER A … ») apparaissent dans le catalogue local.
 
 ## Ce qui a été joué

@@ -221,7 +221,8 @@ comptes rendus versionnés dans `docs/superpowers/grand-test/` : `nouveau-venu.m
 **Corrections de BASE faites à la main (22/10)** : 0112 repartage les mois ouverts au départ d'un membre
 (`repartit_les_lignes` lit `parts_du_mois`) et retire sa charge perso ; 0103 recule le premier revenu avec
 l'arrivée (geste de la personne seulement, revenu accroché à l'ancienne arrivée) ; **0116** plancher
-d'épargne (INSERT, UPDATE, DELETE). Commits 857b83f, 00c60af, af45104.
+d'épargne (INSERT, UPDATE, DELETE). Commits 857b83f, 00c60af, af45104. **0117** : les quatre défauts de base
+de `cuisine.md` (session interrompue, ligne protégée, non-alimentaire, position des recettes).
 
 **Deux revues adverses finales (SQL et front, sur bc1c1e3)** : le SQL est corrigé (af45104). Le front : 11
 constats confiés à un agent (réseau coupé : mutations en pause et jeton expiré, courses, épargne, mois clos
@@ -230,9 +231,9 @@ avant l'arrivée, md5 des égalités, focus…) ; **à vérifier à son retour**
 **Restent avant la mise en ligne** :
 1. Cueillir le rapport de l'agent des 11 constats ; `npm run build -- --mode development`, `npm run lint`,
    `npx vitest run src`, `npm test` (série, base), `npx playwright test` en entier.
-2. Rejouer `bash scripts/banc-migration-budget.sh --tout` (0093 à 0116 ; remet la base locale à zéro) puis
+2. Rejouer `bash scripts/banc-migration-budget.sh --tout` (0093 à 0117 ; remet la base locale à zéro) puis
    `npx supabase db reset --local && npm run seed`.
-3. **Mise en ligne D1+D2 en une fois** (migrations 0093 à 0116, fonctions `importer` ET `invite` avec
+3. **Mise en ligne D1+D2 en une fois** (migrations 0093 à 0117, fonctions `importer` ET `invite` avec
    `--use-api`, puis le site) : relire la prod (mêmes chiffres ?), sauvegarde en lecture seule, nettoyer le
    compte de Thauba (voir « Décision du 22/10 »), merge de `feat/budget-refait` dans `main` par
    fast-forward, `npm run deploy`, fumée prod.

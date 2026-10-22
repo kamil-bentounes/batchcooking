@@ -40,6 +40,7 @@ par le rôle de service — et le trigger recalcule tout derrière.
 | `llm_budget_remaining` | — | `numeric` (€) | authentifié |
 | `llm_global_budget_remaining` | — | `numeric` (€) | **rôle de service uniquement** |
 | `current_cycle` | — | `uuid` \| `null` | authentifié |
+| `cycle_a_reprendre` | — | `uuid` \| `null` | authentifié |
 | `open_cycle` | `p_week_of date`, `p_servings int` | `uuid` | authentifié |
 | `export_my_data` | — | `jsonb` | authentifié |
 | `delete_my_account` | — | `void` | authentifié |
@@ -68,7 +69,14 @@ lisaient la même valeur et un appel sur deux ne comptait pas.
 
 `create_household` lève `déjà rattaché à un foyer` (23505) ou `création de foyer fermée` (42501).
 `open_cycle` rend le cycle vivant s'il y en a un, et lève `unique_violation` si la semaine
-demandée a déjà son cycle clos — on n'efface pas un bilan pour recommencer.
+demandée a déjà son cycle clos — on n'efface pas un bilan pour recommencer — ou une session
+interrompue à reprendre (« la semaine du … a une session interrompue : reprends-la »).
+`cycle_a_reprendre` rend l'id de cette session (semaine courante, dernière ou à venir, horloge de la
+base), `null` sinon : c'est elle que « Reprendre la session interrompue » interroge.
+
+`DELETE /shopping_item` sur une ligne cochée ou payée lève `restrict_violation` (23001,
+« Cette ligne est cochée ou payée : décoche-la et efface son prix pour la supprimer. ») ; la
+régénération de la liste ne vise donc que les lignes neuves (`checked_at` et `paid_price_eur` nuls).
 
 **Transitions d'état** : `PATCH /cycle` avec `state` lève `check_violation`
 (`transition de cycle interdite : X -> Y`) pour tout ce qui n'est pas dans

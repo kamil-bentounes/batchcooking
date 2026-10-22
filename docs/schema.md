@@ -113,12 +113,15 @@ remettrait `current_household()` à `NULL` et lui permettrait de créer un secon
 | `tg_class_b_guard` | `BEFORE UPDATE` sur les 4 tables de classe B. Pose la traçabilité, refuse les lignes sûres. Générique via `to_jsonb(old) ? 'confidence'`. |
 | `tg_nutrition_target_household` | `BEFORE INSERT` : remplit `household_id`. S'exécute avant `NOT NULL` et avant le `WITH CHECK`. |
 | `current_cycle()` | Le cycle vivant du foyer, ou `NULL`. |
-| `open_cycle(week, servings)` | Rend le cycle vivant s'il y en a un, refuse de rouvrir une semaine close. |
+| `cycle_a_reprendre()` | L'id de la dernière session `interrompue` du foyer dont la semaine est la courante, la dernière ou une à venir (horloge de la base, 0117), sinon `NULL`. L'écran ne calcule plus de date. |
+| `open_cycle(week, servings)` | Rend le cycle vivant s'il y en a un, refuse de rouvrir une semaine close — ou interrompue et reprenable (« reprends-la », 0117). |
+| `tg_shopping_item_protege` | `BEFORE DELETE` : une ligne cochée ou payée ne se supprime pas. Suppression directe : `restrict_violation` (23001) avec un message lisible ; en cascade (cycle, foyer, `delete_my_account`) la ligne part avec son parent (0117 — avant, elle survivait, orpheline). |
+| `tg_cycle_recipe_position` | `BEFORE INSERT` sur `cycle_recipe` : `position = max + 1` du cycle, 0 pour la première (0117). |
 | `tg_cycle_transition` | `BEFORE UPDATE OF state` : refuse toute transition absente de `cycle_transition`, horodate `started_at` et `closed_at`. |
 | `tg_derive_household` | Générique. Dérive `household_id` du parent (`TG_ARGV`) : RLS empêche d'écrire au nom d'un autre foyer, pas de s'accrocher à SON cycle. |
 | `tg_portion_peremption` | Pose `expires_at` selon le lieu : frigo 4 j, congélateur 90 j, décongelée **24 h**. Sortir du congélateur *est* une décongélation. |
 | `tg_portion_journal` | `AFTER` : écrit `portion_event`. Le journal n'a ni `INSERT`, ni `UPDATE`, ni `DELETE` pour personne. |
-| `tg_shopping_check` | Cocher = rang + ordre des rayons appris + entrée à l'inventaire + habitude retenue. **En base**, parce que deux téléphones cochent la même liste. |
+| `tg_shopping_check` / `tg_shopping_check_apres` | Cocher = rang + ordre des rayons appris + entrée à l'inventaire + habitude retenue. **En base**, parce que deux téléphones cochent la même liste. Pas d'entrée à l'inventaire pour le non-alimentaire : rayons Entretien et Hygiène, ou « Autre » sans aliment (0117). Pas de fusion avec une ligne de stock existante : décocher défait exactement ce que cocher a fait, par `shopping_item_id`. |
 | `tg_session_task_duree` / `_mesure` | La durée réelle est mesurée entre « je prends » et « c'est fait », jamais demandée. Alimente `duration_observation`. |
 | `tg_meal_slot_consomme` | Une case passée à « mangé » consomme sa barquette. |
 | `tables_de_foyer()` | Introspection, rôle de service. Ne liste que des `BASE TABLE` — sinon la vue `price_knowledge` réclamerait un export en plus de la table qu'elle lit. Sert au test qui empêche `export_my_data` de prendre du retard sur le schéma. |

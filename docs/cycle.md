@@ -53,7 +53,7 @@ donc on peut tout mesurer.
 | Porte | Quand | Effet |
 |---|---|---|
 | **Envie spéciale** (`/inventer`) | Rien de prévu ne fait envie | Recette générée, marquée « jamais testée », 10 par mois |
-| **Interrompre** | La session s'arrête | `interrompue`, reprise sans recalcul du plan |
+| **Interrompre** | La session s'arrête | `interrompue`, reprise sans recalcul du plan ; `current_cycle()` l'écarte, `cycle_a_reprendre()` la rend (semaine courante ou dernière, 0117) |
 | **Dépannage** | Une barquette hors cycle | `portion.cycle_id` nul |
 
 Si « Envie spéciale » s'ouvre trois fois par semaine, c'est que le choix du
