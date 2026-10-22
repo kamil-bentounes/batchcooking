@@ -26,7 +26,6 @@ import { etatDeLEcran, messageDeLecture, videDuMois } from '../lib/budget/ecran.
 import { initialeDe, prenomDe, useFoyer } from '../lib/donnees/foyer.ts'
 import {
   moisDe, useCharges, useClotures, useComptes, useMois, useRevenus, useSaisies,
-  type Depense,
 } from '../lib/donnees/budget.ts'
 import {
   bandeau, barre, capitale, joursRestants, moisVoisin, nomDuMois, parCategorie,
@@ -36,24 +35,18 @@ import { aujourdhui } from '../lib/horloge.ts'
 import { Bandeau } from '../ui/budget/Bandeau.tsx'
 import { CarteEpargne } from '../ui/budget/CarteEpargne.tsx'
 import { Categorie } from '../ui/budget/Categorie.tsx'
-import { ChoixDeLaLigne } from '../ui/budget/ChoixDeLaLigne.tsx'
-import { FeuilleDeclarer } from '../ui/budget/FeuilleDeclarer.tsx'
-import { FeuilleFactureMois } from '../ui/budget/FeuilleFactureMois.tsx'
-import { FeuilleMiseDeCote } from '../ui/budget/FeuilleMiseDeCote.tsx'
+import { FeuillesDuMois, type Ouverte } from '../ui/budget/FeuillesDuMois.tsx'
 import { FiltreDuMois } from '../ui/budget/Filtre.tsx'
 import { Gestes } from '../ui/budget/Gestes.tsx'
-import type { Geste } from '../ui/budget/Ligne.tsx'
 import { Recap } from '../ui/budget/Recap.tsx'
 
-/** Ce qui est ouvert par-dessus l'écran. On garde l'IDENTIFIANT de la ligne, pas
-    la ligne : une copie restait figée après « C'est ça », et la feuille
-    continuait d'annoncer le montant habituel pendant que la base avait validé. */
-type Ouverte = { geste: Geste; id: string } | { geste: 'choix' } | null
-
-export function Budget({ userId, va, mois: depart }: {
+export function Budget({ userId, va, mois: depart, ouverteAuDepart = null }: {
   userId: string; va: (v: string) => void
   /** `/budget/AAAA-MM` : le mois qu'on vient de clôturer, ou de rouvrir. */
   mois?: string
+  /** Pour le banc : le rendu en chaîne ne touche rien, il lui faut une feuille déjà ouverte
+      pour voir ce que l'écran en fait sur un mois clôturé. */
+  ouverteAuDepart?: Ouverte
 }) {
   const courant = moisDe()
   /* Jamais au-delà du mois courant, même par l'adresse : l'ouvrir créerait ses
@@ -62,7 +55,7 @@ export function Budget({ userId, va, mois: depart }: {
   const [mois, setMois] = useState(() =>
     (depart && /^\d{4}-(0[1-9]|1[0-2])-01$/.test(depart) && depart <= courant ? depart : courant))
   const [filtre, setFiltre] = useState<Filtre>('tout')
-  const [ouverte, setOuverte] = useState<Ouverte>(null)
+  const [ouverte, setOuverte] = useState<Ouverte>(ouverteAuDepart)
   const lecteurFoyer = useFoyer()
   const foyer = lecteurFoyer.data
   const depenses = useMois(mois)
@@ -87,6 +80,11 @@ export function Budget({ userId, va, mois: depart }: {
      plus de « max(prévu, déclaré) » (§ 3.1.1). */
   const estClos = (m: string) => (clotures.data ?? []).some(k => k.mois === m)
   const clos = estClos(mois)
+  /* Le chiffre d'un mois clôturé vient de la clôture : `cloture_choix.reste_cents`,
+     celui du jour où on l'a fermé (§ 3.1.1). */
+  const monChoix = (clotures.data ?? []).find(k => k.mois === mois)?.choix
+    .find(c => c.user_profile_id === userId)
+  const misDeCote = monChoix?.mis_de_cote_cents ?? 0
   /* Rien tant que les clôtures ne sont pas lues : un mois clôturé s'annonçait
      « à clôturer » le temps d'un aller-retour. */
   const leBandeau = clotures.isPending ? null : bandeau({
@@ -118,13 +116,10 @@ export function Budget({ userId, va, mois: depart }: {
     : membres.filter(m => revenuDuMois(revenus.data ?? [], m.id, mois) === null)
              .map(m => prenomDe(m.display_name))
 
-  const choisie = ouverte && 'id' in ouverte ? lignes.find(l => l.id === ouverte.id) : undefined
   const fermer = () => setOuverte(null)
   const auFil = lignes.filter(l => l.facon === 'au_fil')
     .sort((a, b) => a.libelle.localeCompare(b.libelle, 'fr'))
   const vide = videDuMois({ mois, courant, nComptes })
-  const categorieDe = (l: Depense) =>
-    (l.charge_id && parCharge.get(l.charge_id)?.categorie) || 'autre'
 
   return (
     <main className="min-h-dvh px-4 pt-4 pb-16">
@@ -181,7 +176,7 @@ export function Budget({ userId, va, mois: depart }: {
             a disparu une fois, conditionnée à un virement à faire, et un foyer qui
             paie tout depuis le compte joint ne pouvait plus corriger ses charges —
             `/charges` n'est dans aucune barre. */}
-        <Gestes va={va} declarer={() => setOuverte({ geste: 'choix' })} />
+        <Gestes va={va} declarer={clos ? null : () => setOuverte({ geste: 'choix' })} />
 
         <Erreur de={enPanne ? new Error(messageDeLecture(enPanne.error)) : null} />
 
@@ -213,7 +208,8 @@ export function Budget({ userId, va, mois: depart }: {
           </>
         ) : (
           <>
-            <Recap mois={mois} reste={reste} segments={segments} va={va} />
+            <Recap mois={mois} reste={reste} segments={segments} va={va}
+                   cloture={clos ? { reste: monChoix?.reste_cents ?? null, misDeCote } : null} />
             {sansRevenu.length > 0 && (
               <p className="mt-3 text-[15px] leading-snug" style={{ color: 'var(--color-ocre)' }}>
                 {sansRevenu.length === 1
@@ -239,20 +235,11 @@ export function Budget({ userId, va, mois: depart }: {
         )}
       </div>
 
-      {ouverte?.geste === 'choix' && (
-        <ChoixDeLaLigne etat={etat} lignes={auFil} saisies={dites} fermer={fermer}
-                        choisir={l => setOuverte({ geste: 'declarer', id: l.id })} />
-      )}
-      {choisie && ouverte?.geste === 'declarer' && (
-        <FeuilleDeclarer ligne={choisie} categorie={categorieDe(choisie)} mois={mois} moi={userId}
-                         foyerId={foyer?.id ?? ''} saisies={dites} membres={membres} fermer={fermer} />
-      )}
-      {choisie && ouverte?.geste === 'facture' && (
-        <FeuilleFactureMois ligne={choisie} categorie={categorieDe(choisie)} fermer={fermer} />
-      )}
-      {choisie && ouverte?.geste === 'mise' && choisie.charge_id && parCharge.has(choisie.charge_id) && (
-        <FeuilleMiseDeCote charge={parCharge.get(choisie.charge_id)!} fermer={fermer} />
-      )}
+      <FeuillesDuMois ouverte={ouverte} clos={clos} misDeCote={misDeCote} etat={etat}
+                      lignes={lignes} auFil={auFil} saisies={dites} charges={parCharge}
+                      mois={mois} moi={userId} foyerId={foyer?.id ?? ''} membres={membres}
+                      fermer={fermer}
+                      choisir={l => setOuverte({ geste: 'declarer', id: l.id })} />
     </main>
   )
 }

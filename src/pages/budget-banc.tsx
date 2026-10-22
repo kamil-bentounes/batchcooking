@@ -11,6 +11,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Charge, Cloture, Compte, Depense, Revenu, Saisie } from '../lib/donnees/budget.ts'
 import { CLE } from '../lib/donnees/budget.ts'
 import { CLE as CLE_FOYER, type Foyer } from '../lib/donnees/foyer.ts'
+import type { Ouverte } from '../ui/budget/FeuillesDuMois.tsx'
 import { Budget } from './Budget.tsx'
 
 export const OCT = '2026-10-01'
@@ -59,7 +60,8 @@ export const tout = (p: Lectures = {}): Lectures => ({
 
 /** L'écran du mois `mois` (le mois courant par défaut), avec ce qui est revenu de la base.
     `depart` : le mois qu'on passe à `<Budget mois=…>`, comme le fait `/budget/AAAA-MM`. */
-export function ecranDuMois(lues: Lectures, o: { mois?: string; depart?: string } = {}) {
+export function ecranDuMois(lues: Lectures,
+                            o: { mois?: string; depart?: string; ouverte?: Ouverte } = {}) {
   const mois = o.mois ?? OCT
   const qc = new QueryClient({ defaultOptions: { queries: {
     retry: false, retryOnMount: false, staleTime: Infinity } } })
@@ -73,6 +75,6 @@ export function ecranDuMois(lues: Lectures, o: { mois?: string; depart?: string 
   qc.setQueryData(CLE.poches, [])
   return renderToStaticMarkup(
     <QueryClientProvider client={qc}>
-      <Budget userId="u1" va={() => {}} mois={o.depart} />
+      <Budget userId="u1" va={() => {}} mois={o.depart} ouverteAuDepart={o.ouverte ?? null} />
     </QueryClientProvider>)
 }

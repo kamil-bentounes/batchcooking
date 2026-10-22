@@ -11,12 +11,14 @@ const Icone = ({ children }: { children: ReactNode }) => (
   </svg>
 )
 
-export function Gestes({ va, declarer }: { va: (v: string) => void; declarer: () => void }) {
+/** `declarer` vaut `null` sur un mois clôturé : rien ne s'y déclare, le geste n'est pas
+    proposé (une porte qui ne doit pas s'ouvrir ne s'affiche pas). */
+export function Gestes({ va, declarer }: { va: (v: string) => void; declarer: (() => void) | null }) {
   const gestes: { texte: string; agir: () => void; safran?: boolean; icone: ReactNode }[] = [
     { texte: 'Mes charges', agir: () => va('/charges'),
       icone: <Icone><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M13 7l4 4" /></Icone> },
-    { texte: 'Déclarer', agir: declarer, safran: true,
-      icone: <Icone><circle cx="12" cy="12" r="8" /><path d="M12 8v8M8 12h8" /></Icone> },
+    ...(declarer ? [{ texte: 'Déclarer', agir: declarer, safran: true,
+      icone: <Icone><circle cx="12" cy="12" r="8" /><path d="M12 8v8M8 12h8" /></Icone> }] : []),
     { texte: 'Revenus', agir: () => va('/budget-reglages'),
       icone: <Icone><rect x="3.5" y="6.5" width="17" height="12" rx="2.5" />
                     <path d="M3.5 10h17M15.5 14.5h2" /></Icone> },
@@ -25,7 +27,8 @@ export function Gestes({ va, declarer }: { va: (v: string) => void; declarer: ()
                     <path d="M12 15c0-2.8-2-5-5-5 0 2.8 2 5 5 5z" /></Icone> },
   ]
   return (
-    <nav aria-label="Les gestes du mois" className="mt-6 grid grid-cols-4 gap-2">
+    <nav aria-label="Les gestes du mois"
+         className={`mt-6 grid gap-2 ${gestes.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
       {gestes.map(g => (
         <button key={g.texte} onClick={g.agir} className="flex flex-col items-center gap-2 min-h-11">
           <span className={`w-[58px] h-[58px] rounded-full grid place-items-center shadow-carte
