@@ -76,7 +76,8 @@ test.describe('la liste de courses', () => {
     }).select().single()).data!
     await db.from('recipe_ingredient').insert([
       { recipe_id: r.id, ordinal: 1, raw_text: '200 g de tomates', food_id: await aliment('Tomate, crue'), qty: 200, unit: 'g', grams_reference: 200 },
-      { recipe_id: r.id, ordinal: 2, raw_text: '100 g de tomates rôties', food_id: await aliment('Tomate, rôtie/cuite au four'), qty: 100, unit: 'g', grams_reference: 100 },
+      { recipe_id: r.id, ordinal: 2, raw_text: '100 g de carottes', food_id: await aliment('Carotte, crue'), qty: 100, unit: 'g', grams_reference: 100 },
+      { recipe_id: r.id, ordinal: 5, raw_text: '300 g de carottes surgelées', food_id: await aliment('Carotte, surgelée, crue'), qty: 300, unit: 'g', grams_reference: 300 },
       { recipe_id: r.id, ordinal: 3, raw_text: '300 g de lentilles', food_id: await aliment('Lentille corail, sèche'), qty: 300, unit: 'g', grams_reference: 300 },
       { recipe_id: r.id, ordinal: 4, raw_text: '4 œufs', food_id: await aliment('Oeuf, cru'), qty: 4, unit: 'u', grams_reference: 240 },
     ])
@@ -85,7 +86,7 @@ test.describe('la liste de courses', () => {
   test.afterAll(async () => { if (foyer) await efface(foyer) })
   test.use({ actionTimeout: 15_000 })
 
-  test('noms courts, tomates additionnées, lentilles à l’épicerie, œufs au frais', async ({ page }) => {
+  test('noms courts, frais et surgelé distincts, lentilles à l’épicerie, œufs au frais', async ({ page }) => {
     await connecte(page, foyer)
     await page.goto('/choisir')
     await expect(page.getByRole('article').first()).toBeVisible({ timeout: 20_000 })
@@ -94,13 +95,18 @@ test.describe('la liste de courses', () => {
 
     const ligne = (nom: RegExp) => page.getByRole('checkbox', { name: nom })
     await expect(ligne(/^Tomate\b/)).toHaveCount(1)
-    await expect(page.locator('li', { has: ligne(/^Tomate\b/) })).toContainText('300 g')
-    await expect(page.getByText(/Tomate, crue|rôtie\/cuite/)).toHaveCount(0)
+    await expect(page.locator('li', { has: ligne(/^Tomate\b/) })).toContainText('200 g')
+    await expect(page.getByText('Tomate, crue')).toHaveCount(0)
+    // Deux carottes au même nom court ne se fusionnent pas (frais, surgelé) : leur nom entier les distingue.
+    await expect(ligne(/^Carotte, crue/)).toHaveCount(1)
+    await expect(ligne(/^Carotte, surgelée, crue/)).toHaveCount(1)
     await expect(ligne(/^Lentille corail/)).toHaveCount(1)
     await expect(page.getByText('Lentille corail, sèche')).toHaveCount(0)
 
     const rayonDe = async (nom: RegExp) => page.locator('div.mt-6', { has: ligne(nom) })
       .locator('h3').first().innerText()
+    expect((await rayonDe(/^Carotte, crue/)).toLowerCase()).toBe('fruits et légumes')
+    expect((await rayonDe(/^Carotte, surgelée, crue/)).toLowerCase()).toBe('surgelés')
     expect((await rayonDe(/^Lentille corail/)).toLowerCase()).toBe('épicerie salée')
     expect((await rayonDe(/^Oeuf/)).toLowerCase()).toBe('frais')
   })

@@ -131,25 +131,16 @@ export function useGenereListe() {
       for (const i of ingredients) {
         const f = facteur.get(i.recipe_id) ?? 1
         const nom = libelleDeCourse(i.food?.name, i.raw_text)
-        /* On regroupe sur le NOM, court et sans sa quantité : « 10 g de beurre » et « 20 g de beurre »
-           (deux recettes) faisaient deux lignes « Beurre », et « Tomate, crue » + « Tomate, rôtie »
-           deux lignes « Tomate ». Les quantités s'additionnent comme avant (même unité), le reste va
-           dans la note : rien ne se perd. */
-        const cle = nom.toLowerCase().trim()
+        /* Un aliment reconnu fait UNE ligne, quel que soit le nom qu'on lui donne ; sans aliment, on regroupe
+           sur le NOM sans sa quantité : « 10 g de beurre » et « 20 g de beurre » (deux recettes) faisaient
+           deux lignes « Beurre ». Regrouper sur le nom COURT fusionnait « Carotte, crue » et « Carotte,
+           surgelée » : un rayon, un prix et un lieu de stock pris au hasard d'un identifiant. */
+        const cle = i.food_id ?? `brut:${nom.toLowerCase().trim()}`
         const c = cumuls.get(cle) ?? {
           label: nom, food_id: i.food_id, groupe: i.food?.ciqual_group ?? null,
           sousGroupe: i.food?.ciqual_subgroup ?? null, nomComplet: i.food?.name ?? null,
           grammes: null, unite: null, quantite: null,
           uniteFixee: false, nonConverti: 0,
-        }
-        /* Deux aliments sous un même nom : celui d'identifiant le plus petit parle pour la ligne
-           (prix appris, rapprochement avec une ligne déjà prise) — l'ordre des lignes lues par la
-           base n'est pas garanti, le résultat ne doit pas en dépendre (D50). */
-        if (i.food_id && (!c.food_id || i.food_id < c.food_id)) {
-          c.food_id = i.food_id
-          c.groupe = i.food?.ciqual_group ?? null
-          c.sousGroupe = i.food?.ciqual_subgroup ?? null
-          c.nomComplet = i.food?.name ?? null
         }
         // Le poids appris par le foyer, quand il en a un : c'est LUI qui fait
         // qu'« 2 oignons » vaut quelque chose.
@@ -173,6 +164,19 @@ export function useGenereListe() {
           }
         }
         cumuls.set(cle, c)
+      }
+
+      /* Deux aliments distincts sous le même nom court (« Tomate, crue » / « Tomate, appertisée ») ne se
+         fusionnent pas — rayon, état et prix diffèrent — mais ne doivent pas se ressembler : leur nom
+         entier les distingue. */
+      const parNom = new Map<string, Cumul[]>()
+      for (const c of cumuls.values()) {
+        const k = c.label.toLowerCase().trim()
+        parNom.set(k, [...(parNom.get(k) ?? []), c])
+      }
+      for (const groupe of parNom.values()) {
+        if (groupe.length < 2) continue
+        for (const c of groupe) if (c.food_id && c.nomComplet) c.label = c.nomComplet
       }
 
       // On repart de zéro sur les lignes issues des recettes, jamais sur celles

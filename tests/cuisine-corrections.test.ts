@@ -233,13 +233,13 @@ describe('3 · cocher ne range que de l’alimentaire', () => {
     expect(await stockDe(a.id)).toHaveLength(0)
   })
 
-  it('un article « Autre » sans aliment non plus ; avec un aliment, oui', async () => {
-    const sans = await article('Piles AA', 'Autre')
-    await coche(sans.id)
-    expect(await stockDe(sans.id)).toHaveLength(0)
-    const avec = await article('Miel', 'Autre', tomate)
-    await coche(avec.id)
-    expect(await stockDe(avec.id)).toHaveLength(1)
+  it('« Autre » se range : c’est le rayon par défaut d’un libellé inconnu (« Tofu » saisi à la main)', async () => {
+    const tofu = await article('Tofu', 'Autre')
+    await coche(tofu.id)
+    expect(await stockDe(tofu.id), 'de la nourriture saisie à la main a disparu du stock').toHaveLength(1)
+    const miel = await article('Miel', 'Autre', tomate)
+    await coche(miel.id)
+    expect(await stockDe(miel.id)).toHaveLength(1)
   })
 
   it('un article SANS rayon se range comme avant (NULL n’est pas « non alimentaire »)', async () => {

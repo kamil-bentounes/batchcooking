@@ -1,6 +1,6 @@
 /**
  * La liste de courses GÉNÉRÉE (src/lib/donnees/courses.ts), contre la vraie base :
- * noms courts, regroupement par nom, rayons, régénération au milieu de lignes prises.
+ * noms courts, regroupement par aliment, rayons, régénération au milieu de lignes prises.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { admin, connecteLeClientPartage, makeActor, type Actor } from './helpers/db'
@@ -38,12 +38,18 @@ beforeAll(async () => {
 })
 
 describe('la liste générée : noms courts, rayons, régénération', () => {
-  const ID = {
-    tomateCrue: '9ff32690-dd75-47d0-9d19-b0b4db1d1699',
-    tomateRotie: '7814033e-a0b4-4c5e-adea-dc6636992fce',
-    lentille: '6940f566-0b44-474d-a0fa-41fd742357a5',
-    oeuf: '9d05afbe-d4ce-4576-89dd-7547436545d4',
-  }
+  /* Les aliments se retrouvent par leur code CIQUAL : les identifiants sont tirés au hasard à chaque base. */
+  const ID = {} as Record<'tomateCrue' | 'carotteCrue' | 'carotteSurgelee' | 'lentille' | 'oeuf', string>
+  beforeAll(async () => {
+    const codes = { tomateCrue: '20047', carotteCrue: '20009', carotteSurgelee: '20208', lentille: '20535', oeuf: '22000' }
+    const { data } = await admin().from('food').select('id, source_code').eq('source', 'ciqual')
+      .in('source_code', Object.values(codes))
+    for (const [cle, code] of Object.entries(codes)) {
+      const id = data?.find(f => f.source_code === code)?.id
+      expect(id, `l'aliment CIQUAL ${code} manque : la base est-elle semée ?`).toBeTruthy()
+      ID[cle as keyof typeof ID] = id!
+    }
+  })
 
   async function recetteAvec(titre: string,
     lignes: { food_id: string | null; raw_text: string; qty?: number; unit?: string; g?: number }[]) {
@@ -78,9 +84,9 @@ describe('la liste générée : noms courts, rayons, régénération', () => {
   const lignesDe = async (cycleId: string) =>
     (await admin().from('shopping_item').select('*').eq('cycle_id', cycleId)).data ?? []
 
-  it('deux aliments au même nom court font UNE ligne, quantités additionnées', async () => {
+  it('un même aliment dans deux recettes fait UNE ligne, quantités additionnées', async () => {
     const r1 = await recetteAvec('Salade', [{ food_id: ID.tomateCrue, raw_text: '200 g de tomates', qty: 200, unit: 'g', g: 200 }])
-    const r2 = await recetteAvec('Four', [{ food_id: ID.tomateRotie, raw_text: '100 g de tomates', qty: 100, unit: 'g', g: 100 }])
+    const r2 = await recetteAvec('Four', [{ food_id: ID.tomateCrue, raw_text: '100 g de tomates', qty: 100, unit: 'g', g: 100 }])
     const c = await cycleAvec(10, [r1, r2])
     await genere(c)
     const lignes = await lignesDe(c)
@@ -89,9 +95,21 @@ describe('la liste générée : noms courts, rayons, régénération', () => {
     expect(lignes[0].unit).toBe('g')
   })
 
+  it('deux aliments au même nom court restent deux lignes, et leur nom entier les distingue (frais / surgelé)', async () => {
+    const r1 = await recetteAvec('Poêlée', [{ food_id: ID.carotteCrue, raw_text: '200 g de carottes', qty: 200, unit: 'g', g: 200 }])
+    const r2 = await recetteAvec('Wok', [{ food_id: ID.carotteSurgelee, raw_text: '300 g de carottes surgelées', qty: 300, unit: 'g', g: 300 }])
+    const c = await cycleAvec(14, [r1, r2])
+    await genere(c)
+    const parLabel = Object.fromEntries((await lignesDe(c)).map(l => [l.label, { rayon: l.aisle, g: Number(l.quantity) }]))
+    expect(parLabel, 'le frais et le surgelé ont été fusionnés : un rayon et un lieu de stock pris au hasard').toEqual({
+      'Carotte, crue': { rayon: 'Fruits et légumes', g: 200 },
+      'Carotte, surgelée, crue': { rayon: 'Surgelés', g: 300 },
+    })
+  })
+
   it('ne perd aucune quantité quand les unités diffèrent', async () => {
     const r1 = await recetteAvec('Salade 2', [{ food_id: ID.tomateCrue, raw_text: '200 g de tomates', qty: 200, unit: 'g', g: 200 }])
-    const r2 = await recetteAvec('Farcies', [{ food_id: ID.tomateRotie, raw_text: '2 tomates', qty: 2, unit: 'u' }])
+    const r2 = await recetteAvec('Farcies', [{ food_id: ID.tomateCrue, raw_text: '2 tomates', qty: 2, unit: 'u' }])
     const c = await cycleAvec(11, [r1, r2])
     await genere(c)
     const lignes = await lignesDe(c)
