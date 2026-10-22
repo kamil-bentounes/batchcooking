@@ -104,6 +104,21 @@ export function useCycleParId(id: string | undefined) {
   })
 }
 
+/**
+ * La dernière session INTERROMPUE du foyer. `current_cycle()` l'écarte (0018) : sans cette
+ * lecture, plus aucun écran n'y ramène, et la semaine ne peut pas être rouverte (`open_cycle`
+ * refuse : « la semaine … a déjà son cycle »). La base autorise `interrompue → en_cuisine` (0013) ;
+ * c'est ce que « Reprendre » fait.
+ */
+export function useCycleInterrompu(actif: boolean) {
+  return useQuery({
+    queryKey: [...CLE.cycle, 'interrompu'] as const,
+    enabled: actif,
+    queryFn: async (): Promise<Cycle | null> => ouNul(await supabase.from('cycle').select('*')
+      .eq('state', 'interrompue').order('created_at', { ascending: false }).limit(1).maybeSingle()),
+  })
+}
+
 export function useOuvreCycle() {
   const qc = useQueryClient()
   return useMutation({

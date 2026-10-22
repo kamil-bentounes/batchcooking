@@ -10,8 +10,9 @@
  * boîte autour. On le lit si on veut. On n'a rien à en faire.
  */
 import { useMemo } from 'react'
-import { Chiffre, Ecran, Principal, Secondaire, Vide, dateLongue, duree, Marque } from '../ui/coque.tsx'
-import { GESTE, useCycle, useOuvreCycle } from '../lib/donnees/cycle.ts'
+import { Chiffre, Ecran, Erreur, Principal, Secondaire, Vide, dateLongue, duree, Marque } from '../ui/coque.tsx'
+import { GESTE, useChangeEtat, useCycle, useCycleInterrompu, useOuvreCycle } from '../lib/donnees/cycle.ts'
+import { enFrancais } from '../lib/reseau.ts'
 import { useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
 import {
   NOM_REPAS, bilanDuJour, jour, useBarquettes, useMange, useSemaine,
@@ -30,6 +31,8 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   const { data: plan = [] } = usePlanEnregistre(cycle?.id)
   const mange = useMange()
   const ouvre = useOuvreCycle()
+  const reprend = useChangeEtat()
+  const { data: interrompu } = useCycleInterrompu(!chargeCycle && !cycle)
   const { data: invitations = [] } = useInvitations()
   const rejoint = useRejoint()
 
@@ -123,6 +126,21 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
               {geste.action}
             </Principal>
           )}
+
+        {/* Le refus de la base (« la semaine … a déjà son cycle ») se lisait nulle part : le bouton
+            semblait mort. */}
+        <Erreur de={ouvre.error
+          ? (/a déjà son cycle/.test(ouvre.error.message)
+            ? 'Cette semaine a déjà eu sa session : reprends-la, ou attends la semaine suivante.'
+            : enFrancais(ouvre.error.message))
+          : reprend.error} />
+        {!cycle && interrompu && (
+          <Secondaire onClick={() => reprend.mutate({ id: interrompu.id, vers: 'en_cuisine' },
+                                                    { onSuccess: () => va('/cuisine') })}
+                      disabled={reprend.isPending}>
+            Reprendre la session interrompue
+          </Secondaire>
+        )}
 
         {/* `prochain` et pas seulement l'état : sans repas prévu, le bouton
             principal EST déjà « Voir la semaine » et mène au même endroit. On

@@ -49,6 +49,7 @@ export function Cuisine({ userId, va, cycleId }:
   const change = useChangeEtat()
   const retire = useRetireConvive()
   const quitte = useQuitteSession()
+  const [confirmeLaSortie, setConfirmeLaSortie] = useState(false)
 
   // L'horloge de la session (D47) : une seconde suffit, et on l'arrête en
   // sortant pour ne pas faire tourner un intervalle dans le vide.
@@ -111,6 +112,14 @@ export function Cuisine({ userId, va, cycleId }:
     id === userId ? 'toi' : id ? prenoms?.get(id) ?? null : null
 
   const fini = etat.faites === etat.total
+
+  async function sort() {
+    // Quitter, c'est partir pour de bon : sinon la ligne survit, l'accueil
+    // reproposerait la session et la lecture resterait ouverte.
+    if (invite) { await quitte.mutateAsync(cycle!.id); va('/cuisine-accueil'); return }
+    await change.mutateAsync({ id: cycle!.id, vers: 'interrompue' })
+    va('/cuisine-accueil')
+  }
 
   return (
     <Sombre>
@@ -251,7 +260,7 @@ export function Cuisine({ userId, va, cycleId }:
           <p className="text-[13px] opacity-70 mb-3.5">Ensuite, si quelqu’un est libre</p>
           {etat.suivantes.slice(1).map(a => (
             <button key={a.id} onClick={() => prend.mutate({ id: a.id, parQui: userId })}
-                    className="w-full flex items-center gap-3 mb-3 text-left">
+                    className="w-full flex items-center gap-3 min-h-11 text-left">
               <span className="grow text-[15px] opacity-80">{a.label}</span>
               <span className="text-[14px] opacity-70">{duree(Number(a.duration_min))}</span>
             </button>
@@ -259,16 +268,37 @@ export function Cuisine({ userId, va, cycleId }:
         </section>
       )}
 
-      <button onClick={async () => {
-        // Quitter, c'est partir pour de bon : sinon la ligne survit, l'accueil
-        // reproposerait la session et la lecture resterait ouverte.
-        if (invite) { await quitte.mutateAsync(cycle.id); va('/cuisine-accueil'); return }
-        await change.mutateAsync({ id: cycle.id, vers: 'interrompue' })
-        va('/cuisine-accueil')
-      }}
-              className="mt-12 w-full h-[46px] rounded-[16px] text-[15px] opacity-60">
-        {invite ? 'Quitter la session' : 'Interrompre la session'}
-      </button>
+      {/*
+        * Interrompre est SANS RETOUR depuis l'application : un cycle interrompu n'est plus « le
+        * cycle courant » (`current_cycle()` l'écarte), donc plus aucun écran n'y ramène. Un seul
+        * toucher, en bas, à 46 px sous le pouce, suffisait à perdre la session — une confirmation
+        * dit ce que le geste coûte. Quitter, pour un convive, ne coûte rien à l'hôte.
+        */}
+      {confirmeLaSortie ? (
+        <div role="alertdialog" aria-label="Interrompre la session ?"
+             className="mt-12 rounded-[18px] bg-fond/8 p-4">
+          <p className="text-[15px]">Interrompre la session ?</p>
+          <p className="mt-1.5 text-[13px] opacity-70">
+            Le plan et les gestes déjà faits ne se reprennent pas depuis l’application.
+          </p>
+          <div className="mt-3.5 flex gap-2.5">
+            <button onClick={() => setConfirmeLaSortie(false)}
+                    className="grow min-h-12 rounded-[14px] bg-safran text-encre text-[15px] font-semibold">
+              Non, je continue
+            </button>
+            <button onClick={sort} disabled={change.isPending}
+                    className="grow min-h-12 rounded-[14px] border border-fond/30 text-[15px]">
+              Oui, interrompre
+            </button>
+          </div>
+          <Erreur de={change.error} />
+        </div>
+      ) : (
+        <button onClick={() => invite ? sort() : setConfirmeLaSortie(true)}
+                className="mt-12 w-full min-h-12 rounded-[16px] text-[15px] opacity-60">
+          {invite ? 'Quitter la session' : 'Interrompre la session'}
+        </button>
+      )}
     </Sombre>
   )
 }
