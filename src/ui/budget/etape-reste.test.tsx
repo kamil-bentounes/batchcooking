@@ -326,11 +326,21 @@ describe('« Combien mettre de côté »', () => {
     expect(vue({ choix: choix({ combien: '316,8' }) })).toContain('value="316,8"')
   })
 
-  it('un champ illisible dit ce qu’il attend ; un champ vide ne reproche rien', () => {
+  it('un champ illisible dit ce qu’il attend ; un champ vide ne crie pas, mais dit pourquoi « Clôturer » attend', () => {
     const faux = vue({ choix: choix({ combien: 'abc' }) })
     expect(faux).toContain('role="alert"')
     expect(texte(faux)).toContain('Un montant')
-    expect(vue({ choix: choix({ combien: '' }) })).not.toContain('role="alert"')
+    expect(texte(faux)).not.toContain('Écris un montant')
+    const vide = vue({ choix: choix({ combien: '' }) })
+    expect(vide).not.toContain('role="alert"')
+    expect(vide).toContain('role="status"')
+    expect(texte(vide)).toContain('Écris un montant, ou 0 pour ne rien mettre de côté.')
+  })
+
+  it('pas de phrase quand le champ n’est pas vide, ni quand on garde l’argent', () => {
+    expect(texte(vue({ choix: choix({ combien: '12' }) }))).not.toContain('Écris un montant')
+    expect(texte(vue())).not.toContain('Écris un montant')
+    expect(texte(vue({ choix: choix({ combien: '', garder: true }) }))).not.toContain('Écris un montant')
   })
 
   it('0 € est permis', () => {

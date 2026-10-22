@@ -170,6 +170,13 @@ export function VueReste({ recap, soldes, mois, poches, choix, changer, panne, d
               {r.tape.refus}
             </p>
           )}
+          {r.vide && (
+            /* Un champ vidé éteignait « Clôturer » sans un mot. Pas d'alerte : vider un champ pour
+               retaper n'est pas une faute, mais le bouton éteint se dit. */
+            <p role="status" className="mt-1 text-[14px] text-doux">
+              Écris un montant, ou 0 pour ne rien mettre de côté.
+            </p>
+          )}
           {r.rogne && (
             <p className="mt-1 text-[14px] text-doux">
               Au plus {montant(reste)} : c’est tout ce qui reste.

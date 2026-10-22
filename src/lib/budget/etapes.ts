@@ -71,6 +71,8 @@ export type ResteChoisi = {
   tape: MontantTape | null
   /** Ce qui partira à l'écran, ramené au reste. 0 si l'on garde ; null si la saisie est illisible. */
   mis: number | null
+  /** Le champ a été vidé : « Clôturer » attend un montant, et l'écran doit le dire. */
+  vide: boolean
   /** Ce qu'on a tapé dépasse ce qui reste. */
   rogne: boolean
 }
@@ -83,15 +85,18 @@ export function leReste(o: { reste: number; poches: Poche[]; choix: ChoixDuReste
   const possible = raison === null
   const mettre = possible && !choix.garder
   if (!mettre) {
-    return { possible, raison, mettre, poche: null, tape: null, mis: 0, rogne: false }
+    return { possible, raison, mettre, poche: null, tape: null, mis: 0, vide: false, rogne: false }
   }
   const poche = pocheDuChoix(poches, choix.poche)
   if (choix.combien === null) {
-    return { possible, raison, mettre, poche, tape: null, mis: reste, rogne: false }
+    return { possible, raison, mettre, poche, tape: null, mis: reste, vide: false, rogne: false }
   }
   const tape = lisLeMontant(choix.combien, { zeroOk: true })
-  if (!tape.valide) return { possible, raison, mettre, poche, tape, mis: null, rogne: false }
-  return { possible, raison, mettre, poche, tape, mis: Math.min(tape.cents, reste),
+  if (!tape.valide) {
+    return { possible, raison, mettre, poche, tape, mis: null, vide: choix.combien.trim() === '',
+             rogne: false }
+  }
+  return { possible, raison, mettre, poche, tape, mis: Math.min(tape.cents, reste), vide: false,
            rogne: tape.cents > reste }
 }
 

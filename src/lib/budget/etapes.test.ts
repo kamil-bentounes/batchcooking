@@ -148,9 +148,15 @@ describe('leReste — ce que « Le mettre de côté » permet', () => {
     }
   })
 
-  it('un champ vide ne reproche rien ; un texte illisible dit ce qu’il attend', () => {
+  it('un champ vide ne reproche rien (pas de refus) mais dit pourquoi « Clôturer » attend ; un texte illisible dit ce qu’il attend', () => {
     const vide = leReste({ reste: 793_39, poches: [poche()], choix: choix({ combien: '' }) })
     expect(vide.tape?.refus).toBeNull()
+    expect(vide.vide).toBe(true)
+    expect(leReste({ reste: 793_39, poches: [poche()], choix: choix({ combien: '  ' }) }).vide).toBe(true)
+    for (const combien of [null, '0', '12', 'abc']) {
+      expect(leReste({ reste: 793_39, poches: [poche()], choix: choix({ combien }) }).vide, String(combien))
+        .toBe(false)
+    }
     const faux = leReste({ reste: 793_39, poches: [poche()], choix: choix({ combien: 'abc' }) })
     expect(faux.tape?.refus).toMatch(/montant/)
   })
