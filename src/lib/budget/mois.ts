@@ -6,6 +6,7 @@
  * que le mois est ouvert (le plus grand du prévu et du déclaré), et ce que la
  * clôture laissera. Tout est en CENTIMES ENTIERS.
  */
+import { md5 } from '../md5.ts'
 import { CATEGORIES, infoCategorie, rangDeCategorie, type Categorie, type Mode } from './categories.ts'
 
 export type Facon = Mode
@@ -97,8 +98,10 @@ export function montantCompte(l: Ligne, saisies: Saisie[], clos: boolean): numbe
  * Lire la proportion sur les centimes seuls était faux sur une ligne rouverte : ses parts sont
  * celles du réel (47,90 €), arrondies au centime, et recompter le prévu (800 €) multipliait cet
  * arrondi par ×16,7 : le reste dérivait de six centimes. Les points de base, eux, ne s'arrondissent
- * pas avec le montant. L'égalité d'un reste à l'autre se départage ici par l'identifiant ; la base
- * le fait par un hachage qu'on ne recalcule pas : un centime peut encore différer à égalité exacte.
+ * pas avec le montant. L'égalité d'un reste à l'autre se départage COMME la base : par
+ * `md5(uid::text || ligne::text)` (`confirme_la_ligne` 0104, `repartit_les_lignes` 0100/0112). En 50/50
+ * avec un montant impair l'égalité est systématique, et un départage par identifiant donnait le
+ * centime à l'autre : `maPart` d'une ligne dépassée et le récap de clôture différaient de la base.
  */
 function prorata(l: Ligne, moi: string, cents: number): number {
   if (!l.parts.some(p => p.user_profile_id === moi)) return 0
@@ -115,7 +118,10 @@ function prorata(l: Ligne, moi: string, cents: number): number {
     reste: (a * poids[i]) % total,
   }))
   let manque = a - lignes.reduce((t, x) => t + x.base, 0)
-  const ordre = [...lignes].sort((x, y) => y.reste - x.reste || (x.id < y.id ? -1 : 1))
+  /* `md5` en hexadécimal minuscule : chiffres puis a-f, le même ordre que la base. */
+  const rang = new Map(lignes.map(x => [x.id, md5(x.id + l.id)]))
+  const ordre = [...lignes].sort((x, y) =>
+    y.reste - x.reste || (rang.get(x.id)! < rang.get(y.id)! ? -1 : 1))
   const bonus = new Set<string>()
   for (const x of ordre) {
     if (manque <= 0) break

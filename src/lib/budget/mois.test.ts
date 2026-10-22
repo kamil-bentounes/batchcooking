@@ -475,6 +475,41 @@ describe('une ligne rouverte garde la proportion de ses points de base, pas cell
   })
 })
 
+describe('l’égalité de reste se départage comme la base : par md5(uid || ligne), pas par identifiant', () => {
+  /* En 50/50 avec un montant impair, les deux restes sont égaux. La base donne le centime à celui
+     dont `md5(uid::text || ligne::text)` est le plus petit (`confirme_la_ligne`, 0104). Relevés :
+       md5('kamil' || 'l1') = ddb14b53…  md5('thauba' || 'l1') = 07176d90…  → Thauba
+       md5('kamil' || 'l4') = 715fe0f5…  md5('thauba' || 'l4') = 84dbe05d…  → Kamil
+     Départagée par identifiant, « kamil » < « thauba » donnait TOUJOURS le centime à Kamil. */
+  const moitie = (id: string) => ({
+    ...ligne({ id, montant_cents: 5_000, parts: [[K, 2_500], [T, 2_500]] }),
+  })
+
+  it('l1 : le hachage donne le centime à Thauba, pas à Kamil (premier par identifiant)', () => {
+    expect(partSur(moitie('l1'), K, 6_201)).toBe(3_100)
+    expect(partSur(moitie('l1'), T, 6_201)).toBe(3_101)
+  })
+
+  it('l4 : le hachage donne le centime à Kamil', () => {
+    expect(partSur(moitie('l4'), K, 6_201)).toBe(3_101)
+    expect(partSur(moitie('l4'), T, 6_201)).toBe(3_100)
+  })
+
+  it('un avoir impair se départage de même, avec son signe', () => {
+    expect(partSur(moitie('l1'), T, -6_201)).toBe(-3_101)
+    expect(partSur(moitie('l1'), K, -6_201)).toBe(-3_100)
+  })
+
+  it('le récap de clôture suit : Thauba porte 3 101 sur l1 et 3 100 sur l4', () => {
+    const reste = (id: string) => recapCloture({
+      revenu: 300_000, lignes: [moitie(id)], saisies: [saisie(id, 6_201)], moi: T,
+      rien: new Set(), soldes: 0,
+    }).reste
+    expect(reste('l1')).toBe(300_000 - 3_101)
+    expect(reste('l4')).toBe(300_000 - 3_100)
+  })
+})
+
 describe('sousLEuro', () => {
   it('un reste non nul que l’arrondi à l’euro ferait tomber à « 0 € »', () => {
     expect(sousLEuro(-30)).toBe(true)
