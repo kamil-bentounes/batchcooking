@@ -159,5 +159,12 @@ test.describe('le budget refait, à la largeur de la maquette', () => {
     await ouvreLaCategorie(page, 'Auto')
     await page.getByRole('button', { name: /^Entretien auto/ }).click()
     await prend(page, '33-feuille-mise-de-cote')
+
+    /* La clôture du mois d'avant (réel) : l'amorce y a un revenu depuis janvier. */
+    const d = new Date()
+    const avant = new Date(d.getFullYear(), d.getMonth() - 1, 1)
+    await page.goto(`/cloture/${avant.getFullYear()}-${String(avant.getMonth() + 1).padStart(2, '0')}`)
+    await expect(page.getByRole('heading', { name: /^Clôturer / })).toBeVisible({ timeout: 15_000 })
+    await prend(page, '34-cloture')
   })
 })
