@@ -31,7 +31,7 @@ import {
   bandeau, barre, capitale, estLaCeMois, joursRestants, membresSansRevenu, moisDemande, moisVoisin,
   nomDuMois, parCategorie, resteDuMois, revenuDuMois, totauxDuFiltre, type Filtre,
 } from '../lib/budget/mois.ts'
-import { choixAFermer, misDeCoteDuFoyer } from '../lib/budget/cloture.ts'
+import { choixAFermer, clotureParLesAutres, misDeCoteDuFoyer } from '../lib/budget/cloture.ts'
 import { jourDeParis } from '../lib/horloge.ts'
 import { Bandeau } from '../ui/budget/Bandeau.tsx'
 import { CarteEpargne } from '../ui/budget/CarteEpargne.tsx'
@@ -90,6 +90,9 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
   const cetteCloture = (clotures.data ?? []).find(k => k.mois === mois)
   const monChoix = cetteCloture?.choix.find(c => c.user_profile_id === userId)
   const misDeCote = monChoix?.mis_de_cote_cents ?? 0
+  /* Clôturé par un AUTRE : je n'ai aucun `cloture_choix`, mais les lignes d'un mois clos sont
+     gelées — mon reste calculé est stable. On le montre, et on dit qui a clôturé. */
+  const parQui = clos ? clotureParLesAutres(cetteCloture?.choix ?? [], userId, foyer?.membres) : null
   /* « Revenir dessus » rouvre pour tout le foyer : c'est ce total qu'il annonce. */
   const misDeCoteFoyer = misDeCoteDuFoyer(cetteCloture?.choix ?? [], foyer?.membres.map(m => m.id))
   const nonSoldees = useNonSoldees(mois)
@@ -236,8 +239,8 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
               </section>
             ) : (
               <Recap mois={mois} reste={reste} segments={segments} va={va}
-                     cloture={clos ? { reste: monChoix?.reste_cents ?? null, misDeCote,
-                                       duFoyer: misDeCoteFoyer } : null} />
+                     cloture={clos ? { reste: monChoix ? monChoix.reste_cents : parQui ? reste.reste : null,
+                                       misDeCote, duFoyer: misDeCoteFoyer, parQui } : null} />
             )}
             {/* Ce que la clôture n'a pas pu solder se dit sous son chiffre, jusqu'au
                 rechargement (choix 20). Sur un mois clôturé seulement : rouvert, il n'a

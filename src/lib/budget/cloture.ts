@@ -103,6 +103,22 @@ export function envoiDeLaCloture(o: {
 }
 
 /**
+ * Qui a clôturé, quand ce n'est pas moi. La clôture n'écrit un `cloture_choix` que pour celui qui
+ * la fait (« chacun clôture sa part » est le lot 4) : l'autre membre n'en a aucun et lisait un tiret
+ * sur chaque mois clos. L'écran lui montre alors son reste CALCULÉ (les lignes d'un mois clos sont
+ * gelées) et dit, avec ce nom, que le chiffre n'est pas celui d'un choix à lui.
+ * `null` : j'ai un choix (la clôture est la mienne), ou il n'y en a aucun. Un membre parti, ou le
+ * foyer pas encore lu : « quelqu'un du foyer », jamais un nom inventé.
+ */
+export function clotureParLesAutres(
+  choix: Choix[], moi: string, membres: { id: string; display_name: string | null }[] | undefined,
+): string | null {
+  if (choix.length === 0 || choix.some(c => c.user_profile_id === moi)) return null
+  const noms = choix.map(c => membres?.find(m => m.id === c.user_profile_id)?.display_name?.trim())
+  return noms.every(n => n) ? noms.join(' et ') : 'quelqu’un du foyer'
+}
+
+/**
  * Ce que « Revenir dessus » retire de l'épargne : le versement de TOUS les membres encore
  * dans le foyer (`rouvre_le_mois` les efface tous), pas ma part seule. Un membre parti
  * garde le sien dans la poche. `presents` à `undefined` : le foyer n'est pas lu — on ne sait

@@ -13,7 +13,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Choix } from '../../lib/donnees/budget.ts'
-import { FINE, OCT, bouton, charge, cloture, depense, ecranDuMois, membre, saisie, texte, tout }
+import { FINE, OCT, bouton, charge, cloture, depense, ecranDuMois, foyer, membre, saisie, texte, tout }
   from '../../pages/budget-banc.tsx'
 import type { Reste } from '../../lib/budget/mois.ts'
 import { FeuillesDuMois, type Ouverte } from './FeuillesDuMois.tsx'
@@ -181,7 +181,7 @@ describe('« Revenir dessus » sans total connu', () => {
 
 describe('Recap d’un mois clôturé', () => {
   const reste: Reste = { revenu: 4325_00, reste: 99_00, charges: 1 }
-  const rend = (cl: { reste: number | null; misDeCote: number } | null) =>
+  const rend = (cl: { reste: number | null; misDeCote: number; parQui?: string | null } | null) =>
     texte(dansUnClient(<Recap mois={OCT} reste={reste} segments={[]} va={() => {}}
                               cloture={cl} />))
 
@@ -211,9 +211,22 @@ describe('Recap d’un mois clôturé', () => {
     expect(rend({ reste: 50_00, misDeCote: 0 })).not.toContain('dont')
   })
 
-  it('sans choix de ma part : un tiret, jamais un 0 inventé', () => {
+  it('sans reste à montrer (pas de revenu ce mois-là) : un tiret, jamais un 0 inventé', () => {
     const t = rend({ reste: null, misDeCote: 0 })
     expect(t).toContain('Il t’est resté —')
+  })
+
+  it('clôturé par un autre : « Octobre est clôturé par Thauba. » et la raison du chiffre', () => {
+    const t = rend({ reste: 1728_30, misDeCote: 0, parQui: 'Thauba' })
+    expect(t).toContain('Octobre est clôturé par Thauba.')
+    expect(t).toContain('Calculé sur tes parts')
+    expect(t).toContain(`1${FINE}728,30 €`)
+  })
+
+  it('clôturé par moi : la phrase d’avant, sans mention', () => {
+    const t = rend({ reste: 1728_30, misDeCote: 0 })
+    expect(t).toContain('Octobre est clôturé.')
+    expect(t).not.toContain('Calculé')
   })
 })
 
@@ -228,11 +241,24 @@ describe('L’écran du mois, clôturé', () => {
     expect(t).not.toContain('Il te reste')
   })
 
-  it('le choix d’un AUTRE membre ne devient pas le mien', () => {
+  it('le choix d’un AUTRE membre ne devient pas le mien : mon reste est CALCULÉ, et on dit qui a clôturé', () => {
+    // Thauba clôture ; Kamil n'a aucun choix. Il lit son reste calculé (revenu − ses parts gelées),
+    // jamais le 999 € de l'autre, et plus un tiret.
     const autre = { ...cloture(OCT), choix: [choix({ user_profile_id: 'u2', reste_cents: 999_00 })] }
-    const t = texte(ecranDuMois(tout({ clotures: [autre] })))
-    expect(t).toContain('Il t’est resté —')
+    const t = texte(ecranDuMois(tout({
+      clotures: [autre], foyer: foyer([membre('u1', 'Kamil'), membre('u2', 'Thauba')]),
+      depenses: [depense({ facon: 'fixe', montant_cents: 800_00,
+        parts: [{ user_profile_id: 'u1', part_cents: 800_00, part_bps: 10000 }] })],
+    })))
+    expect(t).toContain(`Il t’est resté 3${FINE}525 €`)
+    expect(t).toContain('clôturé par Thauba')
+    expect(t).not.toContain('Il t’est resté —')
     expect(t).not.toContain('999')
+    expect(t, 'il n’a rien mis de côté : pas de « dont »').not.toContain('dont')
+  })
+
+  it('quand c’est moi qui ai clôturé, aucune mention d’un autre', () => {
+    expect(texte(clos())).not.toContain('clôturé par')
   })
 
   it('« Déclarer » n’est proposé nulle part : ni le geste, ni le bouton d’une ligne', () => {

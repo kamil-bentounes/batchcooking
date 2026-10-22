@@ -16,7 +16,9 @@ export function Recap({ mois, reste, segments, cloture, va }: {
   /** Lot 3 : le mois est clôturé, et voici ce que le choix de clôture en a retenu.
       `duFoyer` : ce que « Revenir dessus » retirera de l'épargne — le total des membres,
       que `rouvre_le_mois` efface tous ; à défaut, ma part. */
-  cloture?: { reste: number | null; misDeCote: number; duFoyer?: number | null } | null
+  cloture?: { reste: number | null; misDeCote: number; duFoyer?: number | null
+              /** Le membre qui a clôturé, quand ce n'est pas moi : mon reste est alors CALCULÉ. */
+              parQui?: string | null } | null
   va: (v: string) => void
 }) {
   const teinte = (s: Segment) =>
@@ -27,7 +29,9 @@ export function Recap({ mois, reste, segments, cloture, va }: {
     <section aria-label="Ce qui reste" className="sur-encre mt-7 rounded-[28px] bg-encre text-fond p-5">
       {cloture ? (
         <>
-          <p className="text-[16px] opacity-80">{capitale(nomDuMois(mois))} est clôturé.</p>
+          <p className="text-[16px] opacity-80">
+            {capitale(nomDuMois(mois))} est clôturé{cloture.parQui ? ` par ${cloture.parQui}` : ''}.
+          </p>
           {/* Négatif : « Il te manque », comme le mois ouvert (§ Négatif) — jamais « resté −120 € ». */}
           <p className="text-[16px]">
             {cloture.reste !== null && cloture.reste < 0 ? 'Il te manque' : 'Il t’est resté'}
@@ -35,6 +39,11 @@ export function Recap({ mois, reste, segments, cloture, va }: {
           <p className="chiffre mt-1 text-[56px] leading-none text-safran">
             {cloture.reste === null ? '—' : montant(Math.abs(cloture.reste))}
           </p>
+          {cloture.parQui && (
+            <p className="mt-3 text-[15px] opacity-80">
+              Calculé sur tes parts du mois : tu n’as pas fait cette clôture.
+            </p>
+          )}
           {cloture.misDeCote > 0 && (
             <p className="mt-3 text-[15px] opacity-80">dont {montant(cloture.misDeCote)} mis de côté</p>
           )}
