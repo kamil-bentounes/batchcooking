@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { budget, organise } from './liste.ts'
+import { budget, organise, sansLesDejaPrises } from './liste.ts'
 import type { ArticleRange, Rang } from './liste.ts'
 
 const LIDL = { id: 'lidl', name: 'Lidl' }
@@ -152,5 +152,24 @@ describe('le budget', () => {
 
   it('rend zéro sur une liste vide', () => {
     expect(budget([])).toEqual({ estime: 0, paye: null })
+  })
+})
+
+describe('régénérer la liste', () => {
+  const ligne = (label: string, food_id: string | null = null) => ({ label, food_id })
+
+  it('ne redouble pas un aliment déjà gardé (coché ou payé)', () => {
+    const neuves = [ligne('Oignon, cru', 'o'), ligne('Carotte, crue', 'c')]
+    expect(sansLesDejaPrises(neuves, [ligne('Oignon, cru', 'o')])).toEqual([ligne('Carotte, crue', 'c')])
+  })
+
+  it('compare les lignes sans aliment par leur libellé, casse et blancs mis à part', () => {
+    const neuves = [ligne('Beurre'), ligne('Muscade')]
+    expect(sansLesDejaPrises(neuves, [ligne(' beurre ')])).toEqual([ligne('Muscade')])
+  })
+
+  it('garde tout quand rien n’a été pris', () => {
+    const neuves = [ligne('Beurre'), ligne('Sel')]
+    expect(sansLesDejaPrises(neuves, [])).toEqual(neuves)
   })
 })

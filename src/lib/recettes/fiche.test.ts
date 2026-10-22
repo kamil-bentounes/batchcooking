@@ -1,6 +1,6 @@
 /** La fiche (i) : les ingrédients en deux colonnes, et ce que vaut la fourchette. */
 import { describe, expect, it } from 'vitest'
-import { ingredientEnDeux, precision } from './fiche.ts'
+import { ingredientEnDeux, libelleDeCourse, precision } from './fiche.ts'
 
 describe('un ingrédient en deux colonnes', () => {
   it.each([
@@ -111,5 +111,22 @@ describe('la pastille « Par part »', () => {
     expect(p(NaN)).toBe('Tout est pesé')
     expect(p(Infinity)).toBe('Tout est pesé')
     expect(p('x', 'y')).toBe('0 % des ingrédients connus')
+  })
+})
+
+describe('libelleDeCourse', () => {
+  it('garde le nom de l’aliment reconnu', () => {
+    expect(libelleDeCourse('Oignon, cru', '2 oignons')).toBe('Oignon, cru')
+  })
+
+  it('retire la quantité du texte quand l’aliment n’est pas reconnu', () => {
+    expect(libelleDeCourse(null, '500 g d’agneau haché')).toBe('Agneau haché')
+    expect(libelleDeCourse(null, '40 cl de lait de coco')).toBe('Lait de coco')
+    expect(libelleDeCourse(null, '10 g de beurre')).toBe('Beurre')
+  })
+
+  it('ne perd rien quand il n’y a pas de quantité', () => {
+    expect(libelleDeCourse(null, 'muscade')).toBe('Muscade')
+    expect(libelleDeCourse(undefined, '250 g')).toBe('250 g')
   })
 })

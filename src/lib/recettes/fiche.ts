@@ -36,6 +36,18 @@ export function ingredientEnDeux(brut: string): { qte: string; nom: string } {
   return { qte: m[1].trim(), nom: majuscule(m[2].trim()) }
 }
 
+/**
+ * Le libellé d'une ligne de COURSES : le nom de l'aliment reconnu, sinon le texte de la
+ * recette SANS sa quantité. La quantité du texte (« 500 g d'agneau haché ») est celle de la
+ * recette ; la liste porte la sienne, mise à l'échelle des parts (250 g) : les deux côte à
+ * côte se contredisaient (« 500 g d'agneau haché — 250 g »).
+ */
+export function libelleDeCourse(aliment: string | null | undefined, brut: string): string {
+  if (aliment) return aliment
+  const { nom } = ingredientEnDeux(brut)
+  return nom || decodeEntites(brut).trim()
+}
+
 /** PostgREST rend parfois les `numeric` en chaîne ; une valeur illisible compte
     zéro, comme un temps illisible (temps.ts). */
 const lu = (v: number | string): number => {

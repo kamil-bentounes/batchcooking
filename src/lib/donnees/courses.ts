@@ -16,6 +16,8 @@ import { ou, ouNul, supabase } from '../supabase.ts'
 import type { Ligne } from '../supabase.ts'
 import { rayonDe } from '../rayons.ts'
 import { estimation } from '../prix.ts'
+import { libelleDeCourse } from '../recettes/fiche.ts'
+import { sansLesDejaPrises } from '../liste.ts'
 
 export type Article = Ligne<'shopping_item'>
 
@@ -126,8 +128,10 @@ export function useGenereListe() {
       const cumuls = new Map<string, Cumul>()
       for (const i of ingredients) {
         const f = facteur.get(i.recipe_id) ?? 1
-        const cle = i.food_id ?? `brut:${i.raw_text.toLowerCase().trim()}`
-        const nom = i.food?.name ?? i.raw_text
+        const nom = libelleDeCourse(i.food?.name, i.raw_text)
+        /* Sans aliment reconnu, on regroupe sur le NOM sans sa quantité : « 10 g de beurre » et
+           « 20 g de beurre » (deux recettes) faisaient deux lignes « Beurre ». */
+        const cle = i.food_id ?? `brut:${nom.toLowerCase().trim()}`
         const c = cumuls.get(cle) ?? {
           label: nom, food_id: i.food_id, groupe: i.food?.ciqual_group ?? null,
           grammes: null, unite: null, quantite: null,
@@ -161,6 +165,9 @@ export function useGenereListe() {
       // ajoutées à la main : les effacer serait perdre le travail de quelqu'un.
       ou(await supabase.from('shopping_item').delete()
         .eq('cycle_id', cycleId).eq('source', 'recette').select())
+      // Ce que la base a refusé d'effacer (coché, payé : 0031) est resté : on n'y ajoute pas un double.
+      const gardees = ou(await supabase.from('shopping_item').select('food_id, label')
+        .eq('cycle_id', cycleId).eq('source', 'recette'))
 
       // Ce que le foyer a déjà payé pour ces produits (lot 5). C'est la seule
       // source de prix qu'on ait : il n'existe aucune API pour un particulier,
@@ -173,7 +180,7 @@ export function useGenereListe() {
       }))
 
       const magasin = magasinDefaut ? magasinDefaut.id : null
-      const lignes = [...cumuls.values()].map(c => {
+      const lignes = sansLesDejaPrises([...cumuls.values()].map(c => {
         const quantite = c.grammes ?? c.quantite ?? null
         const unite = c.grammes !== null ? 'g' : c.unite
         // Un compte qu'on n'a su ni convertir ni additionner ne DISPARAÎT pas :
@@ -205,7 +212,7 @@ export function useGenereListe() {
           est_price_eur: prix?.euros ?? null,
           source: 'recette' as const,
         }
-      }).filter(l => l.label.trim().length > 0)
+      }).filter(l => l.label.trim().length > 0), gardees)
 
       return ou(await supabase.from('shopping_item').insert(lignes).select())
     },

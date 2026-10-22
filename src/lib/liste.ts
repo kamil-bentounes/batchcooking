@@ -96,3 +96,19 @@ export function budget(
       : null,
   }
 }
+
+/**
+ * Régénérer la liste ne redouble pas ce qui est déjà pris.
+ *
+ * Une ligne cochée ou payée ne se supprime plus (migration 0031) : elle survit à la
+ * régénération, et la ligne neuve du même produit s'ajoutait à côté — « Beurre » coché,
+ * puis « Beurre » à prendre. Un article déjà dans la liste (même aliment, ou à défaut même
+ * libellé) n'est pas réinséré.
+ */
+export function sansLesDejaPrises<T extends { food_id: string | null; label: string }>(
+  neuves: T[], gardees: { food_id: string | null; label: string }[],
+): T[] {
+  const aliments = new Set(gardees.map(g => g.food_id).filter((x): x is string => !!x))
+  const libelles = new Set(gardees.map(g => g.label.trim().toLowerCase()))
+  return neuves.filter(n => !(n.food_id ? aliments.has(n.food_id) : libelles.has(n.label.trim().toLowerCase())))
+}
