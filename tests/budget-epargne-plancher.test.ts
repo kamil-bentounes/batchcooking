@@ -5,9 +5,10 @@
  * −99 620 €. L'écran le refuse ; la base, elle, ne l'empêchait pas : un appel REST direct
  * passait.
  */
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { admin } from './helpers/db'
-import { foyerSolo, membre, ou } from './helpers/budget'
+import { regleLHeure, remetLHeure } from './helpers/horloge'
+import { clore, foyerDOctobre, foyerSolo, membre, ou } from './helpers/budget'
 
 async function unePoche(foyerId: string) {
   return (ou(await admin().from('poche_epargne').insert({
@@ -21,6 +22,8 @@ const solde = async (poche: string, uid: string) =>
   ((ou(await admin().from('versement_epargne').select('montant_cents')
     .eq('poche_id', poche).eq('user_profile_id', uid)) as { montant_cents: number }[])
     .reduce((s, v) => s + v.montant_cents, 0))
+
+afterAll(remetLHeure)
 
 describe('le plancher de l’épargne', () => {
   it('un retrait va jusqu’au dernier centime versé, jamais au-delà', async () => {
@@ -69,5 +72,57 @@ describe('le plancher de l’épargne', () => {
     }
     ou(await ecrit(f, f.userId, poche, 1_000, 'mensuel').select())
     expect(await solde(poche, f.userId)).toBe(500)
+  })
+
+  it('un versement ne se réécrit pas, et ne se supprime pas quand des retraits l’ont entamé', async () => {
+    const f = await foyerSolo('plancher-update-delete')
+    const poche = await unePoche(f.householdId)
+    const v1 = ou(await ecrit(f, f.userId, poche, 38_000, 'mensuel').select().single()) as { id: string }
+    const v2 = ou(await ecrit(f, f.userId, poche, 10_000, 'mensuel').select().single()) as { id: string }
+    ou(await ecrit(f, f.userId, poche, -30_000, 'retrait').select())
+    // Réécrire le montant : refusé (c'était le contournement par PATCH).
+    const patch = await f.client.from('versement_epargne').update({ montant_cents: -9_999_999 })
+      .eq('id', v1.id).select()
+    expect(patch.error?.message, 'un PATCH a creusé la poche').toContain('ne se modifie pas')
+    // Une date, elle, se corrige.
+    ou(await f.client.from('versement_epargne').update({ fait_le: '2026-10-01' }).eq('id', v2.id).select())
+    // 380 + 100 − 300 = 180 : supprimer les 100 laisse 80, supprimer les 380 laisserait −200.
+    const sans380 = await f.client.from('versement_epargne').delete().eq('id', v1.id).select()
+    expect(sans380.error?.message, 'un versement entamé s’est effacé').toContain('ne peut plus s’annuler')
+    ou(await f.client.from('versement_epargne').delete().eq('id', v2.id).select())
+    expect(await solde(poche, f.userId)).toBe(8_000)
+  })
+
+  it('« Revenir dessus » est refusé quand on a retiré de la poche depuis la clôture', async () => {
+    await regleLHeure('2026-11-10T12:00:00+01:00')
+    const { f, poche } = await foyerDOctobre('plancher-rouvre')
+    ou(await clore(f, { poche }))
+    ou(await ecrit(f, f.userId, poche, -10_000, 'retrait').select())
+    const { error } = await f.client.rpc('rouvre_le_mois', { le_mois: '2026-10-01' })
+    expect(error?.message, 'la réouverture a laissé la poche en négatif')
+      .toBe('Tu as retiré 100 € de cette poche depuis : ce versement ne peut plus s’annuler.')
+    expect((await admin().from('cloture').select('id').eq('household_id', f.householdId)).data)
+      .toHaveLength(1)
+  })
+
+  it('supprimer une poche emporte ses versements, retraits compris', async () => {
+    const f = await foyerSolo('plancher-cascade')
+    const poche = await unePoche(f.householdId)
+    ou(await ecrit(f, f.userId, poche, 38_000, 'mensuel').select())
+    ou(await ecrit(f, f.userId, poche, -30_000, 'retrait').select())
+    ou(await admin().from('poche_epargne').delete().eq('id', poche).select())
+    expect((await admin().from('versement_epargne').select('id').eq('poche_id', poche)).data).toEqual([])
+  })
+
+  it('un foyer étranger ne lit pas un solde dans le message d’erreur', async () => {
+    const a = await foyerSolo('plancher-etranger-a')
+    const b = await foyerSolo('plancher-etranger-b')
+    const pocheDeB = await unePoche(b.householdId)
+    ou(await ecrit(b, b.userId, pocheDeB, 38_000, 'mensuel').select())
+    const { error } = await a.client.from('versement_epargne').insert({
+      household_id: b.householdId, poche_id: pocheDeB, user_profile_id: b.userId,
+      montant_cents: -10_000_000, motif: 'retrait' })
+    expect(error, 'un client a écrit dans un autre foyer').not.toBeNull()
+    expect(error!.message, 'le solde d’un autre foyer a fuité').not.toMatch(/versé/)
   })
 })

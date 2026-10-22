@@ -149,6 +149,44 @@ describe('un membre part, le foyer reste', () => {
       expect(await parts('2026-09-01'), 'un mois clôturé a été repartagé').toEqual(septembre)
     })
 
+  it('à trois, le départ de l’un repartage entre les deux qui restent, au prorata de leurs revenus',
+    async () => {
+      const f = await foyerSolo('dep-trois', { revenu: 300_000 })
+      const thauba = await membre(f, 'Thauba', { arrivee: '2026-09-01', revenu: 200_000 })
+      const camille = await membre(f, 'Camille', { arrivee: '2026-09-01', revenu: 100_000 })
+      const courses = await poseCharge(f, { libelle: 'Courses', cents: 80_000, mode: 'au_fil',
+        commun: true, participants: [f.userId, thauba.userId, camille.userId] })
+      await ouvre(f, '2026-10-01')
+      const ligneDOctobre = (await ligne(courses, '2026-10-01'))!
+      ou(await thauba.client.rpc('delete_my_account'))
+      const parts = ou(await admin().from('depense_part').select('user_profile_id, part_cents')
+        .eq('depense_id', ligneDOctobre.id)) as { user_profile_id: string; part_cents: number }[]
+      // 300 000 et 100 000 : 75 % et 25 % de 80 000 €.
+      expect(Object.fromEntries(parts.map(p => [p.user_profile_id, p.part_cents])),
+        'les parts des deux qui restent ne suivent pas leurs revenus').toEqual({
+          [f.userId]: 60_000, [camille.userId]: 20_000 })
+    })
+
+  it('l’ajustement posé sur la charge perso archivée de la partante part avec elle', async () => {
+    await regleLHeure('2026-11-10T12:00:00+01:00')
+    const f = await foyerSolo('dep-ajustement', { revenu: 300_000 })
+    const thauba = await membre(f, 'Thauba', { arrivee: '2026-09-01', revenu: 300_000 })
+    const entretien = await poseCharge(f, { libelle: 'Entretien perso', cents: 50_004,
+      mode: 'mis_de_cote', participants: [thauba.userId] })
+    await ouvreLAnnee(f, entretien, 2026)
+    ou(await thauba.client.rpc('paie_une_facture', { la_facture: randomUUID(), la_charge: entretien,
+                                                    montant_cents: 32_000, paye_le: '2026-11-10' }))
+    expect((await ajustements(entretien)).length, 'le test doit partir d’un ajustement').toBeGreaterThan(0)
+
+    ou(await thauba.client.rpc('delete_my_account'))
+
+    // La charge a une facture : elle s'arrête. Son ajustement du mois ouvert n'est à personne.
+    expect((await admin().from('charge').select('archive_le').eq('id', entretien)).data![0].archive_le)
+      .not.toBeNull()
+    expect(await ajustements(entretien), 'un ajustement sans propriétaire compte encore dans le mois')
+      .toEqual([])
+  })
+
   it('le départ du seul membre qui avait un revenu recale les années ouvertes', async () => {
     const f = await foyerSolo('dep-recale', { revenu: null })
     const thauba = await membre(f, 'Thauba', { arrivee: '2026-09-01', revenu: 240_000 })

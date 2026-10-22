@@ -113,6 +113,16 @@ begin
     loop
       perform public.retire_charge(ch, true);
       retirees := retirees || ch;
+      /* `retire_charge` ne retire jamais un ajustement, et la charge qui a une
+         histoire s'archive : le recalage de son archivage vient de poser, sur le mois
+         courant, un ajustement qui porte les parts de la partante seule. Personne ne
+         le repartagerait (`refige_pour` ne lit que `modele`) : il compterait dans le
+         mois, dans le reste de personne. Ce qui n'est ni confirmé, ni réglé, ni dans
+         un mois clôturé part avec elle. */
+      delete from public.depense d
+      where d.charge_id = ch and d.confirme_le is null and d.regle_le is null
+        and not exists (select 1 from public.cloture k
+                        where k.household_id = v_hh and k.mois = d.mois);
     end loop;
   end if;
 

@@ -92,6 +92,33 @@ describe('changer sa date d’arrivée', () => {
       await clos(f, '2026-09-01')
     })
 
+  it('un revenu posé bien après l’arrivée reste où il est : celui de Kamil, depuis septembre',
+    async () => {
+      await regleLHeure('2026-11-05T10:00:00+01:00')
+      // Arrivée en janvier, revenu depuis septembre : la base réelle de Kamil.
+      const f = await foyerSolo('entre-le-kamil', { revenu: 432_500, depuis: '2026-09-01',
+                                                    arrivee: '2026-01-01' })
+      ou(await f.client.from('user_profile').update({ entre_le: '2025-06-01' })
+        .eq('id', f.userId).select())
+      expect(await revenus(f.userId), 'corriger son arrivée a rendu suivis des mois d’avant septembre')
+        .toEqual(['2026-09-01'])
+    })
+
+  it('sans jeton de personne (réparation en SQL), l’histoire des revenus ne se réécrit pas',
+    async () => {
+      await regleLHeure('2026-11-05T10:00:00+01:00')
+      const f = await foyerSolo('entre-le-sql', { revenu: 370_000, depuis: '2026-01-01' })
+      const thauba = await membre(f, 'Thauba', { arrivee: '2026-10-01', revenu: 200_000,
+                                                 depuis: '2026-10-01' })
+      const c = await connexion()
+      try {
+        // Le propriétaire, sans claims : `security definer` ne dit rien de l'appelant.
+        await c.query('update public.user_profile set entre_le = $2 where id = $1',
+                      [thauba.userId, '2026-09-01'])
+      } finally { await c.end() }
+      expect(await revenus(thauba.userId)).toEqual(['2026-10-01'])
+    })
+
   it('traverse plusieurs mois : refige juillet à septembre, et pas octobre', async () => {
     await regleLHeure('2026-11-05T10:00:00+01:00')
     const f = await foyerSolo('entre-le-mois', { revenu: 370_000, depuis: '2026-01-01' })

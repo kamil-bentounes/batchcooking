@@ -86,22 +86,28 @@ begin
      partir du mois courant. Un revenu ne se modifie pas (`tg_revenu_date_immuable`) :
      on en ajoute un, du même montant, à la nouvelle date — jamais avant le mois qui
      suit la dernière clôture.
-     Seulement pour un GESTE de la personne : sous la clé de service (amorces,
-     réparations à la main), on corrige une date sans réécrire l'histoire des
-     revenus — la base de Kamil a un revenu depuis septembre et une arrivée bien plus
-     ancienne, et le rapprocher de l'arrivée créerait des mois suivis qu'il n'a jamais voulus. */
-  if new.entre_le < old.entre_le and not public.is_service_role() then
+     Seulement si ce revenu était ACCROCHÉ à l'ancienne arrivée, comme `tg_revenu_premier`
+     l'accroche : un revenu posé bien après l'arrivée (celui de Kamil, depuis septembre,
+     pour une arrivée de janvier) reste où il est, sans quoi corriger sa date d'un jour
+     rendrait « suivis » des mois qu'il n'a jamais voulus.
+     Seulement pour un GESTE de la personne (un jeton `authenticated`, donc un
+     `auth.uid()`) : une amorce, une réparation en SQL ou la clé de service corrigent
+     une date sans réécrire l'histoire des revenus. (`is_service_role()` ne suffit pas :
+     sous `security definer`, `current_user` est le propriétaire.) */
+  if new.entre_le < old.entre_le and auth.uid() is not null and not public.is_service_role() then
     arrivee := date_trunc('month', new.entre_le)::date;
     select (max(k.mois) + interval '1 month')::date into apres_cloture
     from public.cloture k where k.household_id = new.household_id;
-    arrivee := greatest(arrivee, coalesce(apres_cloture, arrivee));
     insert into public.revenu (household_id, user_profile_id, net_mensuel_cents, valid_from)
-    select r.household_id, r.user_profile_id, r.net_mensuel_cents, arrivee
+    select r.household_id, r.user_profile_id, r.net_mensuel_cents,
+           greatest(arrivee, coalesce(apres_cloture, arrivee))
     from public.revenu r
     where r.user_profile_id = new.id
       and r.valid_from = (select min(v.valid_from) from public.revenu v
                           where v.user_profile_id = new.id)
-      and r.valid_from > arrivee;
+      and r.valid_from <= greatest(date_trunc('month', old.entre_le)::date,
+                                   coalesce(apres_cloture, date_trunc('month', old.entre_le)::date))
+      and r.valid_from > greatest(arrivee, coalesce(apres_cloture, arrivee));
   end if;
 
   /* Seuls les mois ENTRE l'ancienne et la nouvelle date changent de partage. Il
