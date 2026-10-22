@@ -28,7 +28,7 @@ import {
   moisDe, useCharges, useClotures, useComptes, useMois, useNonSoldees, useRevenus, useSaisies,
 } from '../lib/donnees/budget.ts'
 import {
-  bandeau, barre, capitale, estLaCeMois, joursRestants, membresSansRevenu, moisDemande, moisVoisin,
+  bandeau, barre, capitale, clotureSansMoi, estLaCeMois, joursRestants, membresSansRevenu, moisDemande, moisVoisin,
   nomDuMois, parCategorie, resteDuMois, revenuDuMois, totauxDuFiltre, type Filtre,
 } from '../lib/budget/mois.ts'
 import { choixAFermer, clotureParLesAutres, misDeCoteDuFoyer } from '../lib/budget/cloture.ts'
@@ -128,6 +128,8 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
   /* Celle qui arrive en octobre n'a ni revenu ni part en septembre : on le lui dit, au lieu de
      « Ajoute ton revenu pour voir ce qu'il te reste » sur un mois qui n'est pas le sien. */
   const pasEncoreLa = moi !== undefined && !!moi.entre_le && !estLaCeMois(moi, mois)
+  /* Un mois clos SANS elle : arrivée (ou premier revenu) après la clôture. Ni reste ni choix à lui prêter. */
+  const clotureSansElle = clotureSansMoi({ clos, revenu: reste.revenu, charges: reste.charges })
 
   const fermer = () => setOuverte(null)
   /* Le mois se clôt (relecture, autre appareil) pendant que la feuille « choix » est ouverte : elle
@@ -233,11 +235,14 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
             {/* ⚠️ Clos ou non : un mois clos d'avant son arrivée n'a ni reste ni choix pour elle (le
                 récap lui lisait « Il t'est resté — » et « Revenir dessus » : un tiret, et le geste
                 d'un mois qui n'est pas le sien). */}
-            {pasEncoreLa ? (
+            {pasEncoreLa || clotureSansElle ? (
               <section aria-label="Ce qui reste" className="mt-7 rounded-[28px] bg-encre text-fond p-5">
                 <p className="text-[17px] leading-snug">
-                  Tu n’étais pas encore dans le foyer : tu y entres en {nomDuMois(`${moi!.entre_le!.slice(0, 7)}-01`)}.
-                  Ce mois-là ne te compte aucune part.
+                  {pasEncoreLa
+                    ? <>Tu n’étais pas encore dans le foyer : tu y entres en {nomDuMois(`${moi!.entre_le!.slice(0, 7)}-01`)}.{' '}
+                        Ce mois-là ne te compte aucune part.</>
+                    : <>Le mois de {nomDuMois(mois)} a été clôturé avant que ton revenu soit posé.{' '}
+                        Il ne te compte aucune part.</>}
                 </p>
               </section>
             ) : (
@@ -254,7 +259,7 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
                 {n.libelle} : {n.annee} n’a pas pu être soldée. Elle le sera à la prochaine clôture.
               </p>
             ))}
-            {sansRevenu.length > 0 && (
+            {sansRevenu.length > 0 && !clos && (
               <p className="mt-3 text-[15px] leading-snug" style={{ color: 'var(--color-ocre)' }}>
                 {sansRevenu.length === 1
                   ? `${sansRevenu[0]} n’a pas encore dit son revenu : tant qu’il manque, le partage se fait à parts égales.`

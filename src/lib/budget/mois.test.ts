@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aDire, bandeau, estLaCeMois, finDePhrase, membresSansRevenu, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
+import { aDire, bandeau, clotureSansMoi, estLaCeMois, finDePhrase, membresSansRevenu, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
          maPart, partDesSoldes, montant, montantCompte, moisDemande, adresseDeMoisFausse, moisVoisin, nomDuMois, nomDuMoisDate, parCategorie,
          partSur, pourcentages, recapCloture, resteDuMois, revenuDuMois, sousLEuro, totauxDuFiltre, type Ligne,
          type Saisie } from './mois.ts'
@@ -621,5 +621,16 @@ describe('finDePhrase', () => {
   it('ne double pas le point d’une abréviation (« oct.. » lisait mal sous le champ du jour)', () => {
     expect(finDePhrase('Jeu. 15 oct.')).toBe('Jeu. 15 oct.')
     expect(finDePhrase('Sam. 3 mars')).toBe('Sam. 3 mars.')
+  })
+})
+
+describe('clotureSansMoi', () => {
+  it('mois clos, ni revenu ni part : la clôture s’est faite sans elle', () => {
+    expect(clotureSansMoi({ clos: true, revenu: null, charges: 0 })).toBe(true)
+  })
+  it('un mois ouvert, un revenu posé ou une part : non', () => {
+    expect(clotureSansMoi({ clos: false, revenu: null, charges: 0 })).toBe(false)
+    expect(clotureSansMoi({ clos: true, revenu: 250_000, charges: 0 })).toBe(false)
+    expect(clotureSansMoi({ clos: true, revenu: null, charges: 12_000 })).toBe(false)
   })
 })

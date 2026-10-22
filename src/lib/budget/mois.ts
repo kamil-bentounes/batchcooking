@@ -191,6 +191,15 @@ export function membresSansRevenu<M extends { id: string; entre_le?: string | nu
   return presents.length < 2 ? [] : presents.filter(m => revenuDuMois(revenus, m.id, mois) === null)
 }
 
+/**
+ * Un mois CLOS où la personne n'a ni revenu ni part : la clôture s'est faite sans elle. Elle est arrivée
+ * (ou a posé son premier revenu) après, et un mois clos ne se recalcule pas. Sans cette règle, l'écran lui
+ * lisait « Il t'est resté — » (un tiret) et, sous le chiffre, qu'elle « n'a pas encore dit son revenu ».
+ */
+export function clotureSansMoi(o: { clos: boolean; revenu: number | null; charges: number }): boolean {
+  return o.clos && o.revenu === null && o.charges === 0
+}
+
 export type Reste = { revenu: number | null; charges: number; reste: number | null }
 
 /** « Il te reste » : mon revenu du mois, moins ma part de chaque ligne. */
