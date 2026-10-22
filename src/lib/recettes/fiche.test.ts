@@ -1,6 +1,6 @@
 /** La fiche (i) : les ingrédients en deux colonnes, et ce que vaut la fourchette. */
 import { describe, expect, it } from 'vitest'
-import { ingredientEnDeux, libelleDeCourse, precision } from './fiche.ts'
+import { ingredientEnDeux, libelleDeCourse, nomCourt, precision } from './fiche.ts'
 
 describe('un ingrédient en deux colonnes', () => {
   it.each([
@@ -115,8 +115,9 @@ describe('la pastille « Par part »', () => {
 })
 
 describe('libelleDeCourse', () => {
-  it('garde le nom de l’aliment reconnu', () => {
-    expect(libelleDeCourse('Oignon, cru', '2 oignons')).toBe('Oignon, cru')
+  it('garde le nom COURT de l’aliment reconnu', () => {
+    expect(libelleDeCourse('Oignon, cru', '2 oignons')).toBe('Oignon')
+    expect(libelleDeCourse('Poulet, cuisse, viande, rôti/cuit au four', '4 cuisses')).toBe('Poulet cuisse')
   })
 
   it('retire la quantité du texte quand l’aliment n’est pas reconnu', () => {
@@ -128,5 +129,49 @@ describe('libelleDeCourse', () => {
   it('ne perd rien quand il n’y a pas de quantité', () => {
     expect(libelleDeCourse(null, 'muscade')).toBe('Muscade')
     expect(libelleDeCourse(undefined, '250 g')).toBe('250 g')
+  })
+})
+
+describe('nomCourt : le nom CIQUAL tel qu’on le cherche au rayon', () => {
+  it.each([
+    // les attendus de la consigne
+    ['Poulet, cuisse, viande, rôti/cuit au four', 'Poulet cuisse'],
+    ['Tomate, crue', 'Tomate'],
+    ['Lentille corail, sèche', 'Lentille corail'],
+    ['Beurre, doux', 'Beurre doux'],
+    ['Yaourt, nature', 'Yaourt nature'],
+    // douze noms réels de la table `food`
+    ['Poulet, filet, sans peau, sauté/poêlé', 'Poulet filet sans peau'],
+    ['Porc, côte, crue', 'Porc côte'],
+    ['Boeuf, gîte à la noix, cuit', 'Boeuf gîte à la noix'],
+    ['Agneau, selle, partie maigre, rôtie/cuite au four', 'Agneau selle partie maigre'],
+    ['Poule, viande et peau, crue', 'Poule'],
+    ['Concombre, pulpe, cru, prélevé à la Martinique', 'Concombre'],
+    ['Hareng, grillé/poêlé', 'Hareng'],
+    ['Maroilles, sans précision', 'Maroilles'],
+    ['Lait de chèvre, entier, UHT', 'Lait de chèvre entier UHT'],
+    ['Yaourt, lait fermenté ou spécialité laitière, nature, 0% MG, enrichi en vitamine D', 'Yaourt nature 0% MG'],
+    ['Beurre à 82% MG, doux, tendre', 'Beurre à 82% MG doux tendre'],
+    ['Eau minérale Arcens, embouteillée, gazeuse, moyennement minéralisée (Arcens, 07)',
+      'Eau minérale Arcens gazeuse moyennement minéralisée'],
+    ['Petits pois et carottes, appertisés, égouttés', 'Petits pois et carottes'],
+    ['Céréales pour petit déjeuner (aliment moyen)', 'Céréales pour petit déjeuner'],
+  ])('%s → %s', (ciqual, attendu) => {
+    expect(nomCourt(ciqual)).toBe(attendu)
+  })
+
+  it('plafonne à trois segments', () => {
+    expect(nomCourt('Fromage, chèvre, frais, nature, entier')).toBe('Fromage chèvre frais')
+  })
+
+  it('garde le premier segment quand tout le reste est retiré, ou quand il n’y a pas de virgule', () => {
+    expect(nomCourt('Riz, cuit')).toBe('Riz')
+    expect(nomCourt('Banane')).toBe('Banane')
+    expect(nomCourt('Tomate, crue, cuite')).toBe('Tomate')
+  })
+
+  it('ne rend jamais une chaîne vide', () => {
+    expect(nomCourt(', cru')).toBe('cru')
+    expect(nomCourt('')).toBe('')
   })
 })

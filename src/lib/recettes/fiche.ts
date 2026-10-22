@@ -37,13 +37,80 @@ export function ingredientEnDeux(brut: string): { qte: string; nom: string } {
 }
 
 /**
- * Le libellé d'une ligne de COURSES : le nom de l'aliment reconnu, sinon le texte de la
+ * Les mots qui disent COMMENT l'aliment a été préparé, mesuré ou emballé pour le tableau CIQUAL —
+ * pas CE QU'ON ACHÈTE. Un segment fait seulement de ces mots disparaît du libellé de courses.
+ */
+const MOTS_D_ETAT = new Set([
+  'cru', 'crue', 'crus', 'crues', 'cuit', 'cuite', 'cuits', 'cuites', 'cuisiné', 'cuisinée',
+  'cuisinés', 'cuisinées', 'bouilli', 'bouillie', 'bouillis', 'bouillies', 'rôti', 'rôtie', 'rôtis',
+  'rôties', 'grillé', 'grillée', 'grillés', 'grillées', 'poêlé', 'poêlée', 'poêlés', 'poêlées',
+  'sauté', 'sautée', 'sautés', 'sautées', 'frit', 'frite', 'frits', 'frites', 'préfrit', 'préfrite',
+  'vapeur', 'poêle', 'eau', 'four',
+  'appertisé', 'appertisée', 'appertisés', 'appertisées', 'égoutté', 'égouttée', 'égouttés',
+  'égouttées', 'préemballé', 'préemballée', 'préemballés', 'préemballées', 'embouteillé',
+  'embouteillée', 'embouteillés', 'embouteillées', 'déshydraté', 'déshydratée', 'déshydratés',
+  'déshydratées', 'reconstitué', 'reconstituée', 'séché', 'séchée', 'séchés', 'séchées', 'sec',
+  'sèche', 'secs', 'sèches', 'surgelé', 'surgelée', 'surgelés', 'surgelées', 'congelé', 'congelée',
+  'pulpe', 'peau', 'viande', 'rayon',
+  // les liaisons de ces segments (« à la vapeur », « cuit à l'eau », « pulpe et peau »)
+  'à', 'a', 'la', 'le', 'l', 'au', 'aux', 'et', 'ou', 'de', 'du', 'des', 'd',
+])
+
+/** Les segments à retirer en entier, quels que soient les mots qu'ils contiennent. */
+const SEGMENT_SANS_INTERET = [
+  /^rayon frais$/i,
+  /^prélev/i,
+  /^lait fermenté ou spécialité laitière$/i,
+  /^sans précision\b/i,
+  /^aliment moyen$/i,
+  /^enrichie?s?\b/i,
+]
+
+/**
+ * Le nom d'un aliment CIQUAL tel qu'on le lit sur une LISTE DE COURSES.
+ *
+ * CIQUAL écrit « Poulet, cuisse, viande, rôti/cuit au four » : un nom de catalogue, fait pour être
+ * indexé. En magasin on cherche « Poulet cuisse ». On découpe sur « , », on garde le premier
+ * segment et ceux qui distinguent encore deux produits au rayon (cuisse, filet, nature, doux,
+ * 0 % MG, entier, sans peau…), on retire ceux qui ne parlent que de cuisson, d'état ou
+ * d'emballage, on joint par une espace et on plafonne à trois segments. Si tout part, le premier
+ * reste.
+ */
+export function nomCourt(nomCiqual: string): string {
+  const [tete, ...suite] = segments(nomCiqual.replace(/\s*\((?:[^)]*\s)?aliment moyen\)/gi, ''))
+  if (!tete) return nomCiqual.trim()
+  const utile = (segment: string) => {
+    if (SEGMENT_SANS_INTERET.some(m => m.test(segment))) return false
+    const mots = segment.toLowerCase().split(/[\s/'’]+/).filter(m => m.length > 0)
+    return !mots.every(m => MOTS_D_ETAT.has(m))
+  }
+  // Une parenthèse (« (Arcens, 07) », « (Italie) ») n'aide personne au rayon, sauf dans le nom lui-même.
+  const sansParentheses = (segment: string) => segment.replace(/\s*\([^)]*\)/g, '').trim()
+  return [tete, ...suite.map(sansParentheses).filter(utile)].filter(x => x.length > 0).slice(0, 3).join(' ')
+}
+
+/** Découpe sur « , » HORS parenthèses : « moyennement minéralisée (Arcens, 07) » reste d'un bloc. */
+function segments(nom: string): string[] {
+  const morceaux: string[] = []
+  let profondeur = 0
+  let courant = ''
+  for (const c of nom) {
+    if (c === '(') profondeur++
+    else if (c === ')') profondeur = Math.max(0, profondeur - 1)
+    if (c === ',' && profondeur === 0) { morceaux.push(courant); courant = '' } else courant += c
+  }
+  morceaux.push(courant)
+  return morceaux.map(x => x.trim()).filter(x => x.length > 0)
+}
+
+/**
+ * Le libellé d'une ligne de COURSES : le nom court de l'aliment reconnu, sinon le texte de la
  * recette SANS sa quantité. La quantité du texte (« 500 g d'agneau haché ») est celle de la
  * recette ; la liste porte la sienne, mise à l'échelle des parts (250 g) : les deux côte à
  * côte se contredisaient (« 500 g d'agneau haché — 250 g »).
  */
 export function libelleDeCourse(aliment: string | null | undefined, brut: string): string {
-  if (aliment) return aliment
+  if (aliment) return nomCourt(aliment)
   const { nom } = ingredientEnDeux(brut)
   return nom || decodeEntites(brut).trim()
 }
