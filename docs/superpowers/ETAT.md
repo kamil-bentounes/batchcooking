@@ -1,8 +1,8 @@
 # Finaliser Popote : où on en est
 
-Mis à jour le 21/10/2026. Le chantier 2 (Recettes) est EN LIGNE depuis ce matin (migration 0092,
-fonction `importer`, recalcule, site, 1 426 photos relues). Le chantier 3 (Budget) est en cours
-sur `feat/budget-refait`. Kamil a donné son « go » le 21/10 : finir seul, tout tester en local
+Mis à jour le 22/10/2026. Le chantier 2 (Recettes) est EN LIGNE depuis le 21/10 (migration 0092,
+fonction `importer`, recalcule, site, 1 426 photos relues). Le chantier 3 (Budget) est CODÉ sur
+`feat/budget-refait` ; le chantier 4 (le grand test) est en cours. Kamil a donné son « go » le 21/10 : finir seul, tout tester en local
 (front et base, tous les parcours), tout corriger, puis tout pousser en prod.
 
 Kamil voulait « finaliser ce projet qui date depuis un MOMMMMMMENT ». Il a pris six
@@ -39,8 +39,10 @@ high** : c'est sa demande, notée en mémoire sous `agents-en-sonnet-high`.
    est dans `~/PERSO/sauvegardes-popote/2026-10-21/`.
 4. Pour les bancs : relancer `npx supabase start` si la pile locale est arrêtée, et `npx supabase
    functions serve` en fond (sans lui, les tests d'invitation échouent : 503).
-5. Chantier 3 (Budget) : codé sur `feat/budget-refait` ; voir « Chantier 3 » plus bas pour ce qui reste
-   (3.5, 3.9, passe d'accessibilité, puis le chantier 4 et la mise en ligne).
+5. Chantier 3 (Budget) : CODÉ sur `feat/budget-refait` (3.5 et 3.9 faites le 22/10, revue adverse du
+   front du lot 3 et ses 9 constats corrigés). Reste le chantier 4 : le grand test (parcours A nouveau
+   venu, B cuisine, C budget, joués par des agents l'un après l'autre : consignes dans le dossier de
+   travail, rapports dans `docs/superpowers/grand-test/`), puis la mise en ligne D1+D2.
 6. Deux `git stash` sont devenus inutiles (« wip recettes tâche 6 » et « tâche 7 » : le travail est
    refait et livré). Les retirer avec `git stash drop` deux fois ; l'effacement a été refusé le 20/10
    par le contrôle de sécurité, donc à lui de le faire.
@@ -169,10 +171,19 @@ après chaque groupe, leurs défauts corrigés en place puisque rien n'est en pr
   `Hub.tsx`, `Charges.tsx`, `BudgetReglages.tsx`, bancs `e2e/budget.spec.ts` (110 bancs
   navigateur verts à la 2.19).
 - **Lot 3, la clôture** : 3.1 (e2e rouge `e2e/cloture.spec.ts`), 3.2, 3.3, 3.4, 3.6, 3.7 (partielle), 3.8,
-  3.10 (0115, `regularise_annuel` s'en va) faites. **Restent : 3.5** (la page `Cloture.tsx`,
-  `RevenirDessus`, `useNonSoldees`, plus les deux branchements de 3.7 : « Revenir dessus » dans
-  `Recap`/`MoisClos` et les lignes « n'a pas pu être soldée ») — un agent y travaillait au
-  moment de cette note — puis **3.9** (le parcours de la clôture vert, captures).
+  3.10 (0115, `regularise_annuel` s'en va), **3.5** (page `Cloture.tsx`, `RevenirDessus`, les
+  branchements) et **3.9** (parcours de la clôture vert, captures à 390 px) faites. Revue adverse du
+  front du lot 3 (22/10) : 9 constats, tous corrigés (réponse perdue → relecture des clôtures,
+  mois courant de Paris, aperçu des soldes à deux, champ vidé, reste négatif, focus, tests de clics).
+  Playwright : 115 verts ; Vitest `src` : 1 301 verts ; banc de migration `--tout` vert (copie de la
+  prod, 9 arrêts, variantes).
+- **Décision de Kamil du 22/10 : le compte qui se ferme.** Un membre qui supprime son compte emporte sa
+  charge perso (lignes des mois ouverts et saisies ; la charge s'archive si elle a une histoire ; les mois
+  clôturés restent) : `delete_my_account` (0112, commit 0c02528), `docs/budget.md`. Le premier revenu qui
+  remonte à l'arrivée (`tg_revenu_premier`) était déjà son choix du 01/10.
+- **Décision du 22/10 : nettoyer le compte de Thauba en prod** s'il en traîne, « on refait tout proprement ».
+  Lu le 22/10 (lecture seule) : 2 comptes `auth.users`, dont 1 SANS profil, 1 profil, 1 foyer, 1 invitation
+  expirée non acceptée. À faire au moment de D1, après sauvegarde ; puis réinviter par un lien neuf.
 - Les contextes et la liste des défauts relevés par les revues : `docs/superpowers/budget-agents/`.
 
 **Chiffres de la prod relus le 21/10** (identiques à ceux du plan § 5, rien n'a bougé depuis le 01/10) :
