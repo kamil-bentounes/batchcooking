@@ -39,7 +39,7 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
   const { data: cycle } = useCycle()
   const { data: catalogue = [] } = useAppareils()
   const { data: choisis = [], isPending: lisLesAppareils } = useAppareilsDeLaSession(cycle?.id)
-  const { data: precedent } = useEquipementPrecedent(cycle?.id)
+  const { data: precedent, isError: precedentEnPanne } = useEquipementPrecedent(cycle?.id)
   const { data: simulation, isPending, error } = useSimule(cycle?.id)
   const choisitAppareils = useChoisitAppareils()
   const enregistre = useEnregistrePlan()
@@ -123,8 +123,8 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
       )}
 
       {/* `precedent` d'abord : l'état initial de la carte se pose UNE fois, au montage. */}
-      {(reglages || choisis.length === 0) && precedent !== undefined && !lisLesAppareils && catalogue.length > 0 && (
-        <Equipement catalogue={catalogue} depart={equipementInitial({ propres: capacites, derniere: precedent, catalogue })}
+      {(reglages || choisis.length === 0) && (precedent !== undefined || precedentEnPanne) && !lisLesAppareils && catalogue.length > 0 && (
+        <Equipement catalogue={catalogue} depart={equipementInitial({ propres: capacites, derniere: precedent ?? {}, catalogue })}
                     surValide={codes => {
                       choisitAppareils.mutate({ cycleId: cycle.id, codes })
                       setReglages(false)

@@ -163,7 +163,11 @@ export function Profil({ userId, onFini, retour }: {
         )}
 
         <Message texte={msg} erreur />
-        <Bouton onClick={() => { if (revenuAConfirmer(cents)) setQuestion(true); else enregistre() }}
+        {/* On ne repose pas la question pour un revenu DÉJÀ posé : changer seulement son prénom ne doit pas la redemander. */}
+        <Bouton onClick={() => {
+                  if (revenuAConfirmer(cents) && cents !== mien?.net_mensuel_cents) setQuestion(true)
+                  else enregistre()
+                }}
                 disabled={!pret || envoi}>
           {envoi ? 'J’enregistre…' : 'Enregistrer'}
         </Bouton>

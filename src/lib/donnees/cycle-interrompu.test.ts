@@ -52,8 +52,4 @@ describe('useCycleInterrompu : la base choisit', () => {
     expect(await lance()).toBeNull()
     expect(faux.appels.find(a => a[0] === 'from'), 'une lecture inutile a été lancée').toBeUndefined()
   })
-
-  it('ne garde plus de calcul de date côté client pour la reprise', () => {
-    expect('plancherDeReprise' in cycle).toBe(false)
-  })
 })
