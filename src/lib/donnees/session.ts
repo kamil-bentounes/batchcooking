@@ -82,6 +82,33 @@ export function useAppareilsDeLaSession(cycleId: string | undefined) {
   })
 }
 
+/**
+ * L'équipement de la DERNIÈRE session du foyer qui en avait un (code → capacité), hors la session
+ * courante ; `{}` si le foyer n'a jamais rien choisi. C'est le point de départ de « Équipement du
+ * jour » : on ne recoche pas ses huit appareils chaque dimanche. Le foyer est filtré à la main : la
+ * lecture de `session_appliance` s'ouvre aussi aux sessions où l'on est convié.
+ */
+export async function lisLEquipementPrecedent(cycleId: string): Promise<Record<string, number>> {
+  const foyer = ou(await supabase.rpc('current_household'))
+  if (!foyer) return {}
+  const [derniere] = ou(await supabase.from('cycle')
+    .select('id, session_appliance!inner(appliance_code, capacity)')
+    .eq('household_id', foyer).neq('id', cycleId)
+    .order('week_of', { ascending: false }).order('created_at', { ascending: false })
+    .limit(1))
+  return Object.fromEntries((derniere?.session_appliance ?? [])
+    .map(a => [a.appliance_code, a.capacity]))
+}
+
+export function useEquipementPrecedent(cycleId: string | undefined) {
+  return useQuery({
+    queryKey: [...CLE.appareilsSession(cycleId), 'precedent'] as const,
+    enabled: !!cycleId,
+    queryFn: () => lisLEquipementPrecedent(cycleId!),
+    staleTime: 60_000,
+  })
+}
+
 export function useChoisitAppareils() {
   const qc = useQueryClient()
   return useMutation({

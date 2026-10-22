@@ -19,10 +19,12 @@ import { useChangeEtat, useCycle, useMajCycle } from '../lib/donnees/cycle.ts'
 import { useConvie, useFoyersAmis } from '../lib/donnees/convives.ts'
 import { useAppareils } from '../lib/donnees/foyer.ts'
 import {
-  goulot, useAppareilsDeLaSession, useChoisitAppareils, useEnregistrePlan, useSimule,
+  goulot, useAppareilsDeLaSession, useChoisitAppareils, useEnregistrePlan, useEquipementPrecedent,
+  useSimule,
 } from '../lib/donnees/session.ts'
 import type { Plan as PlanCalcule, TachePlanifiee } from '../lib/plan/types.ts'
 import { placeEtiquettes } from '../lib/plan/etiquettes.ts'
+import { equipementInitial } from '../lib/plan/equipement.ts'
 
 /** Hauteur d'un libellé de geste : le nom sur deux lignes, puis la durée. */
 const HAUTEUR_GESTE = 54
@@ -36,7 +38,8 @@ const COULEURS = ['#2F5D45', '#B8791A', '#7A9484', '#4C6E8A', '#8A6E9E']
 export function Plan({ retour, va }: { retour: () => void; va: (v: string) => void }) {
   const { data: cycle } = useCycle()
   const { data: catalogue = [] } = useAppareils()
-  const { data: choisis = [] } = useAppareilsDeLaSession(cycle?.id)
+  const { data: choisis = [], isPending: lisLesAppareils } = useAppareilsDeLaSession(cycle?.id)
+  const { data: precedent } = useEquipementPrecedent(cycle?.id)
   const { data: simulation, isPending, error } = useSimule(cycle?.id)
   const choisitAppareils = useChoisitAppareils()
   const enregistre = useEnregistrePlan()
@@ -119,8 +122,9 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
         </Surface>
       )}
 
-      {(reglages || choisis.length === 0) && (
-        <Equipement catalogue={catalogue} capacites={capacites}
+      {/* `precedent` d'abord : l'état initial de la carte se pose UNE fois, au montage. */}
+      {(reglages || choisis.length === 0) && precedent !== undefined && !lisLesAppareils && catalogue.length > 0 && (
+        <Equipement catalogue={catalogue} depart={equipementInitial({ propres: capacites, derniere: precedent, catalogue })}
                     surValide={codes => {
                       choisitAppareils.mutate({ cycleId: cycle.id, codes })
                       setReglages(false)
@@ -261,15 +265,13 @@ function Geste({ tache, top, critique }: { tache: TachePlanifiee; top: number; c
 }
 
 /** L'équipement du jour : il change d'une session à l'autre (D8). */
-function Equipement({ catalogue, capacites, surValide }: {
+function Equipement({ catalogue, depart, surValide }: {
   catalogue: { code: string; label: string; default_capacity: number }[]
-  capacites: Record<string, number>
+  /** Ce qui arrive coché : la dernière session du foyer, sinon le catalogue (`equipementInitial`). */
+  depart: Record<string, number>
   surValide: (codes: Record<string, number>) => void
 }) {
-  const [choix, setChoix] = useState<Record<string, number>>(() =>
-    Object.keys(capacites).length > 0
-      ? capacites
-      : Object.fromEntries(catalogue.map(a => [a.code, a.default_capacity])))
+  const [choix, setChoix] = useState<Record<string, number>>(depart)
 
   return (
     <Surface className="mt-6">
