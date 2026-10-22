@@ -17,7 +17,7 @@
  * ne la fait pas avancer. La base le lui interdit ; ici on ne lui montre pas
  * des boutons qui échoueraient.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Attente, Erreur, Vide, duree } from '../ui/coque.tsx'
 import { useChangeEtat, useCycle, useCycleParId } from '../lib/donnees/cycle.ts'
 import { useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
@@ -50,6 +50,28 @@ export function Cuisine({ userId, va, cycleId }:
   const retire = useRetireConvive()
   const quitte = useQuitteSession()
   const [confirmeLaSortie, setConfirmeLaSortie] = useState(false)
+  /* Le focus suit la question : elle le prend en s'ouvrant, le rend en se fermant. Sans cela le
+     bouton « Interrompre » disparaissait sous le doigt et le focus tombait sur `body` — au
+     clavier ou au lecteur d'écran, on ne savait plus où l'on était. */
+  const nonJeContinue = useRef<HTMLButtonElement>(null)
+  const interrompre = useRef<HTMLButtonElement>(null)
+  const rendreLeFocus = useRef(false)
+  useEffect(() => {
+    if (confirmeLaSortie) nonJeContinue.current?.focus()
+    else if (rendreLeFocus.current) { rendreLeFocus.current = false; interrompre.current?.focus() }
+  }, [confirmeLaSortie])
+  const ferme = () => { rendreLeFocus.current = true; setConfirmeLaSortie(false) }
+  /* Un seul départ par geste : `disabled={isPending}` ne tient pas deux touchers rapprochés (React
+     n'a pas toujours rendu entre les deux), et « Quitter » partait deux fois. */
+  const sortieEnVol = useRef(false)
+  function quitteLaSession(id: string) {
+    if (sortieEnVol.current) return
+    sortieEnVol.current = true
+    quitte.mutate(id, {
+      onSuccess: () => va('/cuisine-accueil'),
+      onSettled: () => { sortieEnVol.current = false },
+    })
+  }
 
   // L'horloge de la session (D47) : une seconde suffit, et on l'arrête en
   // sortant pour ne pas faire tourner un intervalle dans le vide.
@@ -83,13 +105,14 @@ export function Cuisine({ userId, va, cycleId }:
             l'écran n'offrait aucune sortie : il fallait attendre que l'hôte y
             pense. */}
         {invite && (
-          <button onClick={async () => { await quitte.mutateAsync(cycleId!); va('/cuisine-accueil') }}
+          <button onClick={() => quitteLaSession(cycleId!)}
                   disabled={quitte.isPending}
                   className="mt-8 w-full h-[52px] rounded-[16px] bg-safran text-encre
                              text-[16px] font-medium">
             Quitter cette session
           </button>
         )}
+        <Erreur de={quitte.error} />
       </Sombre>
     )
   }
@@ -113,12 +136,18 @@ export function Cuisine({ userId, va, cycleId }:
 
   const fini = etat.faites === etat.total
 
-  async function sort() {
+  function sort() {
     // Quitter, c'est partir pour de bon : sinon la ligne survit, l'accueil
     // reproposerait la session et la lecture resterait ouverte.
-    if (invite) { await quitte.mutateAsync(cycle!.id); va('/cuisine-accueil'); return }
-    await change.mutateAsync({ id: cycle!.id, vers: 'interrompue' })
-    va('/cuisine-accueil')
+    if (invite) { quitteLaSession(cycle!.id); return }
+    if (!sortieEnVol.current) {
+      sortieEnVol.current = true
+      /* `mutate`, pas `mutateAsync` : un rejet n'est pas rattrapé, il se dit (`change.error`). */
+      change.mutate({ id: cycle!.id, vers: 'interrompue' }, {
+        onSuccess: () => va('/cuisine-accueil'),
+        onSettled: () => { sortieEnVol.current = false },
+      })
+    }
   }
 
   return (
@@ -277,13 +306,14 @@ export function Cuisine({ userId, va, cycleId }:
         */}
       {confirmeLaSortie ? (
         <div role="alertdialog" aria-label="Interrompre la session ?"
+             onKeyDown={e => { if (e.key === 'Escape') ferme() }}
              className="mt-12 rounded-[18px] bg-fond/8 p-4">
           <p className="text-[15px]">Interrompre la session ?</p>
           <p className="mt-1.5 text-[13px] opacity-70">
             Tu pourras la reprendre depuis l’accueil ; la semaine n’aura pas d’autre session.
           </p>
           <div className="mt-3.5 flex gap-2.5">
-            <button onClick={() => setConfirmeLaSortie(false)}
+            <button ref={nonJeContinue} onClick={ferme}
                     className="grow min-h-12 rounded-[14px] bg-safran text-encre text-[15px] font-semibold">
               Non, je continue
             </button>
@@ -295,10 +325,14 @@ export function Cuisine({ userId, va, cycleId }:
           <Erreur de={change.error} />
         </div>
       ) : (
-        <button onClick={() => invite ? sort() : setConfirmeLaSortie(true)}
-                className="mt-12 w-full min-h-12 rounded-[16px] text-[15px] opacity-60">
-          {invite ? 'Quitter la session' : 'Interrompre la session'}
-        </button>
+        <>
+          <button ref={interrompre} onClick={() => invite ? sort() : setConfirmeLaSortie(true)}
+                  disabled={invite && quitte.isPending}
+                  className="mt-12 w-full min-h-12 rounded-[16px] text-[15px] opacity-60">
+            {invite ? 'Quitter la session' : 'Interrompre la session'}
+          </button>
+          <Erreur de={quitte.error} />
+        </>
       )}
     </Sombre>
   )
