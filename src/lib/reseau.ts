@@ -23,3 +23,28 @@ export function estUnePanneDeReseau(e: unknown): boolean {
 export function enFrancais(message: string): string {
   return PANNE.test(message) ? PAS_DE_RESEAU : message
 }
+
+export const LA_BASE_NE_REPOND_PAS = 'La base ne répond pas : réessaie dans un instant.'
+
+/**
+ * Le jeton est périmé : PostgREST répond `PGRST301` (« JWT expired »), `PGRST303` (revendications
+ * refusées) ou 401. Ce n'est ni une panne ni « aucun foyer » : la personne doit se reconnecter.
+ */
+export function estUneSessionExpiree(e: unknown, statut?: number): boolean {
+  if (statut === 401) return true
+  if (!e || typeof e !== 'object') return false
+  const { message = '', code = '' } = e as { message?: string; code?: string }
+  return code === 'PGRST301' || code === 'PGRST303' || /jwt expired/i.test(String(message))
+}
+
+/**
+ * Ce que dit une erreur de lecture de l'appli (`current_household`, le profil) : la session a
+ * expiré (→ connexion), le réseau manque, ou la base ne répond pas. Toute erreur est une PANNE :
+ * `current_household` sans foyer rend `data` nul SANS erreur, donc une `error` — 502, 503, 504, délai
+ * dépassé, projet en pause — n'est jamais « aucun foyer » (Onboarding, « Il te faut une invitation »).
+ */
+export type Panne = 'expiree' | 'reseau' | 'base'
+export function classeLaPanne(e: unknown, statut?: number): Panne {
+  if (estUneSessionExpiree(e, statut)) return 'expiree'
+  return estUnePanneDeReseau(e) ? 'reseau' : 'base'
+}

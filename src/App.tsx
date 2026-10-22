@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { lienDeploye, useRoute } from './lib/route.ts'
 import { SESSION_PERDUE } from './lib/session-perdue.ts'
-import { estUnePanneDeReseau } from './lib/reseau.ts'
+import { LA_BASE_NE_REPOND_PAS, PAS_DE_RESEAU, classeLaPanne, estUnePanneDeReseau } from './lib/reseau.ts'
+import { BandeauDePanne } from './ui/BandeauDePanne.tsx'
 import { HorsLigne } from './pages/HorsLigne'
 import { SignIn } from './pages/SignIn'
 import { Password } from './pages/Password'
@@ -49,8 +50,12 @@ export default function App() {
   const [prenomRemis, setPrenomRemis] = useState(false)
   const [mdpPose, setMdpPose] = useState(true)
   const [pret, setPret] = useState(false)
-  /** Le réseau (ou le serveur) ne répond pas : on ne sait PAS si la personne a un foyer. */
-  const [horsLigne, setHorsLigne] = useState(false)
+  /** Le réseau (ou la base) ne répond pas : on ne sait PAS si la personne a un foyer. */
+  const [panne, setPanne] = useState<'reseau' | 'base' | null>(null)
+  /** La relecture a échoué alors que l'appli est déjà là : l'écran reste, on le dit à côté. */
+  const [alerte, setAlerte] = useState<string | null>(null)
+  /** Une lecture a déjà réussi avec une session : il y a un écran à ne pas démonter. */
+  const appliLa = useRef(false)
   /** Sur un lien d'invitation : elle a dit avoir déjà un compte. */
   const [connexionDemandee, setConnexionDemandee] = useState(false)
   /** La session a disparu en cours de route (jeton retiré, compte supprimé ailleurs) : on le dit. */
@@ -58,12 +63,45 @@ export default function App() {
   const sessionRef = useRef<Session | null>(null)
   const { ici, va, remplace, retour } = useRoute()
 
+  /* Ce que la relecture a appris, écrit d'un coup (voir `relire`). */
+  const applique = useCallback((r: {
+    session: Session | null; foyer: string | null
+    profil: { password_set: boolean; display_name: string | null } | null
+    ratee: 'reseau' | 'base' | null; expiree: boolean
+  }) => {
+    if (r.expiree) {
+      /* Le jeton est périmé côté serveur : la connexion, avec sa phrase. */
+      appliLa.current = false
+      sessionRef.current = null
+      setSession(null); setFoyer(null); setPanne(null); setAlerte(null); setPerdue(true)
+      setPret(true)
+      return
+    }
+    if (r.ratee && appliLa.current) {
+      /* ⚠️ Une relecture EN COURS D'USAGE (jeton rafraîchi, retour du réseau) qui tombe sur une
+         panne ne remplace pas l'appli par « Hors ligne » : le formulaire à moitié rempli, la feuille
+         ouverte s'en allaient avec. On garde l'écran et on dit la panne à côté. */
+      setAlerte(r.ratee === 'reseau' ? PAS_DE_RESEAU : LA_BASE_NE_REPOND_PAS)
+      return
+    }
+    setAlerte(null)
+    setPanne(r.ratee)
+    appliLa.current = !r.ratee && !!r.session
+    if (r.session) setPerdue(false)
+    sessionRef.current = r.session
+    setSession(r.session)
+    setFoyer(r.foyer)
+    setMdpPose(r.profil ? !!r.profil.password_set : true)
+    setSansPrenom(r.profil ? (r.profil.display_name ?? '').trim() === '' : false)
+    setPret(true)
+  }, [])
+
   /* Le numéro de la DERNIÈRE relecture : une plus ancienne qui répond après
      elle n'a plus rien à dire. */
   const tour = useRef(0)
   const relire = useCallback(async () => {
     const ceTour = ++tour.current
-    const { data } = await supabase.auth.getSession()
+    const { data, error: erreurSession } = await supabase.auth.getSession()
     /* ⚠️ On LIT tout, puis on ÉCRIT tout, d'un coup.
        La session était posée avant le foyer, qu'on attendait ensuite : le
        temps de cet aller-retour, l'écran croyait la personne connectée SANS
@@ -75,30 +113,38 @@ export default function App() {
        réinitialisation l'avait retiré. */
     let hh: string | null = null
     let p: { password_set: boolean; display_name: string | null } | null = null
-    let panne = false
-    if (data.session) {
-      /* ⚠️ Une panne n'est pas « pas de foyer ». Le `data` nul d'un `fetch` raté était lu comme
-         « aucun foyer » : ouverte sans réseau, l'appli finissait, après vingt secondes d'« Un
-         instant… », sur « Il te faut une invitation » — à quelqu'un qui a un foyer. */
+    let ratee: 'reseau' | 'base' | null = null
+    let expiree = false
+    /** Une erreur de lecture : session expirée (→ connexion), réseau coupé, ou base muette. */
+    const note = (e: unknown, statut?: number) => {
+      const c = classeLaPanne(e, statut)
+      if (c === 'expiree') expiree = true
+      else if (c === 'reseau' || ratee === null) ratee = c
+    }
+    if (!data.session) {
+      /* ⚠️ `session: null` AVEC une erreur de réseau n'est pas « déconnecté ». Jeton de plus d'une
+         heure + réseau coupé : auth-js ne peut pas le rafraîchir, rend `session: null` et la
+         session reste en stockage. L'écran « Se connecter » arrivait sans un mot. */
+      if (erreurSession && estUnePanneDeReseau(erreurSession)) ratee = 'reseau'
+    } else {
+      /* ⚠️ Une panne n'est pas « pas de foyer ». `current_household` d'une personne SANS foyer rend
+         `data` nul SANS `error` : toute `error` (502, 503, 504, jeton expiré, délai dépassé, projet
+         en pause) est donc une panne. Le `data` nul d'un `fetch` raté était lu comme « aucun
+         foyer » : ouverte sans réseau, l'appli finissait, après vingt secondes d'« Un instant… »,
+         sur « Il te faut une invitation » — à quelqu'un qui a un foyer. */
       const f = await supabase.rpc('current_household')
-      if (f.error && estUnePanneDeReseau(f.error)) panne = true
+      if (f.error) note(f.error, f.status)
       hh = f.data ?? null
       // Tant que le mot de passe n'est pas posé, on n'entre pas : sinon la
       // personne repart sur un lien par mail à chaque connexion.
       const pr = await supabase.from('user_profile')
         .select('password_set, display_name').eq('id', data.session.user.id).maybeSingle()
-      if (pr.error && estUnePanneDeReseau(pr.error)) panne = true
+      if (pr.error) note(pr.error, pr.status)
       p = pr.data
     }
     if (ceTour !== tour.current) return
-    setHorsLigne(panne)
-    sessionRef.current = data.session
-    setSession(data.session)
-    setFoyer(hh)
-    setMdpPose(p ? !!p.password_set : true)
-    setSansPrenom(p ? (p.display_name ?? '').trim() === '' : false)
-    setPret(true)
-  }, [])
+    applique({ session: data.session, foyer: hh, profil: p, ratee, expiree })
+  }, [applique])
 
   useEffect(() => {
     relire()
@@ -139,6 +185,7 @@ export default function App() {
     return () => { sub.subscription.unsubscribe(); window.removeEventListener(SESSION_PERDUE, surSessionPerdue) }
   }, [relire])
 
+  const ecran = (): ReactNode => {
   if (!pret) return <main className="min-h-dvh grid place-items-center text-doux">Un instant…</main>
 
   const invitation = ici.match(/^\/invite\/(.+)$/)
@@ -159,13 +206,14 @@ export default function App() {
      elle y choisit son mot de passe, et son compte naît. L'écran de connexion
      la renvoyait chercher un lien par mail, mort au bout d'une heure — cinq
      invitées n'ont jamais dépassé cette étape. */
+  /* La panne d'abord, même sans session : `getSession` en panne de réseau rend `session: null`. */
+  if (panne) return <HorsLigne reessayer={relire} panne={panne} />
   if (!session) {
     return invitation && !connexionDemandee
       ? <Rejoindre token={invitation[1]} connexion={() => setConnexionDemandee(true)} />
       : <SignIn redirectTo={lienDeploye(ici)}
                 info={perdue ? 'Ta session a expiré : reconnecte-toi.' : undefined} />
   }
-  if (horsLigne) return <HorsLigne reessayer={relire} />
   if (invitation) {
     return <AcceptInvite token={invitation[1]} dejaChezToi={!!foyer} va={va}
                          compte={session.user.email ?? ''} />
@@ -265,6 +313,14 @@ export default function App() {
 
     default: return <Hub userId={moi} va={va} />
   }
+  }
+
+  return (
+    <>
+      {ecran()}
+      {alerte && <BandeauDePanne message={alerte} reessayer={relire} />}
+    </>
+  )
 }
 
 /**
