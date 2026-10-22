@@ -6,7 +6,7 @@
  * demandent ici.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ou, supabase } from '../supabase.ts'
+import { ou, ouNul, supabase } from '../supabase.ts'
 import type { Ligne } from '../supabase.ts'
 
 export type Cycle = Ligne<'cycle'>
@@ -68,14 +68,21 @@ export function garderLeCatalogue(cle: readonly unknown[]): boolean {
   return cle[0] !== 'catalogue-leger' && cle[0] !== 'fiche'
 }
 
+/**
+ * Le cycle vivant du foyer, ou `null`. `ouNul` et pas `ou` : « aucun cycle vivant » (foyer neuf,
+ * semaine close, session interrompue) est une réponse, pas une panne — `ou` la faisait lever,
+ * TanStack rejouait trois fois, et l'accueil restait 7,5 s sur « Un instant… ».
+ */
+export async function lisLeCycle(): Promise<Cycle | null> {
+  const id = ouNul(await supabase.rpc('current_cycle'))
+  if (!id) return null
+  return ou(await supabase.from('cycle').select('*').eq('id', id).single())
+}
+
 export function useCycle() {
   return useQuery({
     queryKey: CLE.cycle,
-    queryFn: async (): Promise<Cycle | null> => {
-      const id = ou(await supabase.rpc('current_cycle'))
-      if (!id) return null
-      return ou(await supabase.from('cycle').select('*').eq('id', id).single())
-    },
+    queryFn: lisLeCycle,
     staleTime: 15_000,
   })
 }
