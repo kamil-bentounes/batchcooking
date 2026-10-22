@@ -277,7 +277,10 @@ test('une clôture refusée par la base se dit, et « Clôturer » reste utilisa
     await expect(bouton).toBeEnabled()
     refus = false
     await bouton.click()
-    await expect(page.getByText(/^Novembre est clôturé le/)).toBeVisible({ timeout: 15_000 })
+    /* Le clic qui passe ramène AU MOIS (`apres`), dont la carte dit « Novembre est clôturé. » :
+       « … clôturé le 01/12 » est la phrase de la page de clôture, qu'on quitte. Le test
+       attendait celle-là et échouait déjà avant le grand test du 22/10. */
+    await expect(page.getByText(/^Novembre est clôturé\./)).toBeVisible({ timeout: 15_000 })
     // Remet novembre ouvert pour les bancs suivants.
     page.once('dialog', d => { void d.accept() })
     await page.getByRole('button', { name: 'Revenir dessus, Novembre' }).click()
