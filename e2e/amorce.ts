@@ -337,6 +337,16 @@ export async function sansFoyer(): Promise<{ email: string; userId: string }> {
 }
 
 export async function efface(f: Foyer) {
+  /* Les deux recettes semées appartiennent au CATALOGUE (aucun foyer propriétaire) : effacer le
+     foyer ne les retirait pas, et chaque passage de banc en laissait deux de plus — 44 « Dahl » et
+     « Poulet » en double dans la liste locale à la fin du grand test. On les retire avec le
+     foyer, seulement si ce sont les nôtres (`exemple.fr`) et que rien d'autre ne s'en sert. */
+  const { data: lignes } = await db.from('cycle_recipe').select('recipe_id').eq('household_id', f.householdId)
+  const ids = [...new Set((lignes ?? []).map(l => l.recipe_id))]
+  await db.from('cycle_recipe').delete().eq('household_id', f.householdId)
+  if (ids.length > 0) {
+    await db.from('recipe').delete().in('id', ids).eq('source_name', 'exemple.fr').is('owner_household_id', null)
+  }
   await db.auth.admin.deleteUser(f.userId)
   if (f.elleId) await db.auth.admin.deleteUser(f.elleId)
   await db.from('household').delete().eq('id', f.householdId)
