@@ -130,9 +130,11 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
         {/* Le refus de la base (« la semaine … a déjà son cycle ») se lisait nulle part : le bouton
             semblait mort. */}
         <Erreur de={ouvre.error
-          ? (/a déjà son cycle/.test(ouvre.error.message)
-            ? 'Cette semaine a déjà eu sa session : reprends-la, ou attends la semaine suivante.'
-            : enFrancais(ouvre.error.message))
+          ? (/a une session interrompue/.test(ouvre.error.message)
+            ? 'Cette semaine a une session interrompue : reprends-la.'
+            : /a déjà son cycle/.test(ouvre.error.message)
+              ? 'Cette semaine a déjà eu sa session : reprends-la, ou attends la semaine suivante.'
+              : enFrancais(ouvre.error.message))
           : reprend.error} />
         {!cycle && interrompu && (
           <Secondaire onClick={() => reprend.mutate({ id: interrompu.id, vers: 'en_cuisine' },

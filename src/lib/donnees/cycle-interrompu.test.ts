@@ -1,56 +1,58 @@
 /**
- * « Reprendre la session interrompue » ne propose pas une session d'il y a un mois.
+ * « Reprendre la session interrompue » : la base décide laquelle (`cycle_a_reprendre`, 0117).
  *
- * `useCycleInterrompu` lisait la dernière session interrompue de n'importe quelle semaine, sans
- * date ; l'accueil la propose dès qu'il n'y a plus de cycle courant, donc une session de septembre
- * revenait à la fin de chaque cycle. On la borne à la semaine courante et à la dernière.
+ * L'écran bornait sa lecture par une date calculée avec l'horloge du téléphone
+ * (`plancherDeReprise`) : un téléphone mal réglé proposait ou cachait la mauvaise session.
+ * Il ne calcule plus aucune date : il demande, la base répond avec la sienne.
  */
 import { describe, expect, it, vi } from 'vitest'
 
-const faux = vi.hoisted(() => ({ appels: [] as [string, ...unknown[]][] }))
+const faux = vi.hoisted(() => ({
+  appels: [] as [string, ...unknown[]][],
+  idARendre: null as string | null,
+}))
 
-/* Une chaîne de requête qui note ce qu'on lui demande, et rend « rien trouvé ». */
+/* Une chaîne de requête qui note ce qu'on lui demande, et rend la ligne du cycle. */
 vi.mock('../supabase.ts', async importOriginal => {
   const chaine: Record<string, unknown> = {}
   for (const m of ['select', 'eq', 'gte', 'order', 'limit', 'maybeSingle']) {
     chaine[m] = (...a: unknown[]) => { faux.appels.push([m, ...a]); return chaine }
   }
-  chaine.then = (ok: (r: unknown) => unknown) => ok({ data: null, error: null })
+  chaine.then = (ok: (r: unknown) => unknown) => ok({ data: { id: faux.idARendre }, error: null })
   return { ...await importOriginal<typeof import('../supabase.ts')>(),
-           supabase: { from: () => chaine } }
+           supabase: {
+             from: (t: string) => { faux.appels.push(['from', t]); return chaine },
+             rpc: async (f: string) => { faux.appels.push(['rpc', f]); return { data: faux.idARendre, error: null } },
+           } }
 })
 vi.mock('@tanstack/react-query', async importOriginal => ({
   ...await importOriginal<typeof import('@tanstack/react-query')>(),
   useQuery: (o: unknown) => o,
 }))
 
-const { plancherDeReprise, useCycleInterrompu } = await import('./cycle.ts')
+const cycle = await import('./cycle.ts')
+const { useCycleInterrompu } = cycle
 
-describe('plancherDeReprise : le lundi de la semaine dernière', () => {
-  it.each([
-    // mercredi 21/10/2026 : cette semaine commence le 19, la dernière le 12
-    [new Date(2026, 9, 21), '2026-10-12'],
-    // lundi, premier jour de la semaine
-    [new Date(2026, 9, 19), '2026-10-12'],
-    // dimanche, dernier jour de la semaine : toujours la semaine du 19
-    [new Date(2026, 9, 25), '2026-10-12'],
-    // passage de mois et d'année
-    [new Date(2026, 10, 3), '2026-10-26'],
-    [new Date(2027, 0, 5), '2026-12-28'],
-  ])('le %s', (jour, attendu) => {
-    expect(plancherDeReprise(jour)).toBe(attendu)
-  })
-})
+const lance = () => (useCycleInterrompu(true) as unknown as { queryFn: () => Promise<unknown> }).queryFn()
 
-describe('useCycleInterrompu : la requête est bornée par la date', () => {
-  it('ne lit que les sessions interrompues dont la semaine est au plus la dernière', async () => {
+describe('useCycleInterrompu : la base choisit', () => {
+  it('demande cycle_a_reprendre, sans borne de date côté client', async () => {
     faux.appels.length = 0
-    const o = useCycleInterrompu(true) as unknown as { queryFn: () => Promise<unknown> }
-    await o.queryFn()
-    const gte = faux.appels.find(a => a[0] === 'gte')
-    expect(gte, 'la requête n’est pas bornée par une date').toBeDefined()
-    expect(gte![1]).toBe('week_of')
-    expect(gte![2]).toBe(plancherDeReprise())
-    expect(faux.appels.find(a => a[0] === 'eq')).toEqual(['eq', 'state', 'interrompue'])
+    faux.idARendre = 'c-1'
+    await lance()
+    expect(faux.appels).toContainEqual(['rpc', 'cycle_a_reprendre'])
+    expect(faux.appels.find(a => a[0] === 'gte'), 'une date calculée côté client est revenue').toBeUndefined()
+    expect(faux.appels).toContainEqual(['eq', 'id', 'c-1'])
+  })
+
+  it('ne lit rien d’autre quand la base ne propose aucune session', async () => {
+    faux.appels.length = 0
+    faux.idARendre = null
+    expect(await lance()).toBeNull()
+    expect(faux.appels.find(a => a[0] === 'from'), 'une lecture inutile a été lancée').toBeUndefined()
+  })
+
+  it('ne garde plus de calcul de date côté client pour la reprise', () => {
+    expect('plancherDeReprise' in cycle).toBe(false)
   })
 })

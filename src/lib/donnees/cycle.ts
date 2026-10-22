@@ -105,32 +105,21 @@ export function useCycleParId(id: string | undefined) {
 }
 
 /**
- * Le plus vieux lundi qu'une session interrompue peut encore avoir : celui de la semaine
- * DERNIÈRE. Au-delà, ce n'est plus « la session qu'on vient d'interrompre » mais un plan d'il y a
- * un mois, dont les barquettes sont mangées ou périmées.
- */
-export function plancherDeReprise(d = new Date()): string {
-  const j = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7)
-  return lundiDe(j)
-}
-
-/**
- * La dernière session INTERROMPUE du foyer — de la semaine courante ou de la dernière. `current_cycle()` l'écarte (0018) : sans cette
- * lecture, plus aucun écran n'y ramène, et la semaine ne peut pas être rouverte (`open_cycle`
- * refuse : « la semaine … a déjà son cycle »). La base autorise `interrompue → en_cuisine` (0013) ;
- * c'est ce que « Reprendre » fait.
+ * La dernière session INTERROMPUE du foyer, de la semaine courante ou de la dernière — celle que
+ * la BASE désigne (`cycle_a_reprendre`, 0117), avec sa propre horloge : aucune date ne se calcule
+ * ici. `current_cycle()` l'écarte (0018) et `open_cycle` refuse sa semaine : sans cette lecture,
+ * plus aucun écran n'y ramène. La base autorise `interrompue → en_cuisine` (0013) ; c'est ce que
+ * « Reprendre » fait.
  */
 export function useCycleInterrompu(actif: boolean) {
   return useQuery({
     queryKey: [...CLE.cycle, 'interrompu'] as const,
     enabled: actif,
-    queryFn: async (): Promise<Cycle | null> => ouNul(await supabase.from('cycle').select('*')
-      /* ⚠️ Bornée : sans date, la dernière session interrompue de N'IMPORTE quelle semaine se
-         proposait « à reprendre » — une de septembre revenait à chaque fin de cycle (l'accueil la
-         propose dès qu'il n'y a plus de cycle courant). Reprendre cuisiner un plan d'il y a un mois
-         n'a pas de sens. */
-      .eq('state', 'interrompue').gte('week_of', plancherDeReprise())
-      .order('created_at', { ascending: false }).limit(1).maybeSingle()),
+    queryFn: async (): Promise<Cycle | null> => {
+      const id = ouNul(await supabase.rpc('cycle_a_reprendre'))
+      if (!id) return null
+      return ouNul(await supabase.from('cycle').select('*').eq('id', id).maybeSingle())
+    },
   })
 }
 
