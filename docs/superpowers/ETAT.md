@@ -264,12 +264,12 @@ avant l'arrivée, md5 des égalités, focus…) ; **à vérifier à son retour**
   septembre : tous les totaux se recoupent à la main, aucune erreur de console.
 
 **Reste** :
-1. Le compte rendu du Budget (page Artifact) avec les points à dire à Kamil.
-2. **Branche par défaut du dépôt GitHub = `feat/lot-0a-1-schema-et-acces`, pas `main`** : un cron ne tourne que depuis la
-   branche par défaut, donc `reveil.yml` (le réveil quotidien de la base) ne s'est JAMAIS exécuté. À Kamil de passer la
-   branche par défaut sur `main` (Settings → Branches), puis de lancer « Réveil de la base » une fois à la main
-   (Actions → Run workflow). Sans `gh` ni jeton perso, je ne peux pas le faire. Le projet Supabase est éveillé
-   (utilisé le 22/10) : sept jours de marge.
+1. (fait) compte rendu du Budget : https://claude.ai/artifact/6bPixfrDyFTAMxte8BnfBe
+2. **Branche par défaut du dépôt GitHub = `feat/lot-0a-1-schema-et-acces`, pas `main`** : un cron ne tourne que depuis elle,
+   donc `reveil.yml` ne s'était jamais exécuté. Sans `gh` ni jeton perso, je ne peux pas changer le réglage : une COPIE du
+   workflow (checkout de `main`) est posée sur cette branche (commit 516e3de), GitHub la liste « active ». **À vérifier le
+   23/10 vers 8 h 20 (Paris)** : un run « Réveil de la base » doit exister (API publique des runs). Quand Kamil passera la
+   branche par défaut sur `main`, supprimer la copie.
 3. Safari/WebKit ne se joue pas sur ce poste (bibliothèques système absentes, `sudo` demande un mot de passe).
 
 ## Côté Kamil
@@ -305,3 +305,9 @@ avant l'arrivée, md5 des égalités, focus…) ; **à vérifier à son retour**
   prod demande `RESEAU_INTERCEPTE=1` (voir `scripts/fumee-prod.mjs`).
 - **Lire la prod.** Passer par `q.py` (SQL en lecture seule) et l'API de gestion. Le jeton
   est dans `~/PERSO/supabase_token.txt` et ne s'affiche jamais.
+
+## Répétition de l'arrivée de Thauba (22/10, copie locale des vraies données)
+Arrivée au 01/09, revenu 2 500 € : reste d'octobre de Kamil 316,80 → 850,75 € (Thauba : 1 966,05 €, 533,95 € de charges),
+septembre 426,76 → 462,55 € (ses 3 lignes confirmées restent à lui). Si Kamil clôt septembre AVANT : le mois reste clos,
+et Thauba y lit « Le mois de septembre a été clôturé avant que ton revenu soit posé. Il ne te compte aucune part. »
+(`clotureSansMoi`, `src/lib/budget/mois.ts`). Avec l'arrivée par défaut (1er novembre), rien ne bouge avant novembre.
