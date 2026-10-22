@@ -207,7 +207,7 @@ describe('3 · cocher ne range que de l’alimentaire', () => {
     tomate = data!.id
   })
 
-  async function article(label: string, aisle: string, food_id: string | null = null) {
+  async function article(label: string, aisle: string | null, food_id: string | null = null) {
     const { data, error } = await admin().from('shopping_item').insert({
       household_id: alice.householdId, store_id: magasin, label, aisle, food_id,
     }).select().single()
@@ -240,6 +240,15 @@ describe('3 · cocher ne range que de l’alimentaire', () => {
     const avec = await article('Miel', 'Autre', tomate)
     await coche(avec.id)
     expect(await stockDe(avec.id)).toHaveLength(1)
+  })
+
+  it('un article SANS rayon se range comme avant (NULL n’est pas « non alimentaire »)', async () => {
+    const sans = await article('Farine', null, tomate)
+    await coche(sans.id)
+    expect(await stockDe(sans.id), 'un article sans rayon a disparu du stock').toHaveLength(1)
+    const brut = await article('Truc sans rayon ni aliment', null)
+    await coche(brut.id)
+    expect(await stockDe(brut.id)).toHaveLength(1)
   })
 
   it('un article créé déjà coché suit la même règle', async () => {

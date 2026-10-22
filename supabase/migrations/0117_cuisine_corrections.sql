@@ -142,8 +142,10 @@ begin
 
   -- Entretien et Hygiène ne se mangent pas ; « Autre » sans aliment rattaché non plus
   -- (piles, croquettes, sacs poubelle).
-  alimentaire := not (new.aisle in ('Entretien', 'Hygiène')
-                      or (new.aisle = 'Autre' and new.food_id is null));
+  -- ⚠️ `coalesce` : sans rayon (NULL), `not (null or null)` vaut NULL, donc faux dans un `if` —
+  -- un article sans rayon disparaîtrait du stock au lieu de s'y ranger comme avant.
+  alimentaire := not (coalesce(new.aisle, '') in ('Entretien', 'Hygiène')
+                      or (coalesce(new.aisle, '') = 'Autre' and new.food_id is null));
 
   if alimentaire then
     lieu := public.lieu_du_rayon(new.aisle);
