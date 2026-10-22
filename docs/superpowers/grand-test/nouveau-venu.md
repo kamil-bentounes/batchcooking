@@ -80,6 +80,6 @@ Firefox et Safari ; une vraie expiration de jeton (le jeton retiré du stockage 
   `e2e/cloture.spec.ts` 11/11.
 - `npx vitest run src` : 1 319 verts sur 1 320. Le rouge, `plan/ordonnance.test.ts › tient le budget sur une grosse session`, est un
   test de durée : vert seul, rouge quand la machine est chargée (charge 6 pendant le passage). Non lié.
-- `npm run build` et `npm run lint` : build vert, lint sans nouvelle alerte (mêmes trois avertissements qu'avant).
+- `npm run build` et `npm run lint` : build vert, lint sans nouvelle alerte (les mêmes huit avertissements qu'à `240cba8`).
 - Tests de base : `npx vitest run --fileParallelism=false tests/invitation.test.ts` : 23/23.
 - Horloge de la base : `show popote.maintenant` → « unrecognized configuration parameter ».

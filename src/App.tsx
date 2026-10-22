@@ -79,7 +79,6 @@ export default function App() {
     }
     if (ceTour !== tour.current) return
     sessionRef.current = data.session
-    if (data.session) setPerdue(false)
     setSession(data.session)
     setFoyer(hh)
     setMdpPose(p ? !!p.password_set : true)
@@ -104,6 +103,7 @@ export default function App() {
        *    survit au rechargement et aux liens par construction, et il n'y a
        *    plus qu'une seule règle à tenir.
        */
+      if (evenement === 'SIGNED_IN') setPerdue(false)
       if (evenement === 'PASSWORD_RECOVERY' && s?.user) {
         /* Le tour avance DÈS l'événement, avant l'écriture : la relecture
            d'`INITIAL_SESSION`, partie plus tôt, lirait encore « posé » et
