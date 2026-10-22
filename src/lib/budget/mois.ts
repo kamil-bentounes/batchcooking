@@ -89,18 +89,41 @@ export function montantCompte(l: Ligne, saisies: Saisie[], clos: boolean): numbe
   return Math.max(prevu(l), declare(l, saisies))
 }
 
-/** Ma part de `cents`, dans la proportion de mes parts sur la ligne. Les parts en centimes ;
-    et si elles sont toutes nulles, les points de base. */
+/**
+ * Ma part de `cents`, comme la base la répartirait (`confirme_depense`, 0072) : au poids des
+ * POINTS DE BASE des parts ; à défaut (aucun point), au poids de leurs centimes ; à défaut, à parts
+ * égales. Chacun reçoit le plancher de sa part et les centimes restants vont aux plus forts restes.
+ *
+ * Lire la proportion sur les centimes seuls était faux sur une ligne rouverte : ses parts sont
+ * celles du réel (47,90 €), arrondies au centime, et recompter le prévu (800 €) multipliait cet
+ * arrondi par ×16,7 : le reste dérivait de six centimes. Les points de base, eux, ne s'arrondissent
+ * pas avec le montant. L'égalité d'un reste à l'autre se départage ici par l'identifiant ; la base
+ * le fait par un hachage qu'on ne recalcule pas : un centime peut encore différer à égalité exacte.
+ */
 function prorata(l: Ligne, moi: string, cents: number): number {
-  const mienne = l.parts.find(p => p.user_profile_id === moi)
-  if (!mienne) return 0
-  const total = l.parts.reduce((t, p) => t + p.part_cents, 0)
-  if (total !== 0) return Math.round((cents * mienne.part_cents) / total)
-  /* Une ligne confirmée à 0 € (« Rien dépensé ») n'a plus que des parts nulles :
-     la proportion se lit alors sur les points de base, qu'elle a gardés. Sans
-     eux, un mois rouvert effaçait le prévu revenu de « Il te reste ». */
-  const totalBps = l.parts.reduce((t, p) => t + (p.part_bps ?? 0), 0)
-  return totalBps === 0 ? 0 : Math.round((cents * (mienne.part_bps ?? 0)) / totalBps)
+  if (!l.parts.some(p => p.user_profile_id === moi)) return 0
+  const poidsBps = l.parts.map(p => Math.max(0, p.part_bps ?? 0))
+  const poidsCents = l.parts.map(p => Math.abs(p.part_cents))
+  const somme = (v: number[]) => v.reduce((t, x) => t + x, 0)
+  const poids = somme(poidsBps) > 0 ? poidsBps : somme(poidsCents) > 0 ? poidsCents : l.parts.map(() => 1)
+  const total = somme(poids)
+  const signe = cents < 0 ? -1 : 1
+  const a = Math.abs(cents)
+  const lignes = l.parts.map((p, i) => ({
+    id: p.user_profile_id,
+    base: Math.floor((a * poids[i]) / total),
+    reste: (a * poids[i]) % total,
+  }))
+  let manque = a - lignes.reduce((t, x) => t + x.base, 0)
+  const ordre = [...lignes].sort((x, y) => y.reste - x.reste || (x.id < y.id ? -1 : 1))
+  const bonus = new Set<string>()
+  for (const x of ordre) {
+    if (manque <= 0) break
+    bonus.add(x.id)
+    manque--
+  }
+  const mienne = lignes.find(x => x.id === moi)!
+  return signe * (mienne.base + (bonus.has(moi) ? 1 : 0))
 }
 
 /** Ma part d'un montant, dans la proportion de mes parts sur la ligne. */

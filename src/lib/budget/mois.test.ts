@@ -79,7 +79,8 @@ describe('« Il te reste »', () => {
   })
   it('au fil du mois, ma part de max(prévu, déclaré)', () => {
     const l = ligne({ id: 'courses', parts: [[K, 48_525], [T, 31_475]] })
-    expect(maPart(l, K, [saisie('courses', 90_000)], false)).toBe(Math.round(90_000 * 48_525 / 80_000))
+    // 48 525 / 80 000 = 60,66 % : la base fige 6 066 points de base, et c'est sur eux qu'elle répartit.
+    expect(maPart(l, K, [saisie('courses', 90_000)], false)).toBe(Math.round(90_000 * 6_066 / 10_000))
   })
   it('sans revenu ce mois-là, il n’y a pas de reste', () => {
     expect(resteDuMois({ lignes: [ligne()], saisies: [], moi: K, revenus: [], mois: '2026-10-01',
@@ -423,6 +424,39 @@ describe('le récap de la clôture', () => {
     const lignes = [ligne({ id: 'e', charge_id: 'entretien', facon: 'mis_de_cote',
                             montant_cents: 0, montant_prevu_cents: 0, parts: [[K, 0], [T, 0]] })]
     expect(partSur(lignes[0], K, -1_000)).toBe(-500)
+  })
+})
+
+describe('une ligne rouverte garde la proportion de ses points de base, pas celle de ses centimes', () => {
+  /* Après « Revenir dessus », la ligne reste confirmée à son réel (47,90 €) et ses parts restent
+     celles de ce réel, arrondies au centime. L'écran recompte pourtant le prévu (800 €) : lire la
+     proportion sur les centimes (3 070 / 4 790) multiplie par ×16,7 l'arrondi d'un demi-centime et
+     fait dériver le reste de six centimes. La base, elle, répartit sur les points de base. */
+  const rouverte = () => ({
+    ...ligne({ id: 'courses', montant_cents: 4_790, montant_prevu_cents: 80_000,
+               confirme_le: '2026-10-31T10:00:00Z', parts: [[K, 3_070], [T, 1_720]] }),
+    parts: [{ user_profile_id: K, part_cents: 3_070, part_bps: 6_410 },
+            { user_profile_id: T, part_cents: 1_720, part_bps: 3_590 }],
+  })
+  it('ma part du prévu = ce que la base répartira sur les points de base', () => {
+    expect(partSur(rouverte(), K, 80_000)).toBe(51_280)
+    expect(partSur(rouverte(), T, 80_000)).toBe(28_720)
+  })
+  it('« Il te reste » compte donc 512,80 €, pas 512,74 €', () => {
+    const r = resteDuMois({ lignes: [rouverte()], saisies: [], moi: K, mois: '2026-10-01', clos: false,
+      revenus: [{ user_profile_id: K, net_mensuel_cents: 300_000, valid_from: '2026-01-01' }] })
+    expect(r.charges).toBe(51_280)
+  })
+  it('les parts d’un montant font toujours ce montant (le centime restant va au plus fort reste)', () => {
+    const l = { ...rouverte(), parts: [
+      { user_profile_id: K, part_cents: 1, part_bps: 3_333 },
+      { user_profile_id: T, part_cents: 1, part_bps: 3_333 },
+      { user_profile_id: 'c', part_cents: 1, part_bps: 3_334 }] }
+    const somme = [K, T, 'c'].reduce((t, u) => t + partSur(l, u, 10_001), 0)
+    expect(somme).toBe(10_001)
+  })
+  it('un avoir se répartit de même, avec son signe', () => {
+    expect(partSur(rouverte(), K, -80_000)).toBe(-51_280)
   })
 })
 
