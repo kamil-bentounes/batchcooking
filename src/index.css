@@ -167,3 +167,6 @@ dialog.feuille {
   padding: 0;
 }
 dialog.feuille::backdrop { background: rgb(28 43 35 / 0.45); }
+/* Le fond ne défile pas sous la feuille : `showModal` le rend inerte, mais un glissé ou la molette
+   sur le fond assombri faisait défiler la page de 400 px derrière (grand test, parcours budget). */
+html:has(dialog.feuille[open]) { overflow: hidden; }
