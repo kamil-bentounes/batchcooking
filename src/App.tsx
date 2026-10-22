@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { lienDeploye, useRoute } from './lib/route.ts'
+import { SESSION_PERDUE } from './lib/session-perdue.ts'
 import { SignIn } from './pages/SignIn'
 import { Password } from './pages/Password'
 import { Onboarding } from './pages/Onboarding'
@@ -47,6 +48,9 @@ export default function App() {
   const [pret, setPret] = useState(false)
   /** Sur un lien d'invitation : elle a dit avoir déjà un compte. */
   const [connexionDemandee, setConnexionDemandee] = useState(false)
+  /** La session a disparu en cours de route (jeton retiré, compte supprimé ailleurs) : on le dit. */
+  const [perdue, setPerdue] = useState(false)
+  const sessionRef = useRef<Session | null>(null)
   const { ici, va, remplace, retour } = useRoute()
 
   /* Le numéro de la DERNIÈRE relecture : une plus ancienne qui répond après
@@ -74,6 +78,8 @@ export default function App() {
         .select('password_set, display_name').eq('id', data.session.user.id).maybeSingle()).data
     }
     if (ceTour !== tour.current) return
+    sessionRef.current = data.session
+    if (data.session) setPerdue(false)
     setSession(data.session)
     setFoyer(hh)
     setMdpPose(p ? !!p.password_set : true)
@@ -108,7 +114,15 @@ export default function App() {
       }
       relire()
     })
-    return () => sub.subscription.unsubscribe()
+    /* `signOut` d'un autre onglet, jeton expiré : supabase-js le dit. Un jeton RETIRÉ du
+       stockage, lui, ne dit rien — c'est la requête refusée qui l'apprend (`session-perdue.ts`). */
+    const surSessionPerdue = () => {
+      if (!sessionRef.current) return
+      setPerdue(true)
+      relire()
+    }
+    window.addEventListener(SESSION_PERDUE, surSessionPerdue)
+    return () => { sub.subscription.unsubscribe(); window.removeEventListener(SESSION_PERDUE, surSessionPerdue) }
   }, [relire])
 
   if (!pret) return <main className="min-h-dvh grid place-items-center text-doux">Un instant…</main>
@@ -134,7 +148,8 @@ export default function App() {
   if (!session) {
     return invitation && !connexionDemandee
       ? <Rejoindre token={invitation[1]} connexion={() => setConnexionDemandee(true)} />
-      : <SignIn redirectTo={lienDeploye(ici)} />
+      : <SignIn redirectTo={lienDeploye(ici)}
+                info={perdue ? 'Ta session a expiré : reconnecte-toi.' : undefined} />
   }
   if (invitation) {
     return <AcceptInvite token={invitation[1]} dejaChezToi={!!foyer} va={va}

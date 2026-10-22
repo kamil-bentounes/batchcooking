@@ -39,14 +39,18 @@ const ACTION: Record<Mode, string> = {
  * `redirectTo` est OBLIGATOIRE : le défaut `window.location.href` emportait le
  * fragment de l'URL dans chaque lien envoyé. Voir `App.tsx`.
  */
-export function SignIn({ redirectTo: cible }: { redirectTo: string }) {
+export function SignIn({ redirectTo: cible, info }: {
+  redirectTo: string
+  /** Ce qu'il faut dire en arrivant ici, hors lien mort : la session a expiré. */
+  info?: string
+}) {
   const [mode, setMode] = useState<Mode>('mdp')
   const [email, setEmail] = useState('')
   const [mdp, setMdp] = useState('')
   /* Un lien mort le DIT. L'écran se taisait : on arrivait d'un clic sur un
      lien, et rien n'expliquait pourquoi on se retrouvait à la porte. */
   const [lienMort] = useState(() => erreurDeLien(window.location.href))
-  const [msg, setMsg] = useState(lienMort ?? ''); const [err, setErr] = useState(!!lienMort)
+  const [msg, setMsg] = useState(lienMort ?? info ?? ''); const [err, setErr] = useState(!!(lienMort ?? info))
   const [envoi, setEnvoi] = useState(false)
 
   /* Puis on l'efface de la barre d'adresse : un fragment d'erreur qui traîne

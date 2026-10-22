@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { PostgrestSingleResponse } from '@supabase/supabase-js'
 import type { Database } from './base.types.ts'
 import { fragmentRepare } from './lien.ts'
+import { SESSION_PERDUE, sessionPerdue } from './session-perdue.ts'
 
 /* ⚠️ AVANT `createClient` : c'est lui qui lit l'URL pour y chercher la session.
    Un lien empoisonné (`#error=…#access_token=…`, voir `fragmentRepare`) y
@@ -14,9 +15,25 @@ if (typeof window !== 'undefined') {
   }
 }
 
+/* Chaque requête de données passe ici : si elle part SANS jeton de session (la clé anonyme en
+   tient lieu) et se fait refuser, la session a disparu — voir `session-perdue.ts`. */
+const avecSurveillance: typeof fetch = async (entree, init) => {
+  const res = await fetch(entree, init)
+  if (typeof window !== 'undefined') {
+    const url = entree instanceof Request ? entree.url : String(entree)
+    const entetes = new Headers(init?.headers ?? (entree instanceof Request ? entree.headers : undefined))
+    if (sessionPerdue(res.status, url, entetes.get('Authorization'),
+                      import.meta.env.VITE_SUPABASE_ANON_KEY)) {
+      window.dispatchEvent(new Event(SESSION_PERDUE))
+    }
+  }
+  return res
+}
+
 export const supabase = createClient<Database>(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY,
+  { global: { fetch: avecSurveillance } },
 )
 
 /** Une ligne de table, telle que la base la rend. Évite de retyper à la main. */
@@ -82,7 +99,10 @@ export async function deconnecte(vers: string = import.meta.env.BASE_URL): Promi
 
 export async function callFunction<T = unknown>(name: string, body: unknown): Promise<T> {
   const { data } = await supabase.auth.getSession()
-  if (!data.session) throw new Error('Connecte-toi d’abord.')
+  if (!data.session) {
+    window.dispatchEvent(new Event(SESSION_PERDUE))
+    throw new Error('Connecte-toi d’abord.')
+  }
   return appelle<T>(name, body, data.session.access_token)
 }
 
