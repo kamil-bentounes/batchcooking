@@ -116,8 +116,12 @@ export type Contexte = {
  * avant tout arrondi : seul l'affichage arrondit.
  */
 export function retient(c: Candidate, f: Filtres, ctx: Contexte): boolean {
-  const texte = plie(f.texte.trim())
-  if (texte && !plie(c.title ?? '').includes(texte)) return false
+  /* Chaque MOT doit se trouver dans le titre, dans n'importe quel ordre : la phrase entière,
+     cherchée d'un bloc, ne trouvait rien dès qu'un mot s'intercalait (« tarte poireaux »
+     contre « Tarte aux poireaux »). */
+  const mots = plie(f.texte).split(/\s+/).filter(Boolean)
+  const titre = plie(c.title ?? '')
+  if (!mots.every(m => titre.includes(m))) return false
 
   // Un temps inconnu ne tient aucune promesse de temps (R6).
   if (f.tempsActifMax !== null

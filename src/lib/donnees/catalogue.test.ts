@@ -158,6 +158,17 @@ describe('la recherche', () => {
       .toBe(true)
   })
 
+  it('cherche chaque mot, dans n’importe quel ordre : « tarte poireaux » trouve « Tarte aux poireaux »', () => {
+    // Le catalogue entier se cherche au titre : taper deux mots est le cas ordinaire, et la
+    // phrase entière, collée telle quelle, ne trouvait rien dès qu'un mot s'intercalait.
+    const tarte = recette({ title: 'Tarte aux poireaux' })
+    expect(retient(tarte, filtres({ texte: 'tarte poireaux' }), RIEN)).toBe(true)
+    expect(retient(tarte, filtres({ texte: 'poireaux  TARTE' }), RIEN)).toBe(true)
+    expect(retient(recette({ title: 'Poulet à l’ail & au citron' }),
+      filtres({ texte: 'poulet ail' }), RIEN)).toBe(true)
+    expect(retient(tarte, filtres({ texte: 'tarte courgettes' }), RIEN)).toBe(false)
+  })
+
   it('écarte ce qui ne contient pas le texte', () => {
     expect(retient(recette({ title: 'Dahl' }), filtres({ texte: 'poulet' }), RIEN)).toBe(false)
   })
