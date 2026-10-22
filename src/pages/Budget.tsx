@@ -230,7 +230,10 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
           </>
         ) : (
           <>
-            {pasEncoreLa && !clos ? (
+            {/* ⚠️ Clos ou non : un mois clos d'avant son arrivée n'a ni reste ni choix pour elle (le
+                récap lui lisait « Il t'est resté — » et « Revenir dessus » : un tiret, et le geste
+                d'un mois qui n'est pas le sien). */}
+            {pasEncoreLa ? (
               <section aria-label="Ce qui reste" className="mt-7 rounded-[28px] bg-encre text-fond p-5">
                 <p className="text-[17px] leading-snug">
                   Tu n’étais pas encore dans le foyer : tu y entres en {nomDuMois(`${moi!.entre_le!.slice(0, 7)}-01`)}.

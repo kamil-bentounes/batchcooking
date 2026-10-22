@@ -20,7 +20,13 @@ export type Porte = 'trop-tot' | 'chargement' | 'erreur' | 'close' | 'pas-encore
  *   est déjà clos, et lui offrir « Clôturer » serait offrir ce que la base refuse.
  *   Pas lues, c'est « Un instant » ; en panne, c'est la panne.
  * - Un mois clos se lit, même si le reste n'est pas revenu : seul « Revenir dessus » agit.
- * - Pas encore dans le foyer ce mois-là : rien à ajouter, rien à clore (grand test du 22/10).
+ * - Pas encore dans le foyer ce mois-là : rien à ajouter, rien à clore (grand test du 22/10) — et
+ *   rien à rouvrir : un mois CLOS d'avant son arrivée n'est pas le sien non plus (« Revenir dessus »
+ *   lui était offert, avec un récap vide).
+ * - Le foyer décide de « Ajoute ton revenu » (`present`) : tant qu'il n'est pas lu, on ne sait pas
+ *   si la personne était là, et cette phrase — un cul-de-sac pour qui arrive en octobre —
+ *   s'affichait un instant, ou pour de bon si la lecture échouait. Pas lu, c'est « Un instant » ;
+ *   en panne, c'est la panne. Les autres portes (un mois clos, un revenu connu) ne l'attendent pas.
  * - Sans revenu on ne clôture pas (§ 4.5) — mais seulement quand les revenus sont LUS :
  *   « Ajoute ton revenu » dit à qui l'a posé qu'il ne l'a pas fait.
  */
@@ -34,17 +40,24 @@ export function porteDeLaCloture(o: {
   /** Je suis déjà dans le foyer ce mois-là (`estLaCeMois`) ; par défaut oui. Celle qui arrive
       en octobre n'a pas de revenu de septembre à ajouter : ce mois-là n'est pas le sien. */
   present?: boolean
+  /** La lecture du foyer, dont `present` découle. Omise : on ne l'attend pas. */
+  foyer?: Lecture
 }): { porte: Porte; fermee: Cloture | null } {
   if (o.mois >= o.courant) return { porte: 'trop-tot', fermee: null }
   if (o.clotures.data === undefined) {
     return { porte: o.clotures.error ? 'erreur' : 'chargement', fermee: null }
   }
+  if (o.present === false) return { porte: 'pas-encore-la', fermee: null }
   const fermee = o.clotures.data.find(k => k.mois === o.mois) ?? null
   if (fermee) return { porte: 'close', fermee }
   const etat = etatDeLEcran(o.lectures)
   if (etat !== 'pret') return { porte: etat, fermee: null }
-  if (o.present === false) return { porte: 'pas-encore-la', fermee: null }
-  return { porte: o.revenu === null ? 'sans-revenu' : 'a-clore', fermee: null }
+  if (o.revenu !== null) return { porte: 'a-clore', fermee: null }
+  /* « Ajoute ton revenu » ne se dit qu'à quelqu'un dont on sait qu'il était là : le foyer d'abord. */
+  if (o.foyer && o.foyer.data === undefined) {
+    return { porte: o.foyer.error ? 'erreur' : 'chargement', fermee: null }
+  }
+  return { porte: 'sans-revenu', fermee: null }
 }
 
 /** « d'octobre », « de mars » : la base dit la même chose (`de_mois`, 0094). Avec `courant`,

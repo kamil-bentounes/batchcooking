@@ -475,6 +475,34 @@ describe('une ligne rouverte garde la proportion de ses points de base, pas cell
   })
 })
 
+describe('le reste d’un mois clos, pour celui qui ne l’a pas clôturé : le revenu EN VIGUEUR CE MOIS-LÀ', () => {
+  /* Les parts d'un mois clos sont figées ; le revenu, lui, se relit dans l'historique. Un revenu
+     posé ou corrigé APRÈS le mois (valid_from au mois suivant, ou plus tard) ne déplace pas son
+     chiffre : `revenuDuMois` ne prend que `valid_from <= dernier jour du mois`, comme `parts_du_mois`. */
+  const historique = [
+    { user_profile_id: T, net_mensuel_cents: 250_000, valid_from: '2026-01-01' },
+    { user_profile_id: T, net_mensuel_cents: 310_000, valid_from: '2026-09-01' },
+    { user_profile_id: T, net_mensuel_cents: 999_900, valid_from: '2026-11-01' },
+  ]
+  const l = ligne({ id: 'l1', montant_cents: 80_000, parts: [[K, 40_000], [T, 40_000]] })
+  const reste = (mois: string) => resteDuMois({
+    lignes: [l], saisies: [], moi: T, revenus: historique, mois, clos: true })
+
+  it('septembre clos : 3 100 € − 400 €, jamais le revenu d’aujourd’hui', () => {
+    expect(reste('2026-09-01')).toEqual({ revenu: 310_000, charges: 40_000, reste: 270_000 })
+  })
+
+  it('août clos : l’ancien revenu, celui du 1er janvier', () => {
+    expect(reste('2026-08-01').revenu).toBe(250_000)
+  })
+
+  it('un revenu posé le dernier jour du mois compte déjà pour ce mois', () => {
+    const r = resteDuMois({ lignes: [l], saisies: [], moi: T, mois: '2026-10-01', clos: true,
+      revenus: [...historique, { user_profile_id: T, net_mensuel_cents: 320_000, valid_from: '2026-10-31' }] })
+    expect(r.revenu).toBe(320_000)
+  })
+})
+
 describe('l’égalité de reste se départage comme la base : par md5(uid || ligne), pas par identifiant', () => {
   /* En 50/50 avec un montant impair, les deux restes sont égaux. La base donne le centime à celui
      dont `md5(uid::text || ligne::text)` est le plus petit (`confirme_la_ligne`, 0104). Relevés :

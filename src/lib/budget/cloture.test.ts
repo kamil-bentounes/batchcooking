@@ -31,8 +31,19 @@ describe('porteDeLaCloture — ce que la page ouvre', () => {
     /* Thauba entre le 1er octobre : « Ajoute ton revenu de septembre » était un cul-de-sac. */
     expect(porte({ revenu: null, present: false })).toBe('pas-encore-la')
     expect(porte({ revenu: null, present: true })).toBe('sans-revenu')
-    /* Un mois déjà clos se lit toujours. */
-    expect(porte({ present: false, clotures: lu([k()]) })).toBe('close')
+    /* Un mois déjà clos se lit toujours — sauf s'il est d'avant mon arrivée : il n'est pas le mien,
+       et « Revenir dessus » ne m'est pas offert. */
+    expect(porte({ present: true, clotures: lu([k()]) })).toBe('close')
+    expect(porte({ present: false, clotures: lu([k()]) })).toBe('pas-encore-la')
+  })
+
+  it('le foyer pas lu : « Ajoute ton revenu » ne se dit pas (cul-de-sac pour qui arrive en octobre)', () => {
+    expect(porte({ revenu: null, foyer: attend })).toBe('chargement')
+    expect(porte({ revenu: null, foyer: rate })).toBe('erreur')
+    expect(porte({ revenu: null, foyer: lu({}), present: true })).toBe('sans-revenu')
+    /* Un revenu connu, ou un mois clos, ne l'attendent pas. */
+    expect(porte({ foyer: attend })).toBe('a-clore')
+    expect(porte({ foyer: attend, clotures: lu([k()]) })).toBe('close')
   })
 
   it('un mois passé, tout lu, un revenu : on clôture', () => {

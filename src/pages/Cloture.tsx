@@ -60,7 +60,8 @@ export function Cloture({ userId, mois, va, retour }: {
   userId: string; mois: string; va: (v: string) => void; retour: () => void
 }) {
   const courant = moisDe()
-  const { data: foyer } = useFoyer()
+  const lecteurFoyer = useFoyer()
+  const foyer = lecteurFoyer.data
   const clotures = useClotures()
   const depenses = useMois(mois)
   const saisies = useSaisies(mois)
@@ -82,6 +83,7 @@ export function Cloture({ userId, mois, va, retour }: {
   const moi = foyer?.membres.find(m => m.id === userId)
   const { porte, fermee } = porteDeLaCloture({
     mois, courant, clotures, lectures: [depenses, saisies, revenus], revenu,
+    foyer: lecteurFoyer,
     present: moi ? estLaCeMois(moi, mois) : true,
   })
   /* Les soldes d'année ne se lisent que pour un mois qu'on va clôturer. */
@@ -142,7 +144,7 @@ export function Cloture({ userId, mois, va, retour }: {
   } else if (porte === 'erreur') {
     /* Rien d'autre que la panne et de quoi réessayer : « Clôturer » ou « Ajoute ton revenu »
        seraient des faits que personne n'a lus. */
-    const enPanne = [clotures, depenses, saisies, revenus].filter(q => q.error)
+    const enPanne = [clotures, lecteurFoyer, depenses, saisies, revenus].filter(q => q.error)
     corps = (
       <>
         <Erreur de={new Error(messageDeLecture(enPanne[0]?.error))} />
