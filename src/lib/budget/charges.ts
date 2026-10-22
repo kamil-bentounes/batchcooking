@@ -136,3 +136,13 @@ export function peutCorriger(o: {
   return { pret: o.libelle.trim() !== '' && m.valide && d.valide,
            cents: m.cents, refusMontant: m.refus, refusDebut: d.refus }
 }
+
+/**
+ * Commune : elle se partage (plusieurs participants), ou — seul dans le foyer seulement — la
+ * personne a dit qu'elle devra être partagée avec celle qu'elle invite (l'intention).
+ * À deux ou plus, une charge payée par une seule personne est perso : l'intention pré-cochée
+ * par le catalogue ne vaut que tant qu'il n'y a personne d'autre à qui la partager.
+ */
+export function communeDeLaCharge(o: { qui: number; membres: number; intention: boolean }): boolean {
+  return o.qui > 1 || (o.membres === 1 && o.intention)
+}

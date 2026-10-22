@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ceQuiChange, debutDuChamp, ditLaCorrection, lisLeDebut, peutCorriger, peutPoser,
+import { ceQuiChange, communeDeLaCharge, debutDuChamp, ditLaCorrection, lisLeDebut, peutCorriger, peutPoser,
          periodiciteDeLaFacon, plancherDuDebut, retireesEncoreAReg, sousTitreDeLaFacon,
          suiteDuRetrait, texteDeLaRetiree } from './charges.ts'
 import { montant } from './mois.ts'
@@ -209,5 +209,25 @@ describe('peutCorriger — corriger ne contourne ni le plafond ni la date', () =
 
   it('le départ ancien déjà posé ne bloque pas un simple changement de libellé', () => {
     expect(peutCorriger({ ...base, debut: '2024-03-01', garde: '2024-03-01' }).pret).toBe(true)
+  })
+})
+
+describe('communeDeLaCharge : une charge n’est commune que si elle se partage', () => {
+  /* Grand test, parcours « nouveau venu » (22/10) : Thauba pose « Salle de sport » (catalogue : perso),
+     seule participante, dans un foyer de deux. Elle était enregistrée COMMUNE : « Commun »
+     comptait son abonnement pour Kamil, et toute troisième personne y serait entrée à son
+     arrivée (`tg_membre_rejoint_les_communes`). */
+  it('à deux dans le foyer, une seule participante : perso, quoi que le catalogue pré-coche', () => {
+    expect(communeDeLaCharge({ qui: 1, membres: 2, intention: true })).toBe(false)
+    expect(communeDeLaCharge({ qui: 1, membres: 2, intention: false })).toBe(false)
+  })
+
+  it('à plusieurs participants : commune', () => {
+    expect(communeDeLaCharge({ qui: 2, membres: 2, intention: false })).toBe(true)
+  })
+
+  it('seul dans le foyer, la case « Elle se partagera avec le foyer » dit l’intention', () => {
+    expect(communeDeLaCharge({ qui: 1, membres: 1, intention: true })).toBe(true)
+    expect(communeDeLaCharge({ qui: 1, membres: 1, intention: false })).toBe(false)
   })
 })

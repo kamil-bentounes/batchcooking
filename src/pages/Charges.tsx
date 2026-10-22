@@ -25,7 +25,7 @@ import {
 } from '../lib/donnees/budget.ts'
 import { CATEGORIES, NOM_DU_MODE, categorieDeLArticle, infoCategorie, modeDeLArticle,
          type Categorie, type Mode } from '../lib/budget/categories.ts'
-import { ceQuiChange, debutDuChamp, ditLaCorrection, peutCorriger, peutPoser, periodiciteDeLaFacon,
+import { ceQuiChange, communeDeLaCharge, debutDuChamp, ditLaCorrection, peutCorriger, peutPoser, periodiciteDeLaFacon,
          plancherDuDebut, retireesEncoreAReg, sousTitreDeLaFacon, suiteDuRetrait, texteDeLaRetiree,
          type Rythme } from '../lib/budget/charges.ts'
 import { maintenant } from '../lib/horloge.ts'
@@ -240,7 +240,7 @@ export function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
               )
             })}
           </div>
-          {qui.length === 1 && !commune && (
+          {qui.length === 1 && !communeDeLaCharge({ qui: 1, membres: membres.length, intention: commune }) && (
             <p className="mt-2 text-[14px] text-doux">
               Payée par une seule personne : elle n’entrera dans aucun partage.
             </p>
@@ -344,7 +344,7 @@ export function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
                         le catalogue le suggérait alors qu'on est encore seul
                         dans le foyer. C'est cette intention qui fera entrer le
                         second membre à son arrivée. */
-                     commun: qui.length > 1 || commune,
+                     commun: communeDeLaCharge({ qui: qui.length, membres: membres.length, intention: commune }),
                      debut,
                    }, { onSuccess: surFini })}>
           {ajoute.isPending ? 'J’ajoute…' : 'Ajouter cette charge'}
