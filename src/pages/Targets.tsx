@@ -40,7 +40,8 @@ function Mesure({ m, valeur, onChange }:
         type="range" min={m.min} max={m.max} step={m.pas} value={valeur}
         aria-label={m.nom}
         onChange={e => onChange(Number(e.target.value))}
-        className="mt-3 w-full accent-herbe"
+        /* 44 px de haut : le curseur natif ne fait que 16 px, et se saisit au pouce. */
+        className="mt-1 h-11 w-full accent-herbe cursor-pointer"
       />
     </div>
   )
