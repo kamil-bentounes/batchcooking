@@ -73,10 +73,36 @@ end $$;
 -- ── La date d'entrée change ─────────────────────────────────────────────────
 create or replace function public.tg_entre_le_refige()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
-declare m date; depuis date; borne date; jusqua date;
+declare m date; depuis date; borne date; jusqua date; arrivee date; apres_cloture date;
 begin
   if new.entre_le is not distinct from old.entre_le then return null; end if;
   perform public.verrou_du_foyer(new.household_id);
+
+  /* Reculer son arrivée fait reculer son PREMIER revenu avec elle, comme à la pose
+     (`tg_revenu_premier`) : Thauba arrive le 01/10, pose son revenu en octobre, puis
+     corrige son arrivée au 01/09. Sans revenu en septembre, le mois se partageait à
+     parts égales et la clôture refusait (« Thauba n'a pas encore posé son revenu »),
+     sans qu'aucun écran permette de le poser : l'interface ne pose un revenu qu'à
+     partir du mois courant. Un revenu ne se modifie pas (`tg_revenu_date_immuable`) :
+     on en ajoute un, du même montant, à la nouvelle date — jamais avant le mois qui
+     suit la dernière clôture.
+     Seulement pour un GESTE de la personne : sous la clé de service (amorces,
+     réparations à la main), on corrige une date sans réécrire l'histoire des
+     revenus — la base de Kamil a un revenu depuis septembre et une arrivée bien plus
+     ancienne, et le rapprocher de l'arrivée créerait des mois suivis qu'il n'a jamais voulus. */
+  if new.entre_le < old.entre_le and not public.is_service_role() then
+    arrivee := date_trunc('month', new.entre_le)::date;
+    select (max(k.mois) + interval '1 month')::date into apres_cloture
+    from public.cloture k where k.household_id = new.household_id;
+    arrivee := greatest(arrivee, coalesce(apres_cloture, arrivee));
+    insert into public.revenu (household_id, user_profile_id, net_mensuel_cents, valid_from)
+    select r.household_id, r.user_profile_id, r.net_mensuel_cents, arrivee
+    from public.revenu r
+    where r.user_profile_id = new.id
+      and r.valid_from = (select min(v.valid_from) from public.revenu v
+                          where v.user_profile_id = new.id)
+      and r.valid_from > arrivee;
+  end if;
 
   /* Seuls les mois ENTRE l'ancienne et la nouvelle date changent de partage. Il
      refigeait tous les mois depuis la plus ancienne : Thauba partie le 03/11,

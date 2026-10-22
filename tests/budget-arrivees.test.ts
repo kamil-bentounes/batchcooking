@@ -65,6 +65,33 @@ describe('changer sa date d’arrivée', () => {
     expect(apres, 'octobre a été repartagé sur Kamil seul').toEqual(avant)
   })
 
+  it('reculer sa date d’arrivée après avoir posé son premier revenu : le revenu recule avec elle',
+    async () => {
+      await regleLHeure('2026-11-05T10:00:00+01:00')
+      const f = await foyerSolo('entre-le-recule', { revenu: 370_000, depuis: '2026-01-01' })
+      const thauba = await membre(f, 'Thauba', { arrivee: '2026-10-01', revenu: 200_000,
+                                                 depuis: '2026-10-01' })
+      const loyer = await poseCharge(f, { libelle: 'Loyer', cents: 167_853, commun: true,
+                                          participants: [f.userId, thauba.userId] })
+      await ouvre(f, '2026-09-01')
+      await ouvre(f, '2026-10-01')
+      expect((await ligne(loyer, '2026-09-01'))!.depense_part, 'septembre : Kamil seul').toHaveLength(1)
+
+      // Elle corrige son arrivée : elle était là dès septembre.
+      ou(await thauba.client.from('user_profile').update({ entre_le: '2026-09-01' })
+        .eq('id', thauba.userId).select())
+
+      /* Sans cela son premier revenu restait à octobre : septembre se partageait
+         50/50 faute de revenu, et la clôture refusait (« Thauba n'a pas encore posé
+         son revenu : septembre attend »), sans que rien, à l'écran, permette de le poser. */
+      expect(await revenus(thauba.userId)).toEqual(['2026-09-01', '2026-10-01'])
+      const parts = (await ligne(loyer, '2026-09-01'))!.depense_part.map(p => p.part_cents)
+      expect(parts, 'septembre se partage à parts égales : le revenu n’a pas suivi')
+        .not.toEqual([83_926, 83_927])
+      expect(parts.reduce((a, b) => a + b, 0)).toBe(167_853)
+      await clos(f, '2026-09-01')
+    })
+
   it('traverse plusieurs mois : refige juillet à septembre, et pas octobre', async () => {
     await regleLHeure('2026-11-05T10:00:00+01:00')
     const f = await foyerSolo('entre-le-mois', { revenu: 370_000, depuis: '2026-01-01' })

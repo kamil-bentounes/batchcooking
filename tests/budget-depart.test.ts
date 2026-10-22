@@ -120,6 +120,35 @@ describe('un membre part, le foyer reste', () => {
       expect(await restantes(), 'une ligne de Kamil a bougé').toEqual(avant)
     })
 
+  it('les mois ouverts se repartagent entre ceux qui restent ; le mois clôturé garde ses parts',
+    async () => {
+      const f = await foyerSolo('dep-repartage', { revenu: 300_000 })
+      const thauba = await membre(f, 'Thauba', { arrivee: '2026-09-01', revenu: 200_000 })
+      const courses = await poseCharge(f, { libelle: 'Courses', cents: 80_000, mode: 'au_fil',
+        commun: true, participants: [f.userId, thauba.userId] })
+      await ouvre(f, '2026-09-01')
+      await ouvre(f, '2026-10-01')
+      await clos(f, '2026-09-01')
+      const parts = async (mois: string) => ou(await admin().from('depense_part')
+        .select('user_profile_id, part_bps, part_cents')
+        .eq('depense_id', (await ligne(courses, mois))!.id)) as
+        { user_profile_id: string; part_bps: number; part_cents: number }[]
+      const septembre = await parts('2026-09-01')
+      // À deux, octobre se partage 60/40 : le test n'a de sens que s'il part de là.
+      expect((await parts('2026-10-01')).map(p => p.part_bps).sort((a, b) => a - b))
+        .toEqual([4_000, 6_000])
+
+      ou(await thauba.client.rpc('delete_my_account'))
+
+      /* Octobre est ouvert : sa part de Courses revient à Kamil, qui doit TOUT.
+         Avant, 40 % restaient rattachés à un profil disparu : Kamil lisait « Il te
+         reste 1 275 € après 2 425 € de charges » alors qu'il en devait 3 959 €. */
+      expect(await parts('2026-10-01'), 'octobre n’a pas été repartagé').toEqual([
+        { user_profile_id: f.userId, part_bps: 10_000, part_cents: 80_000 }])
+      // Septembre est clôturé : il vaut son reste, ses parts ne bougent pas.
+      expect(await parts('2026-09-01'), 'un mois clôturé a été repartagé').toEqual(septembre)
+    })
+
   it('le départ du seul membre qui avait un revenu recale les années ouvertes', async () => {
     const f = await foyerSolo('dep-recale', { revenu: null })
     const thauba = await membre(f, 'Thauba', { arrivee: '2026-09-01', revenu: 240_000 })
