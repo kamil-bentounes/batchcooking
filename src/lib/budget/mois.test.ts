@@ -356,6 +356,21 @@ describe('la carte du hub', () => {
     expect(ligneDuHub({ aCloturer: null, aDire: 1 })).toBe('1 montant à dire')
     expect(ligneDuHub({ aCloturer: null, aDire: 0 })).toBe('Tout est à jour')
   })
+  it('les montants à dire se nomment : trois au plus, puis « et N autres »', () => {
+    expect(ligneDuHub({ aCloturer: null, aDire: 1, noms: ['Courses'] })).toBe('1 montant à dire : Courses')
+    expect(ligneDuHub({ aCloturer: null, aDire: 2, noms: ['Courses', 'Sorties'] }))
+      .toBe('2 montants à dire : Courses et Sorties')
+    expect(ligneDuHub({ aCloturer: null, aDire: 3, noms: ['Courses', 'Sorties', 'Essence'] }))
+      .toBe('3 montants à dire : Courses, Sorties et Essence')
+    expect(ligneDuHub({ aCloturer: null, aDire: 5, noms: ['A', 'B', 'C', 'D', 'E'] }))
+      .toBe('5 montants à dire : A, B, C et 2 autres')
+    expect(ligneDuHub({ aCloturer: null, aDire: 4, noms: ['A', 'B', 'C', 'D'] }))
+      .toBe('4 montants à dire : A, B, C et 1 autre')
+  })
+  it('le mois à clôturer passe devant, noms ou pas', () => {
+    expect(ligneDuHub({ aCloturer: '2026-09-01', aDire: 2, noms: ['Courses', 'Sorties'] }))
+      .toBe('Septembre est à clôturer')
+  })
 })
 
 describe('le récap de la clôture', () => {

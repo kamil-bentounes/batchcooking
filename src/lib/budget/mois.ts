@@ -427,10 +427,23 @@ export function bandeau(o: {
   return null
 }
 
-/** La seconde ligne de la carte Budget du hub (§ 3.6). */
-export function ligneDuHub(o: { aCloturer: string | null; aDire: number }): string {
+/**
+ * La seconde ligne de la carte Budget du hub (§ 3.6). `noms` : les lignes à dire — « 2 montants à
+ * dire » ne disait pas lesquels, et une arrivante ne devinait pas par où commencer. Trois noms au
+ * plus, puis « et N autres » ; sans noms (non lus), le compte seul.
+ */
+export function ligneDuHub(o: { aCloturer: string | null; aDire: number; noms?: string[] }): string {
   if (o.aCloturer) return `${capitale(nomDuMois(o.aCloturer))} est à clôturer`
-  if (o.aDire > 0) return `${o.aDire} montant${o.aDire > 1 ? 's' : ''} à dire`
+  if (o.aDire > 0) {
+    const compte = `${o.aDire} montant${o.aDire > 1 ? 's' : ''} à dire`
+    const noms = (o.noms ?? []).filter(n => n.trim() !== '')
+    if (noms.length === 0) return compte
+    const vus = noms.slice(0, 3)
+    const autres = noms.length - vus.length
+    const liste = autres > 0 ? `${vus.join(', ')} et ${autres} autre${autres > 1 ? 's' : ''}`
+      : vus.length > 1 ? `${vus.slice(0, -1).join(', ')} et ${vus[vus.length - 1]}` : vus[0]
+    return `${compte} : ${liste}`
+  }
   return 'Tout est à jour'
 }
 

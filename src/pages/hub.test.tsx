@@ -195,7 +195,7 @@ describe('Hub — « … est à clôturer » (3.8, § 3.6)', () => {
   it('septembre clôturé : les montants à dire reprennent la ligne', () => {
     const t = carte(hub(tout({ clotures: [septembre()] })))
     expect(t).not.toContain('à clôturer')
-    expect(t).toContain('1 montant à dire')
+    expect(t).toContain('1 montant à dire : Courses')
   })
 
   it('septembre clôturé et rien à dire : « Tout est à jour »', () => {

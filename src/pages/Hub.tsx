@@ -22,7 +22,7 @@ import { useBarquettes } from '../lib/donnees/barquettes.ts'
 import { aDesObjectifs, bandeauDuProfil, useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
 import { useClotures, useMois, useRevenus, useSaisies, moisDe, eurosRonds } from '../lib/donnees/budget.ts'
 import {
-  aDire, ligneDuHub, moisVoisin, montant, nomDuMois, resteDuMois, revenuDuMois, sousLEuro,
+  aDire, estADire, ligneDuHub, moisVoisin, montant, nomDuMois, resteDuMois, revenuDuMois, sousLEuro,
 } from '../lib/budget/mois.ts'
 import { etatDeLEcran, messageDeLecture } from '../lib/budget/ecran.ts'
 
@@ -86,7 +86,8 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
   /* Pas de ligne du tout tant qu'on ne sait pas : « Tout est à jour » dit avant d'avoir
      lu les clôtures aurait menti à qui a un mois à clôturer. */
   const suite = clotures.data === undefined ? null
-    : ligneDuHub({ aCloturer, aDire: aDire(depenses, saisies.data ?? [], false) })
+    : ligneDuHub({ aCloturer, aDire: aDire(depenses, saisies.data ?? [], false),
+                   noms: depenses.filter(l => estADire(l, saisies.data ?? [], false)).map(l => l.libelle) })
   const geste = GESTE[cycle?.state ?? 'vide']
   const leBandeauDuProfil = !profilLu ? null
     : bandeauDuProfil({ prenom: !!moi?.display_name, revenu: revenuPose,
