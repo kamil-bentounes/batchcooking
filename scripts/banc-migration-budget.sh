@@ -54,6 +54,8 @@ monte() {
     SANS=$(mktemp -d)
     mkdir -p "$SANS/supabase/migrations"
     cp supabase/config.toml "$SANS/supabase/config.toml"
+    # config.toml cite `./supabase/templates/*.html` (mails d'auth) : sans ce dossier, la CLI refuse de démarrer.
+    ln -s "$PWD/supabase/templates" "$SANS/supabase/templates"
     for f in supabase/migrations/*.sql; do
       if [ "$(basename "$f" | cut -c1-4)" \< "$LA_MIGRATION" ]; then
         ln -s "$PWD/$f" "$SANS/supabase/migrations/$(basename "$f")"
