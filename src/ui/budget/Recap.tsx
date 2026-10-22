@@ -28,9 +28,12 @@ export function Recap({ mois, reste, segments, cloture, va }: {
       {cloture ? (
         <>
           <p className="text-[16px] opacity-80">{capitale(nomDuMois(mois))} est clôturé.</p>
-          <p className="text-[16px]">Il t’est resté</p>
+          {/* Négatif : « Il te manque », comme le mois ouvert (§ Négatif) — jamais « resté −120 € ». */}
+          <p className="text-[16px]">
+            {cloture.reste !== null && cloture.reste < 0 ? 'Il te manque' : 'Il t’est resté'}
+          </p>
           <p className="chiffre mt-1 text-[56px] leading-none text-safran">
-            {cloture.reste === null ? '—' : montant(cloture.reste)}
+            {cloture.reste === null ? '—' : montant(Math.abs(cloture.reste))}
           </p>
           {cloture.misDeCote > 0 && (
             <p className="mt-3 text-[15px] opacity-80">dont {montant(cloture.misDeCote)} mis de côté</p>

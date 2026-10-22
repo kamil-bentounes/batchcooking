@@ -153,7 +153,8 @@ export function Cloture({ userId, mois, va, retour }: {
         </p>
         {mien && mien.reste_cents !== null && (
           <p className="mt-2 text-[17px]">
-            Il t’est resté <span className="chiffre text-[28px]">{montant(mien.reste_cents)}</span>
+            {mien.reste_cents < 0 ? 'Il te manque' : 'Il t’est resté'}{' '}
+            <span className="chiffre text-[28px]">{montant(Math.abs(mien.reste_cents))}</span>
             {mien.mis_de_cote_cents > 0 && `, dont ${montant(mien.mis_de_cote_cents)} mis de côté`}.
           </p>
         )}

@@ -76,6 +76,14 @@ describe('les gardes', () => {
     expect(texte(h)).toContain('Ajoute ton revenu de septembre')
   })
 
+  it('un mois clôturé à reste négatif : « Il te manque X € », pas « Il t’est resté −X € »', () => {
+    const k = { ...cloturee(), choix: [{ ...cloturee().choix[0], reste_cents: -120_00, mis_de_cote_cents: 0 }] }
+    const t = texte(page({ clotures: [k] }))
+    expect(t).toContain('Il te manque 120 €')
+    expect(t).not.toContain('resté')
+    expect(t).not.toContain('−')
+  })
+
   it('un mois déjà clôturé : il se lit, et « Revenir dessus » est le seul geste', () => {
     const h = page({ clotures: [cloturee()] })
     const t = texte(h)

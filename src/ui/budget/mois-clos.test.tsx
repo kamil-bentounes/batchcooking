@@ -169,6 +169,19 @@ describe('Recap d’un mois clôturé', () => {
     expect(t).not.toContain('Il te reste')
   })
 
+  it('un reste négatif se lit « Il te manque X », comme le mois ouvert — jamais « resté −X »', () => {
+    const t = rend({ reste: -120_00, misDeCote: 0 })
+    expect(t).toContain('Il te manque')
+    expect(t).toContain('120 €')
+    expect(t).not.toContain('resté')
+    expect(t).not.toContain('−')
+    expect(t).not.toContain('-120')
+  })
+
+  it('un reste à 0 reste « Il t’est resté 0 € »', () => {
+    expect(rend({ reste: 0, misDeCote: 0 })).toContain('Il t’est resté 0 €')
+  })
+
   it('rien mis de côté : pas de « dont »', () => {
     expect(rend({ reste: 50_00, misDeCote: 0 })).not.toContain('dont')
   })
