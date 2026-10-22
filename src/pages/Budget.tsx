@@ -49,9 +49,17 @@ import { Recap } from '../ui/budget/Recap.tsx'
     continuait d'annoncer le montant habituel pendant que la base avait validé. */
 type Ouverte = { geste: Geste; id: string } | { geste: 'choix' } | null
 
-export function Budget({ userId, va }: { userId: string; va: (v: string) => void }) {
+export function Budget({ userId, va, mois: depart }: {
+  userId: string; va: (v: string) => void
+  /** `/budget/AAAA-MM` : le mois qu'on vient de clôturer, ou de rouvrir. */
+  mois?: string
+}) {
   const courant = moisDe()
-  const [mois, setMois] = useState(courant)
+  /* Jamais au-delà du mois courant, même par l'adresse : l'ouvrir créerait ses
+     lignes avec la clé du jour, figée. Et un mois qui n'existe pas (`2026-13`)
+     retombe sur le courant, au lieu de requêter la base avec une date fausse. */
+  const [mois, setMois] = useState(() =>
+    (depart && /^\d{4}-(0[1-9]|1[0-2])-01$/.test(depart) && depart <= courant ? depart : courant))
   const [filtre, setFiltre] = useState<Filtre>('tout')
   const [ouverte, setOuverte] = useState<Ouverte>(null)
   const lecteurFoyer = useFoyer()

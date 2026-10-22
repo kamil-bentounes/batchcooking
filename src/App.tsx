@@ -172,6 +172,14 @@ export default function App() {
   if (amitie) return <AccepteAmi jeton={amitie[1]} va={va} />
   if (sessionAmie) return <Cuisine userId={moi} va={va} cycleId={sessionAmie[1]} />
 
+  /* Un mois donné du budget : la clôture y ramène, sur le mois qu'elle vient de
+     fermer. `key` : sans elle, React garderait l'écran déjà monté, et son mois
+     d'avant. */
+  const moisVu = ici.match(/^\/budget\/(\d{4})-(0[1-9]|1[0-2])$/)
+  if (moisVu) {
+    return <Budget key={ici} userId={moi} va={va} mois={`${moisVu[1]}-${moisVu[2]}-01`} />
+  }
+
   switch (ici) {
     /* Les deux univers. `/` est le hub — il ne porte pas de barre du bas, c'est
        l'écran qu'on quitte immédiatement — et `/cuisine-accueil` est l'accueil
