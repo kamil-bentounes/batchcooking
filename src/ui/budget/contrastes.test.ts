@@ -104,3 +104,31 @@ describe('2.9 · la jauge', () => {
     expect(contraste(c('piste'), c('surface'))).toBeGreaterThanOrEqual(1.1)
   })
 })
+
+describe('3.3 / 3.4 · les étapes de la clôture', () => {
+  it('« C’est ça » : le texte `fond` sur l’aplat herbe', () => {
+    expect(contraste(c('fond'), c('herbe'))).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('les phrases posées sur le fond de la page : herbe (« de moins »), ocre (« de plus », refus), doux (consignes), groseille (panne)', () => {
+    for (const nom of ['herbe', 'ocre', 'doux', 'groseille']) {
+      expect(contraste(c(nom), c('fond')), nom).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('l’interrupteur « Rien dépensé » : son rail éteint (trait doux), son rail allumé et sa pastille se voient sur la carte', () => {
+    expect(contraste(c('doux'), c('surface'))).toBeGreaterThanOrEqual(3)
+    expect(contraste(c('herbe'), c('surface'))).toBeGreaterThanOrEqual(3)
+    expect(contraste(c('surface'), c('herbe'))).toBeGreaterThanOrEqual(3)
+  })
+
+  it('le choix coché (cadre et point herbe) et la pastille vide (trait doux) se voient sur la carte', () => {
+    expect(contraste(c('herbe'), c('surface'))).toBeGreaterThanOrEqual(3)
+    expect(contraste(c('doux'), c('surface'))).toBeGreaterThanOrEqual(3)
+  })
+
+  it('la poche choisie : `fond` sur l’encre ; les autres : l’encre sur la piste', () => {
+    expect(contraste(c('fond'), c('encre'))).toBeGreaterThanOrEqual(4.5)
+    expect(contraste(c('encre'), c('piste'))).toBeGreaterThanOrEqual(4.5)
+  })
+})
