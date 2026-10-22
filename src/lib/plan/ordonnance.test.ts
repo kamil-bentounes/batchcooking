@@ -239,12 +239,37 @@ describe('déterminisme et tenue en charge', () => {
         appareil: i % 3 === 0 ? (i % 6 === 0 ? 'four' : 'plaque') : null,
         dependDe: i > 5 ? [`t${i - 6}`] : [],
       }))
+    const ordre = taches.map(t => t.id)
+
+    /* ⚠️ Pas de plafond en millisecondes : « moins de 400 ms » rougissait dès que la machine
+       était chargée (Playwright, build, autre suite en parallèle), sans qu'aucun code n'ait
+       changé. Ce que le test protège, c'est que le coût est borné par la TAILLE du problème —
+       au plus ESSAIS_MAX (600) évaluations de `ordonnance` —, pas qu'une machine donnée soit
+       rapide. On mesure donc le coût d'UNE évaluation dans le même processus, au même instant,
+       et on borne la recherche par un multiple généreux de 600 évaluations : la charge ralentit
+       les deux mesures ensemble. */
+    const evaluations = (n: number) => {
+      const t0 = performance.now()
+      for (let i = 0; i < n; i++) ordonnance(taches, SEUL, ordre)
+      return performance.now() - t0
+    }
+    evaluations(20) // chauffe le moteur
+    const reference = Math.min(evaluations(100), evaluations(100)) / 100
+
     const debut = performance.now()
     const plan = planifie(taches, SEUL, { graine: 'charge' })
     const ecoule = performance.now() - debut
     expect(plan.taches).toHaveLength(60)
-    // Le coût est borné par la TAILLE, jamais par l'horloge : c'est ce qui rend
-    // le plan identique sur les deux téléphones (D50).
-    expect(ecoule).toBeLessThan(400)
+
+    // 600 évaluations + la liste initiale. Mesuré le 22/10 : la recherche coûte ≈ 480 évaluations
+    // (0,8 chacune : le voisinage ne refait pas tout), soit 100 ms ici. Marge ×3 sur 601 (copie de
+    // la liste, tri) et plancher de 1 s : une machine saturée ne fait pas rougir ce test ; une
+    // recherche qui ignorerait son plafond (×4 et plus), si.
+    expect(ecoule).toBeLessThan(Math.max(1_000, reference * 601 * 3))
+
+    /* Le plafond lui-même, sans horloge : 60 actions × 30 essais = 1 800 dépasserait 600 ; le
+       plan par défaut est donc celui de 600 itérations exactement. Le même plan pour la même
+       graine, c'est aussi ce qui rend le plan identique sur les deux téléphones (D50). */
+    expect(planifie(taches, SEUL, { graine: 'charge', iterationsMax: 600 })).toEqual(plan)
   })
 })
