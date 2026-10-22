@@ -250,9 +250,26 @@ avant l'arrivée, md5 des égalités, focus…) ; **à vérifier à son retour**
 `vitest run src` 1 524, build, lint (11 avertissements anciens, 0 erreur), banc de migration `--tout` vert
 (copie nue, 9 arrêts, 5 variantes), base locale rejouée de 0001 à 0117 sur un `db reset` neuf.
 
+**Joué sur la prod après la mise en ligne (22/10)** :
+- Parcours d'une invitée, sur le vrai site, avec un foyer et des adresses jetables (supprimés ensuite, la prod est
+  revenue à 1 compte / 1 profil / 1 foyer) : l'hôte se connecte, crée l'invitation, le lien ouvre « Hôte t'invite »,
+  l'invitée choisit son mot de passe, son compte naît confirmé, elle arrive dans le foyer, remplit son profil,
+  atteint le hub, se déconnecte et revient avec son mot de passe. Le script vit hors dépôt
+  (`.shots/prod-invitee.mjs`, non versionné : il lit la clé de service). Console propre ; le seul HTTP ≥ 400 est le
+  404 du repli de GitHub Pages sur `/invite/<jeton>` (l'application s'affiche : `404.html`).
+- Écrans du Budget sur les VRAIES données de Kamil, migrées, connecté comme lui (copie locale du banc, bundle de
+  développement) : octobre « Il te reste 316,80 € sur 4 325 € de revenus, après 4 008,20 € de charges prévues »
+  (22 lignes de la prod + 3 lignes créées à l'ouverture du mois : Droguerie 60, Coiffeur 30, Pharmacie 20, soit
+  25 lignes), septembre 426,76 € (23 lignes, 3 898,24 €), charges, réglages, épargne, page de clôture de
+  septembre : tous les totaux se recoupent à la main, aucune erreur de console.
+
 **Reste** :
-1. Le parcours d'une invitée sur la VRAIE prod (voir « Côté Kamil »), avec un foyer jetable.
-2. Le compte rendu du Budget (page Artifact) avec les points à dire à Kamil.
+1. Le compte rendu du Budget (page Artifact) avec les points à dire à Kamil.
+2. **Branche par défaut du dépôt GitHub = `feat/lot-0a-1-schema-et-acces`, pas `main`** : un cron ne tourne que depuis la
+   branche par défaut, donc `reveil.yml` (le réveil quotidien de la base) ne s'est JAMAIS exécuté. À Kamil de passer la
+   branche par défaut sur `main` (Settings → Branches), puis de lancer « Réveil de la base » une fois à la main
+   (Actions → Run workflow). Sans `gh` ni jeton perso, je ne peux pas le faire. Le projet Supabase est éveillé
+   (utilisé le 22/10) : sept jours de marge.
 3. Safari/WebKit ne se joue pas sur ce poste (bibliothèques système absentes, `sudo` demande un mot de passe).
 
 ## Côté Kamil
