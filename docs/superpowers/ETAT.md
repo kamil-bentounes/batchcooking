@@ -206,13 +206,39 @@ en lecture seule, banc de migration `--tout` vert sur une copie du jour. Voir D1
 - 0114 s'arrête (et dit quoi faire) sur ce qu'elle ne sait pas migrer : ligne confirmée à 0 €, ligne
   confirmée du mois en cours, plusieurs foyers, enveloppes ambiguës, ligne `modele` sans charge.
 
-## Chantier 4 · Le grand test final
+## Chantier 4 · Le grand test final — JOUÉ le 22/10, corrections en cours
 
-Il passe par tous les parcours de l'app et compare les captures aux maquettes
-(`docs/superpowers/maquettes/captures/`). **Consigne de Kamil du 21/10** : lancer le front ET la base
-en local, cliquer sur TOUS les parcours, regarder ce que répondent le front et la base, lister tous
-les bugs, tout corriger, puis tout pousser en prod. Le parcours complet d'un nouveau venu (invitation,
-création de compte, foyer, écrans) en fait partie, ainsi que la comparaison aux maquettes.
+Consigne de Kamil du 21/10 : lancer le front ET la base en local, cliquer sur TOUS les parcours, regarder ce
+que répondent le front et la base, lister tous les bugs, tout corriger, puis tout pousser en prod.
+
+**Joué par trois agents, l'un après l'autre** (consignes dans le dossier de travail `scratchpad/grand-test/`,
+comptes rendus versionnés dans `docs/superpowers/grand-test/` : `nouveau-venu.md`, `cuisine.md`, `budget.md`) :
+- A, le nouveau venu : 9 bugs corrigés, 2 défauts de base (corrigés ensuite par moi, 0103 et 0112).
+- B, la cuisine : 16 bugs corrigés dont 3 P1 (hors ligne, accueil sans cycle, « Interrompre la session »).
+- C, le Budget : 8 bugs corrigés dont un P1 (retrait d'épargne sans plancher), arithmétique juste au centime.
+- Derniers écarts (dérive de 6 centimes après « Revenir dessus », reste de l'autre membre, Choisir replié…) : corrigés.
+
+**Corrections de BASE faites à la main (22/10)** : 0112 repartage les mois ouverts au départ d'un membre
+(`repartit_les_lignes` lit `parts_du_mois`) et retire sa charge perso ; 0103 recule le premier revenu avec
+l'arrivée (geste de la personne seulement, revenu accroché à l'ancienne arrivée) ; **0116** plancher
+d'épargne (INSERT, UPDATE, DELETE). Commits 857b83f, 00c60af, af45104.
+
+**Deux revues adverses finales (SQL et front, sur bc1c1e3)** : le SQL est corrigé (af45104). Le front : 11
+constats confiés à un agent (réseau coupé : mutations en pause et jeton expiré, courses, épargne, mois clos
+avant l'arrivée, md5 des égalités, focus…) ; **à vérifier à son retour** (`git log`, rapport).
+
+**Restent avant la mise en ligne** :
+1. Cueillir le rapport de l'agent des 11 constats ; `npm run build -- --mode development`, `npm run lint`,
+   `npx vitest run src`, `npm test` (série, base), `npx playwright test` en entier.
+2. Rejouer `bash scripts/banc-migration-budget.sh --tout` (0093 à 0116 ; remet la base locale à zéro) puis
+   `npx supabase db reset --local && npm run seed`.
+3. **Mise en ligne D1+D2 en une fois** (migrations 0093 à 0116, fonctions `importer` ET `invite` avec
+   `--use-api`, puis le site) : relire la prod (mêmes chiffres ?), sauvegarde en lecture seule, nettoyer le
+   compte de Thauba (voir « Décision du 22/10 »), merge de `feat/budget-refait` dans `main` par
+   fast-forward, `npm run deploy`, fumée prod.
+4. Compte rendu du Budget (page Artifact) avec les points à dire à Kamil (ci-dessus, plus : clôture à deux =
+   lot 4 non planifié, l'autre membre lit son reste calculé ; mails d'auth toujours en anglais en attente de
+   « vas-y pour les mails » ; défauts de base hors plage 0013/0018/0021/0028/0031 notés dans `cuisine.md`).
 
 ## Côté Kamil
 
