@@ -195,13 +195,18 @@ export function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
      1 000 000 € se refusent avant l'envoi, et un « Elle court depuis » vidé ne part pas
      comme « -01 ». */
   const plancher = plancherDuDebut(maintenant())
-  const { pret, cents, refusMontant, refusDebut } = peutPoser({
+  const { pret, cents, refusMontant, refusDebut, refusLibelle } = peutPoser({
     libelle, montant, qui: qui.length, debut, plancher })
 
   return (
     <>
       <div className="mt-5 space-y-4">
         <Champ label="Quoi" value={libelle} onChange={e => setLibelle(e.target.value)} />
+        {refusLibelle && (
+          <p role="alert" className="-mt-1 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
+            {refusLibelle}
+          </p>
+        )}
         {depart?.precision && (
           <p className="-mt-1 text-[14px] leading-[22px] text-doux">{depart.precision}</p>
         )}
@@ -720,7 +725,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                 {corrigeOuvert === c.id && (() => {
                   /* Les mêmes règles que l'ajout : le plafond de 1 000 000 €, et un départ
                      vidé ne part pas comme « -01 ». */
-                  const { pret, cents, refusMontant, refusDebut } = peutCorriger({
+                  const { pret, cents, refusMontant, refusDebut, refusLibelle } = peutCorriger({
                     libelle: cLibelle, montant: cMontant, mode: cMode, debut: cDebut,
                     garde: c.debut, plancher: plancherDuDebut(maintenant()) })
                   return (
@@ -730,6 +735,10 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                         <input value={cLibelle} onChange={e => setCLibelle(e.target.value)}
                                className="mt-1 w-full min-h-11 rounded-[12px] border border-brume
                                           bg-surface px-3 text-[16px]" />
+                        {refusLibelle && (
+                          <span role="alert" className="mt-1 block text-[14px]"
+                                style={{ color: 'var(--color-ocre)' }}>{refusLibelle}</span>
+                        )}
                       </label>
                       <label className="block">
                         <span className="text-[14px] text-doux">Son montant</span>

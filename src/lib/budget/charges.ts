@@ -109,16 +109,26 @@ export function lisLeDebut(debut: string, o: { plancher: string; garde?: string 
   return { valide: true, refus: null }
 }
 
+/** La borne de `charge_libelle_check` : au-delà, la base répond en anglais (« violates check constraint »). */
+export const LIBELLE_MAX = 80
+
+/** Le refus d'un nom trop long (les espaces autour ne comptent pas : la base les retire). */
+export function refusDuLibelle(libelle: string): string | null {
+  return libelle.trim().length > LIBELLE_MAX ? `Un nom de ${LIBELLE_MAX} caractères au plus.` : null
+}
+
 /**
  * Ce que le formulaire d'ajout permet d'envoyer. Le montant passe par `lisLeMontant`, comme
  * les feuilles : 0 € et plus de 1 000 000 € se refusent AVANT l'envoi, avec leur phrase.
  */
 export function peutPoser(o: { libelle: string; montant: string; qui: number; debut: string; plancher: string }):
-  { pret: boolean; cents: number | null; refusMontant: string | null; refusDebut: string | null } {
+  { pret: boolean; cents: number | null; refusMontant: string | null; refusDebut: string | null
+    refusLibelle: string | null } {
   const m = lisLeMontant(o.montant, { zeroOk: false })
   const d = lisLeDebut(o.debut, { plancher: o.plancher })
-  return { pret: o.libelle.trim() !== '' && m.valide && o.qui > 0 && d.valide,
-           cents: m.cents, refusMontant: m.refus, refusDebut: d.refus }
+  const refusLibelle = refusDuLibelle(o.libelle)
+  return { pret: o.libelle.trim() !== '' && refusLibelle === null && m.valide && o.qui > 0 && d.valide,
+           cents: m.cents, refusMontant: m.refus, refusDebut: d.refus, refusLibelle }
 }
 
 /**
@@ -128,13 +138,15 @@ export function peutPoser(o: { libelle: string; montant: string; qui: number; de
  */
 export function peutCorriger(o: {
   libelle: string; montant: string; mode: Mode; debut: string; garde: string; plancher: string
-}): { pret: boolean; cents: number | null; refusMontant: string | null; refusDebut: string | null } {
+}): { pret: boolean; cents: number | null; refusMontant: string | null; refusDebut: string | null
+      refusLibelle: string | null } {
   const m = lisLeMontant(o.montant, { zeroOk: false })
   const d = o.mode === 'mis_de_cote'
     ? lisLeDebut(o.debut, { plancher: o.plancher, garde: o.garde })
     : { valide: true, refus: null }
-  return { pret: o.libelle.trim() !== '' && m.valide && d.valide,
-           cents: m.cents, refusMontant: m.refus, refusDebut: d.refus }
+  const refusLibelle = refusDuLibelle(o.libelle)
+  return { pret: o.libelle.trim() !== '' && refusLibelle === null && m.valide && d.valide,
+           cents: m.cents, refusMontant: m.refus, refusDebut: d.refus, refusLibelle }
 }
 
 /**

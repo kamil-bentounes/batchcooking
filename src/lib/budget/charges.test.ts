@@ -180,6 +180,18 @@ describe('peutPoser — l’ajout d’une charge ne part qu’avec un montant ET
     expect(peutPoser({ ...base, debut: '0002-05-01' }).pret).toBe(false)
   })
 
+  it('un libellé de plus de 80 caractères ne part pas, et se dit en français', () => {
+    /* Grand test, parcours budget : 81 caractères laissaient le bouton actif, et la base répondait
+       « new row for relation "charge" violates check constraint "charge_libelle_check" ». */
+    const long = 'x'.repeat(81)
+    const r = peutPoser({ ...base, libelle: long })
+    expect(r.pret).toBe(false)
+    expect(r.refusLibelle).toBe('Un nom de 80 caractères au plus.')
+    expect(peutPoser({ ...base, libelle: 'x'.repeat(80) })).toMatchObject({ pret: true, refusLibelle: null })
+    /* Les espaces autour ne comptent pas : la base les retire (`btrim`). */
+    expect(peutPoser({ ...base, libelle: `  ${'x'.repeat(80)}  ` }).pret).toBe(true)
+  })
+
   it('sans libellé ou sans participant, non', () => {
     expect(peutPoser({ ...base, libelle: '  ' }).pret).toBe(false)
     expect(peutPoser({ ...base, qui: 0 }).pret).toBe(false)
@@ -205,6 +217,12 @@ describe('peutCorriger — corriger ne contourne ni le plafond ni la date', () =
     expect(peutCorriger({ ...base, debut: '' }).pret).toBe(false)
     expect(peutCorriger({ ...base, debut: '' }).refusDebut).toBeTypeOf('string')
     expect(peutCorriger({ ...base, mode: 'fixe', debut: '' }).pret).toBe(true)
+  })
+
+  it('corriger refuse aussi un nom de plus de 80 caractères', () => {
+    const r = peutCorriger({ ...base, libelle: 'y'.repeat(81) })
+    expect(r.pret).toBe(false)
+    expect(r.refusLibelle).toBe('Un nom de 80 caractères au plus.')
   })
 
   it('le départ ancien déjà posé ne bloque pas un simple changement de libellé', () => {
