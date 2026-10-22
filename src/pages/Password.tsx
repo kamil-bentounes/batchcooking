@@ -13,7 +13,12 @@ import { Page, Bouton, Champ, Message } from '../ui/kit'
  */
 const PAS_ENREGISTRE = 'Ton mot de passe n’a pas pu être enregistré. Vérifie ta connexion, puis réessaie.'
 
-export function Password({ userId, onDone }: { userId: string; onDone: () => void }) {
+export function Password({ userId, onDone, retour }: {
+  userId: string; onDone: () => void
+  /** Seulement quand on CHANGE son mot de passe depuis les réglages : l'écran obligatoire
+      (arrivée, réinitialisation) n'a pas de sortie, c'est tout son objet. */
+  retour?: () => void
+}) {
   const [mdp, setMdp] = useState('')
   const [msg, setMsg] = useState('')
 
@@ -47,6 +52,13 @@ export function Password({ userId, onDone }: { userId: string; onDone: () => voi
      */
     <Page centre marque titre="Ton mot de passe"
           chapeau="Choisis-le : c’est lui qui te fera entrer ensuite, sur tous tes appareils.">
+      {retour && (
+        <button onClick={retour}
+                className="mb-5 inline-flex items-center gap-2 min-h-11 text-[15px] text-doux
+                           hover:text-encre transition-colors">
+          <span aria-hidden="true">‹</span> Réglages
+        </button>
+      )}
       <div className="space-y-5">
         <Champ label="Mot de passe" type="password" value={mdp} autoComplete="new-password"
                placeholder="8 caractères au moins"

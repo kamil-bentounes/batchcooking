@@ -230,7 +230,7 @@ export default function App() {
       /* Le HUB, pas les réglages : quelqu'un qui vient de poser son mot de
          passe découvre l'application, et le hub porte le bandeau qui lui dit
          quoi faire. Une page de paramètres n'accueille personne. */
-      return <Password userId={moi} onDone={() => va('/')} />
+      return <Password userId={moi} onDone={() => va('/')} retour={() => va('/reglages')} />
 
     default: return <Hub userId={moi} va={va} />
   }
