@@ -34,6 +34,11 @@ export function Settings({ va }: { va: (v: string) => void }) {
     setReste(r === null ? null : Number(r))
   }
   useEffect(() => { charger() }, [])
+  /* Arrivé par « Inviter quelqu'un » de l'accueil (`/reglages#inviter`) : la section est à mi-page,
+     sous deux autres. Le `#` n'entre pas dans le routage (il ne lit que le chemin). */
+  useEffect(() => {
+    if (window.location.hash === '#inviter') document.getElementById('inviter')?.scrollIntoView?.()
+  }, [])
 
   /* ⚠️ Le message s'affiche SOUS la section qui l'a fait naître.
      Il tombait tout en bas de la page, sous « Supprimer mon compte » : sur un
@@ -150,7 +155,7 @@ export function Settings({ va }: { va: (v: string) => void }) {
         {ici('courses')}
       </section>
 
-      <section className="mt-12">
+      <section id="inviter" className="mt-12">
         <h2 className="titre text-xl text-herbe">Inviter</h2>
         {ceuxDuFoyer(foyer?.membres) && (
           <p className="mt-1 text-[15px] font-semibold">{ceuxDuFoyer(foyer?.membres)}</p>

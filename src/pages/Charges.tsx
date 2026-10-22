@@ -28,6 +28,7 @@ import { CATEGORIES, NOM_DU_MODE, categorieDeLArticle, infoCategorie, modeDeLArt
 import { ceQuiChange, communeDeLaCharge, departDeLaCharge, enVigueur, debutDuChamp, ditLaCorrection, peutCorriger, peutPoser, periodiciteDeLaFacon,
          plancherDuDebut, retireesEncoreAReg, sousTitreDeLaFacon, suiteDuRetrait, texteDeLaRetiree,
          type Rythme } from '../lib/budget/charges.ts'
+import { moisDeDepart } from '../lib/budget/mois.ts'
 import { maintenant } from '../lib/horloge.ts'
 import { FeuilleMiseDeCote } from '../ui/budget/FeuilleMiseDeCote.tsx'
 
@@ -136,7 +137,7 @@ export function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
             /* La section et le rang de plafond de l'article : la catégorie et la
                façon s'en déduisent (§ 3.7). */
             section?: string; plafondOrdre?: number | null } | null
-  membres: { id: string; display_name: string }[]
+  membres: { id: string; display_name: string; entre_le?: string | null }[]
   moi: string
   foyerId: string
   comptes: { id: string; nom: string; genre: string }[]
@@ -171,7 +172,10 @@ export function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
      charge annuelle posée en septembre doit pouvoir commencer en janvier :
      sinon elle ne provisionne que les mois restants, et sa régularisation
      facture l'année entière d'un coup. */
-  const [debut, setDebut] = useState<string>(moisDe())
+  /* Arrivée à venir : la charge court depuis le mois d'arrivée (`moisDeDepart`), pas depuis aujourd'hui —
+     sinon elle ouvrirait le mois courant, qui n'est pas encore celui de qui entre le mois prochain. */
+  const [debut, setDebut] = useState<string>(
+    moisDeDepart(membres.find(m => m.id === moi)?.entre_le, moisDe()))
   /* L'intention, déclarée à la main quand on est encore seul dans le foyer.
      Sans elle, `qui.length > 1` était impossible et aucune charge inventée ne
      pouvait accueillir le second membre à son arrivée. Le catalogue la
@@ -403,7 +407,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   const compteParDefaut = (comptes.data ?? [])
     .find(c => c.genre === 'commun')?.id ?? (comptes.data ?? [])[0]?.id ?? null
 
-  const membres = (foyer?.membres ?? []).map(m => ({ id: m.id, display_name: m.display_name }))
+  const membres = (foyer?.membres ?? []).map(m => ({ id: m.id, display_name: m.display_name, entre_le: m.entre_le }))
   const prenoms = new Map(membres.map(m => [m.id, prenomDe(m.display_name)]))
 
   /* La dictée pose les lignes une à une, par la même mutation que le

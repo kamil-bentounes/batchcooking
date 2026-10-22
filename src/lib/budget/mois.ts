@@ -180,6 +180,16 @@ export function estLaCeMois(m: { entre_le?: string | null }, mois: string): bool
 }
 
 /**
+ * Le mois où un revenu posé AUJOURD'HUI prend effet : le courant, ou le mois d'arrivée quand elle est à
+ * venir. Daté du mois courant, le revenu de qui n'arrive qu'en novembre donnait à octobre un reste plein
+ * (« Il te reste 2 400 € ») et un « Octobre est à clôturer » sur un mois qui n'est pas le sien.
+ */
+export function moisDeDepart(entreLe: string | null | undefined, courant: string): string {
+  const arrivee = entreLe ? `${entreLe.slice(0, 7)}-01` : null
+  return arrivee && arrivee > courant ? arrivee : courant
+}
+
+/**
  * Ceux qui sont là ce mois-là et n'ont pas de revenu : le partage bascule alors en
  * moitié-moitié. Seul (ou presque : une seule personne présente), il n'y a rien à partager.
  * Celle qui arrive en octobre ne « manque » pas de revenu en septembre.

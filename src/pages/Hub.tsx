@@ -22,7 +22,8 @@ import { useBarquettes } from '../lib/donnees/barquettes.ts'
 import { aDesObjectifs, bandeauDuProfil, useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
 import { useClotures, useMois, useRevenus, useSaisies, moisDe, eurosRonds } from '../lib/donnees/budget.ts'
 import {
-  aDire, estADire, ligneDuHub, moisVoisin, montant, nomDuMois, resteDuMois, revenuDuMois, sousLEuro,
+  aDire, estADire, estLaCeMois, ligneDuHub, moisVoisin, montant, nomDuMois, resteDuMois, revenuDuMois,
+  sousLEuro,
 } from '../lib/budget/mois.ts'
 import { etatDeLEcran, messageDeLecture } from '../lib/budget/ecran.ts'
 
@@ -58,6 +59,10 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
   const revenus = lecteurRevenus.data ?? []
   const revenuPose = revenus.some(r => r.user_profile_id === userId)
   const moi = foyer?.membres.find(m => m.id === userId)
+  /* Elle (ou il) n'entre dans le foyer qu'après ce mois : le budget n'est pas encore le sien. Sans ce
+     garde, le hub lui lisait « Il te reste 2 400 € en octobre » sur le revenu d'un autre mois, ou
+     « Ajoute ton revenu » à qui l'avait posé — pour novembre. */
+  const pasEncoreLa = moi !== undefined && !estLaCeMois(moi, mois)
   /* ⚠️ Les trois lectures du chiffre, comme l'écran du mois (`etatDeLEcran`). `= []`
      sans `isPending` disait « Ajoute ton revenu » à qui l'avait posé ; une panne du mois
      se lisait « Rien de posé » ; une panne des saisies comptait le PRÉVU pour du déclaré,
@@ -89,6 +94,10 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
     : ligneDuHub({ aCloturer, aDire: aDire(depenses, saisies.data ?? [], false),
                    noms: depenses.filter(l => estADire(l, saisies.data ?? [], false)).map(l => l.libelle) })
   const geste = GESTE[cycle?.state ?? 'vide']
+  /* Seul dans le foyer : la porte de l'invitation est ICI. Elle vivait dans les réglages de la
+     cuisine, que le hub ne montre nulle part — Kamil cherchait « Réglages » sur le premier écran,
+     et l'avatar mène au profil. Elle disparaît dès qu'on est deux. */
+  const seul = !!foyer && foyer.membres.length < 2
   const leBandeauDuProfil = !profilLu ? null
     : bandeauDuProfil({ prenom: !!moi?.display_name, revenu: revenuPose,
                         objectifs: moi !== undefined && aDesObjectifs(moi) })
@@ -141,6 +150,13 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
               <p role="alert" className="mt-4 text-[15px] leading-snug text-doux">
                 {messageDeLecture(enPanne?.error)}
               </p>
+            ) : pasEncoreLa ? (
+              <>
+                <p className="titre text-[28px] mt-5">Commence en {nomDuMois(`${moi!.entre_le!.slice(0, 7)}-01`)}</p>
+                <p className="mt-2.5 text-[15px] text-doux">
+                  Tu entres dans le foyer à cette date : rien n’est à poser avant.
+                </p>
+              </>
             ) : depenses.length === 0 ? (
               <>
                 <p className="titre text-[28px] mt-5">Rien de posé</p>
@@ -172,6 +188,18 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
             )}
           </Carte>
         </div>
+
+        {seul && (
+          <button onClick={() => va('/reglages#inviter')}
+                  className="mt-4 w-full text-left bg-surface border border-dashed
+                             border-brume rounded-[18px] p-4 transition-colors
+                             hover:bg-brume/20 hover:border-doux/40">
+            <p className="text-[15px] leading-[23px] text-doux">
+              <strong className="text-encre font-semibold">Inviter quelqu’un.</strong>{' '}
+              Tu obtiens un lien à lui envoyer.
+            </p>
+          </button>
+        )}
 
         {/* Le bandeau n'est pas un reproche : il MÈNE quelque part. Tant que le
             revenu manque, `parts_du_foyer` partage à parts égales — autant le

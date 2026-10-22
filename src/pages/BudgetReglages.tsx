@@ -21,7 +21,7 @@ import {
   useRevenus, usePoseRevenu, useComptes, usePoseCompte, useRegle, usePoseRegle, useRangeCompte,
   euros, enCentimes, moisDe,
 } from '../lib/donnees/budget.ts'
-import { revenuDuMois } from '../lib/budget/mois.ts'
+import { moisDeDepart, revenuDuMois } from '../lib/budget/mois.ts'
 import { questionRevenu, revenuAConfirmer } from '../lib/budget/revenu.ts'
 import { Confirmation } from '../ui/Confirmation.tsx'
 
@@ -105,7 +105,11 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
      du plus récent au plus vieux — puis, renversée, le plus récent : celui d'un
      mois qui n'a pas commencé. Les deux affichaient un autre chiffre que celui
      dont la base partage le mois. */
-  const enVigueur = (id: string) => revenuDuMois(revenus.data ?? [], id, moisDe())
+  const arriveeDe = (id: string) => membres.find(m => m.id === id)?.entre_le
+  /* Lu au mois où il prend effet : celui d'une arrivée à venir est daté de son arrivée, et lu en octobre
+     il se dirait « pas encore renseigné » quand on vient de le poser. */
+  const enVigueur = (id: string) =>
+    revenuDuMois(revenus.data ?? [], id, moisDeDepart(arriveeDe(id), moisDe()))
   /* ⚠️ Les revenus pas encore lus (ou en panne) ne sont pas des revenus absents : avec
      `?? []`, chaque membre passait pour « pas encore renseigné », le texte ocre
      « parts égales » s'affichait, et le bouton disait « Enregistrer » à qui avait déjà un
@@ -176,7 +180,7 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
             <button disabled={!lus || !cRevenu || cRevenu <= 0 || poseRevenu.isPending}
                     onClick={() => {
                       if (revenuAConfirmer(cRevenu)) { setAConfirmer(cRevenu); return }
-                      poseRevenu.mutate({ foyerId, userId, cents: cRevenu! },
+                      poseRevenu.mutate({ foyerId, userId, cents: cRevenu!, entreLe: arriveeDe(userId) },
                                         { onSuccess: () => setMonRevenu('') })
                     }}
                     className="w-full min-h-11 rounded-[14px] bg-herbe text-fond text-[15px]
@@ -191,7 +195,7 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
                             surNon={() => setAConfirmer(null)}
                             surOui={() => {
                               setAConfirmer(null)
-                              poseRevenu.mutate({ foyerId, userId, cents: aConfirmer },
+                              poseRevenu.mutate({ foyerId, userId, cents: aConfirmer, entreLe: arriveeDe(userId) },
                                                 { onSuccess: () => setMonRevenu('') })
                             }} />
             )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aDire, bandeau, clotureSansMoi, estLaCeMois, finDePhrase, membresSansRevenu, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
+import { aDire, bandeau, clotureSansMoi, estLaCeMois, moisDeDepart, finDePhrase, membresSansRevenu, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
          maPart, partDesSoldes, montant, montantCompte, moisDemande, adresseDeMoisFausse, moisVoisin, nomDuMois, nomDuMoisDate, parCategorie,
          partSur, pourcentages, recapCloture, resteDuMois, revenuDuMois, sousLEuro, totauxDuFiltre, type Ligne,
          type Saisie } from './mois.ts'
@@ -632,5 +632,18 @@ describe('clotureSansMoi', () => {
     expect(clotureSansMoi({ clos: false, revenu: null, charges: 0 })).toBe(false)
     expect(clotureSansMoi({ clos: true, revenu: 250_000, charges: 0 })).toBe(false)
     expect(clotureSansMoi({ clos: true, revenu: null, charges: 12_000 })).toBe(false)
+  })
+})
+
+describe('moisDeDepart : le mois où un revenu posé aujourd’hui prend effet', () => {
+  it('une arrivée à venir : son mois, pas le courant (sinon octobre lit un reste plein)', () => {
+    expect(moisDeDepart('2026-11-01', '2026-10-01')).toBe('2026-11-01')
+    expect(moisDeDepart('2026-11-17', '2026-10-01')).toBe('2026-11-01')
+  })
+  it('une arrivée passée, ce mois-ci ou inconnue : le mois courant', () => {
+    expect(moisDeDepart('2022-11-17', '2026-10-01')).toBe('2026-10-01')
+    expect(moisDeDepart('2026-10-15', '2026-10-01')).toBe('2026-10-01')
+    expect(moisDeDepart(null, '2026-10-01')).toBe('2026-10-01')
+    expect(moisDeDepart(undefined, '2026-10-01')).toBe('2026-10-01')
   })
 })

@@ -79,7 +79,7 @@ export function Profil({ userId, onFini, retour }: {
       ou(await supabase.from('user_profile')
         .update({ display_name: prenom.trim(), entre_le: entree })
         .eq('id', userId).select())
-      await poseRevenu.mutateAsync({ foyerId: foyer!.id, userId, cents: cents! })
+      await poseRevenu.mutateAsync({ foyerId: foyer!.id, userId, cents: cents!, entreLe: entree })
       /* ⚠️ Le foyer se RELIT avant de partir. Il vit cinq minutes en cache, et
          l'écran suivant le lisait tel qu'à l'arrivée : l'invitée qui venait
          de remplir son profil retrouvait le hub sous un avatar vide, avec

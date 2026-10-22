@@ -14,7 +14,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
 import { maintenant, moisCourantDeParis } from '../horloge.ts'
-import { dernierJour, type Saisie as SaisieDuMois } from '../budget/mois.ts'
+import { dernierJour, moisDeDepart, type Saisie as SaisieDuMois } from '../budget/mois.ts'
 import type { Categorie, Mode } from '../budget/categories.ts'
 import { cleNonSoldees, oublieNonSoldees, retientNonSoldees } from '../budget/non-soldees.ts'
 
@@ -409,10 +409,11 @@ export function useRevenus() {
  * pendant le départ de son compte tenait sa ligne en attendant le verrou du
  * foyer, que `delete_my_account` tenait en attendant de la supprimer.
  */
-export async function poseRevenu(v: { foyerId: string; userId: string; cents: number }) {
+export async function poseRevenu(v: { foyerId: string; userId: string; cents: number; entreLe?: string | null }) {
   return ou(await supabase.from('revenu').upsert({
     household_id: v.foyerId, user_profile_id: v.userId,
-    net_mensuel_cents: v.cents, valid_from: moisDe(),
+    /* `entreLe` : qui arrive plus tard n'a pas de revenu avant son arrivée (`moisDeDepart`). */
+    net_mensuel_cents: v.cents, valid_from: moisDeDepart(v.entreLe, moisDe()),
   }, { onConflict: 'user_profile_id,valid_from' }).select().single())
 }
 

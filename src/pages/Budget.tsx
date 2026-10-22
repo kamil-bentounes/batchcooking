@@ -212,6 +212,11 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
             Réessayer
           </button>
         ) : lignes.length === 0 ? (
+          pasEncoreLa ? (
+            /* Pas de porte : « Commencer par les revenus » daterait octobre, un mois qui n'est pas le sien. */
+            <Vide titre="Pas encore"
+                  texte={`Tu entres dans le foyer en ${nomDuMois(`${moi!.entre_le!.slice(0, 7)}-01`)} : rien n’est à poser avant.`} />
+          ) : (
           <>
             <Vide titre={vide.titre} texte={vide.texte} />
             {/* UN SEUL geste, celui qui vient en premier : sans compte, une charge
@@ -230,6 +235,7 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
               </button>
             )}
           </>
+          )
         ) : (
           <>
             {/* ⚠️ Clos ou non : un mois clos d'avant son arrivée n'a ni reste ni choix pour elle (le
@@ -239,7 +245,7 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
               <section aria-label="Ce qui reste" className="mt-7 rounded-[28px] bg-encre text-fond p-5">
                 <p className="text-[17px] leading-snug">
                   {pasEncoreLa
-                    ? <>Tu n’étais pas encore dans le foyer : tu y entres en {nomDuMois(`${moi!.entre_le!.slice(0, 7)}-01`)}.{' '}
+                    ? <>Tu {mois < courant ? 'n’étais' : 'n’es'} pas encore dans le foyer : tu y entres en {nomDuMois(`${moi!.entre_le!.slice(0, 7)}-01`)}.{' '}
                         Ce mois-là ne te compte aucune part.</>
                     : <>Le mois de {nomDuMois(mois)} a été clôturé avant que ton revenu soit posé.{' '}
                         Il ne te compte aucune part.</>}
