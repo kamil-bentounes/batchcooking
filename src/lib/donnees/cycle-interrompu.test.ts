@@ -31,9 +31,10 @@ vi.mock('@tanstack/react-query', async importOriginal => ({
 }))
 
 const cycle = await import('./cycle.ts')
-const { useCycleInterrompu } = cycle
+/* Le hook sous un autre nom : on l'appelle ici hors de tout composant, avec `useQuery` réduit à ses options. */
+const reprise = cycle.useCycleInterrompu
 
-const lance = () => (useCycleInterrompu(true) as unknown as { queryFn: () => Promise<unknown> }).queryFn()
+const lance = () => (reprise(true) as unknown as { queryFn: () => Promise<unknown> }).queryFn()
 
 describe('useCycleInterrompu : la base choisit', () => {
   it('demande cycle_a_reprendre, sans borne de date côté client', async () => {

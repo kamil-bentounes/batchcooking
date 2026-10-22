@@ -70,8 +70,9 @@ describe('la liste générée : noms courts, rayons, régénération', () => {
 
   async function genere(cycleId: string) {
     await connecteLeClientPartage(alice)
-    const { useGenereListe } = await import('../src/lib/donnees/courses.ts')
-    const m = useGenereListe() as unknown as { mutationFn: (id: string) => Promise<unknown> }
+    /* Le hook sous un autre nom : on l'appelle hors de tout composant, avec `useMutation` réduit à ses options. */
+    const { useGenereListe: genereLaListe } = await import('../src/lib/donnees/courses.ts')
+    const m = genereLaListe() as unknown as { mutationFn: (id: string) => Promise<unknown> }
     return m.mutationFn(cycleId)
   }
   const lignesDe = async (cycleId: string) =>
