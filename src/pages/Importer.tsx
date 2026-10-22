@@ -16,6 +16,9 @@ import {
   BarreAction, Erreur, Passage, Secondaire, Surface, Vide, duree,
 } from '../ui/coque.tsx'
 import { callFunction } from '../lib/supabase.ts'
+import { enFrancais } from '../lib/reseau.ts'
+import { ChampParts } from '../ui/recettes/ChampParts.tsx'
+import { PARTS_MAX_RECETTE } from '../lib/recettes/parts.ts'
 import { useEnregistreImport } from '../lib/donnees/importer.ts'
 import type { EtapeLue, IngredientLu, RecetteLue } from '../lib/donnees/importer.ts'
 
@@ -32,6 +35,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
   const [etapes, setEtapes] = useState<EtapeLue[]>([])
 
   const enregistre = useEnregistreImport()
+  const [refusParts, setRefusParts] = useState<string | null>(null)
 
   const lit = useMutation({
     mutationFn: () => callFunction('importer', {
@@ -49,11 +53,12 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
   const sansDuree = etapes.filter(e => e.duration_min === null).length
   const sansAliment = ingredients.filter(i => i.food_id === null).length
 
-  async function garde() {
-    const { recette } = await enregistre.mutateAsync({
+  function garde() {
+    // `mutate`, pas `mutateAsync` : un refus de la base (affiché sous le bouton) ne doit pas
+    // remonter en erreur non rattrapée.
+    enregistre.mutate({
       titre, parts, ingredients, etapes, note: precisions, visibility,
-    })
-    va(`/choisir?ajoute=${recette.id}`)
+    }, { onSuccess: ({ recette }) => va(`/choisir?ajoute=${recette.id}`) })
   }
 
   // ── L'écran de saisie ────────────────────────────────────────────────────
@@ -125,7 +130,13 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
                            font-medium disabled:bg-brume disabled:text-encre transition-colors">
           {enregistre.isPending ? 'J’enregistre…' : 'Garder cette recette'}
         </button>
-        <Erreur de={enregistre.error} />
+        {/* Les phrases françaises de la mutation (« Il lui faut un titre ») passent telles quelles ; le
+            texte brut de la base (« invalid input syntax… ») ne se lit pas à l'écran. */}
+        <Erreur de={enregistre.error
+          ? (/invalid input|violates|constraint|PGRST|syntax|duplicate key/i.test(enregistre.error.message)
+            ? 'Je n’ai pas pu garder cette recette. Vérifie les parts et les durées, puis réessaie.'
+            : enFrancais(enregistre.error.message))
+          : null} />
       </BarreAction>
     }>
       <h1 className="titre text-[34px]">Ce que j’ai compris</h1>
@@ -139,11 +150,14 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
 
       <div className="mt-4 flex items-center gap-3">
         <span className="text-[15px] text-doux grow">Pour combien de parts ?</span>
-        <input type="number" min={1} max={40} value={parts}
-               onChange={e => setParts(Math.max(1, Number(e.target.value) || 1))}
-               className="w-20 h-[48px] rounded-[14px] bg-brume/40 px-3 text-right
-                          text-[17px] outline-none focus:bg-brume/60" />
+        {/* Entiers de 1 à 20, comme partout : « 2.5 » partait à la base (« invalid input syntax for
+            type integer »), et « 9999 » s'enregistrait. */}
+        <ChampParts valeur={parts} max={PARTS_MAX_RECETTE} libelle="Pour combien de parts ?"
+                    surValeur={setParts} surRefus={setRefusParts}
+                    className="w-20 h-[48px] rounded-[14px] bg-brume/40 px-3 text-right
+                               text-[17px] outline-none focus:bg-brume/60" />
       </div>
+      <Erreur de={refusParts} />
 
       {(sansDuree > 0 || sansAliment > 0 || lue.aCompleter.length > 0) && (
         <Surface className="mt-6">
@@ -197,7 +211,8 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
                 <span className="grow text-[15px]">{i.raw_text}</span>
                 <button onClick={() => setIngredients(l => l.filter((_, k) => k !== n))}
                         aria-label={`Retirer ${i.raw_text}`}
-                        className="text-[13px] text-doux underline underline-offset-2">
+                        className="text-[13px] text-doux underline underline-offset-2
+                                   min-h-11 min-w-11 -my-3">
                   retirer
                 </button>
               </div>
@@ -225,7 +240,8 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
                 <span className="grow text-[15px]">{e.text}</span>
                 <button onClick={() => setEtapes(l => l.filter((_, k) => k !== n))}
                         aria-label={`Retirer l’étape ${n + 1}`}
-                        className="text-[13px] text-doux underline underline-offset-2">
+                        className="text-[13px] text-doux underline underline-offset-2
+                                   min-h-11 min-w-11 -my-3">
                   retirer
                 </button>
               </div>
