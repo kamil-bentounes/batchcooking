@@ -47,7 +47,7 @@ Aucun dans la plage 0093–0115. Les quatre hors plage, contournés côté écra
    son foyer effacés, `delete_my_account` compris) : la cascade passe maintenant. La régénération de la liste
    ne vise que les lignes neuves. **Corrigé, 0117.**
 3. **0021/0028/0048 — cocher remplissait toujours le stock**, non-alimentaire compris : plus d'entrée pour les
-   rayons Entretien et Hygiène, ni pour « Autre » sans aliment. Pas de fusion avec une ligne existante
+   rayons Entretien et Hygiène (« Autre » reste rangé : c’est le rayon par défaut d’un libellé inconnu). Pas de fusion avec une ligne existante
    (« oignon 3 u » à côté de « Oignon, cru 183 g ») : elle casserait « décocher défait exactement ce que cocher
    a fait » (lien `shopping_item_id`). **Corrigé, 0117** (la fusion reste non faite, volontairement).
 4. **`cycle_recipe.position` n'était jamais renseignée** : trigger `max + 1` par cycle, existant renuméroté

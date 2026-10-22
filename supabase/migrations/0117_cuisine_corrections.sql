@@ -16,7 +16,9 @@
 --     effacé, orpheline). La cascade passe désormais.
 --  3. 0021/0028/0048 — cocher remplissait le stock même pour le non-alimentaire
 --     (« Papier toilette » rangé au frigo). On ne range plus un article des rayons
---     Entretien et Hygiène, ni un article « Autre » sans aliment rattaché.
+--     Entretien et Hygiène. « Autre » reste rangé : c'est le rayon par défaut d'un libellé
+--     inconnu (« Tofu », « Lait » saisis à la main) — l'écarter ferait disparaître de la
+--     nourriture du stock en silence, un défaut pire que des piles rangées au placard.
 --     ⚠️ Pas de fusion avec une ligne de stock existante : « décocher défait exactement
 --     ce que cocher a fait » repose sur le lien `shopping_item_id` ; fusionner le casserait.
 --  4. `cycle_recipe.position` n'était jamais renseignée (tout à 0).
@@ -140,12 +142,9 @@ begin
           updated_at = now();
   end if;
 
-  -- Entretien et Hygiène ne se mangent pas ; « Autre » sans aliment rattaché non plus
-  -- (piles, croquettes, sacs poubelle).
-  -- ⚠️ `coalesce` : sans rayon (NULL), `not (null or null)` vaut NULL, donc faux dans un `if` —
-  -- un article sans rayon disparaîtrait du stock au lieu de s'y ranger comme avant.
-  alimentaire := not (coalesce(new.aisle, '') in ('Entretien', 'Hygiène')
-                      or (coalesce(new.aisle, '') = 'Autre' and new.food_id is null));
+  -- Entretien et Hygiène ne se mangent pas. ⚠️ `coalesce` : sans rayon (NULL), `not (null)` vaudrait
+  -- NULL, donc faux dans un `if` — un article sans rayon disparaîtrait du stock au lieu de s'y ranger.
+  alimentaire := coalesce(new.aisle, '') not in ('Entretien', 'Hygiène');
 
   if alimentaire then
     lieu := public.lieu_du_rayon(new.aisle);
