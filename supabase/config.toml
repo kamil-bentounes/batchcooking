@@ -477,3 +477,7 @@ verify_jwt = false
 
 [functions.importer]
 verify_jwt = false
+
+# L'aide intégrée vérifie elle aussi le jeton dans son corps (voir plus haut).
+[functions.aide]
+verify_jwt = false

@@ -36,6 +36,7 @@ import { Ticket } from './pages/Ticket.tsx'
 import { Peser } from './pages/Peser.tsx'
 import { Importer } from './pages/Importer.tsx'
 import { AccepteAmi } from './pages/AccepteAmi.tsx'
+import { Aide } from './ui/Aide.tsx'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -315,9 +316,15 @@ export default function App() {
   }
   }
 
+  /* L'aide n'existe que dans l'appli installée : ni sur la connexion, ni sur un lien d'invitation, ni avant le
+     mot de passe et le prénom — on n'y pose pas de question sur ce qu'on n'a pas encore vu. */
+  const dansLAppli = !!session && !!foyer && mdpPose && !(sansPrenom && !prenomRemis) && !panne
+    && !/^\/(invite|ami)\//.test(ici)
+
   return (
     <>
       {ecran()}
+      {dansLAppli && session && <Aide userId={session.user.id} ici={ici} va={va} />}
       {alerte && <BandeauDePanne message={alerte} reessayer={relire} />}
     </>
   )

@@ -34,6 +34,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      aide_signalement: {
+        Row: {
+          cree_le: string
+          household_id: string
+          id: string
+          pages: string[]
+          question: string
+          reponse: string
+          user_profile_id: string
+        }
+        Insert: {
+          cree_le?: string
+          household_id: string
+          id?: string
+          pages?: string[]
+          question: string
+          reponse: string
+          user_profile_id: string
+        }
+        Update: {
+          cree_le?: string
+          household_id?: string
+          id?: string
+          pages?: string[]
+          question?: string
+          reponse?: string
+          user_profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aide_signalement_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aide_signalement_user_profile_id_fkey"
+            columns: ["user_profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       aisle_order: {
         Row: {
           aisle: string

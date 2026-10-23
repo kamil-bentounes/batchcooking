@@ -26,6 +26,10 @@ import { join } from 'node:path'
 const lance = (cmd, args, env = {}) =>
   execFileSync(cmd, args, { stdio: 'inherit', env: { ...process.env, ...env } })
 
+/* Le manuel de l'aide d'abord : une page dont le code a changé depuis sa vérification dirait faux en ligne. */
+console.log('0. Le manuel de l’aide est-il à jour avec le code ?')
+lance('npm', ['run', 'manuel:verifie'])
+
 console.log('1. On efface dist/ — un build raté ne doit rien laisser derrière lui.')
 rmSync('dist', { recursive: true, force: true })
 

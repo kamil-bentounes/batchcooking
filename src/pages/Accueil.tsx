@@ -21,6 +21,7 @@ import type { Case } from '../lib/donnees/barquettes.ts'
 import { usePlanEnregistre } from '../lib/donnees/session.ts'
 import { useInvitations, useRejoint } from '../lib/donnees/convives.ts'
 import { urgence } from '../lib/peremption.ts'
+import { BoutonAide } from '../ui/Aide.tsx'
 
 export function Accueil({ userId, va }: { userId: string; va: (v: string) => void }) {
   const aujourdhui = useMemo(() => new Date(), [])
@@ -72,13 +73,16 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
         </button>
         {/* 44 px touchables, 34 visibles : c'est la SEULE porte vers les
             réglages — la barre du bas n'y mène pas. */}
-        <button onClick={() => va('/reglages')} aria-label="Réglages"
-                className="w-11 h-11 -mr-2 grid place-items-center">
-          <span className="w-[34px] h-[34px] rounded-full bg-herbe text-fond text-[13px]
-                           grid place-items-center">
-            {initialeDe(moi?.display_name)}
-          </span>
-        </button>
+        <span className="flex items-center">
+          <BoutonAide />
+          <button onClick={() => va('/reglages')} aria-label="Réglages"
+                  className="w-11 h-11 -mr-2 grid place-items-center">
+            <span className="w-[34px] h-[34px] rounded-full bg-herbe text-fond text-[13px]
+                             grid place-items-center">
+              {initialeDe(moi?.display_name)}
+            </span>
+          </button>
+        </span>
       </div>
 
       {/*

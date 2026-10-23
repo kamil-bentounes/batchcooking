@@ -26,6 +26,7 @@ import {
   sousLEuro,
 } from '../lib/budget/mois.ts'
 import { etatDeLEcran, messageDeLecture } from '../lib/budget/ecran.ts'
+import { BoutonAide } from '../ui/Aide.tsx'
 
 function Carte({ titre, onClick, children }:
   { titre: string; onClick: () => void; children: React.ReactNode }) {
@@ -123,13 +124,16 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
               porte son initiale, un tap dessus doit mener à soi. C'était aussi
               le seul chemin manquant — une fois le profil rempli, le bandeau
               disparaissait et la date d'arrivée devenait incorrigeable. */}
-          <button onClick={() => va('/profil')} aria-label="Mon profil"
-                  className="w-11 h-11 -mr-2 grid place-items-center">
-            <span className="w-[34px] h-[34px] rounded-full bg-herbe text-fond text-[13px]
-                             grid place-items-center">
-              {initialeDe(moi?.display_name)}
-            </span>
-          </button>
+          <span className="flex items-center">
+            <BoutonAide />
+            <button onClick={() => va('/profil')} aria-label="Mon profil"
+                    className="w-11 h-11 -mr-2 grid place-items-center">
+              <span className="w-[34px] h-[34px] rounded-full bg-herbe text-fond text-[13px]
+                               grid place-items-center">
+                {initialeDe(moi?.display_name)}
+              </span>
+            </button>
+          </span>
         </header>
 
         <div className="mt-5 flex flex-col gap-3.5">

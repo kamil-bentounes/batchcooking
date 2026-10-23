@@ -40,6 +40,7 @@ import { FeuillesDuMois, type Ouverte } from '../ui/budget/FeuillesDuMois.tsx'
 import { FiltreDuMois } from '../ui/budget/Filtre.tsx'
 import { Gestes } from '../ui/budget/Gestes.tsx'
 import { Recap } from '../ui/budget/Recap.tsx'
+import { BoutonAide } from '../ui/Aide.tsx'
 
 export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = null }: {
   userId: string; va: (v: string) => void
@@ -157,13 +158,16 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
             <Marque taille={22} />
             <span className="titre text-[20px]">Popote</span>
           </button>
-          <button onClick={() => va('/profil')} aria-label="Mon profil"
-                  className="w-11 h-11 -mr-2 grid place-items-center">
-            <span className="w-[34px] h-[34px] rounded-full bg-herbe text-fond text-[13px]
-                             grid place-items-center">
-              {initialeDe(moi?.display_name)}
-            </span>
-          </button>
+          <span className="flex items-center">
+            <BoutonAide />
+            <button onClick={() => va('/profil')} aria-label="Mon profil"
+                    className="w-11 h-11 -mr-2 grid place-items-center">
+              <span className="w-[34px] h-[34px] rounded-full bg-herbe text-fond text-[13px]
+                               grid place-items-center">
+                {initialeDe(moi?.display_name)}
+              </span>
+            </button>
+          </span>
         </header>
 
         {/* Les pastilles des mois sur la ligne du surtitre, pas à côté du titre :
