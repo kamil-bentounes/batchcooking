@@ -88,6 +88,7 @@ test('le « ? » est dans l’en-tête de l’accueil, à côté de l’avatar, 
   await expect(bouton(page), 'le focus revient au « ? »').toBeFocused()
 })
 
+/* \s : l'écran pose des espaces insécables (`typographie`) autour des guillemets et avant « : ». */
 test('une question : la réponse, sa source, l’écran à ouvrir — et le bouton mène sur la section', async ({ page }) => {
   foyer = await amorce({ budget: false })
   const corps = await simule(page, [INVITER])
@@ -96,7 +97,7 @@ test('une question : la réponse, sa source, l’écran à ouvrir — et le bout
 
   await page.getByRole('button', { name: 'Comment inviter Thauba ?' }).click()
   await expect(page.getByText('Aucun mail ne part', { exact: false })).toBeVisible()
-  await expect(page.getByText(/Source : manuel « Inviter quelqu’un », vérifié le 23 octobre/)).toBeVisible()
+  await expect(page.getByText(/Source\s:\smanuel\s«\sInviter quelqu’un\s», vérifié le 23 octobre/)).toBeVisible()
   await expect(page.getByRole('note'), 'une réponse confirmée ne porte aucune mise en garde').toHaveCount(0)
   expect(corps[0]).toMatchObject({ question: 'Comment inviter Thauba ?', precedent: null, ecran: '/' })
   await page.screenshot({ path: '.shots/aide/03-reponse.png' })
@@ -161,7 +162,11 @@ test('partout ailleurs le « ? » flotte dans la marge du haut, sans recouvrir r
   foyer = await amorce()
   await connecte(page, foyer.email)
 
-  for (const route of ['/charges', '/budget-reglages', '/epargne', '/reglages', '/profil', '/semaine', '/stock', '/bilan', '/choisir']) {
+  for (const route of [
+    '/charges', '/budget-reglages', '/epargne', '/reglages', '/profil', '/semaine', '/stock', '/bilan', '/choisir',
+    '/magasin', '/plan', '/cuisine', '/dressage', '/inventer', '/photo', '/ticket', '/peser', '/importer', '/objectifs',
+    '/motdepasse', '/cloture/2026-09',
+  ]) {
     await page.goto(route)
     await page.waitForLoadState('networkidle')
     await expect(bouton(page), `un seul « ? » sur ${route}`).toHaveCount(1)
@@ -181,7 +186,8 @@ test('partout ailleurs le « ? » flotte dans la marge du haut, sans recouvrir r
     await page.screenshot({ path: `.shots/aide/06${route.replace(/\//g, '-')}.png` })
   }
 
-  for (const route of ['/', '/budget', '/cuisine-accueil']) {
+  /* `/budget/` (barre finale) et une adresse inconnue tombent sur le hub, qui porte son « ? » : jamais deux. */
+  for (const route of ['/', '/budget', '/cuisine-accueil', '/budget/', '/inconnue']) {
     await page.goto(route)
     await page.waitForLoadState('networkidle')
     await expect(bouton(page), `un seul « ? » sur ${route} (celui de l’en-tête)`).toHaveCount(1)

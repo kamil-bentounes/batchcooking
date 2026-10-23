@@ -1,0 +1,54 @@
+---
+id: cuisine-vue-ensemble
+titre: La cuisine, du choix des recettes au bilan
+ecrans: [/cuisine-accueil]
+questions:
+  - Comment ça marche, la cuisine dans Popote ?
+  - Par où je commence pour préparer la semaine ?
+  - Que faire maintenant ? Quelle est la prochaine étape ?
+  - Pourquoi l’accueil me propose « Choisir les recettes » alors que j’ai déjà commencé ?
+  - Comment reprendre une session interrompue ?
+  - Pour quelle semaine je choisis les recettes ?
+sources:
+  - src/pages/Accueil.tsx
+  - src/lib/donnees/cycle.ts
+  - src/pages/Choisir.tsx
+  - src/pages/Cuisine.tsx
+  - src/pages/Bilan.tsx
+  - src/pages/Hub.tsx
+  - src/ui/coque.tsx
+  - src/lib/peremption.ts
+  - supabase/migrations/0013_cycle.sql
+  - supabase/migrations/0117_cuisine_corrections.sql
+verifie_sur: bd10d8c
+---
+## Ce que fait l’appli
+
+On choisit les recettes maintenant, on cuisine dimanche, on mange la semaine d’après. L’accueil de la cuisine (carte « Cuisine » de l’accueil de Popote) ne pose qu’une question, « et maintenant ? » : un titre et un gros bouton, qui changent selon l’avancement.
+
+## Les états, dans l’ordre
+
+1. **Rien de prévu** : « Choisir les recettes » ouvre la semaine et mène à « Choisir ». Tant que tu n’as pas touché « Faire la liste », l’accueil reste là, même avec des recettes retenues.
+2. **Votre liste est prête** : « Je pars faire les courses ».
+3. **Tout est là** : « Voir le plan de dimanche ».
+4. **Session en cours** : « Reprendre la cuisine ».
+5. **Il reste à dresser** : « Dresser les barquettes ».
+6. **La semaine tourne** : « Voir la semaine ». Si un repas est prévu aujourd’hui, l’accueil l’affiche avec « Je l’ai mangé » et « Voir toute la semaine ».
+
+« Clore et préparer la semaine prochaine » (dans « Bilan ») referme la semaine : retour à « Rien de prévu ». « Faire la liste » traverse « Recettes en cours de choix » sans s’y arrêter. « Semaine close » et « Session interrompue » ne s’affichent jamais. La ligne « N actions, … les mains prises » sous « Tout est là » n’apparaît que si un « Commencer la session » a échoué en route (le plan n’est enregistré qu’alors).
+
+## Les règles
+
+- Un foyer n’a **qu’une semaine ouverte à la fois**.
+- « Choisir les recettes » ouvre la semaine du **lundi suivant** ; on cuisine le dimanche, la veille. Par défaut : **10 parts** à couvrir.
+- Rouvrir la même semaine est refusé : « Cette semaine a déjà eu sa session : reprends-la, ou attends la semaine suivante. » Une semaine close ne se reprend pas.
+- « Interrompre la session » se fait depuis l’écran de cuisine. Sans semaine ouverte, l’accueil propose « Reprendre la session interrompue » (semaine courante, dernière ou à venir). Une semaine interrompue ne se rouvre pas : « Cette semaine a une session interrompue : reprends-la. »
+
+## Aussi sur l’accueil
+
+- En bas, sans titre : les deux barquettes les plus pressées, avec « à manger aujourd'hui », « demain dernier délai », « périmée » ou « à sortir sous N j », quand leur date approche.
+- « Envie spéciale ? » invente une recette.
+
+## Ce que l’appli ne fait pas
+
+Il n’existe pas aujourd’hui de notification : tout se lit en ouvrant l’appli.
