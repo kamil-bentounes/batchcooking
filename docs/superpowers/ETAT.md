@@ -382,24 +382,35 @@ ligne « Source » (page du manuel + date de relecture), bouton « Ouvrir … »
   lettres, libellés à frontières de mot, citation vide qui boostait toutes les pages, focus perdu (Échap/Tab), deux
   requêtes concurrentes après fermeture/réouverture, « ? » doublé sur les adresses inconnues, garde de déploiement.
 - **Défauts du PRODUIT trouvés par les relecteurs du manuel** (rejoués en local ; chaque page dit ce que fait le code, pas ce
-  que l'écran promet) — à décider avec Kamil :
-  1. « Garder cette recette » après « Inventer » : insérée avec `plannable = false` → jamais listée dans « Choisir ».
-  2. Import : `/choisir?ajoute=<id>` n'est lu par personne ; une recette dont une étape n'a pas de durée est enregistrée
-     invisible partout alors que l'écran dit « elle se garde et se lit ».
-  3. Durée du plan (`etapesDuCycle`) : ni les parts ni les quantités ne changent les durées ; le plan montré avant
+  que l'écran promet). **Corrigés le 23/10** (e058ce7, a9b88fa ; banc `e2e/defauts-du-manuel.spec.ts`) : une recette
+  « Inventer » gardée est enregistrée `plannable` quand chaque étape a une durée (avant : jamais choisissable ; celles
+  gardées avant le correctif restent à faux, la prod n'en a aucune) ; bornes d'« Inventer » lues après le foyer ; `/peser`
+  sans semaine ; « N barquettes sans jour » (ne compte plus celles posées avant aujourd'hui) ; rayon des suggestions de
+  « Compléter ma liste » (eau et skyr ne finissent plus au placard) ; retrait d'un magasin refusé = message ; et huit
+  textes d'écran qui promettaient ce que le code ne fait pas (Dressage « Pèse-les », photo « corriger les quantités »,
+  « elle dit où virer », « te les virer », « se resserreront », « marqué comme estimé », « nourrit le choix du mercredi »,
+  « La suivante est prête », Importer « se garde et se lit »).
+  **Restent à décider avec Kamil** (le manuel les décrit comme ce que fait le code) :
+  1. Import : `/choisir?ajoute=<id>` n'est lu par personne ; une recette collée dont une étape n'a pas de durée est
+     enregistrée mais n'apparaît jamais dans « Choisir » (l'écran le dit désormais).
+  2. Durée du plan (`etapesDuCycle`) : ni les parts ni les quantités ne changent les durées ; le plan montré avant
      « Recalculer le plan » compte un plat par appareil ; un appareil décoché reste utilisé à 1 plat.
-  4. Plafond en euros des lectures : aucun coût n'est jamais enregistré (`cost_eur` = 0) ; seuls les quotas bloquent.
-  5. `virements()` n'est appelée par aucun écran ; « elle dit où virer » (BudgetReglages) et « le mois ne te demandera pas de
-     te les virer » (Charges) promettent un écran qui n'existe pas. `paye_par` et « réglé » ne sont jamais écrits.
-  6. « Ce que j'ai » : pas de correction de quantité malgré la promesse de l'écran photo ; les lignes ajoutées à la main ou
-     par photo n'ont pas de `food_id` (ignorées par « Avec ce que j'ai ») ; la DLC lue ne sert qu'au congélateur.
-  7. Dressage « Pèse-les » : aucun champ ; « recette mal quantifiée : parts égales » = même calcul que pour une fiable.
-  8. Bilan « nourrit le choix du mercredi » et Semaine « c'est marqué comme estimé » : rien dans le code ne le fait.
-  9. « N barquettes sans jour » compte aussi celles placées avant aujourd'hui ; « Compléter ma liste » range tout en
-     « Épicerie salée » (eau, skyr → placard) hors Entretien et Hygiène.
-  10. États d'accueil jamais affichés : « Semaine close », « Session interrompue » ; `/peser` sans semaine reste sur
-      « Un instant… » ; bornes d'« Inventer » à 30 g / 620 kcal après rechargement direct de `/inventer`.
-  11. Retirer un magasin qui a eu une sortie de courses échoue sans message.
+  3. Plafond en euros des lectures : aucun coût n'est jamais enregistré (`cost_eur` = 0) ; seuls les quotas bloquent.
+  4. `virements()` n'est appelée par aucun écran : aucun écran ne dit qui doit combien à qui ; `paye_par` et « réglé » ne
+     sont jamais écrits.
+  5. « Ce que j'ai » : pas de correction de quantité ; les lignes ajoutées à la main ou par photo n'ont pas de `food_id`
+     (ignorées par « Avec ce que j'ai ») ; la DLC lue ne sert qu'au congélateur.
+  6. Dressage : aucun champ de pesée ; « recette mal quantifiée : parts égales » = même calcul que pour une fiable.
+  7. États d'accueil jamais affichés : « Semaine close », « Session interrompue ».
+  8. Barquettes du congélateur distribuées dans la semaine sans rien dire de décongeler avant le jour.
+- **Prod au 23/10, fin de journée.** Migration 0118 : APPLIQUÉE (le « à blanc » lancé avec `ecrit.py --a-blanc` n'était pas
+  un vrai à blanc — ce drapeau ne vaut que si le SQL lit `popote.blanc` — donc il a écrit ; tables, politiques, contrainte
+  et `export_my_data` vérifiés, propriétaire `postgres`) mais PAS inscrite dans `supabase_migrations.schema_migrations`
+  (l'inscription a été refusée par le classeur d'actions, non contournée) : à inscrire (`insert … ('0118','aide_signalement')`)
+  avant tout `supabase db push`. Sauvegarde avant : `~/PERSO/sauvegardes-popote/2026-10-23-avant-aide/`. Pour une vraie
+  répétition, utiliser `applique.py N N --a-blanc` (il n'écrit rien).
+  Pas encore déployés : la fonction `aide` (`npm run deploy:aide`), le site (`npm run deploy`), le push de `main` et de
+  `feat/budget-refait`.
 - **Taxe foncière (question de Kamil)** : l'appli n'a pas de « payé par l'un, à répartir ». Une charge commune « Mise de côté »
   met 1/12 par mois ; la facture d'une année payée avant le premier mois suivi est refusée, et sans facture la clôture de
   décembre rend tout ce qui a été mis de côté : la mise de côté ne travaille donc vraiment qu'à partir de janvier 2027.
