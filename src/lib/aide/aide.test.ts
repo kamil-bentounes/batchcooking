@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { dateDeSource, ligneDeSource, miseEnGarde, typographie } from './aide.ts'
-import { aLeBoutonDansSonEntete, ecranPourLAide, surCetEcran } from './suggestions.ts'
+import { SANS_BOUTON_D_ENTETE, aLeBoutonDansSonEntete, ecranPourLAide, surCetEcran } from './suggestions.ts'
 
 const NOW = new Date('2026-10-23T10:00:00')
 
@@ -60,6 +61,20 @@ describe('les écrans de l’aide', () => {
   it('les trois entrées portent le « ? » dans leur en-tête, le mois précis aussi', () => {
     for (const r of ['/', '/budget', '/cuisine-accueil', '/budget/2026-10']) expect(aLeBoutonDansSonEntete(r)).toBe(true)
     for (const r of ['/charges', '/reglages', '/profil', '/cloture/2026-09', '/budget-reglages']) expect(aLeBoutonDansSonEntete(r)).toBe(false)
+  })
+  it('une adresse inconnue ou à barre finale tombe sur le hub : son « ? » d’en-tête suffit', () => {
+    for (const r of ['/budget/', '/inconnue', '/cloture/2026-13', '/budget/2026-13']) expect(aLeBoutonDansSonEntete(r)).toBe(true)
+    expect(aLeBoutonDansSonEntete('/cuisine/abc123')).toBe(false)
+  })
+  it('chaque écran de App.tsx est rangé : en-tête (/, /budget, /cuisine-accueil) ou bouton flottant', () => {
+    const app = readFileSync('src/App.tsx', 'utf8')
+    const cases = [...app.matchAll(/case '(\/[a-z-]+)'/g)].map(m => m[1])
+    expect(cases.length).toBeGreaterThan(15)
+    const entetes = ['/budget', '/cuisine-accueil']
+    for (const c of cases) {
+      expect(entetes.includes(c) || SANS_BOUTON_D_ENTETE.includes(c), `${c} n'est classé nulle part`).toBe(true)
+    }
+    for (const c of SANS_BOUTON_D_ENTETE) expect(cases, `${c} n'est plus un écran de App.tsx`).toContain(c)
   })
   it('un mois du budget compte pour le budget', () => {
     expect(ecranPourLAide('/budget/2026-10')).toBe('/budget')

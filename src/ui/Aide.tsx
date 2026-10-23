@@ -74,6 +74,8 @@ function useFenetre() {
 export function Aide({ userId, ici, va }: { userId: string; ici: string; va: (v: string) => void }) {
   const [ouvert, setOuvert] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
+  /* Ici et non dans la feuille : fermer pendant une requête puis rouvrir ne doit pas permettre d'en lancer une 2e. */
+  const [enCours, setEnCours] = useState(false)
 
   useEffect(() => {
     const ouvre = () => setOuvert(true)
@@ -92,15 +94,16 @@ export function Aide({ userId, ici, va }: { userId: string; ici: string; va: (v:
       )}
       {ouvert && (
         <Feuille userId={userId} ici={ici} va={va} messages={messages} setMessages={setMessages}
-                 ferme={() => setOuvert(false)} />
+                 enCours={enCours} setEnCours={setEnCours} ferme={() => setOuvert(false)} />
       )}
     </>
   )
 }
 
-function Feuille({ userId, ici, va, messages, setMessages, ferme }: {
+function Feuille({ userId, ici, va, messages, setMessages, enCours, setEnCours, ferme }: {
   userId: string; ici: string; va: (v: string) => void
   messages: Message[]; setMessages: React.Dispatch<React.SetStateAction<Message[]>>
+  enCours: boolean; setEnCours: (v: boolean) => void
   ferme: () => void
 }) {
   const { data: foyer } = useFoyer()
@@ -109,7 +112,6 @@ function Feuille({ userId, ici, va, messages, setMessages, ferme }: {
   const champ = useRef<HTMLInputElement>(null)
   const fin = useRef<HTMLDivElement>(null)
   const [saisie, setSaisie] = useState('')
-  const [enCours, setEnCours] = useState(false)
   const [erreur, setErreur] = useState<unknown>(null)
   const fenetre = useFenetre()
 
@@ -135,18 +137,24 @@ function Feuille({ userId, ici, va, messages, setMessages, ferme }: {
   async function pose(texte: string) {
     const question = texte.trim()
     if (question.length < 3 || enCours) return
+    /* Cette ligne-là, et pas « la dernière » : si la feuille a été fermée puis rouverte entre-temps, la dernière
+       n'est plus forcément la sienne. */
+    const mienne: Message = { role: 'moi', texte: question }
     setSaisie(''); setErreur(null); setEnCours(true)
-    setMessages(m => [...m, { role: 'moi', texte: question }])
+    setMessages(m => [...m, mienne])
+    /* Un clic sur une suggestion démonte son bouton : sans ceci le focus tombe sur la page et Échap ne ferme plus. */
+    champ.current?.focus()
     try {
       const reponse = await demande(question, precedent, ecranPourLAide(ici))
       setMessages(m => [...m, { role: 'aide', question, reponse, etat: 'rien' }])
     } catch (e) {
       /* La question revient dans le champ : un aller-retour raté ne doit pas la faire retaper. */
-      setMessages(m => m.slice(0, -1))
+      setMessages(m => m.filter(x => x !== mienne))
       setSaisie(question)
       setErreur(e)
     } finally {
       setEnCours(false)
+      champ.current?.focus()
     }
   }
 
@@ -167,20 +175,28 @@ function Feuille({ userId, ici, va, messages, setMessages, ferme }: {
     } catch { maj('echec') }
   }
 
-  function clavier(e: React.KeyboardEvent) {
-    if (e.key === 'Escape') { e.stopPropagation(); ferme(); return }
-    if (e.key !== 'Tab' || !racine.current) return
-    const cibles = [...racine.current.querySelectorAll<HTMLElement>(FOCALISABLE)]
-    if (cibles.length === 0) return
-    const premiere = cibles[0], derniere = cibles[cibles.length - 1]
-    if (e.shiftKey && document.activeElement === premiere) { e.preventDefault(); derniere.focus() }
-    else if (!e.shiftKey && document.activeElement === derniere) { e.preventDefault(); premiere.focus() }
-  }
+  /* Au document, pas à la feuille : quand un bouton disparaît sous le doigt (suggestion, « Merci »), le focus tombe
+     sur `body` et un écouteur posé sur la feuille ne reçoit plus rien — Échap ne fermerait plus, Tab sortirait. */
+  useEffect(() => {
+    const touche = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); ferme(); return }
+      if (e.key !== 'Tab' || !racine.current) return
+      const cibles = [...racine.current.querySelectorAll<HTMLElement>(FOCALISABLE)]
+      if (cibles.length === 0) return
+      const premiere = cibles[0], derniere = cibles[cibles.length - 1]
+      const actif = document.activeElement
+      if (!racine.current.contains(actif)) { e.preventDefault(); (e.shiftKey ? derniere : premiere).focus() }
+      else if (e.shiftKey && actif === premiere) { e.preventDefault(); derniere.focus() }
+      else if (!e.shiftKey && actif === derniere) { e.preventDefault(); premiere.focus() }
+    }
+    document.addEventListener('keydown', touche)
+    return () => document.removeEventListener('keydown', touche)
+  }, [ferme])
 
   const suggestionsIci = surCetEcran(ici)
 
   return (
-    <div className="fixed inset-0 z-40" onKeyDown={clavier}>
+    <div className="fixed inset-0 z-40">
       <div aria-hidden="true" onClick={ferme} className="absolute inset-0 bg-encre/40" />
       <div ref={racine} role="dialog" aria-modal="true" aria-labelledby={titreId}
            style={{ height: Math.min(fenetre.h * 0.88, 720), bottom: fenetre.bas }}

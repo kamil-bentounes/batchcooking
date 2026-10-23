@@ -62,12 +62,18 @@ export const PAGES: PageDatee[] = ${JSON.stringify(pages, null, 2)}
   return { pages, contenu }
 }
 
-/** Les fichiers de `sources` qui diffèrent entre `sha` et l'arbre de travail (suivis par git). */
+/**
+ * Les fichiers de `sources` qui diffèrent entre `sha` et l'arbre de travail (suivis par git). Un fichier que git ne
+ * suit pas (jamais ajouté, ou ignoré) ne laisse aucune trace de ce qui a changé : `git diff` resterait vide pour
+ * toujours — il est signalé, pas toléré.
+ */
 function fichiersChanges(racine) {
+  const suivis = new Set(git(racine, 'ls-files').split('\n'))
   return (sha, sources) => {
     const dehors = []
     for (const s of sources) {
       if (!existsSync(join(racine, s))) { dehors.push(`${s} (absent)`); continue }
+      if (!suivis.has(s)) { dehors.push(`${s} (non suivi par git)`); continue }
       const diff = git(racine, 'diff', '--name-only', sha, '--', s)
       if (diff !== '') dehors.push(s)
     }

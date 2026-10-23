@@ -179,7 +179,8 @@ export function choisis<P extends Page>(
 
   /* Les libellés cités « entre guillemets » : on demande volontiers « à quoi sert « Ce que j'ai » ? », dont les mots
      sont tous des mots vides pour la recherche. Une page qui contient le libellé tel quel est LA page. */
-  const cites = [...o.question.matchAll(/«\s*([^»]{4,80}?)\s*»/g)].map(m => sansAccent(m[1]))
+  const cites = [...o.question.matchAll(/«\s*([^»]{4,80}?)\s*»/g)].map(m => sansAccent(m[1]).trim())
+    .filter(c => /[a-z0-9]/.test(c))
   if (cites.length > 0) {
     for (const n of notes) {
       const texte = sansAccent(`${n.d.p.titre}\n${n.d.p.corps}`)
@@ -243,8 +244,33 @@ export function perimees(
 
 const NOMBRE = /\d+(?:[.,]\d+)?/g
 
-function nombresDe(texte: string): Set<string> {
-  return new Set((texte.match(NOMBRE) ?? []).map(n => n.replace(',', '.')))
+/**
+ * Les nombres écrits en lettres que le manuel donnerait en chiffres : « trente jours » est « 30 », pas une absence de
+ * chiffre. De dix à mille, toujours ; de deux à neuf seulement devant une unité, parce que « à deux » ou « les deux »
+ * n'annoncent aucune valeur.
+ */
+const EN_LETTRES: Record<string, number> = {
+  dix: 10, onze: 11, douze: 12, treize: 13, quatorze: 14, quinze: 15, seize: 16, vingt: 20, trente: 30,
+  quarante: 40, cinquante: 50, soixante: 60, cent: 100, mille: 1000,
+  deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9,
+}
+const UNITES = '(?:jours?|mois|semaines?|ans?|annees?|heures?|minutes?|euros?|fois|pour cent)'
+const MOT_NOMBRE = new RegExp(
+  `\\b(dix|onze|douze|treize|quatorze|quinze|seize|vingt|trente|quarante|cinquante|soixante|(?<!pour )cent|mille)\\b`
+  + `|\\b(deux|trois|quatre|cinq|six|sept|huit|neuf)(?= ${UNITES}\\b)`, 'g')
+
+/** Les nombres d'un texte, comparables : « 12,5 » = « 12,50 », « 1 500 » = « 1500 », « trente » = « 30 ». */
+function nombresDe(texte: string, aussiSepares = false): Set<string> {
+  const vu = sansAccent(texte)
+  const fusionne = vu.replace(/(\d) (?=\d{3}\b)/g, '$1')
+  const lot = new Set<string>()
+  const ajoute = (t: string) => {
+    for (const n of t.match(NOMBRE) ?? []) lot.add(String(Number(n.replace(',', '.'))))
+  }
+  ajoute(fusionne)
+  if (aussiSepares) ajoute(vu)
+  for (const m of vu.matchAll(MOT_NOMBRE)) lot.add(String(EN_LETTRES[m[1] ?? m[2]]))
+  return lot
 }
 
 /**
@@ -273,14 +299,23 @@ export function nonConfirme(reponse: string, textes: string[], question: string)
 
   /* Les numéros d'étape (« 1. », « 2. ») ouvrent une ligne : ce ne sont pas des chiffres du manuel. */
   const sansEtapes = reponse.replace(/^\s*\d+[.)]\s+/gm, '')
-  const connus = nombresDe(source)
+  /* Le manuel qui écrit « 1 500 » donne aussi 1 et 500 : on accepte les deux lectures de SA page, pas de la réponse. */
+  const connus = nombresDe(source, true)
   for (const n of nombresDe(sansEtapes)) if (!connus.has(n)) manque.push(n)
 
   const lu = sansAccent(source)
+  /* Un libellé se lit à frontières de mot : « Ajout » n'est pas confirmé par « Ajouter ». */
+  const seLit = (morceau: string) => {
+    for (let i = lu.indexOf(morceau); i !== -1; i = lu.indexOf(morceau, i + 1)) {
+      const avant = lu[i - 1], apres = lu[i + morceau.length]
+      if (!(avant && /[a-z0-9]/.test(avant)) && !(apres && /[a-z0-9]/.test(apres))) return true
+    }
+    return false
+  }
   for (const m of reponse.matchAll(/«\s*([^»]{2,120}?)\s*»/g)) {
     /* Un libellé à trous (« Invitation créée pour … Envoie-lui ce lien. ») : chaque morceau doit se lire dans les pages. */
     const morceaux = m[1].split(/…|\.{3}/).map(x => sansAccent(x).trim()).filter(x => x.length >= 3)
-    if (morceaux.some(x => !lu.includes(x))) manque.push(`« ${m[1]} »`)
+    if (morceaux.some(x => !seLit(x))) manque.push(`« ${m[1]} »`)
   }
   return manque
 }

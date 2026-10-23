@@ -19,7 +19,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { choisis } from '../supabase/functions/_shared/manuel.ts'
-import { SYSTEME, controle, messageDe, schemaDe } from '../supabase/functions/aide/prompt.ts'
+import { JETONS_REPONSE, SYSTEME, controle, messageDe, schemaDe } from '../supabase/functions/aide/prompt.ts'
 import { construit } from './manuel.mjs'
 
 const args = process.argv.slice(2)
@@ -49,7 +49,7 @@ async function pose({ question, precedent = null, ecran }) {
         { role: 'system', content: SYSTEME },
         { role: 'user', content: messageDe({ question, precedent, pages: jointes }) },
       ],
-      max_completion_tokens: 8000,
+      max_completion_tokens: JETONS_REPONSE,
       reasoning_effort: 'low',
       response_format: { type: 'json_schema', json_schema: { name: 'aide', strict: true, schema: schemaDe(jointes.map(p => p.id)) } },
     }),

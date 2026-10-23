@@ -51,9 +51,14 @@ Sans clé, l'écran « Envie spéciale » répond 503 et le dit — il ne plante
 export SUPABASE_ACCESS_TOKEN=<jeton>
 npx supabase db push                          # migrations
 npx supabase functions deploy invite accept-invite inventer
+npm run deploy:aide                           # « Demande à Popote » : refuse de partir si une page du manuel est périmée
 npx supabase secrets set RESEND_API_KEY=<clé> APP_BASE_URL=<url>
 npx supabase secrets set LLM_API_KEY=<clé>            # « Envie spéciale »
 ```
+
+L'ordre pour l'aide intégrée : `db push` (la migration 0118 d'abord : la fonction écrit dans `llm_usage`),
+`npm run deploy:aide`, puis `npm run deploy` (le site). `npm run deploy` ne garde que le front : la fonction `aide`
+embarque `manuel.generated.ts`, d'où `deploy:aide`, qui lance `manuel:verifie` avant de la publier.
 
 La création de foyer **se referme d'elle-même** dès que le premier foyer existe
 (migration 0070) : la personne suivante entre par un lien d'invitation, et

@@ -96,6 +96,7 @@ async function unAppel<T>(
   nomSchema: string,
   delai: number,
   raisonnement?: 'low' | 'medium' | 'high',
+  jetons = 8000,
 ): Promise<{ valeur?: T; erreur?: string }> {
   const corps = {
     model: f.modele,
@@ -113,7 +114,7 @@ async function unAppel<T>(
      * un échec sec. Mesuré sur gpt-oss-120b : le prompt long échouait à chaque
      * appel, le prompt court passait.
      */
-    max_completion_tokens: 8000,
+    max_completion_tokens: jetons,
     // ⚠️ On NE POSE PAS la température. Google recommande fortement de laisser
     //    les paramètres par défaut sur Gemini 3.x, et une lecture de photo est
     //    une extraction, pas une création : rien à gagner à la faire varier.
@@ -159,7 +160,11 @@ export async function demande<T>(
   messages: Message[],
   schema: Record<string, unknown>,
   nomSchema: string,
-  { vision = false, raisonnement }: { vision?: boolean; raisonnement?: 'low' | 'medium' | 'high' } = {},
+  { vision = false, raisonnement, jetons }: {
+    vision?: boolean; raisonnement?: 'low' | 'medium' | 'high'
+    /** Le plafond de jetons produits : 8 000 par défaut (voir `unAppel`), à baisser quand la réponse est courte. */
+    jetons?: number
+  } = {},
 ): Promise<Resultat<T>> {
   const echecs: string[] = []
   if (liste.length === 0) return { ok: false, erreur: 'Aucun modèle configuré.', echecs }
@@ -168,7 +173,7 @@ export async function demande<T>(
     const t0 = Date.now()
     try {
       const r = await unAppel<T>(
-        f, messages, schema, nomSchema, vision ? DELAI_VISION_MS : DELAI_MS, raisonnement)
+        f, messages, schema, nomSchema, vision ? DELAI_VISION_MS : DELAI_MS, raisonnement, jetons)
       if (r.valeur !== undefined) {
         return { ok: true, valeur: r.valeur, par: f.nom, ms: Date.now() - t0, echecs }
       }

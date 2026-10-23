@@ -19,7 +19,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { preflight, reply } from '../_shared/cors.ts'
 import { demande, fournisseurs } from '../_shared/llm.ts'
 import { choisis } from '../_shared/manuel.ts'
-import { controle, messageDe, schemaDe, SYSTEME, type Sortie } from './prompt.ts'
+import { controle, JETONS_REPONSE, messageDe, schemaDe, SYSTEME, type Sortie } from './prompt.ts'
 import { PAGES } from './manuel.generated.ts'
 
 /** Par foyer et par mois : deux personnes qui s'informent, pas un robot. */
@@ -27,6 +27,8 @@ const QUOTA_MENSUEL = 300
 
 const QUESTION_MAX = 500
 const COUPE_PRECEDENT = 800
+/** Question + précédent (2 × 800) + écran, avec de la marge pour l'échappement JSON. */
+const CORPS_MAX = 8_000
 
 export type Corps = {
   question?: unknown
@@ -53,7 +55,13 @@ Deno.serve(async (req) => {
     .select('household_id').eq('id', userRes.user.id).maybeSingle()
   if (!profil) return reply('Aucun foyer', 403)
 
-  const corps: Corps = await req.json().catch(() => ({}))
+  /* Une question de 500 caractères, la précédente et sa réponse : quelques kilo-octets. Au-delà, ce n'est pas la
+     feuille de l'appli qui parle — et `req.json()` lirait tout ce qu'on lui envoie. */
+  const brut = await req.text()
+  if (brut.length > CORPS_MAX) return reply({ erreur: 'Requête trop volumineuse.' }, 413)
+  let lu: unknown = null
+  try { lu = JSON.parse(brut) } catch { /* corps illisible : traité comme vide, la question manquera */ }
+  const corps: Corps = lu && typeof lu === 'object' ? lu as Corps : {}
   const question = typeof corps.question === 'string' ? corps.question.trim() : ''
   if (question.length < 3) return reply({ erreur: 'Pose ta question en quelques mots.' }, 400)
   if (question.length > QUESTION_MAX) {
@@ -69,6 +77,10 @@ Deno.serve(async (req) => {
   const ecran = typeof corps.ecran === 'string'
     && PAGES.some(pg => pg.ecrans.includes(corps.ecran as string)) ? corps.ecran : undefined
 
+  /* Sans modèle configuré, rien ne sert de consommer le jeton d'un foyer. */
+  const fs = fournisseurs()
+  if (fs.length === 0) return reply({ erreur: 'Aucun modèle configuré.' }, 503)
+
   /* On CONSOMME d'abord, on regarde ensuite — voir `charges` : lire puis incrémenter laisserait passer N appels
      simultanés. Un appel refusé a consommé son jeton, c'est le bon sens du compromis. */
   const { data: consomme, error: eQuota } = await admin
@@ -78,9 +90,6 @@ Deno.serve(async (req) => {
   if (deja >= QUOTA_MENSUEL) {
     return reply({ erreur: `Quota atteint : ${QUOTA_MENSUEL} questions par mois. Il repart le 1er.` }, 429)
   }
-
-  const fs = fournisseurs()
-  if (fs.length === 0) return reply({ erreur: 'Aucun modèle configuré.' }, 503)
 
   const jointes = choisis(PAGES, {
     question, precedente: precedent?.question, ecran,
@@ -94,7 +103,7 @@ Deno.serve(async (req) => {
     ],
     schemaDe(jointes.map(pg => pg.id)),
     'aide',
-    { raisonnement: 'low' },
+    { raisonnement: 'low', jetons: JETONS_REPONSE },
   )
   if (!r.ok) {
     /* Sans trace, une panne du fournisseur ressemble à un bug de l'aide : le journal de la fonction dit lequel. */

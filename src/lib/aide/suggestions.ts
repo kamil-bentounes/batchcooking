@@ -5,9 +5,23 @@
  * qui ne reçoit pas un « oui ». Une suggestion sans réponse est pire qu'une absence de suggestion.
  */
 
-/** Les écrans qui portent le « ? » dans leur en-tête : le bouton flottant s'y efface. */
+/**
+ * Les écrans de l'appli (cases du `switch` de `App.tsx`) qui n'ont PAS de « ? » dans leur en-tête : le bouton y flotte.
+ * Tout le reste — `/`, `/budget`, un mois du budget, `/cuisine-accueil`, ET toute adresse inconnue, que l'appli
+ * traite comme `/` — porte le sien, et le bouton flottant s'y efface : deux « ? » se superposeraient. Un test lit
+ * `App.tsx` pour qu'un écran ajouté ne soit pas oublié ici.
+ */
+export const SANS_BOUTON_D_ENTETE = [
+  '/charges', '/budget-reglages', '/epargne', '/profil', '/semaine', '/stock', '/bilan', '/choisir', '/magasin',
+  '/plan', '/cuisine', '/dressage', '/inventer', '/photo', '/ticket', '/peser', '/importer', '/objectifs',
+  '/reglages', '/motdepasse',
+]
+
 export function aLeBoutonDansSonEntete(ici: string): boolean {
-  return ici === '/' || ici === '/budget' || ici === '/cuisine-accueil' || /^\/budget\/\d{4}-\d{2}$/.test(ici)
+  if (SANS_BOUTON_D_ENTETE.includes(ici)) return false
+  if (/^\/cloture\/\d{4}-(0[1-9]|1[0-2])$/.test(ici)) return false
+  if (/^\/cuisine\/./.test(ici)) return false
+  return true
 }
 
 export const SUR_CET_ECRAN: Record<string, string[]> = {

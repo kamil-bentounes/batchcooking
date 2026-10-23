@@ -34,6 +34,13 @@ Sortie :
 - ouvrir : l'écran à proposer SEULEMENT si ta réponse est un geste à faire dans cet écran ; sinon null. Les écrans possibles :
 ${IDS_DES_PORTES.map(id => `  · ${id} : ${PORTES[id].bouton.replace(/^Ouvrir /, '')}`).join('\n')}`
 
+/**
+ * Le plafond de ce que le modèle peut produire : réflexion « low » (quelques centaines de jetons) + 1 200 caractères
+ * de réponse + le JSON. Le palier gratuit de Groq plafonne à 8 000 jetons par minute et peut compter le plafond
+ * DEMANDÉ : avec le plafond par défaut (8 000), la requête pouvait dépasser le palier à elle seule.
+ */
+export const JETONS_REPONSE = 2_500
+
 export type Sortie = {
   reponse: string
   savoir: 'oui' | 'partiel' | 'non'
@@ -61,8 +68,12 @@ export function schemaDe(ids: string[]) {
 
 const COUPE = 600
 
-/** Une balise du prompt dans le texte de la personne : retirée, pour qu'elle ne referme pas son propre bloc de données. */
-export const sansBalises = (t: string) => t.replace(/<\/?\s*(manuel|page|question|precedent)\b[^>]*>/gi, '')
+/**
+ * Les chevrons du texte de la personne : retirés TOUS, pour qu'elle ne referme pas son propre bloc de données.
+ * Retirer seulement les balises connues en une passe laissait `<</question>/question>` se recomposer en
+ * `</question>` : on ne cherche pas à reconnaître une balise, on enlève ce dont elle est faite.
+ */
+export const sansBalises = (t: string) => t.replace(/[<>]/g, ' ')
 
 /** Les pages, la question, et la dernière question avec sa réponse — délimitées comme des données. */
 export function messageDe(o: {
@@ -91,27 +102,35 @@ export type Reponse = {
   a_verifier: string[]
 }
 
+/** La phrase fixe d'un « non » : le modèle n'a pas à la reformuler, ni à la compléter. */
+export const PAS_DANS_LE_MANUEL = 'Ce n’est pas dans mon manuel.'
+
 /**
  * Le contrôle déterministe, après le modèle.
  *
  * - Une source qui n'est pas une page jointe est jetée (le schéma l'interdit déjà : ceinture et bretelles).
  * - Une réponse qui dit « oui » sans citer aucune page n'est pas un « oui » : elle devient « partiel ».
- * - Un « non » ne propose pas d'écran.
+ * - Un « non » ne propose pas d'écran, ne cite rien — et ne contient ni chiffre ni libellé que les pages ne disent
+ *   pas : un « non » qui s'avance quand même (« en général c'est 30 jours ») est ramené à la phrase fixe.
  * - Un chiffre ou un libellé que les pages ne contiennent pas va dans `a_verifier`, et abaisse « oui » à « partiel ».
+ * - Une sortie mal formée (le repli `json_object` ne garantit pas le schéma) ne fait pas planter : elle devient un « non ».
  */
 export function controle(sortie: Sortie, jointes: PageDatee[], question: string): Reponse {
   const connues = new Map(jointes.map(p => [p.id, p]))
-  const citees = [...new Set(sortie.pages)].filter(id => connues.has(id)).map(id => connues.get(id)!)
-  let savoir = sortie.savoir
-  const reponse = sortie.reponse.trim().slice(0, 1200)
+  const pages = Array.isArray(sortie?.pages) ? sortie.pages.filter(x => typeof x === 'string') : []
+  const citees = [...new Set(pages)].filter(id => connues.has(id)).map(id => connues.get(id)!)
+  const texte = typeof sortie?.reponse === 'string' ? sortie.reponse.trim().slice(0, 1200) : ''
+  let savoir: Sortie['savoir'] = sortie?.savoir === 'oui' || sortie?.savoir === 'partiel' ? sortie.savoir : 'non'
+  let reponse = texte
+  if (texte === '') { savoir = 'non'; reponse = PAS_DANS_LE_MANUEL }
 
-  const a_verifier = savoir === 'non'
-    ? []
-    : nonConfirme(reponse, jointes.map(p => p.corps), question)
+  let a_verifier = nonConfirme(reponse, jointes.map(p => p.corps), question)
+  if (savoir === 'non' && a_verifier.length > 0) { reponse = PAS_DANS_LE_MANUEL; a_verifier = [] }
 
   if (savoir === 'oui' && (citees.length === 0 || a_verifier.length > 0)) savoir = 'partiel'
 
-  const porte = savoir !== 'non' && sortie.ouvrir && sortie.ouvrir in PORTES ? sortie.ouvrir : null
+  const porte = savoir !== 'non' && typeof sortie.ouvrir === 'string' && Object.hasOwn(PORTES, sortie.ouvrir)
+    ? sortie.ouvrir as PorteId : null
   return {
     reponse,
     savoir,
