@@ -148,6 +148,13 @@ describe('nonConfirme', () => {
     /* « à deux » n'annonce aucune valeur ; « 60 pour cent » ne cache pas un « cent ». */
     expect(nonConfirme('Le budget se partage à deux, à 60 pour cent.', ['Le partage vaut 60 %.'], '')).toEqual([])
   })
+  it('lit « deux » à « neuf » partout dans les pages, mais devant une unité seulement dans la réponse', () => {
+    /* Le manuel écrit « Les trois champs » : « 3 champs » est confirmé. */
+    expect(nonConfirme('Il y a 3 champs.', ['Les trois champs du profil.'], '')).toEqual([])
+    expect(nonConfirme('Il y a 4 champs.', ['Les trois champs du profil.'], '')).toEqual(['4'])
+    /* Dans la réponse, « les deux » n'annonce aucune valeur : pas de « 2 » à confirmer. */
+    expect(nonConfirme('Vous êtes les deux à le voir.', ['Une page sans nombre.'], '')).toEqual([])
+  })
   it('un libellé se lit à frontières de mot', () => {
     expect(nonConfirme('Touche « Ajout ».', ['Touche « Ajouter ».'], '')).toEqual(['« Ajout »'])
     expect(nonConfirme('Touche « Ajouter ».', ['Touche « Ajouter une charge ».'], '')).toEqual([])

@@ -56,7 +56,10 @@ Deno.serve(async (req) => {
   if (!profil) return reply('Aucun foyer', 403)
 
   /* Une question de 500 caractères, la précédente et sa réponse : quelques kilo-octets. Au-delà, ce n'est pas la
-     feuille de l'appli qui parle — et `req.json()` lirait tout ce qu'on lui envoie. */
+     feuille de l'appli qui parle. L'en-tête évite de lire un corps énorme ; la longueur lue couvre l'en-tête absent. */
+  if (Number(req.headers.get('content-length') ?? 0) > CORPS_MAX) {
+    return reply({ erreur: 'Requête trop volumineuse.' }, 413)
+  }
   const brut = await req.text()
   if (brut.length > CORPS_MAX) return reply({ erreur: 'Requête trop volumineuse.' }, 413)
   let lu: unknown = null

@@ -60,8 +60,11 @@ export function useBarquettes(inclureMangees = false) {
 export function usePortionsPlacees() {
   return useQuery({
     queryKey: [...CLE.barquettes, 'placees'],
+    /* Seules les barquettes encore là comptent : sans cette jointure la requête lirait tout l'historique des repas,
+       et PostgREST coupe à 1 000 lignes — dans un ordre quelconque. */
     queryFn: async () => new Set(
-      ou(await supabase.from('meal_slot').select('portion_id').not('portion_id', 'is', null))
+      ou(await supabase.from('meal_slot').select('portion_id, portion!inner(state)')
+        .in('portion.state', ['au_frais', 'decongelee']))
         .map(r => r.portion_id as string)),
     staleTime: 10_000,
   })

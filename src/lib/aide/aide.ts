@@ -23,12 +23,15 @@ export type Echange = { question: string; reponse: string }
 
 export const QUESTION_MAX = 500
 
+/** Une réponse prend deux à quatre secondes : passé 45 s, c'est le réseau qui a lâché, pas le modèle qui réfléchit. */
+const DELAI_MAX_MS = 45_000
+
 /** Les boutons « ? » des en-têtes n'ouvrent pas la feuille eux-mêmes : ils le disent à `Aide`, monté une fois dans l'appli. */
 export const OUVRE_L_AIDE = 'popote:aide'
 
 /** Une question, avec le dernier échange (pour « et si… ? ») et l'écran où l'on est (pour départager les pages). */
 export function demande(question: string, precedent: Echange | null, ecran: string): Promise<Reponse> {
-  return callFunction<Reponse>('aide', { question, precedent, ecran })
+  return callFunction<Reponse>('aide', { question, precedent, ecran }, DELAI_MAX_MS)
 }
 
 /** « Cette réponse est fausse » : la question, ce qu'il a répondu, les pages dont il s'est servi. */

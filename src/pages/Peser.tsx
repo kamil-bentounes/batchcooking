@@ -24,8 +24,8 @@ import type { APeser } from '../lib/pesee.ts'
 import { seraRetenue } from '../lib/pesee.ts'
 
 export function Peser({ retour }: { retour: () => void }) {
-  const { data: cycle, isPending: cycleEnCours } = useCycle()
-  const { data: aPeser = [], isPending, fetchStatus } = useAPeser(cycle?.id)
+  const { data: cycle, isPending: cycleEnCours, error: panneCycle } = useCycle()
+  const { data: aPeser = [], isPending, fetchStatus, error: panneListe } = useAPeser(cycle?.id)
   /* Sans semaine ouverte la requête est DÉSACTIVÉE : `isPending` y reste vrai pour toujours. On n'attend que ce qui se charge. */
   const attend = cycleEnCours || (isPending && fetchStatus !== 'idle')
   const [ouvert, setOuvert] = useState<string | null>(null)
@@ -38,7 +38,7 @@ export function Peser({ retour }: { retour: () => void }) {
         deux, puis trois — et l’app ne te le redemandera plus jamais.
       </p>
 
-      {attend ? <Attente /> : aPeser.length === 0 ? (
+      {attend ? <Attente /> : (panneCycle ?? panneListe) ? <Erreur de={panneCycle ?? panneListe} /> : aPeser.length === 0 ? (
         <Vide titre="Rien à peser"
               texte={cycle
                 ? 'Toutes les recettes de ce cycle se convertissent déjà en grammes.'

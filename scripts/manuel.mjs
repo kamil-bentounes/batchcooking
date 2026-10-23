@@ -68,7 +68,7 @@ export const PAGES: PageDatee[] = ${JSON.stringify(pages, null, 2)}
  * toujours — il est signalé, pas toléré.
  */
 function fichiersChanges(racine) {
-  const suivis = new Set(git(racine, 'ls-files').split('\n'))
+  const suivis = new Set(git(racine, 'ls-files', '-z').split('\0'))
   return (sha, sources) => {
     const dehors = []
     for (const s of sources) {

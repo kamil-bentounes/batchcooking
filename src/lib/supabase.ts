@@ -98,7 +98,8 @@ export async function deconnecte(vers: string = import.meta.env.BASE_URL): Promi
   return null
 }
 
-export async function callFunction<T = unknown>(name: string, body: unknown): Promise<T> {
+/** `delaiMs` : au-delà, l'appel est abandonné et dit « pas de réseau » — un fetch suspendu ne doit pas bloquer l'écran. */
+export async function callFunction<T = unknown>(name: string, body: unknown, delaiMs?: number): Promise<T> {
   const { data, error } = await supabase.auth.getSession()
   if (!data.session) {
     /* ⚠️ Pas de session ne veut pas dire « session perdue ». Jeton de plus d'une heure + réseau
@@ -108,7 +109,7 @@ export async function callFunction<T = unknown>(name: string, body: unknown): Pr
     window.dispatchEvent(new Event(SESSION_PERDUE))
     throw new Error('Connecte-toi d’abord.')
   }
-  return appelle<T>(name, body, data.session.access_token)
+  return appelle<T>(name, body, data.session.access_token, delaiMs)
 }
 
 /**
@@ -130,7 +131,7 @@ export class ErreurDeFonction extends Error {
   }
 }
 
-async function appelle<T>(name: string, body: unknown, jeton: string): Promise<T> {
+async function appelle<T>(name: string, body: unknown, jeton: string, delaiMs?: number): Promise<T> {
   /* Réseau coupé : `fetch` lève « Failed to fetch », que l'écran affichait tel quel. */
   const res = await fetch(fn(name), {
     method: 'POST',
@@ -140,6 +141,7 @@ async function appelle<T>(name: string, body: unknown, jeton: string): Promise<T
       Authorization: `Bearer ${jeton}`,
     },
     body: JSON.stringify(body),
+    signal: delaiMs ? AbortSignal.timeout(delaiMs) : undefined,
   }).catch(() => { throw new ErreurDeFonction(PAS_DE_RESEAU, 'reseau', 0) })
   if (!res.ok) {
     /* Le corps d'erreur est du JSON : le jeter tel quel affichait

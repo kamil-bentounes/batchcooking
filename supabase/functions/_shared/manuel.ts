@@ -246,8 +246,9 @@ const NOMBRE = /\d+(?:[.,]\d+)?/g
 
 /**
  * Les nombres écrits en lettres que le manuel donnerait en chiffres : « trente jours » est « 30 », pas une absence de
- * chiffre. De dix à mille, toujours ; de deux à neuf seulement devant une unité, parce que « à deux » ou « les deux »
- * n'annoncent aucune valeur.
+ * chiffre. De dix à mille, toujours ; de deux à neuf, dans la RÉPONSE, seulement devant une unité, parce que « à deux »
+ * ou « les deux » n'annoncent aucune valeur. Dans les PAGES, de deux à neuf se lisent partout : « Les trois champs »
+ * confirme « 3 champs », et une page qui écrit « Quatre gestes » n'a pas à les écrire en chiffres.
  */
 const EN_LETTRES: Record<string, number> = {
   dix: 10, onze: 11, douze: 12, treize: 13, quatorze: 14, quinze: 15, seize: 16, vingt: 20, trente: 30,
@@ -255,12 +256,13 @@ const EN_LETTRES: Record<string, number> = {
   deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9,
 }
 const UNITES = '(?:jours?|mois|semaines?|ans?|annees?|heures?|minutes?|euros?|fois|pour cent)'
-const MOT_NOMBRE = new RegExp(
-  `\\b(dix|onze|douze|treize|quatorze|quinze|seize|vingt|trente|quarante|cinquante|soixante|(?<!pour )cent|mille)\\b`
-  + `|\\b(deux|trois|quatre|cinq|six|sept|huit|neuf)(?= ${UNITES}\\b)`, 'g')
+const GRANDS = '(dix|onze|douze|treize|quatorze|quinze|seize|vingt|trente|quarante|cinquante|soixante|(?<!pour )cent|mille)'
+const PETITS = '(deux|trois|quatre|cinq|six|sept|huit|neuf)'
+const MOT_NOMBRE = new RegExp(`\\b${GRANDS}\\b|\\b${PETITS}(?= ${UNITES}\\b)`, 'g')
+const MOT_NOMBRE_LARGE = new RegExp(`\\b${GRANDS}\\b|\\b${PETITS}\\b`, 'g')
 
 /** Les nombres d'un texte, comparables : « 12,5 » = « 12,50 », « 1 500 » = « 1500 », « trente » = « 30 ». */
-function nombresDe(texte: string, aussiSepares = false): Set<string> {
+function nombresDe(texte: string, pagesDuManuel = false): Set<string> {
   const vu = sansAccent(texte)
   const fusionne = vu.replace(/(\d) (?=\d{3}\b)/g, '$1')
   const lot = new Set<string>()
@@ -268,8 +270,8 @@ function nombresDe(texte: string, aussiSepares = false): Set<string> {
     for (const n of t.match(NOMBRE) ?? []) lot.add(String(Number(n.replace(',', '.'))))
   }
   ajoute(fusionne)
-  if (aussiSepares) ajoute(vu)
-  for (const m of vu.matchAll(MOT_NOMBRE)) lot.add(String(EN_LETTRES[m[1] ?? m[2]]))
+  if (pagesDuManuel) ajoute(vu)
+  for (const m of vu.matchAll(pagesDuManuel ? MOT_NOMBRE_LARGE : MOT_NOMBRE)) lot.add(String(EN_LETTRES[m[1] ?? m[2]]))
   return lot
 }
 
