@@ -310,7 +310,7 @@ avant l'arrivée, md5 des égalités, focus…) ; **à vérifier à son retour**
 Arrivée au 01/09, revenu 2 500 € : reste d'octobre de Kamil 316,80 → 850,75 € (Thauba : 1 966,05 €, 533,95 € de charges),
 septembre 426,76 → 462,55 € (ses 3 lignes confirmées restent à lui). Si Kamil clôt septembre AVANT : le mois reste clos,
 et Thauba y lit « Le mois de septembre a été clôturé avant que ton revenu soit posé. Il ne te compte aucune part. »
-(`clotureSansMoi`, `src/lib/budget/mois.ts`). Avec l'arrivée par défaut (1er novembre), rien ne bouge avant novembre.
+(`clotureSansMoi`, `src/lib/budget/mois.ts`). Rien ne bouge avant novembre pour qui arrive en novembre (voir la correction du 23/10 plus bas : l'arrivée « par défaut » n'est PAS le 1er novembre, c'est la date d'inscription, que l'écran du profil relève désormais à la première arrivée du foyer).
 
 ## Remise à zéro du budget de la prod, et début en novembre (22/10, soir, à la demande de Kamil)
 - **Demande de Kamil :** « tout me supprimer et faire en sorte que le budget commence en novembre ».
@@ -335,3 +335,21 @@ et Thauba y lit « Le mois de septembre a été clôturé avant que ton revenu s
 - **Piège pour la suite :** le premier revenu qu'il pose AVANT le 1er novembre prend effet en novembre (bon) ; une
   charge posée avant aussi. Mais `tg_revenu_premier` garde `least(valid_from, arrivée)` : une arrivée à venir ET un
   revenu daté du passé reste daté du passé (le front ne le fait plus, la base l'accepterait encore).
+
+## Seconde revue adverse, et ce qu'elle a fait corriger (23/10)
+- **Dictée contournait `moisDeDepart`** : `debut` vide pour une charge mensuelle → octobre pour qui n'entre qu'en novembre
+  (compté dans le total d'octobre ; et si Thauba arrivait avant le 1er novembre, la base ouvrait octobre avec 100 % des
+  parts sur elle). Corrigé en UN endroit : `useAjouteCharge` borne `debut` à l'arrivée (`arrivee` passée par le
+  formulaire ET la dictée). Une date tapée à la main avant l'arrivée est donc aussi relevée à l'arrivée.
+- **L'arrivée « par défaut » de Thauba n'était PAS le 1er novembre** : `user_profile.entre_le` vaut `current_date`
+  (0049) ; invitée le 23/10 sans toucher au champ, elle serait entrée en octobre. L'écran du profil propose maintenant
+  `arriveeParDefaut` : jamais avant la première arrivée du foyer (donc le 01/11 tant que Kamil y est), modifiable ; si
+  un revenu est déjà posé, la date de la base reste celle affichée.
+- **Porte « Inviter quelqu'un » des réglages du budget** : arrive sur la section (`/reglages#inviter`).
+- **Gardes d'arrivée** : « Octobre est à clôturer » (hub) et le bandeau de clôture de l'écran du mois exigent que le mois
+  soit celui de la personne (`estLaCeMois`), même si un revenu y est daté (cas : profil enregistré en octobre, arrivée
+  repoussée ensuite à novembre ; `tg_entre_le_refige` ne déplace pas un revenu quand l'arrivée avance).
+- Bancs : `arriveeParDefaut` (3 tests), `e2e/inviter-et-novembre.spec.ts` (+2 : charge au début antérieur, profil de
+  l'invitée) ; les deux échouent sans le correctif.
+- **Réveil quotidien** (`reveil.yml`) : à 07:13 UTC le 23/10, toujours 0 exécution (cron prévu 06:17 UTC) ; le workflow
+  est actif des deux côtés. À revérifier ; GitHub retarde souvent la première exécution d'un cron neuf.

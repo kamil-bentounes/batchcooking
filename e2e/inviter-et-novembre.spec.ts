@@ -118,3 +118,39 @@ test('une arrivée au mois prochain : « Commence en … », pas de porte, et le
   await expect(page.getByText(`Commence en ${nom}`)).toBeVisible()
   await expect(page.getByText(/Il te reste|à clôturer/)).toHaveCount(0)
 })
+
+/* Relecture adverse du 23/10 : la date tapée à la main (ou celle de la dictée) ne devait pas ouvrir un mois
+   avant l'arrivée — le loyer d'octobre naissait avec 100 % des parts sur la seconde, arrivée avant novembre. */
+test('une charge dont le début précède l’arrivée court depuis l’arrivée', async ({ page }) => {
+  foyer = await amorce({ budget: false })
+  await seul(foyer)
+  const { iso } = moisProchain()
+  await db.from('user_profile').update({ entre_le: iso }).eq('id', foyer.userId)
+  await connecte(page, foyer.email)
+
+  await page.goto('/charges')
+  await page.getByRole('button', { name: 'Autre chose' }).click()
+  await page.getByLabel('Quoi').fill('Assurance')
+  await page.getByLabel('Combien (€)').fill('30')
+  await page.locator('#debut-charge').fill(new Date().toISOString().slice(0, 7))
+  await page.getByRole('button', { name: /Ajouter cette charge/ }).click()
+  await expect(page.getByText('Assurance').first()).toBeVisible({ timeout: 10_000 })
+  const { data: charges } = await db.from('charge').select('debut').eq('household_id', foyer.householdId)
+  expect(charges, 'la charge ne doit pas courir avant l’arrivée').toEqual([{ debut: iso }])
+  const { data: lignes } = await db.from('depense').select('mois').eq('household_id', foyer.householdId)
+  expect(lignes?.filter(l => l.mois < iso)).toEqual([])
+})
+
+test('l’invitée qui arrive avant le début du budget se voit proposer la première arrivée du foyer', async ({ page }) => {
+  foyer = await amorce({ budget: false })
+  const { iso } = moisProchain()
+  /* Lui entre le mois prochain ; elle, fraîche inscrite, a la date du jour (défaut de la base) et rien posé. */
+  await db.from('user_profile').update({ entre_le: iso }).eq('id', foyer.userId)
+  await db.from('user_profile').update({ entre_le: new Date().toISOString().slice(0, 10) }).eq('id', foyer.elleId)
+  await connecte(page, foyer.elleEmail)
+
+  await page.goto('/profil')
+  await expect(page.getByLabel('Ton arrivée dans le foyer'),
+    'sans y toucher, elle entrerait dans un mois qui n’est pas encore celui du budget').toHaveValue(iso)
+  await page.screenshot({ path: '.shots/inviter/07-profil-invitee.png', fullPage: true })
+})

@@ -87,7 +87,8 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
      clôturé », donc « à clôturer »). */
   const aCloturer = clotures.data !== undefined
     && !clotures.data.some(k => k.mois === precedent)
-    && revenuDuMois(revenus, userId, precedent) !== null ? precedent : null
+    && revenuDuMois(revenus, userId, precedent) !== null
+    && (moi === undefined || estLaCeMois(moi, precedent)) ? precedent : null
   /* Pas de ligne du tout tant qu'on ne sait pas : « Tout est à jour » dit avant d'avoir
      lu les clôtures aurait menti à qui a un mois à clôturer. */
   const suite = clotures.data === undefined ? null

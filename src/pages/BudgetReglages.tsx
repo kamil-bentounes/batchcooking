@@ -137,7 +137,7 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
           <Section titre="Ton foyer"
                    aide="Un partage à deux commence par quelqu'un d'autre. Tant que tu es
                          seul, tout t'est attribué et la règle de partage ne change rien.">
-            <button onClick={() => va('/reglages')}
+            <button onClick={() => va('/reglages#inviter')}
                     className="mt-4 w-full min-h-[52px] rounded-[14px] bg-herbe text-fond
                                text-[16px] font-medium">
               Inviter quelqu’un

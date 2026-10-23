@@ -354,7 +354,7 @@ export function Ajout({ depart, membres, moi, foyerId, comptes, surFini }: {
                         dans le foyer. C'est cette intention qui fera entrer le
                         second membre à son arrivée. */
                      commun: communeDeLaCharge({ qui: qui.length, membres: membres.length, intention: commune }),
-                     debut,
+                     debut, arrivee: membres.find(m => m.id === moi)?.entre_le,
                    }, { onSuccess: surFini })}>
           {ajoute.isPending ? 'J’ajoute…' : 'Ajouter cette charge'}
         </Principal>
@@ -454,7 +454,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                les mois restants, et sa régularisation réclamait l'année entière
                d'un coup — 1 329 € au lieu de 362 € pour une taxe foncière. La
                dictée demande désormais depuis quand. */
-            debut: l.debut,
+            debut: l.debut, arrivee: membres.find(m => m.id === userId)?.entre_le,
             })
             posees++
           } catch (e) {

@@ -190,6 +190,21 @@ export function moisDeDepart(entreLe: string | null | undefined, courant: string
 }
 
 /**
+ * La date d'arrivée que l'écran du profil PROPOSE à qui n'a encore rien posé. La base la pose à
+ * `current_date` pour toute nouvelle inscrite : invitée le 23 octobre dans un foyer dont le budget
+ * commence le 1er novembre, elle remplissait son profil sans y toucher et entrait en octobre — revenu
+ * daté octobre, « à clôturer » d'octobre. On ne propose jamais une date avant la première arrivée du
+ * foyer ; elle reste modifiable.
+ */
+export function arriveeParDefaut(
+  sienne: string | null | undefined, autres: (string | null | undefined)[], aujourdhui: string,
+): string {
+  const base = sienne || aujourdhui
+  const debutDuFoyer = autres.filter((d): d is string => !!d).sort()[0]
+  return debutDuFoyer && debutDuFoyer > base ? debutDuFoyer : base
+}
+
+/**
  * Ceux qui sont là ce mois-là et n'ont pas de revenu : le partage bascule alors en
  * moitié-moitié. Seul (ou presque : une seule personne présente), il n'y a rien à partager.
  * Celle qui arrive en octobre ne « manque » pas de revenu en septembre.

@@ -288,9 +288,16 @@ export function useAjouteCharge() {
       participants: string[]; cle?: string | null; catalogueId?: string | null
       variable?: boolean; compteId?: string | null; enveloppeId?: string | null
       commun?: boolean; debut?: string
+      /** L'arrivée de qui pose la charge : rien ne court avant elle (voir `moisDeDepart`). */
+      arrivee?: string | null
       mode?: Mode; categorie?: Categorie
       foyerId: string
     }) => {
+      /* ⚠️ Une charge ne court pas avant l'arrivée de qui la pose. La dictée envoyait `debut` vide pour
+         une charge mensuelle, donc octobre pour quelqu'un qui n'entre qu'en novembre : la charge entrait
+         dans le total d'octobre, et si le second membre arrivait avant le 1er novembre, la base ouvrait
+         octobre avec 100 % des parts sur lui. Un seul endroit, pour le formulaire comme pour la dictée. */
+      const debut = moisDeDepart(c.arrivee, c.debut ?? moisDe())
       const ligne = ou(await supabase.from('charge').insert({
         household_id: c.foyerId, libelle: c.libelle, montant_cents: c.montantCents,
         periodicite: c.periodicite, cle: c.cle ?? null, catalogue_id: c.catalogueId ?? null,
@@ -308,7 +315,7 @@ export function useAjouteCharge() {
            taxe foncière posée en septembre ne provisionnait que septembre — et
            que sa régularisation facturait l'année entière d'un coup, exactement
            ce que D61 existe pour empêcher. */
-        debut: c.debut ?? moisDe(),
+        debut,
       }).select().single())
       /* Une charge sans participant n'engendre rien : le générateur l'ignore.
          Les deux écritures vont donc ensemble, toujours. */
@@ -324,7 +331,7 @@ export function useAjouteCharge() {
        *    que septembre — et sa régularisation annuelle facturait 1 208 € d'un
        *    coup, exactement ce que D61 existe pour empêcher. Le champ « depuis
        *    quand » ne servait à rien sans ça. */
-      const depuis = (c.debut ?? moisDe()).slice(0, 7)
+      const depuis = debut.slice(0, 7)
       const jusqua = moisDe().slice(0, 7)
       for (let [a, m] = depuis.split('-').map(Number);
            `${a}-${String(m).padStart(2, '0')}` <= jusqua; m === 12 ? (a++, m = 1) : m++) {

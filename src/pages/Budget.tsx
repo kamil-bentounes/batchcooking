@@ -100,7 +100,9 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
      « à clôturer » le temps d'un aller-retour. */
   const leBandeau = clotures.isPending ? null : bandeau({
     mois, aujourdhui: jourDeParis(), clos: estClos,
-    aRevenu: m => revenuDuMois(revenus.data ?? [], userId, m) !== null,
+    /* Et le mois doit être le sien : un revenu daté avant l'arrivée ne fait pas d'un mois sans elle un mois à clôturer. */
+    aRevenu: m => revenuDuMois(revenus.data ?? [], userId, m) !== null
+      && estLaCeMois(foyer?.membres.find(x => x.id === userId) ?? {}, m),
   })
   const reste = resteDuMois({ lignes, saisies: dites, moi: userId, revenus: revenus.data ?? [],
                              mois, clos })
