@@ -15,7 +15,7 @@ sources:
   - src/lib/semaine.ts
   - supabase/migrations/0047_peremption_donnee.sql
   - src/pages/Stock.tsx
-verifie_sur: e058ce7
+verifie_sur: 78ffdc2
 ---
 ## Ce que fait l’appli
 

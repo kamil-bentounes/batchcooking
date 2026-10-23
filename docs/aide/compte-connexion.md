@@ -19,7 +19,7 @@ sources:
   - src/lib/lien.ts
   - src/pages/Onboarding.tsx
   - supabase/config.toml
-verifie_sur: a9b88fa
+verifie_sur: 78ffdc2
 ---
 ## Se connecter
 

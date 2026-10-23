@@ -423,3 +423,13 @@ ligne « Source » (page du manuel + date de relecture), bouton « Ouvrir … »
 - **Taxe foncière (question de Kamil)** : l'appli n'a pas de « payé par l'un, à répartir ». Une charge commune « Mise de côté »
   met 1/12 par mois ; la facture d'une année payée avant le premier mois suivi est refusée, et sans facture la clôture de
   décembre rend tout ce qui a été mis de côté : la mise de côté ne travaille donc vraiment qu'à partir de janvier 2027.
+- **Dernière revue adverse (23/10, soir, Sonnet) : un défaut confirmé, quatre mineurs corrigés (78ffdc2).** Le contrôle de
+  l'aide prenait « Les trois champs » du manuel pour une absence de « 3 » (15 cas sur 11 pages) : « deux » à « neuf » se lisent
+  maintenant partout dans les pages, devant une unité seulement dans la réponse. `usePortionsPlacees` ne lit plus que les
+  barquettes encore là (jointure sur `portion.state`) au lieu de tout l'historique, que PostgREST coupe à 1 000 lignes.
+  « Peser » dit une panne de lecture au lieu de « Rien à peser ». L'aide lit `Content-Length` avant le corps et abandonne un
+  appel resté suspendu après 45 s. `git ls-files -z` dans `scripts/manuel.mjs`.
+  **Laissés tels quels, à décider ou sans suite :** une barquette posée sur une case « sautée » ou un jour passé jamais marqué
+  mangé reste « placée » (voulu ? avant, elle retombait dans « sans jour ») ; le quota de l'aide n'est pas rendu quand le
+  fournisseur est en panne ; `reasoning_effort` part aussi au repli (sans objet avec Gemini) ; la recette inventée est
+  écrite `plannable` avant ses étapes, sans transaction (comme `importer.ts`).

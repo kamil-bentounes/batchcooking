@@ -21,7 +21,7 @@ sources:
   - supabase/migrations/0047_peremption_donnee.sql
   - supabase/migrations/0092_la_photo_et_les_gestes.sql
   - supabase/migrations/0117_cuisine_corrections.sql
-verifie_sur: e058ce7
+verifie_sur: 78ffdc2
 ---
 ## Ce que fait l’appli
 
