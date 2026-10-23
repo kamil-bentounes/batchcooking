@@ -16,6 +16,8 @@
  *   npm run banc-aide
  *   npm run banc-aide -- --essais 3        # trois passes, pour voir la variance
  *   npm run banc-aide -- --cat taxe        # une seule catégorie, en détail
+ *   npm run banc-aide -- --cat pages --pas 12   # une question-type du manuel sur douze (le palier gratuit est compté)
+ *   npm run banc-aide -- --repli                # le fournisseur de repli au lieu du principal
  */
 import { readFileSync } from 'node:fs'
 import { choisis } from '../supabase/functions/_shared/manuel.ts'
@@ -26,13 +28,21 @@ const args = process.argv.slice(2)
 const opt = n => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : null }
 const ESSAIS = Number(opt('--essais') ?? 1)
 const CAT = opt('--cat')
+/* `--pas 12` : une question-type sur douze (la recherche des autres est déjà couverte hors ligne par tests/aide.test.ts). */
+const PAS = Number(opt('--pas') ?? 1)
 
 const env = Object.fromEntries(
   readFileSync('supabase/functions/.env', 'utf8')
     .split('\n').filter(l => l.includes('=') && !l.startsWith('#'))
     .map(l => [l.slice(0, l.indexOf('=')).trim(),
                l.slice(l.indexOf('=') + 1).trim().replace(/^["']|["']$/g, '')]))
-const BASE = env.LLM_BASE_URL, CLE = env.LLM_API_KEY, MODELE = env.LLM_MODEL
+/* `--repli` : le fournisseur de repli (celui qui répond quand le principal est en 429, ce qui arrive vite : le palier gratuit
+   de Groq ne donne que 200 000 jetons par JOUR, soit une quarantaine de questions). */
+const REPLI = args.includes('--repli')
+/* En local il n'y a pas de repli configuré : à défaut, la clé et la base de la vision (Gemini), avec son premier modèle. */
+const BASE = REPLI ? (env.LLM_FALLBACK_BASE_URL ?? env.LLM_VISION_BASE_URL) : env.LLM_BASE_URL
+const CLE = REPLI ? (env.LLM_FALLBACK_API_KEY ?? env.LLM_VISION_API_KEY) : env.LLM_API_KEY
+const MODELE = REPLI ? (env.LLM_FALLBACK_MODEL ?? env.LLM_VISION_MODELS?.split(',')[0].trim()) : env.LLM_MODEL
 if (!BASE || !CLE) { console.error('Pas de clé LLM dans supabase/functions/.env'); process.exit(1) }
 
 const { pages: PAGES } = construit('.')
@@ -158,7 +168,8 @@ for (const p of PAGES) {
 
 /* ── La passe ────────────────────────────────────────────────────────────── */
 
-const tous = CAS.filter(c => !CAT || c.cat === CAT)
+let nPages = 0
+const tous = CAS.filter(c => (!CAT || c.cat === CAT) && (c.cat !== 'pages' || nPages++ % PAS === 0))
 const bilan = {}
 const echecs = []
 let jetonsMax = 0, totalMax = 0, msTotal = 0, appels = 0, aVerifier = 0
