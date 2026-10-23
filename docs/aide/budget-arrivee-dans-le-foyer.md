@@ -24,7 +24,7 @@ sources:
   - supabase/migrations/0098_budget_lignes_nees.sql
   - supabase/migrations/0102_budget_mois_suivis.sql
   - supabase/migrations/0103_budget_arrivees.sql
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 ## La date d'arrivée
 

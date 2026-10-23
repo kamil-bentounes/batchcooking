@@ -17,7 +17,7 @@ sources:
   - src/lib/donnees/catalogue.ts
   - src/pages/Accueil.tsx
   - src/pages/Choisir.tsx
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 ## Ce que fait l’appli
 
@@ -36,14 +36,14 @@ Le badge **« Inventée · jamais testée »**, des fourchettes de protéines et
 
 ## Les règles
 
-- Bornes de départ : tes objectifs ramenés à un repas, **35 %** de ta journée. Exemple : 2 000 kcal et 150 g de protéines donnent « Au plus 700 kcal » et « Au moins 53 g ». Sans objectifs, ou page rechargée : 30 g et 620 kcal.
+- Bornes de départ : tes objectifs ramenés à un repas, **35 %** de ta journée. Exemple : 2 000 kcal et 150 g de protéines donnent « Au plus 700 kcal » et « Au moins 53 g ». Sans objectifs enregistrés : 30 g et 620 kcal.
 - Le modèle ne voit **jamais tes objectifs ni ton prénom** : seulement ces bornes, ton envie, et les noms et quantités des ingrédients de « Ce que j’ai » (60 lignes au plus ; rien en « Libre »).
 - Recette demandée pour **2 parts**.
 - **Quota : 10 générations par mois** pour le foyer ; il repart le 1er. « N générations restantes ce mois-ci » s’affiche sous le résultat, pas avant. Un échec ne consomme rien.
 
 ## Garder ou non
 
-« Garder cette recette » l’enregistre (privée, pour ton foyer), puis t’envoie sur « Choisir ». **Défaut connu : elle n’y apparaît pas.** « Choisir » ne montre que les recettes planifiables, et celle-ci ne l’est pas (vérifié : la recherche par titre ne la trouve pas) : tu ne peux pas la retenir pour la semaine depuis l’appli. Sans « Garder », elle **disparaît**.
+« Garder cette recette » l’enregistre (privée, pour ton foyer), puis t’envoie sur « Choisir ». « Choisir » ne montre que les recettes planifiables ; une recette inventée l’est quand chaque étape a une durée (le modèle en donne une à chacune) : cherche son titre, tu peux la retenir. Gardée avant le dernier changement, elle n’y est pas. Sans « Garder », elle **disparaît**.
 
 ## Ce que l’appli ne fait pas
 

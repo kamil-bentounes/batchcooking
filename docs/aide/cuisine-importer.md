@@ -17,7 +17,7 @@ sources:
   - supabase/functions/importer/index.ts
   - supabase/migrations/0033_import.sql
   - src/lib/nutrition/macros.ts
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 ## Ce que fait l’appli
 
@@ -40,7 +40,7 @@ Tu colles une recette d’un carnet, d’un message ou d’un site, et elle rejo
 ## Les règles
 
 - 60 ingrédients et 40 étapes au plus sont gardés ; une étape qui n’est pas une action est écartée.
-- Une recette n’est **planifiable** que si **toutes** ses étapes ont une durée. **Seules les recettes planifiables apparaissent dans « Choisir »** : sinon elle est enregistrée mais invisible (vérifié), donc jamais proposée. Complète les durées avant de la garder.
+- Une recette n’est **planifiable** que si **toutes** ses étapes ont une durée. **Seules les recettes planifiables apparaissent dans « Choisir »** : sinon elle est enregistrée sans y figurer (l’écran le dit). Complète les durées avant de la garder.
 - Les macros se **calculent** : elles n’existent que si 75 % des lignes au moins sont reconnues et chiffrées, et sont écartées pour une part impossible (plus de 900 kcal/100 g).
 - **Quota : 40 imports par mois** pour le foyer, remis à zéro le 1er. Au-delà : « Quota atteint : 40 imports par mois. Il repart le 1er. »
 - Trop court : « Colle la recette : au moins quelques lignes. » Trop long : « Texte trop long. Colle la recette seule, sans la page. »

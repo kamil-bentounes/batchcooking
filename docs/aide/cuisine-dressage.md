@@ -15,7 +15,7 @@ sources:
   - src/lib/semaine.ts
   - supabase/migrations/0047_peremption_donnee.sql
   - src/pages/Stock.tsx
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 ## Ce que fait l’appli
 
@@ -24,7 +24,7 @@ Une session produit des **barquettes**, pas des recettes : nommées, datées, av
 ## Comment faire
 
 1. Pour chaque recette : « N × G g pour <prénom> », les kcal et les g de protéines d’une part, et une phrase d’explication. S’il faut un complément : « + N g de skyr pour <prénom> ».
-2. Remplis tes barquettes en suivant ces poids. L’écran dit « Pèse-les : c’est la seule pesée de la semaine », mais il n’y a pas de champ pour saisir une pesée : rien ne s’enregistre.
+2. Remplis tes barquettes en suivant ces poids : l’écran dit « Remplis chacune au poids indiqué : c’est ce qui rend les parts justes. » Il n’y a rien à saisir ici : aucun poids n’est enregistré.
 3. **« C’est dressé, ranger »** (« Je range… ») crée les barquettes, propose une répartition sur la semaine, puis ouvre « La semaine ».
 
 ## Frigo ou congélateur

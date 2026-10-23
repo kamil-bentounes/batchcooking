@@ -18,7 +18,7 @@ sources:
   - supabase/migrations/0100_budget_mois_gele.sql
   - supabase/migrations/0102_budget_mois_suivis.sql
   - supabase/migrations/0105_budget_cible.sql
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 Chaque ligne d’une charge commune se répartit entre ses participants, au centime près. Les parts sont figées sur la ligne.
 

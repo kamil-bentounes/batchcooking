@@ -24,11 +24,11 @@ sources:
   - src/lib/donnees/cycle.ts
   - src/pages/Inventer.tsx
   - supabase/migrations/0003_class_b.sql
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 ## Ce que fait l’appli
 
-Tu retiens les recettes de dimanche. L’écran compte les parts à mesure : « 6 / 10 parts » en bas veut dire 6 parts retenues sur 10 visées.
+Tu retiens les recettes de dimanche. L’écran compte les parts : « 6 / 10 parts » en bas : 6 parts retenues sur 10 visées.
 
 ## Comment faire
 
@@ -56,4 +56,4 @@ Puces : « ≤ 20 min actives », « ≥ 30 g de protéines », « Se congèle �
 - « Avec ce que j’ai » : tous les ingrédients reconnus de la recette sont dans ton stock.
 - « Jamais essayée » écarte les recettes déjà retenues une autre semaine.
 
-La liste se lit dix par dix : « Les 10 suivantes », ou les numéros de page. Elle ne montre que les recettes planifiables : une recette inventée n’y apparaît pas.
+La liste se lit dix par dix : « Les 10 suivantes », ou les numéros de page. Elle ne montre que les recettes planifiables (chaque étape a une durée) : pas les inventées gardées avant le dernier changement.

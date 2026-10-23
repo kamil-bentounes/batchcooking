@@ -18,7 +18,7 @@ sources:
   - supabase/migrations/0013_cycle.sql
   - src/pages/Choisir.tsx
   - src/lib/donnees/catalogue.ts
-verifie_sur: bd10d8c
+verifie_sur: a9b88fa
 ---
 ## Ce que fait l’appli
 
@@ -34,7 +34,7 @@ verifie_sur: bd10d8c
 
 ## Les barquettes
 
-Celles préparées dans la période : « N mangées », « N au frais » et, s’il y en a, « N jetées ». « Ce qui est passé » : par recette, mangées / dressées. Rien dans « Choisir » ne lit ce tableau, bien que l’écran dise qu’il « nourrit le choix du mercredi ».
+Celles préparées dans la période : « N mangées », « N au frais » et, s’il y en a, « N jetées ». « Ce qui est passé » : par recette, mangées / dressées. Rien dans « Choisir » ne lit ce tableau, qui « garde la trace de ce qu’on finit et de ce qu’on jette ».
 
 ## Les courbes
 

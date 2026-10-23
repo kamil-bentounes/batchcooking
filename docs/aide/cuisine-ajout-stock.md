@@ -18,7 +18,7 @@ sources:
   - supabase/functions/etiquette/index.ts
   - supabase/migrations/0047_peremption_donnee.sql
   - supabase/migrations/0048_stock_congele.sql
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 ## Ce que fait l’appli
 

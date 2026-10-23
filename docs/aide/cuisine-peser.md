@@ -16,7 +16,7 @@ sources:
   - src/lib/donnees/pesee.ts
   - src/lib/donnees/courses.ts
   - supabase/migrations/0025_pesee.sql
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 ## Ce que fait l’appli
 
@@ -47,4 +47,4 @@ Sous un aliment ouvert, chaque pesée est listée (« 2 → 236 g (118 g l’uni
 
 ## Ce que l’appli ne fait pas
 
-« Rien à peser » : toutes les recettes de la semaine se convertissent déjà en grammes, ou aucune n’est retenue. Sans semaine ouverte, l’écran reste sur « Un instant… ». Il n’existe pas aujourd’hui d’effet de ces pesées sur les calories des recettes (seule la liste de courses lit les poids appris).
+« Rien à peser » : toutes les recettes de la semaine se convertissent déjà en grammes, ou aucune n’est retenue. Sans semaine ouverte : « Choisis des recettes… ». Il n’existe pas aujourd’hui d’effet de ces pesées sur les calories des recettes (seule la liste de courses lit les poids appris).

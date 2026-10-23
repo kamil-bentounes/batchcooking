@@ -21,7 +21,7 @@ sources:
   - supabase/migrations/0102_budget_mois_suivis.sql
   - supabase/migrations/0105_budget_cible.sql
   - supabase/migrations/0110_budget_corrige.sql
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 « Elle court depuis » est le mois où la charge commence à compter : rien n’est mis de côté avant.
 

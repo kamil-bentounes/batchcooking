@@ -14,9 +14,9 @@ sources:
   - supabase/functions/aide/index.ts
   - supabase/functions/aide/prompt.ts
   - supabase/migrations/0118_aide_signalement.sql
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
-**Ce que c'est.** Un petit assistant qui répond à tes questions sur l'appli : où cliquer, comment c'est calculé, ce qu'elle ne fait pas. Il répond d'après un manuel écrit à partir du code de l'appli, pas de mémoire.
+**Ce que c'est.** Un petit assistant qui répond à tes questions sur l'appli : où cliquer, comment c'est calculé, ce qu'elle ne fait pas. Il répond d'après un manuel écrit à partir du code de l'appli, pas de mémoire. Si plusieurs pages parlent du sujet, il retient celle qui traite le cas décrit, et la cite.
 
 **Où le trouver.** Le bouton rond avec un « ? » est dans l'en-tête de l'accueil, du budget et de l'accueil de la cuisine, à côté de ton initiale. Sur tous les autres écrans, il flotte en haut à droite. Il ouvre la feuille « Demande à Popote », sur l'écran où tu es : tu n'as pas à le quitter. Tu la fermes avec la croix, en touchant à côté, ou avec la touche Échap.
 

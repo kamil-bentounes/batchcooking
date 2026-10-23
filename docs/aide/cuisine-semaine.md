@@ -18,7 +18,7 @@ sources:
   - src/lib/suivi.ts
   - supabase/migrations/0017_triggers_lot1.sql
   - src/lib/peremption.ts
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 ## Ce que fait l’appli
 
@@ -36,7 +36,7 @@ verifie_sur: bd10d8c
 « + ce que j’ai mangé en plus » ouvre trois façons d’écrire :
 
 - « Ce que tu reprends souvent » : tes habitudes ;
-- des repères en un geste, selon le repas : « Restaurant » 900 kcal, « Sandwich » 550, « Pizza » 850, « Yaourt » 60. Rien ne les marque comme estimés ensuite ;
+- des repères en un geste, selon le repas : « Restaurant » 900 kcal, « Sandwich » 550, « Pizza » 850, « Yaourt » 60. rien ne les distingue ensuite d’une saisie ;
 - « Autre chose », ses kcal et ses g de protéines, puis « Ajouter ».
 
 « retirer » efface un extra. En regardant une seule personne, « Mangé sans barquette ? » crée un repas : « Petit déjeuner », « Déjeuner », « Dîner » ou « Collation ».
@@ -47,7 +47,7 @@ verifie_sur: bd10d8c
 - Une barquette ne compte dans les calories du jour que si le repas est **mangé**. Un **extra compte toujours**.
 - « Sauté » est une réponse : le jour est renseigné, avec zéro pour ce repas.
 - **Un jour sans rien coché ni noté n’est pas un jour à zéro** : c’est un trou, hors des moyennes du bilan. Sur l’accueil : « N repas pas encore renseignés ».
-- « N barquettes sans jour » (et « N encore libres » en haut) compte aussi celles placées avant aujourd’hui ou après les sept jours affichés.
+- « N barquettes sans jour » (et « N encore libres » en haut) ne compte que celles qui n’ont **aucun** jour, où qu’il tombe.
 
 ## Les mots d’urgence
 

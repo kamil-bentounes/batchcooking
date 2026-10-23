@@ -97,7 +97,7 @@ export function verifie(racine = '.') {
   return problemes
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const cmd = process.argv[2]
   if (cmd === 'genere') {
     const { pages, contenu } = construit()

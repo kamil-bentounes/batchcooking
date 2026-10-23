@@ -15,7 +15,7 @@ sources:
   - src/lib/photo.ts
   - src/lib/donnees/barquettes.ts
   - supabase/functions/frigo/index.ts
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 ## Ce que fait l’appli
 
@@ -34,7 +34,7 @@ Un modèle de langage qui sait lire les images regarde ta photo et **propose** u
 - Sont cochés d’avance **seulement** les articles dont le modèle est sûr (confiance d’au moins 0,8). Les autres portent « deviné, à vérifier » et ne sont pas cochés.
 - Chaque article est rangé dans le lieu que **le modèle** lui attribue (givre = congélateur, bacs = frigo, boîtes = placard), pas dans celui que tu as choisi.
 - Ces lignes ne sont pas rattachées à un aliment : « Avec ce que j’ai » et « il manque … » les ignorent.
-- L’écran écrit « Tu pourras toujours corriger les quantités depuis « Ce que j’ai » », mais il n’existe pas aujourd’hui de bouton pour modifier une quantité : supprime la ligne et ajoute-la à la main. Corrige avant d’ajouter.
+- L’écran écrit « Tu pourras toujours retirer une ligne depuis « Ce que j’ai » ». Il n’existe pas aujourd’hui de bouton pour modifier une quantité : « Supprimer » la ligne et ajoute-la à la main. Corrige avant d’ajouter.
 - **Quota : 30 photos par mois** pour le foyer ; il repart le 1er. « N photos restantes ce mois-ci » s’affiche sous la liste, après la lecture. Au-delà : « Quota atteint : 30 photos par mois. Il repart le 1er. »
 - Une panne du modèle ne consomme pas de photo ; une photo où rien n’est reconnu, si.
 - Le modèle ne reçoit que la photo et le lieu : pas tes objectifs, pas ton prénom.

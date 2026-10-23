@@ -22,7 +22,7 @@ sources:
   - supabase/migrations/0102_budget_mois_suivis.sql
   - supabase/migrations/0108_budget_cloture.sql
   - supabase/migrations/0114_budget_donnees.sql
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 Popote ne sert pas qu'à cuisiner : elle tient aussi le budget du foyer. Sur l'accueil (le hub), il y a deux cartes : « Cuisine » et « Budget ». La carte « Budget » te donne le chiffre qui compte : ce qu'il te reste ce mois-ci.
 

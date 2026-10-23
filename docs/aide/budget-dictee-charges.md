@@ -17,7 +17,7 @@ sources:
   - supabase/functions/revue-charges/index.ts
   - supabase/functions/revue-charges/prompt.ts
   - supabase/migrations/0027_ecriture_croisee.sql
-verifie_sur: bd10d8c
+verifie_sur: e058ce7
 ---
 « Dicte tout, je range » (page « Les charges ») pose plusieurs charges à partir de ce que tu racontes. Le modèle propose, tu valides. Rien n’est enregistré tant que tu n’as pas touché « Ajouter N charges ».
 
