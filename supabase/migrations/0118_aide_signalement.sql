@@ -35,6 +35,12 @@ drop trigger if exists z_profil_meme_foyer on public.aide_signalement;
 create trigger z_profil_meme_foyer before insert or update on public.aide_signalement
   for each row execute function public.tg_meme_foyer('user_profile_id', 'user_profile');
 
+/* Le compteur d'usage connaît désormais « aide » : `llm_consomme` écrit dans `llm_usage`, dont la colonne `kind`
+   n'accepte que les usages déclarés. Sans cette ligne, la fonction rendait 503 « compteur indisponible ». */
+alter table public.llm_usage drop constraint if exists llm_usage_kind_check;
+alter table public.llm_usage add constraint llm_usage_kind_check
+  check (kind in ('extraction', 'vision', 'generation', 'ticket', 'import', 'etiquette', 'charges', 'revue-charges', 'aide'));
+
 /* L'export RGPD : une table de plus, une ligne de plus. La définition est celle de 0097, plus une clé. */
 create or replace function public.export_my_data()
  returns jsonb

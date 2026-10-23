@@ -50,6 +50,7 @@ async function pose({ question, precedent = null, ecran }) {
         { role: 'user', content: messageDe({ question, precedent, pages: jointes }) },
       ],
       max_completion_tokens: 8000,
+      reasoning_effort: 'low',
       response_format: { type: 'json_schema', json_schema: { name: 'aide', strict: true, schema: schemaDe(jointes.map(p => p.id)) } },
     }),
     signal: AbortSignal.timeout(60_000),
@@ -60,7 +61,7 @@ async function pose({ question, precedent = null, ecran }) {
   const sortie = JSON.parse(contenu.slice(contenu.indexOf('{'), contenu.lastIndexOf('}') + 1))
   return {
     jointes: jointes.map(p => p.id), brut: sortie, ms: Date.now() - t0,
-    jetons: json.usage?.prompt_tokens ?? null,
+    jetons: json.usage?.prompt_tokens ?? null, total: json.usage?.total_tokens ?? null,
     r: controle(sortie, jointes, question),
   }
 }
@@ -136,7 +137,7 @@ for (const p of PAGES) {
 const tous = CAS.filter(c => !CAT || c.cat === CAT)
 const bilan = {}
 const echecs = []
-let jetonsMax = 0, msTotal = 0, appels = 0, aVerifier = 0
+let jetonsMax = 0, totalMax = 0, msTotal = 0, appels = 0, aVerifier = 0
 
 for (let essai = 1; essai <= ESSAIS; essai++) {
   for (const c of tous) {
@@ -144,7 +145,7 @@ for (let essai = 1; essai <= ESSAIS; essai++) {
     let sortie
     try {
       sortie = await pose(c)
-      appels++; msTotal += sortie.ms; jetonsMax = Math.max(jetonsMax, sortie.jetons ?? 0)
+      appels++; msTotal += sortie.ms; jetonsMax = Math.max(jetonsMax, sortie.jetons ?? 0); totalMax = Math.max(totalMax, sortie.total ?? 0)
       const { r } = sortie
       if (!c.attendu.savoir.includes(r.savoir)) verdict.push(`savoir « ${r.savoir} », attendu ${c.attendu.savoir.join('/')}`)
       if (c.attendu.page && !r.sources.some(s => s.id === c.attendu.page) && !sortie.jointes.includes(c.attendu.page)) {
@@ -168,7 +169,7 @@ for (let essai = 1; essai <= ESSAIS; essai++) {
 
 console.log('\n=== Bilan ===')
 for (const [cat, b] of Object.entries(bilan)) console.log(`${cat.padEnd(8)} ${b.ok}/${b.ok + b.ko}`)
-console.log(`\n${appels} appels · ${Math.round(msTotal / Math.max(1, appels))} ms en moyenne · prompt max ${jetonsMax} jetons · ${aVerifier} réponse(s) à vérifier signalée(s) par le contrôle`)
+console.log(`\n${appels} appels · ${Math.round(msTotal / Math.max(1, appels))} ms en moyenne · prompt max ${jetonsMax} jetons, requête entière max ${totalMax} (le palier gratuit en plafonne 8 000 par minute) · ${aVerifier} réponse(s) à vérifier signalée(s) par le contrôle`)
 if (echecs.length > 0) {
   console.log('\n=== Échecs ===')
   for (const { c, verdict, sortie, essai } of echecs) {

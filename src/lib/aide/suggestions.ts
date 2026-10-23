@@ -29,7 +29,8 @@ export function surCetEcran(ici: string): string[] {
   return SUR_CET_ECRAN[route] ?? []
 }
 
-/** L'écran tel que la fonction le connaît pour départager les pages (`/budget/2026-10` → `/budget`). */
+/** L'écran tel que la fonction le connaît pour départager les pages : un mois précis vaut sa famille d'écrans
+ *  (`/budget/2026-10` → `/budget`, `/cloture/2026-09` → `/cloture`). */
 export function ecranPourLAide(ici: string): string {
-  return /^\/budget\/\d{4}-\d{2}$/.test(ici) ? '/budget' : ici
+  return ici.replace(/^(\/(?:budget|cloture))\/\d{4}-\d{2}$/, '$1')
 }

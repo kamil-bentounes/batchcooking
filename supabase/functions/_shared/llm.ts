@@ -95,10 +95,15 @@ async function unAppel<T>(
   schema: Record<string, unknown>,
   nomSchema: string,
   delai: number,
+  raisonnement?: 'low' | 'medium' | 'high',
 ): Promise<{ valeur?: T; erreur?: string }> {
   const corps = {
     model: f.modele,
     messages,
+    /* L'effort de raisonnement, quand l'appelant le borne : une réponse de manuel n'a pas besoin que le modèle
+       réfléchisse longtemps, et sur le palier gratuit de Groq (8 000 jetons par minute) chaque jeton de réflexion
+       se paie en questions de moins par minute. */
+    ...(raisonnement ? { reasoning_effort: raisonnement } : {}),
     /**
      * ⚠️ Indispensable avec un schéma strict et un modèle à RAISONNEMENT.
      *
@@ -154,7 +159,7 @@ export async function demande<T>(
   messages: Message[],
   schema: Record<string, unknown>,
   nomSchema: string,
-  { vision = false } = {},
+  { vision = false, raisonnement }: { vision?: boolean; raisonnement?: 'low' | 'medium' | 'high' } = {},
 ): Promise<Resultat<T>> {
   const echecs: string[] = []
   if (liste.length === 0) return { ok: false, erreur: 'Aucun modèle configuré.', echecs }
@@ -163,7 +168,7 @@ export async function demande<T>(
     const t0 = Date.now()
     try {
       const r = await unAppel<T>(
-        f, messages, schema, nomSchema, vision ? DELAI_VISION_MS : DELAI_MS)
+        f, messages, schema, nomSchema, vision ? DELAI_VISION_MS : DELAI_MS, raisonnement)
       if (r.valeur !== undefined) {
         return { ok: true, valeur: r.valeur, par: f.nom, ms: Date.now() - t0, echecs }
       }

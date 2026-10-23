@@ -89,6 +89,14 @@ describe('choisis', () => {
     const r = choisis(pages, { question: 'et si c’est annuel ?', precedente: 'Comment ajouter la taxe foncière ?' })
     expect(r[0].id).toBe('budget-charges')
   })
+  it('un libellé cité entre guillemets désigne la page qui le contient', () => {
+    const avec = [
+      ...pages,
+      page('cuisine-stock', { titre: 'Le stock', corps: 'Ouvre « Ce que j’ai » pour voir ton frigo.' }),
+    ]
+    /* Tous les mots de la question sont des mots vides pour la recherche : seul le libellé parle. */
+    expect(choisis(avec, { question: 'À quoi sert « Ce que j’ai » ?' })[0].id).toBe('cuisine-stock')
+  })
   it('sans rien de proche : les pages de l’écran, jamais une page au hasard', () => {
     const r = choisis(pages, { question: 'xyzzy plugh', ecran: '/charges' })
     expect(r.map(p => p.id)).toEqual(['budget-charges', 'limites'])
@@ -113,6 +121,16 @@ describe('nonConfirme', () => {
   })
   it('relève un libellé que les pages ne contiennent pas', () => {
     expect(nonConfirme('Touche « Valider ».', textes, '')).toEqual(['« Valider »'])
+  })
+  it('ne prend pas une variante typographique pour une invention', () => {
+    const t = ['Saisis son e-mail. Le champ « Son e-mail » : puis « Créer l’invitation ».']
+    /* tiret insécable (U+2011), apostrophe droite, espace fine insécable avant les deux-points */
+    expect(nonConfirme('Remplis « Son e\u2011mail » puis « Créer l\'invitation »\u202f:', t, '')).toEqual([])
+  })
+  it('lit chaque morceau d’un libellé à trous', () => {
+    const t = ['Tu lis « Invitation créée pour <adresse>. Envoie-lui ce lien. »']
+    expect(nonConfirme('Tu lis « Invitation créée pour … Envoie‑lui ce lien. »', t, '')).toEqual([])
+    expect(nonConfirme('Tu lis « Invitation créée pour … Bravo ! »', t, '')).toEqual(['« Invitation créée pour … Bravo ! »'])
   })
   it('ne compte ni les numéros d’étape ni les chiffres de la question', () => {
     expect(nonConfirme('1. Ouvre l’écran.\n2. Saisis 700.', textes, 'Je paie 700 par mois')).toEqual([])

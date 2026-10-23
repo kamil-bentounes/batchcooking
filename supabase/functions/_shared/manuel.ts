@@ -177,6 +177,16 @@ export function choisis<P extends Page>(
     return { d, note }
   })
 
+  /* Les libellés cités « entre guillemets » : on demande volontiers « à quoi sert « Ce que j'ai » ? », dont les mots
+     sont tous des mots vides pour la recherche. Une page qui contient le libellé tel quel est LA page. */
+  const cites = [...o.question.matchAll(/«\s*([^»]{4,80}?)\s*»/g)].map(m => sansAccent(m[1]))
+  if (cites.length > 0) {
+    for (const n of notes) {
+      const texte = sansAccent(`${n.d.p.titre}\n${n.d.p.corps}`)
+      n.note += 4 * Math.min(2, cites.filter(c => texte.includes(c)).length)
+    }
+  }
+
   const meilleure = Math.max(0, ...notes.map(n => n.note))
   if (o.ecran) {
     for (const n of notes) {
@@ -237,8 +247,18 @@ function nombresDe(texte: string): Set<string> {
   return new Set((texte.match(NOMBRE) ?? []).map(n => n.replace(',', '.')))
 }
 
+/**
+ * La forme sur laquelle on compare : sans accent, en minuscules, avec UN tiret, UNE apostrophe, UNE espace. Un modèle
+ * écrit volontiers « e‑mail » avec le tiret insécable (U+2011) ou une espace fine avant « : » ; ce n'est pas une
+ * invention, et le contrôle ne doit pas la prendre pour une.
+ */
 function sansAccent(s: string): string {
-  return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[’']/g, "'")
+  return s
+    .normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+    .replace(/[\u2010-\u2015\u2212\u00ad]/g, '-')
+    .replace(/[’‘ʼ`]/g, "'")
+    .replace(/[\u00a0\u202f\u2009]/g, ' ')
+    .replace(/\s+/g, ' ')
 }
 
 /**
@@ -257,8 +277,10 @@ export function nonConfirme(reponse: string, textes: string[], question: string)
   for (const n of nombresDe(sansEtapes)) if (!connus.has(n)) manque.push(n)
 
   const lu = sansAccent(source)
-  for (const m of reponse.matchAll(/«\s*([^»]{2,80}?)\s*»/g)) {
-    if (!lu.includes(sansAccent(m[1]))) manque.push(`« ${m[1]} »`)
+  for (const m of reponse.matchAll(/«\s*([^»]{2,120}?)\s*»/g)) {
+    /* Un libellé à trous (« Invitation créée pour … Envoie-lui ce lien. ») : chaque morceau doit se lire dans les pages. */
+    const morceaux = m[1].split(/…|\.{3}/).map(x => sansAccent(x).trim()).filter(x => x.length >= 3)
+    if (morceaux.some(x => !lu.includes(x))) manque.push(`« ${m[1]} »`)
   }
   return manque
 }

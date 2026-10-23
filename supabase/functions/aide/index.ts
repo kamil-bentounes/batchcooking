@@ -94,8 +94,17 @@ Deno.serve(async (req) => {
     ],
     schemaDe(jointes.map(pg => pg.id)),
     'aide',
+    { raisonnement: 'low' },
   )
-  if (!r.ok) return reply({ erreur: 'L’aide ne répond pas pour le moment. Réessaie dans un instant.' }, 502)
+  if (!r.ok) {
+    /* Sans trace, une panne du fournisseur ressemble à un bug de l'aide : le journal de la fonction dit lequel. */
+    console.error('aide : aucun modèle n’a répondu', r.echecs)
+    /* Le palier gratuit plafonne les jetons par minute : « réessaie dans une minute » est vrai, « ne répond pas » non. */
+    if (r.echecs.some(e => /HTTP 429/.test(e))) {
+      return reply({ erreur: 'L’aide est très sollicitée en ce moment : réessaie dans une minute.' }, 429)
+    }
+    return reply({ erreur: 'L’aide ne répond pas pour le moment. Réessaie dans un instant.' }, 502)
+  }
 
   return reply({
     ...controle(r.valeur, jointes, question),
