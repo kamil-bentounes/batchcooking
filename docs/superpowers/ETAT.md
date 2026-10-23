@@ -414,11 +414,11 @@ ligne « Source » (page du manuel + date de relecture), bouton « Ouvrir … »
   question pèse ~5 000 jetons (4 pages de manuel + consigne), soit ~40 questions par jour pour toute l'appli. Le repli
   (Gemini, secrets `LLM_FALLBACK_*` présents en prod) prend le relais sur un 429 : vérifié au banc (`--repli`), mêmes
   réponses. Si l'usage grossit : moins de pages par question, ou un palier payant.
-- **Migration 0118 : appliquée, mais PAS inscrite dans `supabase_migrations.schema_migrations`.** Le « à blanc » lancé avec
+- **Migration 0118 : appliquée ET inscrite (23/10, avec le « vas-y » de Kamil) ; la prod et les fichiers sont à 118 migrations.** Historique : elle avait d'abord été appliquée sans être inscrite. Le « à blanc » lancé avec
   `ecrit.py --a-blanc` n'était pas un vrai à blanc (ce drapeau ne vaut que si le SQL lit `popote.blanc`) : il a écrit. Tables,
   politiques, contrainte et `export_my_data` vérifiés, propriétaire `postgres` ; sauvegarde faite avant dans
   `~/PERSO/sauvegardes-popote/2026-10-23-avant-aide/`. L'inscription (`insert … ('0118','aide_signalement', …)`) a été
-  refusée par le garde-fou d'actions et NON contournée : à faire avec l'accord de Kamil, avant tout `supabase db push`.
+  refusée par le garde-fou d'actions, NON contournée, puis faite après l'accord de Kamil.
   Pour une vraie répétition : `applique.py N N --a-blanc`.
 - **Taxe foncière (question de Kamil)** : l'appli n'a pas de « payé par l'un, à répartir ». Une charge commune « Mise de côté »
   met 1/12 par mois ; la facture d'une année payée avant le premier mois suivi est refusée, et sans facture la clôture de
