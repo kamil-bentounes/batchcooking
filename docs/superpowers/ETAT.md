@@ -353,3 +353,4 @@ et Thauba y lit « Le mois de septembre a été clôturé avant que ton revenu s
   l'invitée) ; les deux échouent sans le correctif.
 - **Réveil quotidien** (`reveil.yml`) : à 07:13 UTC le 23/10, toujours 0 exécution (cron prévu 06:17 UTC) ; le workflow
   est actif des deux côtés. À revérifier ; GitHub retarde souvent la première exécution d'un cron neuf.
+- **En ligne le 23/10** (commit 0f0fa73, bundle `index-BfquS3O7.js`, servi par GitHub Pages) ; bancs de parcours 95/95, unitaires 1 531, lint 0 erreur.
