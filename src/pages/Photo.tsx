@@ -207,7 +207,7 @@ export function Photo({ retour, va }: { retour: () => void; va: (v: string) => v
             <p className="text-[13px] text-doux leading-relaxed">
               {lecture.commentaire
                 ?? 'Décoche ce qui n’y est pas, coche ce que le modèle a raté. '
-                 + 'Tu pourras toujours corriger les quantités depuis « Ce que j’ai ».'}
+                 + 'Tu pourras toujours retirer une ligne depuis « Ce que j’ai ».'}
             </p>
           </Surface>
 

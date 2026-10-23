@@ -169,8 +169,8 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
           </ul>
           {sansDuree > 0 && (
             <p className="mt-2.5 text-[13px] text-doux leading-relaxed">
-              Sans durée sur chaque étape, la recette se garde et se lit, mais
-              elle ne part pas au plan du dimanche : l’optimiseur ne saurait pas
+              Sans durée sur chaque étape, la recette est enregistrée mais
+              n’apparaît pas dans « Choisir » : l’optimiseur ne saurait pas
               quand la caler.
             </p>
           )}

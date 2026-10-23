@@ -53,6 +53,20 @@ export function useBarquettes(inclureMangees = false) {
   })
 }
 
+/**
+ * Les barquettes qui ont DÉJÀ un jour, où qu'il tombe. `useSemaine` ne lit que sept jours : une barquette posée avant
+ * aujourd'hui et pas encore mangée n'y est pas, et « N barquettes sans jour » la comptait comme sans jour.
+ */
+export function usePortionsPlacees() {
+  return useQuery({
+    queryKey: [...CLE.barquettes, 'placees'],
+    queryFn: async () => new Set(
+      ou(await supabase.from('meal_slot').select('portion_id').not('portion_id', 'is', null))
+        .map(r => r.portion_id as string)),
+    staleTime: 10_000,
+  })
+}
+
 export function useStock() {
   return useQuery({
     queryKey: CLE.stock,

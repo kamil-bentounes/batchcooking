@@ -233,8 +233,8 @@ export function BudgetReglages({ userId, retour }: { userId: string; retour: () 
         <Erreur de={rangeCompte.error} />
 
         <Section titre="Les comptes"
-                 aide="Un par vrai compte bancaire. Sans eux, l'app ne peut annoncer qu'un
-                       montant ; avec eux, elle dit où virer.">
+                 aide="Un par vrai compte bancaire : chaque charge note de quel compte
+                       elle est payée.">
           <Surface className="mt-4">
             {(comptes.data ?? []).length === 0
               ? <p className="py-3 text-[15px] text-doux">Aucun compte. Commence par le commun.</p>

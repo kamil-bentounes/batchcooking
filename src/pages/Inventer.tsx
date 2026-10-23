@@ -10,12 +10,12 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
-  Chiffre, Erreur, Passage, Principal, Secondaire, Surface, duree,
+  Attente, Chiffre, Erreur, Passage, Principal, Secondaire, Surface, duree,
 } from '../ui/coque.tsx'
 import { callFunction, ou, supabase } from '../lib/supabase.ts'
 import { useAppareils, useFoyer, objectifDe } from '../lib/donnees/foyer.ts'
 import { PART_DU_JOUR } from '../lib/nutrition/portions.ts'
-import { appareilDuCatalogue } from '../lib/plan/duree.ts'
+import { appareilDuCatalogue, planifiable } from '../lib/plan/duree.ts'
 import { useStock } from '../lib/donnees/barquettes.ts'
 
 type Perimetre = 'frigo' | 'courses' | 'libre'
@@ -34,7 +34,18 @@ type Recette = {
 
 const ENVIES = ['Réconfortant', 'Asiatique', 'Sans cuisson', 'Un dessert', 'Épicé', 'Frais']
 
-export function Inventer({ userId, retour, va }: {
+/**
+ * Les bornes de départ viennent de tes objectifs, et un `useState` ne lit sa valeur initiale qu'UNE fois : après un
+ * rechargement direct de l'adresse le foyer n'était pas encore là, les bornes restaient figées à 30 g et 620 kcal. On
+ * n'affiche donc le formulaire qu'une fois le foyer lu.
+ */
+export function Inventer(props: { userId: string; retour: () => void; va: (v: string) => void }) {
+  const { isPending } = useFoyer()
+  if (isPending) return <Passage retour={props.retour}><Attente /></Passage>
+  return <Invente {...props} />
+}
+
+function Invente({ userId, retour, va }: {
   userId: string; retour: () => void; va: (v: string) => void
 }) {
   const { data: foyer } = useFoyer()
@@ -72,6 +83,8 @@ export function Inventer({ userId, retour, va }: {
         visibility: 'privee',
         yield_servings: Math.max(1, r.parts),
         total_time_min: r.etapes.reduce((s, e) => s + (e.minutes ?? 0), 0) || null,
+        /* Sans ceci la recette est enregistrée mais « Choisir » ne la liste jamais : `plannable` vaut faux par défaut. */
+        plannable: planifiable(r.etapes.map(e => e.minutes)),
         license_note: 'Inventée par un modèle, jamais testée.',
       }).select().single())
 
@@ -262,7 +275,7 @@ function Resultat({ r, restantes, retour, garde, surGardee }: {
       </div>
       <p className="mt-3.5 text-[13px] text-doux leading-relaxed">
         Des fourchettes, pas des chiffres : les grammages sont proposés, pas
-        mesurés. Ils se resserreront quand tu l’auras pesée.
+        mesurés.
       </p>
 
       <Surface className="mt-6">

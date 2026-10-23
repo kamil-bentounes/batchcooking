@@ -13,7 +13,7 @@ import { Attente, Ecran, Erreur, Surface, Vide, dateLongue, jourCourt } from '..
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
   NOM_REPAS, REPAS, jour, useAjouteExtra, useBarquettes, useDistribue, useFrequents,
-  useMange, useSaute, useSemaine, useSupprimeExtra,
+  useMange, usePortionsPlacees, useSaute, useSemaine, useSupprimeExtra,
 } from '../lib/donnees/barquettes.ts'
 import type { Barquette, Case, Repas } from '../lib/donnees/barquettes.ts'
 import type { Ligne as LigneBase } from '../lib/supabase.ts'
@@ -46,8 +46,9 @@ export function Semaine({ userId, va }: { userId: string; va: (v: string) => voi
 
   const membres = foyer?.membres ?? []
   const prenoms = new Map(membres.map(m => [m.id, prenomDe(m.display_name)]))
+  const { data: dejaPlacees } = usePortionsPlacees()
   const placees = new Set(cases.map(c => c.portion_id).filter(Boolean))
-  const disponibles = libres.filter(b => !placees.has(b.id))
+  const disponibles = libres.filter(b => !placees.has(b.id) && !dejaPlacees?.has(b.id))
 
   const visibles = cases.filter(c =>
     (qui === 'tous' || c.user_profile_id === qui) &&
@@ -330,7 +331,7 @@ function EnPlus({ cas, frequents, deployeParDefaut = false, surAjoute }:
 
           <div>
             <p className="text-[13px] text-doux mb-1.5">
-              Un repère, pas une pesée — c’est marqué comme estimé
+              Un repère, pas une pesée
             </p>
             <div className="flex gap-2 flex-wrap">
               {reperes.map(r => (

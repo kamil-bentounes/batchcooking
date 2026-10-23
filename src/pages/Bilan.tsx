@@ -168,8 +168,7 @@ export function Bilan({ va, userId }: { va: (v: string) => void; userId: string 
                 ))}
               </ul>
               <p className="mt-3.5 text-[13px] text-doux leading-relaxed">
-                Ce tableau nourrit le choix du mercredi : ce qu’on jette revient
-                moins souvent, ce qu’on finit revient plus.
+                Ce tableau garde la trace de ce qu’on finit et de ce qu’on jette.
               </p>
             </section>
           )}
@@ -193,7 +192,7 @@ export function Bilan({ va, userId }: { va: (v: string) => void; userId: string 
                     if (!confirm('Clore la semaine ? Le cycle se termine et un nouveau '
                       + 'commence. On ne revient pas en arrière.')) return
                     change.mutate({ id: cycle.id, vers: 'cloture' },
-                      { onSuccess: () => setDit('Semaine close. La suivante est prête.') })
+                      { onSuccess: () => setDit('Semaine close.') })
                   }}
                   disabled={change.isPending}
                   className="mt-4 w-full h-[46px] rounded-[16px] bg-herbe text-fond text-[15px]">

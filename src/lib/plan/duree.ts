@@ -50,3 +50,13 @@ export function appareilDuCatalogue(type: string | null): string | null {
   if (!type) return null
   return VERS_CATALOGUE[type] ?? type
 }
+
+/**
+ * Une recette se PLANIFIE quand l'ordonnanceur sait en faire quelque chose : elle a des étapes, et chacune a une durée.
+ * Sans durée il ne peut pas, et la recette resterait invisible dans « Choisir » (qui ne liste que les planifiables).
+ * Oubliée au moment de garder une recette d'« Inventer », elle a laissé des recettes enregistrées sans jamais pouvoir être
+ * choisies : `plannable` vaut faux par défaut en base.
+ */
+export function planifiable(durees: (number | null | undefined)[]): boolean {
+  return durees.length > 0 && durees.every(d => typeof d === 'number' && d > 0)
+}

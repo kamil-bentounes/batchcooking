@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PLAFOND, QUANTITE_REFERENCE_G, appareilDuCatalogue, dureeDe } from './duree.ts'
+import { PLAFOND, QUANTITE_REFERENCE_G, appareilDuCatalogue, dureeDe, planifiable } from './duree.ts'
 
 describe('la mise à l’échelle (D19)', () => {
   it('ne bouge pas pour une cuisson', () => {
@@ -55,5 +55,15 @@ describe('les appareils', () => {
 
   it('rend null pour un geste à la main', () => {
     expect(appareilDuCatalogue(null)).toBeNull()
+  })
+})
+
+describe('planifiable', () => {
+  it('veut des étapes, et une durée à chacune', () => {
+    expect(planifiable([10, 25, 5])).toBe(true)
+    expect(planifiable([])).toBe(false)
+    expect(planifiable([10, null, 5])).toBe(false)
+    expect(planifiable([10, undefined])).toBe(false)
+    expect(planifiable([10, 0])).toBe(false)
   })
 })

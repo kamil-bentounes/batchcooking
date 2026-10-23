@@ -153,8 +153,7 @@ export function Dressage({ va, retour, userId }: { va: (v: string) => void; reto
         Dresse<br />{total} barquette{total > 1 ? 's' : ''}
       </h1>
       <p className="mt-3.5 text-[15px] opacity-65">
-        Pèse-les : c’est la seule pesée de la semaine, et c’est elle qui rend
-        tout le reste juste.
+        Remplis chacune au poids indiqué : c’est ce qui rend les parts justes.
       </p>
 
       {phraseSans && (

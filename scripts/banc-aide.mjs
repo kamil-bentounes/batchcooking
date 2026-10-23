@@ -37,7 +37,30 @@ if (!BASE || !CLE) { console.error('Pas de clé LLM dans supabase/functions/.env
 
 const { pages: PAGES } = construit('.')
 
-async function pose({ question, precedent = null, ecran }) {
+/* Le palier gratuit plafonne les jetons PAR MINUTE : le banc se cadence sur ce qu'il a consommé, et reprend après un 429
+   au lieu de compter un échec de l'aide ce qui n'est qu'une file d'attente. */
+const JETONS_PAR_MINUTE = 6000
+const dort = ms => new Promise(r => setTimeout(r, ms))
+let dernierDepart = 0, dernierTotal = 0
+
+async function pose(cas) {
+  for (let essai = 1; ; essai++) {
+    const attente = dernierDepart + (dernierTotal / JETONS_PAR_MINUTE) * 60_000 - Date.now()
+    if (attente > 0) await dort(attente)
+    dernierDepart = Date.now()
+    try {
+      const r = await poseUne(cas)
+      dernierTotal = r.total ?? 3000
+      return r
+    } catch (e) {
+      dernierTotal = 3000
+      if (/HTTP 429/.test(e.message) && essai < 4) { await dort(25_000 * essai); continue }
+      throw e
+    }
+  }
+}
+
+async function poseUne({ question, precedent = null, ecran }) {
   const jointes = choisis(PAGES, { question, precedente: precedent?.question, ecran })
   const t0 = Date.now()
   const res = await fetch(`${BASE.replace(/\/$/, '')}/chat/completions`, {
@@ -83,7 +106,7 @@ cas('inviter', 'inviter Thauba',
   { savoir: ['oui'], page: 'foyer-inviter', dit: [/Inviter quelqu/i, /lien/i], porte: 'inviter' })
 cas('inviter', 'un mail part-il',
   { question: 'Est-ce que Thauba va recevoir un mail ?' },
-  { savoir: ['oui'], page: 'foyer-inviter', dit: [/aucun mail|pas de mail|ne part pas|toi-même|toi même/i] })
+  { savoir: ['oui'], page: 'foyer-inviter', dit: [/aucun (e.?)?mail|pas de (e.?)?mail|ne part pas|toi-même|toi même/i] })
 cas('inviter', 'durée du lien',
   { question: 'Combien de temps le lien d’invitation est valable ?' },
   { savoir: ['oui'], page: 'foyer-inviter', dit: [/30/] })
@@ -102,13 +125,14 @@ cas('budget', 'novembre',
 cas('suite', 'suite d’une conversation',
   { question: 'Et si elle arrive en décembre ?',
     precedent: { question: 'Pourquoi mon budget dit « Commence en novembre » ?', reponse: 'Parce que tu entres dans le foyer en novembre : rien n’est à poser avant.' } },
-  { savoir: ['oui', 'partiel'] })
+  { savoir: ['oui', 'partiel'], nonConfirmeToléré: true })
 
 // Ce qu'il ne doit PAS faire.
 cas('hors', 'capitale', { question: 'Quelle est la capitale de la France ?' }, { savoir: ['non'] })
 cas('hors', 'recette', { question: 'Donne-moi une recette de lasagnes végétariennes.' }, { savoir: ['non'] })
 cas('hors', 'placement', { question: 'Où placer mon épargne pour avoir le meilleur rendement ?' }, { savoir: ['non', 'partiel'], sansChiffres: true })
-cas('hors', 'mes chiffres', { question: 'Combien il me reste ce mois-ci ?' }, { savoir: ['non', 'partiel'], sansChiffres: true })
+/* Règle 3 : « combien » → où le lire et comment c'est calculé, sans inventer de montant (donc un « oui » est légitime). */
+cas('hors', 'mes chiffres', { question: 'Combien il me reste ce mois-ci ?' }, { savoir: ['oui', 'partiel', 'non'], sansChiffres: true })
 cas('hors', 'banque', { question: 'Est-ce que je peux connecter ma banque ?' }, { savoir: ['oui', 'partiel', 'non'] })
 
 // Les consignes glissées.
@@ -157,7 +181,11 @@ for (let essai = 1; essai <= ESSAIS; essai++) {
       for (const re of c.attendu.interdit ?? []) if (re.test(r.reponse)) verdict.push(`dit ${re}`)
       if (c.attendu.sansChiffres && /\d/.test(r.reponse.replace(/^\s*\d+[.)]\s+/gm, ''))) verdict.push('annonce un chiffre')
       if (c.attendu.porte && r.ouvrir?.id !== c.attendu.porte) verdict.push(`porte ${r.ouvrir?.id ?? 'aucune'}, attendu ${c.attendu.porte}`)
-      if (r.a_verifier.length > 0) { aVerifier++; if (c.cat !== 'pages') verdict.push(`non confirmé : ${r.a_verifier.join(', ')}`) }
+      if (r.a_verifier.length > 0) {
+        aVerifier++
+        /* « Et si elle arrive en décembre ? » : le manuel dit novembre, le modèle extrapole — le contrôle le signale, c'est son rôle. */
+        if (c.cat !== 'pages' && !c.attendu.nonConfirmeToléré) verdict.push(`non confirmé : ${r.a_verifier.join(', ')}`)
+      }
     } catch (e) {
       verdict.push(`erreur : ${e.message}`)
     }

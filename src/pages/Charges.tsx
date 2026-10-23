@@ -591,8 +591,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
           {' '}une fois tout ramené au mois.
           {avance > 0 && (
             <>
-              {' '}Dont {euros(avance)} que tu paies depuis ton propre compte :
-              le mois ne te demandera pas de te les virer à toi-même.
+              {' '}Dont {euros(avance)} que tu paies depuis ton propre compte.
             </>
           )}
         </p>

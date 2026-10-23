@@ -375,6 +375,19 @@ function FormulaireAjout({ magasins, surAjoute }: {
   )
 }
 
+/**
+ * Le rayon d'une suggestion, d'après SA catégorie. Tout partait en « Épicerie salée » hors Entretien et Hygiène : l'eau et
+ * le skyr, une fois cochés, finissaient au placard au lieu du frigo.
+ */
+const RAYON_DE_LA_SUGGESTION: Record<string, string> = {
+  'Boissons': 'Boissons',
+  'Entretien': 'Entretien',
+  'Maison': 'Entretien',
+  'Hygiène': 'Hygiène',
+  'Épicerie': 'Épicerie salée',
+  'Frais du quotidien': 'Frais',
+}
+
 /** Le bouton « Compléter ma liste » (D43) : l'entretien, l'hygiène, le café. */
 function Completer({ dejaLa, surAjoute }: {
   dejaLa: Set<string>
@@ -433,8 +446,7 @@ function Completer({ dejaLa, surAjoute }: {
           const pris = dejaLa.has(s.label.toLowerCase())
           return (
             <button key={s.id} disabled={pris}
-                    onClick={() => surAjoute(s.label, s.category === 'Entretien' ? 'Entretien'
-                      : s.category === 'Hygiène' ? 'Hygiène' : 'Épicerie salée')}
+                    onClick={() => surAjoute(s.label, RAYON_DE_LA_SUGGESTION[s.category] ?? 'Épicerie salée')}
                     className={`px-3.5 py-2 rounded-full text-[14px] transition-colors
                       ${pris ? 'bg-herbe/15 text-herbe' : 'bg-fond hover:bg-brume/60'}`}>
               {pris ? '✓ ' : '+ '}{s.label}

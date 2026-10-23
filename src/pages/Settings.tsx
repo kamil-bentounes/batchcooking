@@ -271,6 +271,7 @@ function Magasins() {
   const cree = useCreeMagasin()
   const supprime = useSupprimeMagasin()
   const [nom, setNom] = useState('')
+  const [refus, setRefus] = useState<string | null>(null)
 
   return (
     <div className="mt-4">
@@ -284,7 +285,13 @@ function Magasins() {
               </span>
               <button onClick={() => {
                         if (confirm(`Retirer ${m.name} ? Les articles qui le portent`
-                                  + ` deviennent « sans magasin ».`)) supprime.mutate(m.id)
+                                  + ` deviennent « sans magasin ».`)) {
+                          setRefus(null)
+                          /* Une sortie de courses y a eu lieu : la base refuse (clé étrangère) — on le dit, au lieu de se taire. */
+                          supprime.mutate(m.id, {
+                            onError: () => setRefus(`${m.name} a déjà servi pour une sortie de courses : il ne peut plus être retiré.`),
+                          })
+                        }
                       }}
                       className="h-11 px-3 text-[14px] underline underline-offset-2">
                 retirer
@@ -293,6 +300,7 @@ function Magasins() {
           ))}
         </ul>
       )}
+      {refus && <p role="alert" className="mt-2 text-[14px] text-groseille">{refus}</p>}
       <form className="mt-3 flex gap-2" onSubmit={e => {
         e.preventDefault()
         if (nom.trim()) {
