@@ -289,7 +289,9 @@ function Magasins() {
                           setRefus(null)
                           /* Une sortie de courses y a eu lieu : la base refuse (clé étrangère) — on le dit, au lieu de se taire. */
                           supprime.mutate(m.id, {
-                            onError: () => setRefus(`${m.name} a déjà servi pour une sortie de courses : il ne peut plus être retiré.`),
+                            onError: e => setRefus(/foreign key/i.test(e instanceof Error ? e.message : '')
+                              ? `${m.name} a déjà servi pour une sortie de courses : il ne peut plus être retiré.`
+                              : `${m.name} n’a pas pu être retiré. Réessaie dans un instant.`),
                           })
                         }
                       }}
