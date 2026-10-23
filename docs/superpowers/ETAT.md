@@ -403,14 +403,23 @@ ligne « Source » (page du manuel + date de relecture), bouton « Ouvrir … »
   6. Dressage : aucun champ de pesée ; « recette mal quantifiée : parts égales » = même calcul que pour une fiable.
   7. États d'accueil jamais affichés : « Semaine close », « Session interrompue ».
   8. Barquettes du congélateur distribuées dans la semaine sans rien dire de décongeler avant le jour.
-- **Prod au 23/10, fin de journée.** Migration 0118 : APPLIQUÉE (le « à blanc » lancé avec `ecrit.py --a-blanc` n'était pas
-  un vrai à blanc — ce drapeau ne vaut que si le SQL lit `popote.blanc` — donc il a écrit ; tables, politiques, contrainte
-  et `export_my_data` vérifiés, propriétaire `postgres`) mais PAS inscrite dans `supabase_migrations.schema_migrations`
-  (l'inscription a été refusée par le classeur d'actions, non contournée) : à inscrire (`insert … ('0118','aide_signalement')`)
-  avant tout `supabase db push`. Sauvegarde avant : `~/PERSO/sauvegardes-popote/2026-10-23-avant-aide/`. Pour une vraie
-  répétition, utiliser `applique.py N N --a-blanc` (il n'écrit rien).
-  Pas encore déployés : la fonction `aide` (`npm run deploy:aide`), le site (`npm run deploy`), le push de `main` et de
-  `feat/budget-refait`.
+- **EN LIGNE le 23/10** (dc0ea07, bundle `index-7IkhcnEh.js`, `main` et `feat/budget-refait` poussés) : fonction `aide`
+  déployée (`npm run deploy:aide`, avec `--use-api` : le réseau de ce poste intercepte le TLS, le bundle local échoue sur
+  jsr.io) ; essai RÉEL sur la prod avec un foyer jetable `@fumee.test`, nettoyé (retour à 1 profil, 1 foyer) : 4 questions
+  (inviter, taxe foncière, hors sujet, consigne glissée) en 1,3–1,9 s, 401 sans jeton, 400 question courte, signalement
+  écrit sous la RLS et refusé dans un autre foyer. Unitaires 1 584, base 2 894, e2e 181/181, banc du vrai modèle OK
+  (taxe, inviter, budget, suite, hors sujet, pièges ; échantillon de 20 questions-types : 16 OK, 4 coupées par le quota
+  du jour).
+- **Limite du fournisseur** : Groq gratuit = 8 000 jetons/minute ET 200 000 jetons PAR JOUR pour `gpt-oss-120b` ; une
+  question pèse ~5 000 jetons (4 pages de manuel + consigne), soit ~40 questions par jour pour toute l'appli. Le repli
+  (Gemini, secrets `LLM_FALLBACK_*` présents en prod) prend le relais sur un 429 : vérifié au banc (`--repli`), mêmes
+  réponses. Si l'usage grossit : moins de pages par question, ou un palier payant.
+- **Migration 0118 : appliquée, mais PAS inscrite dans `supabase_migrations.schema_migrations`.** Le « à blanc » lancé avec
+  `ecrit.py --a-blanc` n'était pas un vrai à blanc (ce drapeau ne vaut que si le SQL lit `popote.blanc`) : il a écrit. Tables,
+  politiques, contrainte et `export_my_data` vérifiés, propriétaire `postgres` ; sauvegarde faite avant dans
+  `~/PERSO/sauvegardes-popote/2026-10-23-avant-aide/`. L'inscription (`insert … ('0118','aide_signalement', …)`) a été
+  refusée par le garde-fou d'actions et NON contournée : à faire avec l'accord de Kamil, avant tout `supabase db push`.
+  Pour une vraie répétition : `applique.py N N --a-blanc`.
 - **Taxe foncière (question de Kamil)** : l'appli n'a pas de « payé par l'un, à répartir ». Une charge commune « Mise de côté »
   met 1/12 par mois ; la facture d'une année payée avant le premier mois suivi est refusée, et sans facture la clôture de
   décembre rend tout ce qui a été mis de côté : la mise de côté ne travaille donc vraiment qu'à partir de janvier 2027.
