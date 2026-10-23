@@ -19,7 +19,6 @@ import { CLE, useFoyer } from '../lib/donnees/foyer.ts'
 import { usePoseRevenu, useRevenus, enCentimes, euros } from '../lib/donnees/budget.ts'
 import { aujourdhui } from '../lib/horloge.ts'
 import { questionRevenu, revenuAConfirmer } from '../lib/budget/revenu.ts'
-import { arriveeParDefaut } from '../lib/budget/mois.ts'
 import { Confirmation } from '../ui/Confirmation.tsx'
 
 export function Profil({ userId, onFini, retour }: {
@@ -49,6 +48,7 @@ export function Profil({ userId, onFini, retour }: {
   const [msgSortie, setMsgSortie] = useState('')
 
   const prenom = prenomSaisi ?? moi?.display_name ?? ''
+  const entree = entreeSaisie ?? moi?.entre_le ?? aujourdhui()
   const setPrenom = setPrenomSaisi
   const setEntree = setEntreeSaisie
 
@@ -65,12 +65,6 @@ export function Profil({ userId, onFini, retour }: {
   const revenu = revenuSaisi ?? (mien ? String(mien.net_mensuel_cents / 100).replace('.', ',') : '')
   const setRevenu = setRevenuSaisi
   const dejaPose = mien !== undefined
-  /* La date PROPOSÉE ne remonte jamais avant l'arrivée du premier du foyer (`arriveeParDefaut`) — sauf si
-     un revenu est déjà posé : la date de la base est alors la vraie, et l'écraser fausserait le partage. */
-  const entree = entreeSaisie
-    ?? (dejaPose ? (moi?.entre_le ?? aujourdhui())
-        : arriveeParDefaut(moi?.entre_le, (foyer?.membres ?? []).filter(m => m.id !== userId).map(m => m.entre_le),
-                           aujourdhui()))
 
   const cents = enCentimes(revenu)
   const autre = (foyer?.membres ?? []).find(m => m.id !== userId)

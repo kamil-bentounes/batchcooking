@@ -310,7 +310,7 @@ avant l'arrivée, md5 des égalités, focus…) ; **à vérifier à son retour**
 Arrivée au 01/09, revenu 2 500 € : reste d'octobre de Kamil 316,80 → 850,75 € (Thauba : 1 966,05 €, 533,95 € de charges),
 septembre 426,76 → 462,55 € (ses 3 lignes confirmées restent à lui). Si Kamil clôt septembre AVANT : le mois reste clos,
 et Thauba y lit « Le mois de septembre a été clôturé avant que ton revenu soit posé. Il ne te compte aucune part. »
-(`clotureSansMoi`, `src/lib/budget/mois.ts`). Rien ne bouge avant novembre pour qui arrive en novembre (voir la correction du 23/10 plus bas : l'arrivée « par défaut » n'est PAS le 1er novembre, c'est la date d'inscription, que l'écran du profil relève désormais à la première arrivée du foyer).
+(`clotureSansMoi`, `src/lib/budget/mois.ts`). Rien ne bouge avant novembre pour qui arrive en novembre : `accept-invite` pose l'arrivée de l'invitée au PREMIER DU MOIS SUIVANT (le 1er novembre si elle accepte en octobre, le 1er décembre si elle accepte en novembre).
 
 ## Remise à zéro du budget de la prod, et début en novembre (22/10, soir, à la demande de Kamil)
 - **Demande de Kamil :** « tout me supprimer et faire en sorte que le budget commence en novembre ».
@@ -341,16 +341,21 @@ et Thauba y lit « Le mois de septembre a été clôturé avant que ton revenu s
   (compté dans le total d'octobre ; et si Thauba arrivait avant le 1er novembre, la base ouvrait octobre avec 100 % des
   parts sur elle). Corrigé en UN endroit : `useAjouteCharge` borne `debut` à l'arrivée (`arrivee` passée par le
   formulaire ET la dictée). Une date tapée à la main avant l'arrivée est donc aussi relevée à l'arrivée.
-- **L'arrivée « par défaut » de Thauba n'était PAS le 1er novembre** : `user_profile.entre_le` vaut `current_date`
-  (0049) ; invitée le 23/10 sans toucher au champ, elle serait entrée en octobre. L'écran du profil propose maintenant
-  `arriveeParDefaut` : jamais avant la première arrivée du foyer (donc le 01/11 tant que Kamil y est), modifiable ; si
-  un revenu est déjà posé, la date de la base reste celle affichée.
+- **Piste écartée : « l'arrivée de Thauba est la date du jour ».** La relecture l'avait reproduite en insérant la ligne
+  directement en base (défaut `current_date`, 0049) ; mais le vrai chemin, `accept-invite` (`rattache`), pose
+  `entre_le` au premier du mois suivant. Un correctif du profil (`arriveeParDefaut`) avait été écrit sur cette fausse
+  prémisse ; la seconde relecture a montré qu'il repoussait en plus le premier arrivé du foyer (Kamil le 01/11, Thauba
+  le 05/12 : le profil de Kamil proposait le 05/12). **Retiré.** Seule conséquence à garder en tête : elle entre au
+  1er du mois suivant son acceptation — accepter après le 1er novembre, c'est entrer au 1er décembre ; Kamil en
+  décide en l'invitant à temps.
 - **Porte « Inviter quelqu'un » des réglages du budget** : arrive sur la section (`/reglages#inviter`).
 - **Gardes d'arrivée** : « Octobre est à clôturer » (hub) et le bandeau de clôture de l'écran du mois exigent que le mois
   soit celui de la personne (`estLaCeMois`), même si un revenu y est daté (cas : profil enregistré en octobre, arrivée
   repoussée ensuite à novembre ; `tg_entre_le_refige` ne déplace pas un revenu quand l'arrivée avance).
-- Bancs : `arriveeParDefaut` (3 tests), `e2e/inviter-et-novembre.spec.ts` (+2 : charge au début antérieur, profil de
-  l'invitée) ; les deux échouent sans le correctif.
+- Banc : `e2e/inviter-et-novembre.spec.ts` (+1 : charge au début antérieur à l'arrivée → `debut` relevé à l'arrivée ;
+  échoue sans le correctif). Non couverts : la dictée elle-même (même mutation, pas de banc) ; `useCorrigeCharge`
+  n'est pas bornée (inoffensif : le générateur filtre par `entre_le`) ; l'aide « remonte la date » du formulaire
+  annuel est annulée en silence par la borne pour qui est arrivé récemment (conforme à la règle, pas dit à l'écran).
 - **Réveil quotidien** (`reveil.yml`) : à 07:13 UTC le 23/10, toujours 0 exécution (cron prévu 06:17 UTC) ; le workflow
   est actif des deux côtés. À revérifier ; GitHub retarde souvent la première exécution d'un cron neuf.
 - **En ligne le 23/10** (commit 0f0fa73, bundle `index-BfquS3O7.js`, servi par GitHub Pages) ; bancs de parcours 95/95, unitaires 1 531, lint 0 erreur.

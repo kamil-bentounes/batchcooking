@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aDire, bandeau, clotureSansMoi, estLaCeMois, moisDeDepart, arriveeParDefaut, finDePhrase, membresSansRevenu, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
+import { aDire, bandeau, clotureSansMoi, estLaCeMois, moisDeDepart, finDePhrase, membresSansRevenu, barre, dansLeFiltre, dateCourte, joursProposes, joursRestants, ligneDuHub,
          maPart, partDesSoldes, montant, montantCompte, moisDemande, adresseDeMoisFausse, moisVoisin, nomDuMois, nomDuMoisDate, parCategorie,
          partSur, pourcentages, recapCloture, resteDuMois, revenuDuMois, sousLEuro, totauxDuFiltre, type Ligne,
          type Saisie } from './mois.ts'
@@ -645,21 +645,5 @@ describe('moisDeDepart : le mois où un revenu posé aujourd’hui prend effet',
     expect(moisDeDepart('2026-10-15', '2026-10-01')).toBe('2026-10-01')
     expect(moisDeDepart(null, '2026-10-01')).toBe('2026-10-01')
     expect(moisDeDepart(undefined, '2026-10-01')).toBe('2026-10-01')
-  })
-})
-
-describe('arriveeParDefaut', () => {
-  it('ne propose jamais une date avant la première arrivée du foyer', () => {
-    // Invitée le 23/10 (date posée par la base) dans un foyer qui commence le 1er novembre.
-    expect(arriveeParDefaut('2026-10-23', ['2026-11-01'], '2026-10-23')).toBe('2026-11-01')
-    expect(arriveeParDefaut(null, ['2026-11-01'], '2026-10-23')).toBe('2026-11-01')
-  })
-  it('garde sa date quand elle est plus tardive, ou quand elle est seule', () => {
-    expect(arriveeParDefaut('2026-12-05', ['2026-11-01'], '2026-10-23')).toBe('2026-12-05')
-    expect(arriveeParDefaut('2022-11-17', [], '2026-10-23')).toBe('2022-11-17')
-    expect(arriveeParDefaut(undefined, [], '2026-10-23')).toBe('2026-10-23')
-  })
-  it('un foyer ancien ne repousse personne', () => {
-    expect(arriveeParDefaut('2026-10-23', ['2022-11-17', null], '2026-10-23')).toBe('2026-10-23')
   })
 })

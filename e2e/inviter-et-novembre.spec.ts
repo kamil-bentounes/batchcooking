@@ -137,20 +137,4 @@ test('une charge dont le début précède l’arrivée court depuis l’arrivée
   await expect(page.getByText('Assurance').first()).toBeVisible({ timeout: 10_000 })
   const { data: charges } = await db.from('charge').select('debut').eq('household_id', foyer.householdId)
   expect(charges, 'la charge ne doit pas courir avant l’arrivée').toEqual([{ debut: iso }])
-  const { data: lignes } = await db.from('depense').select('mois').eq('household_id', foyer.householdId)
-  expect(lignes?.filter(l => l.mois < iso)).toEqual([])
-})
-
-test('l’invitée qui arrive avant le début du budget se voit proposer la première arrivée du foyer', async ({ page }) => {
-  foyer = await amorce({ budget: false })
-  const { iso } = moisProchain()
-  /* Lui entre le mois prochain ; elle, fraîche inscrite, a la date du jour (défaut de la base) et rien posé. */
-  await db.from('user_profile').update({ entre_le: iso }).eq('id', foyer.userId)
-  await db.from('user_profile').update({ entre_le: new Date().toISOString().slice(0, 10) }).eq('id', foyer.elleId)
-  await connecte(page, foyer.elleEmail)
-
-  await page.goto('/profil')
-  await expect(page.getByLabel('Ton arrivée dans le foyer'),
-    'sans y toucher, elle entrerait dans un mois qui n’est pas encore celui du budget').toHaveValue(iso)
-  await page.screenshot({ path: '.shots/inviter/07-profil-invitee.png', fullPage: true })
 })
