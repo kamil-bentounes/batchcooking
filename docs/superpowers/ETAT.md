@@ -359,3 +359,47 @@ et Thauba y lit « Le mois de septembre a été clôturé avant que ton revenu s
 - **Réveil quotidien** (`reveil.yml`) : à 07:13 UTC le 23/10, toujours 0 exécution (cron prévu 06:17 UTC) ; le workflow
   est actif des deux côtés. À revérifier ; GitHub retarde souvent la première exécution d'un cron neuf.
 - **En ligne le 23/10** (commit 0f0fa73, bundle `index-BfquS3O7.js`, servi par GitHub Pages) ; bancs de parcours 95/95, unitaires 1 531, lint 0 erreur.
+
+## Aide intégrée « Demande à Popote » (23/10)
+Demandée par Kamil le 23/10 (« peut-on poser la question au LLM par rapport à l'app ? »), maquette validée le jour même :
+un « ? » dans l'en-tête de l'accueil, du budget et de la cuisine (flottant ailleurs), qui ouvre une feuille ; réponse,
+ligne « Source » (page du manuel + date de relecture), bouton « Ouvrir … », « Cette réponse est fausse ».
+- **Principe : le manuel prime sur la mémoire du modèle, et le code prime sur le manuel.** 50 pages `docs/aide/*.md`
+  (≤ 450 mots), chacune avec `sources` (fichiers dont ses phrases dépendent) et `verifie_sur` (commit de relecture).
+  `npm run manuel:verifie` échoue si une source a changé depuis (ou n'est pas suivie par git), si une page est mal
+  formée ou si le paquet `supabase/functions/aide/manuel.generated.ts` est périmé ; `npm run deploy` l'exécute d'abord,
+  `npm run deploy:aide` (fonction) aussi. Guide des rédacteurs : `docs/aide/LISEZMOI.md`. Les doutes des relecteurs :
+  `docs/aide/_incertain-*.md`.
+- **Fonction `aide`** (Edge, Groq `gpt-oss-120b`, `reasoning_effort: low`, 2 500 jetons au plus) : quota 300 questions par
+  foyer et par mois (`llm_consomme`, kind `aide`) ; recherche BM25 maison, 4 pages + « limites » ; schéma strict
+  (sources et écran en énumération) ; `controle()` : un chiffre, un nombre en lettres ou un libellé « entre guillemets »
+  absent des pages jointes → « Je n'ai pas pu confirmer… » à l'écran ; un « non » qui s'avance est ramené à la phrase
+  fixe. Il ne voit jamais les chiffres du foyer. Palier gratuit : 8 000 jetons/minute, d'où le plafond bas et le banc cadencé.
+- **Migration 0118** : `aide_signalement` (RLS par foyer), `llm_usage_kind_check` + 'aide', `export_my_data` (+ `aide_signalements`).
+- **Revue adverse du code (Sonnet high)** : 13 constats, tous traités sauf le remboursement du jeton quand le fournisseur
+  est en panne (choix assumé : 300 par mois suffisent). Corrigés : balises imbriquées recomposées par le nettoyage,
+  « non » non contrôlé, `ouvrir: 'toString'`, sortie mal formée, corps JSON sans borne, nombres comparés par valeur et en
+  lettres, libellés à frontières de mot, citation vide qui boostait toutes les pages, focus perdu (Échap/Tab), deux
+  requêtes concurrentes après fermeture/réouverture, « ? » doublé sur les adresses inconnues, garde de déploiement.
+- **Défauts du PRODUIT trouvés par les relecteurs du manuel** (rejoués en local ; chaque page dit ce que fait le code, pas ce
+  que l'écran promet) — à décider avec Kamil :
+  1. « Garder cette recette » après « Inventer » : insérée avec `plannable = false` → jamais listée dans « Choisir ».
+  2. Import : `/choisir?ajoute=<id>` n'est lu par personne ; une recette dont une étape n'a pas de durée est enregistrée
+     invisible partout alors que l'écran dit « elle se garde et se lit ».
+  3. Durée du plan (`etapesDuCycle`) : ni les parts ni les quantités ne changent les durées ; le plan montré avant
+     « Recalculer le plan » compte un plat par appareil ; un appareil décoché reste utilisé à 1 plat.
+  4. Plafond en euros des lectures : aucun coût n'est jamais enregistré (`cost_eur` = 0) ; seuls les quotas bloquent.
+  5. `virements()` n'est appelée par aucun écran ; « elle dit où virer » (BudgetReglages) et « le mois ne te demandera pas de
+     te les virer » (Charges) promettent un écran qui n'existe pas. `paye_par` et « réglé » ne sont jamais écrits.
+  6. « Ce que j'ai » : pas de correction de quantité malgré la promesse de l'écran photo ; les lignes ajoutées à la main ou
+     par photo n'ont pas de `food_id` (ignorées par « Avec ce que j'ai ») ; la DLC lue ne sert qu'au congélateur.
+  7. Dressage « Pèse-les » : aucun champ ; « recette mal quantifiée : parts égales » = même calcul que pour une fiable.
+  8. Bilan « nourrit le choix du mercredi » et Semaine « c'est marqué comme estimé » : rien dans le code ne le fait.
+  9. « N barquettes sans jour » compte aussi celles placées avant aujourd'hui ; « Compléter ma liste » range tout en
+     « Épicerie salée » (eau, skyr → placard) hors Entretien et Hygiène.
+  10. États d'accueil jamais affichés : « Semaine close », « Session interrompue » ; `/peser` sans semaine reste sur
+      « Un instant… » ; bornes d'« Inventer » à 30 g / 620 kcal après rechargement direct de `/inventer`.
+  11. Retirer un magasin qui a eu une sortie de courses échoue sans message.
+- **Taxe foncière (question de Kamil)** : l'appli n'a pas de « payé par l'un, à répartir ». Une charge commune « Mise de côté »
+  met 1/12 par mois ; la facture d'une année payée avant le premier mois suivi est refusée, et sans facture la clôture de
+  décembre rend tout ce qui a été mis de côté : la mise de côté ne travaille donc vraiment qu'à partir de janvier 2027.
