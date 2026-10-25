@@ -35,8 +35,10 @@ export type LigneType = {
   mensuel: number
   /** Ce que chacun en paie par mois, en centimes ; la somme vaut `mensuel`. */
   parts: Record<string, number>
-  /** Elle commence après ce mois : elle se montre, elle ne compte pas. */
+  /** Elle ne compte pas ce mois-ci, et se montre grisée : elle commence plus tard (`debut`), ou aucun de ses
+      participants n'est encore dans le foyer (`arrivee`) — la base ne lui crée alors aucune ligne (0098). */
   plusTard: boolean
+  pourquoi: 'debut' | 'arrivee' | null
 }
 
 export type CategorieType = {
@@ -79,13 +81,16 @@ export function moisType(o: {
     .map(c => {
       const mensuel = Math.round(c.montant_cents / DIVISEUR[c.periodicite])
       const cle = o.parts[c.cle ?? 'foyer']
-      const parts = repartis(mensuel, c.participants.map(q => [q, cle[q] ?? 0]))
+      /* `parts_du_foyer` ne rend que ceux qui sont là ce mois-là : qui n'y est pas n'a pas de part. */
+      const presents = c.participants.filter(q => q in o.parts.foyer)
+      const pourquoi = !enVigueur(c, o.mois) ? 'debut' as const : presents.length === 0 ? 'arrivee' as const : null
+      const parts = presents.length === 0 ? {} : repartis(mensuel, presents.map(q => [q, cle[q] ?? 0]))
       return {
         id: c.id, libelle: c.libelle, categorie: infoCategorie(c.categorie).cle, periodicite: c.periodicite,
         mode: c.mode, commun: c.commun, montant_cents: c.montant_cents, mensuel,
         /* Chaque membre a sa case, même à zéro : le tableau a une colonne par personne. */
         parts: { ...Object.fromEntries(o.membres.map(q => [q, 0])), ...parts },
-        plusTard: !enVigueur(c, o.mois),
+        plusTard: pourquoi !== null, pourquoi,
       }
     })
 
@@ -113,6 +118,17 @@ export function moisType(o: {
   })
 
   return { lignes, categories, personnes, total: somme(lignes) }
+}
+
+/**
+ * Comment le commun se partage, dit comme la base le fera (`parts_du_mois`, 0102) : un revenu manquant chez
+ * quelqu'un qui est là fait tout passer à parts égales, quelle que soit la règle.
+ */
+export function phraseDuPartage(o: { regle: 'prorata' | 'moitie'; revenuManque: boolean }): string {
+  if (o.revenuManque) return 'Le commun se partage à parts égales tant qu’un revenu manque.'
+  return o.regle === 'moitie'
+    ? 'Le commun se partage moitié-moitié, sauf une charge réglée « Au prorata ».'
+    : 'Le commun se partage au prorata des revenus, sauf une charge réglée « Moitié-moitié ».'
 }
 
 /* ── Le tableau de toutes les charges, et ses filtres ─────────────────────── */

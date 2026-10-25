@@ -125,7 +125,8 @@ test.describe('la session interrompue', () => {
     await page.goto('/cuisine-accueil')
     await expect(page.getByRole('button', { name: 'Reprendre la session interrompue' }))
       .toBeVisible({ timeout: 10_000 })
-    await page.getByRole('button', { name: 'Choisir les recettes' }).click()
+    /* Depuis le 25/10, la reprise est le geste principal ; repartir de zéro est le second. */
+    await page.getByRole('button', { name: 'Choisir de nouvelles recettes' }).click()
     await expect(page.getByRole('alert')).toContainText('Cette semaine a une session interrompue : reprends-la.')
     expect((await db.from('cycle').select('id').eq('household_id', foyer.householdId)).data).toHaveLength(1)
   })

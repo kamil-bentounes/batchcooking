@@ -213,9 +213,10 @@ export type Charge = {
   participants: string[]
 }
 
-export function useCharges() {
+export function useCharges(actif = true) {
   return useQuery({
     queryKey: CLE.charges,
+    enabled: actif,
     queryFn: async (): Promise<Charge[]> => {
       const l = ou(await supabase.from('charge')
         .select('id, libelle, montant_cents, periodicite, mode, categorie, catalogue_id, variable, cle, compte_id, enveloppe_id, archive_le, commun, debut, modifie_par, charge_participant(user_profile_id)')
@@ -526,9 +527,10 @@ export function useRegle() {
  * et chacune des deux clés qu'une charge peut porter. C'est sur elles que le mois type partage — jamais
  * sur un prorata recompté ici, qui oublierait l'arrivée, le revenu manquant ou l'arrondi de la base.
  */
-export function usePartsDuFoyer(mois: string) {
+export function usePartsDuFoyer(mois: string, actif = true) {
   return useQuery({
     queryKey: ['parts-du-foyer', mois],
+    enabled: actif,
     queryFn: async (): Promise<PartsParCle> => {
       const lis = async (cle: 'prorata' | 'moitie' | null) => Object.fromEntries(
         ou(await supabase.rpc('parts_du_foyer', { le_mois: mois, ...(cle ? { la_cle: cle } : {}) }))
@@ -555,6 +557,8 @@ export function usePoseRegle() {
     onSuccess: () => Promise.all([
       qc.invalidateQueries({ queryKey: ['regle-partage'] }),
       qc.invalidateQueries({ queryKey: ['budget-mois'] }),
+      /* Le mois type partage avec ces parts : sans elles, il montrait encore l'ancienne règle. */
+      qc.invalidateQueries({ queryKey: ['parts-du-foyer'] }),
     ]),
   })
 }

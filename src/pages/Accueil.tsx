@@ -29,11 +29,11 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   const { data: foyer } = useFoyer()
   const { data: cases = [] } = useSemaine(aujourdhui, 1)
   const { data: barquettes = [] } = useBarquettes()
-  const { data: plan = [] } = usePlanEnregistre(cycle?.id)
+  const { data: plan = [] } = usePlanEnregistre(cycle?.id, cycle?.state === 'en_cuisine')
   const mange = useMange()
   const ouvre = useOuvreCycle()
   const reprend = useChangeEtat()
-  const { data: interrompu } = useCycleInterrompu(!chargeCycle && !cycle)
+  const { data: interrompu, isLoading: chargeInterrompu } = useCycleInterrompu(!chargeCycle && !cycle)
   const { data: invitations = [] } = useInvitations()
   const rejoint = useRejoint()
 
@@ -44,7 +44,9 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   const prochain = duJour.find(c => c.state === 'prevu' && c.portion)
   const consomme = bilanDuJour(cases, userId, jourDit)
 
-  const etat = cycle?.state ?? 'vide'
+  /* Une session interrompue est LA chose du moment : le hub le dit (« Session interrompue »), l'accueil disait
+     « Rien de prévu » et ne la proposait qu'en second, sous « Choisir les recettes » (revue du 25/10). */
+  const etat = cycle?.state ?? (interrompu ? 'interrompue' : 'vide')
   const geste = GESTE[etat]
   const presses = barquettes
     .map(b => ({ b, u: urgence(b.expires_at, b.location as 'frigo' | 'congelateur') }))
@@ -52,7 +54,7 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
     .sort((a, b) => a.u.heuresRestantes - b.u.heuresRestantes)
     .slice(0, 2)
 
-  if (chargeCycle) {
+  if (chargeCycle || chargeInterrompu) {
     return <Ecran actif="accueil" va={va}><Vide titre="Un instant…" /></Ecran>
   }
 
@@ -124,9 +126,11 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
           )
           : (
             <Principal onClick={() => {
-              if (!cycle) ouvre.mutate({}, { onSuccess: () => va('/choisir') })
+              if (!cycle && interrompu) {
+                reprend.mutate({ id: interrompu.id, vers: 'en_cuisine' }, { onSuccess: () => va('/cuisine') })
+              } else if (!cycle) ouvre.mutate({}, { onSuccess: () => va('/choisir') })
               else va(geste.vers)
-            }} disabled={ouvre.isPending}>
+            }} disabled={ouvre.isPending || reprend.isPending}>
               {geste.action}
             </Principal>
           )}
@@ -140,11 +144,11 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
               ? 'Cette semaine a déjà eu sa session : reprends-la, ou attends la semaine suivante.'
               : enFrancais(ouvre.error.message))
           : reprend.error} />
+        {/* L'autre chemin : la laisser là et repartir sur de nouvelles recettes. */}
         {!cycle && interrompu && (
-          <Secondaire onClick={() => reprend.mutate({ id: interrompu.id, vers: 'en_cuisine' },
-                                                    { onSuccess: () => va('/cuisine') })}
-                      disabled={reprend.isPending}>
-            Reprendre la session interrompue
+          <Secondaire onClick={() => ouvre.mutate({}, { onSuccess: () => va('/choisir') })}
+                      disabled={ouvre.isPending}>
+            Choisir de nouvelles recettes
           </Secondaire>
         )}
 

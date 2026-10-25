@@ -433,3 +433,28 @@ ligne « Source » (page du manuel + date de relecture), bouton « Ouvrir … »
   mangé reste « placée » (voulu ? avant, elle retombait dans « sans jour ») ; le quota de l'aide n'est pas rendu quand le
   fournisseur est en panne ; `reasoning_effort` part aussi au repli (sans objet avec Gemini) ; la recette inventée est
   écrite `plannable` avant ses étapes, sans transaction (comme `importer.ts`).
+
+## Mois type, tableau des charges, « J'ai fini » (25/10)
+
+Après leur premier dimanche (Thauba connectée, charges posées, session à 30/34 interrompue par erreur) :
+- **Session récupérée en prod** (accord de Kamil) : le cycle `d75c8320…` est repassé `interrompue → en_cuisine`, rien
+  d'autre. Les parts n'étaient pas perdues : les barquettes ne naissent qu'au dressage. Il ne la retrouvait pas parce
+  que `cycle_a_reprendre` (0117) ne regardait que la semaine du plan (21/09, ouvert le 18/09, cuisiné le 25/10).
+- **0119** : une session interrompue se reprend aussi si elle a COMMENCÉ il y a moins de 7 jours. L'accueil de la
+  cuisine en fait son geste principal (« Reprendre la session interrompue », « Choisir de nouvelles recettes » en
+  second) ; le hub dit « Session interrompue ».
+- **« J'ai fini · passer au dressage »** en cuisine (hôte seulement) : passe au dressage sans cocher les actions
+  restantes (ne fausse pas les durées apprises) ; la question nomme les recettes dont rien n'est coché, car elles
+  seront dressées quand même. La relecture toutes les 5 s ne tourne plus hors cuisine.
+- **Le mois type** (`/mois-type`, et à la place de « Pas encore » avant l'arrivée) : anneau par catégorie touchable,
+  jauge par personne (% du revenu), commun / à soi, il reste ; sélecteur Le foyer / chaque prénom ; une carte par
+  catégorie qui ouvre le détail. Calcul `src/lib/budget/mois-type.ts`, avec les parts de la base
+  (`parts_du_foyer`) ; une charge qui commence plus tard, ou dont aucun participant n'est encore là, se montre
+  grisée et ne compte pas — comme la base, qui ne lui crée pas de ligne.
+- **Toutes les charges** (`/toutes-les-charges[/<cat>[/<id>]]`) : tableau (rôles ARIA de tableau), recherche,
+  filtres qui paie / catégorie / rythme / façon, tri, totaux qui suivent, revenu et reste sans filtre.
+- Manuel de l'aide : 3 pages nouvelles (`budget-mois-type`, `budget-toutes-les-charges`, `cuisine-session-fin`),
+  portes « mois type » et « tableau des charges ».
+- Deux revues Sonnet : tout le confirmé corrigé. Laissé : une année déjà soldée (`releve_annuel`) compte encore dans
+  le mois type ; le départage d'un centime impair diffère de la base (md5) — invisible en euros ronds ; l'écran de
+  cuisine reste atteignable par l'historique après le dressage (préexistant).

@@ -16,10 +16,10 @@
  */
 import { useEffect, useState } from 'react'
 import { Attente } from '../coque.tsx'
-import { moisType, type CategorieType, type MoisType } from '../../lib/budget/mois-type.ts'
+import { moisType, phraseDuPartage, type CategorieType, type MoisType } from '../../lib/budget/mois-type.ts'
 import type { Categorie } from '../../lib/budget/categories.ts'
-import { nomDuMois } from '../../lib/budget/mois.ts'
-import { eurosRonds, useCharges, usePartsDuFoyer, useRevenus } from '../../lib/donnees/budget.ts'
+import { nomDuMois, revenuDuMois } from '../../lib/budget/mois.ts'
+import { eurosRonds, useCharges, usePartsDuFoyer, useRegle, useRevenus } from '../../lib/donnees/budget.ts'
 import { prenomDe, useFoyer } from '../../lib/donnees/foyer.ts'
 import { messageDeLecture } from '../../lib/budget/ecran.ts'
 import { Photo } from './Photo.tsx'
@@ -30,24 +30,31 @@ export const COULEUR_DE_LA_PERSONNE = ['#2F5D45', '#B8791A']
 export type Personne = { id: string; prenom: string; couleur: string }
 
 /** Les lectures du mois type, en une : rien ne se montre tant qu'une manque (`etatDeLEcran`, même règle). */
-export function useMoisType(mois: string): {
+export function useMoisType(mois: string, actif = true): {
   etat: 'chargement' | 'erreur' | 'pret'; erreur: unknown; donnees: MoisType | null; personnes: Personne[]
+  /** La phrase qui dit comment le commun se partage ce mois-là. */
+  partage: string
 } {
-  const charges = useCharges()
+  const charges = useCharges(actif)
   const revenus = useRevenus()
-  const parts = usePartsDuFoyer(mois)
+  const parts = usePartsDuFoyer(mois, actif)
+  const regle = useRegle()
   const { data: foyer, error: erreurFoyer } = useFoyer()
   const personnes = (foyer?.membres ?? []).map((m, i) => ({
     id: m.id, prenom: prenomDe(m.display_name), couleur: COULEUR_DE_LA_PERSONNE[i % 2],
   }))
+  /* Un revenu manquant chez quelqu'un qui est là ce mois-là fait tout passer à parts égales (`parts_du_mois`). */
+  const revenuManque = !!parts.data && Object.keys(parts.data.foyer)
+    .some(q => revenuDuMois(revenus.data ?? [], q, mois) === null)
+  const partage = phraseDuPartage({ regle: regle.data ?? 'prorata', revenuManque })
   const lectures = [charges, revenus, parts]
   const panne = lectures.find(q => q.data === undefined && q.error)?.error ?? (foyer ? null : erreurFoyer)
-  if (panne) return { etat: 'erreur', erreur: panne, donnees: null, personnes }
+  if (panne) return { etat: 'erreur', erreur: panne, donnees: null, personnes, partage }
   if (!charges.data || !revenus.data || !parts.data || !foyer) {
-    return { etat: 'chargement', erreur: null, donnees: null, personnes }
+    return { etat: 'chargement', erreur: null, donnees: null, personnes, partage }
   }
   return {
-    etat: 'pret', erreur: null, personnes,
+    etat: 'pret', erreur: null, personnes, partage,
     donnees: moisType({ charges: charges.data, parts: parts.data, membres: personnes.map(p => p.id),
                         revenus: revenus.data, mois }),
   }
@@ -128,7 +135,7 @@ function Anneau({ categories, total, legende }: {
         {pleines.map(c => (
           <li key={c.cle}>
             <button onClick={() => choisis(c.cle)} aria-pressed={choisie === c.cle}
-                    className={`w-full min-h-10 px-2.5 rounded-[12px] flex items-center gap-2 text-left text-[13px]
+                    className={`w-full min-h-11 px-2.5 rounded-[12px] flex items-center gap-2 text-left text-[13px]
                                 transition-colors ${choisie === c.cle ? 'bg-piste' : ''}`}>
               <span aria-hidden="true" className="w-2.5 h-2.5 rounded-[3px] shrink-0" style={{ background: c.couleur }} />
               <span className="grow truncate">{c.nom}</span>
@@ -142,7 +149,7 @@ function Anneau({ categories, total, legende }: {
 }
 
 /** La jauge d'une personne : la part de son revenu que ses charges prennent. */
-function Jauge({ part, couleur, deborde }: { part: number; couleur: string; deborde: boolean }) {
+function Jauge({ part, couleur, deborde }: { part: number | null; couleur: string; deborde: boolean }) {
   const trace = useTrace()
   const r = 33
   const tour = 2 * Math.PI * r
@@ -152,12 +159,17 @@ function Jauge({ part, couleur, deborde }: { part: number; couleur: string; debo
         <circle cx="40" cy="40" r={r} fill="none" stroke="var(--color-piste)" strokeWidth="9" />
         <circle cx="40" cy="40" r={r} fill="none" stroke={deborde ? 'var(--color-ocre)' : couleur}
                 strokeWidth="9" strokeLinecap="round" transform="rotate(-90 40 40)"
-                strokeDasharray={`${trace ? tour * Math.min(part, 1) : 0} ${tour}`}
+                strokeDasharray={`${trace && part !== null ? tour * Math.min(part, 1) : 0} ${tour}`}
                 className="motion-reduce:!transition-none" style={{ transition: TRACE }} />
       </svg>
+      {/* Sans revenu, pas de part du revenu : « 100 % » au-dessus de « Revenu pas encore posé » mentait. */}
       <span className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-        <span className="chiffre text-[19px]">{Math.round(part * 100)}<span className="text-[12px]"> %</span></span>
-        <span className="mt-0.5 text-[10px] text-doux">du revenu</span>
+        {part === null ? <span className="chiffre text-[19px] text-doux">—</span> : (
+          <>
+            <span className="chiffre text-[19px]">{Math.round(part * 100)}<span className="text-[12px]"> %</span></span>
+            <span className="mt-0.5 text-[10px] text-doux">du revenu</span>
+          </>
+        )}
       </span>
     </div>
   )
@@ -176,7 +188,7 @@ export function TableauDeBord({ mois, va, avant = false }: {
   /** Le mois n'a pas commencé : la phrase d'ouverture le dit. */
   avant?: boolean
 }) {
-  const { etat, erreur, donnees, personnes } = useMoisType(mois)
+  const { etat, erreur, donnees, personnes, partage } = useMoisType(mois)
   /* Le foyer entier, ou la part d'une personne : l'anneau et les catégories se recomptent sur elle. */
   const [vue, setVue] = useState<string>('foyer')
   if (etat === 'chargement') return <Attente />
@@ -211,8 +223,10 @@ export function TableauDeBord({ mois, va, avant = false }: {
   const total = categories.reduce((t, c) => t + c.total, 0)
   const plusLourde = Math.max(...categories.map(c => c.total), 1)
   const autre = categories.find(c => c.cle === 'autre')
-  const versLeDetail = (cle?: string) =>
-    va(`/toutes-les-charges${cle ? `/${cle}` : ''}${cle && surQui ? `/${surQui}` : ''}`)
+  /* Vu par une personne, le détail s'ouvre sur elle aussi — « toutes » tient la place de la catégorie. */
+  const versLeDetail = (cle?: string) => va(surQui
+    ? `/toutes-les-charges/${cle ?? 'toutes'}/${surQui}`
+    : `/toutes-les-charges${cle ? `/${cle}` : ''}`)
 
   return (
     <div className="mt-5 flex flex-col gap-4">
@@ -226,7 +240,7 @@ export function TableauDeBord({ mois, va, avant = false }: {
         <div role="group" aria-label="Voir pour" className="flex p-1 rounded-full bg-piste">
           {[{ id: 'foyer', prenom: 'Le foyer' }, ...personnes].map(p => (
             <button key={p.id} onClick={() => setVue(p.id)} aria-pressed={vue === p.id}
-                    className={`flex-1 min-h-10 rounded-full text-[14px] font-medium transition-colors
+                    className={`flex-1 min-h-11 rounded-full text-[14px] font-medium transition-colors
                                 ${vue === p.id ? 'bg-surface text-encre shadow-carte' : 'text-doux'}`}>
               {p.prenom}
             </button>
@@ -247,7 +261,8 @@ export function TableauDeBord({ mois, va, avant = false }: {
             const base = p.revenu && p.revenu > 0 ? p.revenu : Math.max(p.total, 1)
             return (
               <div key={p.id} className="flex gap-4 items-center">
-                <Jauge part={p.total / base} couleur={qui.couleur} deborde={p.reste !== null && p.reste < 0} />
+                <Jauge part={p.revenu && p.revenu > 0 ? p.total / p.revenu : null} couleur={qui.couleur}
+                       deborde={p.reste !== null && p.reste < 0} />
                 <div className="grow min-w-0">
                   <div className="flex justify-between items-baseline gap-2">
                     <span className="text-[17px] font-semibold">{qui.prenom}</span>
@@ -278,8 +293,7 @@ export function TableauDeBord({ mois, va, avant = false }: {
           })}
           {aDeux && (
             <p className="text-[12px] leading-relaxed text-doux">
-              Le commun se partage comme le mois le fera : au prorata des revenus, sauf une charge réglée
-              « Moitié-moitié ». Ce qui se paie au trimestre ou à l’année compte au mois.
+              {partage} Ce qui se paie au trimestre ou à l’année compte au mois.
             </p>
           )}
         </section>
@@ -294,7 +308,7 @@ export function TableauDeBord({ mois, va, avant = false }: {
       <div className="-mt-1 flex flex-col gap-2.5">
         {categories.map(c => (
           <button key={`${vue}-${c.cle}`} onClick={() => versLeDetail(c.cle)}
-                  aria-label={`${c.nom} : ${eurosRonds(c.total)} par mois. Voir ses ${c.lignes.length} lignes`}
+                  aria-label={`${c.nom} : ${eurosRonds(c.total)} par mois. Voir ${c.lignes.length > 1 ? `ses ${c.lignes.length} lignes` : 'sa ligne'}`}
                   className="w-full text-left rounded-[22px] bg-surface shadow-carte p-3.5 flex flex-col gap-3">
             <span className="flex items-center gap-3 w-full">
               <Photo categorie={c.cle} taille={46} />

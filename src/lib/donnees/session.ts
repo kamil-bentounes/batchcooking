@@ -34,7 +34,9 @@ export const CLE = {
   appareilsSession: (cycleId: string | undefined) => ['session-appareils', cycleId] as const,
 }
 
-export function usePlanEnregistre(cycleId: string | undefined) {
+/** `suivre` : relire toutes les 5 s tant qu'une action est en cours — pendant la cuisine seulement. Après
+    « J'ai fini », une action restée « en cours » faisait tourner la relecture toute la semaine sur l'accueil. */
+export function usePlanEnregistre(cycleId: string | undefined, suivre = true) {
   return useQuery({
     queryKey: CLE.plan(cycleId),
     enabled: !!cycleId,
@@ -69,7 +71,7 @@ export function usePlanEnregistre(cycleId: string | undefined) {
     },
     // Pendant la cuisine, l'autre téléphone coche : on rafraîchit souvent.
     staleTime: 3_000,
-    refetchInterval: q => (q.state.data?.some(t => t.started_at && !t.done_at) ? 5_000 : false),
+    refetchInterval: q => (suivre && q.state.data?.some(t => t.started_at && !t.done_at) ? 5_000 : false),
   })
 }
 

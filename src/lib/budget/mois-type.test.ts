@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  filtreLesLignes, moisType, sansFiltre, type ChargeDuMoisType, type FiltreDuTableau, type PartsParCle,
+  filtreLesLignes, moisType, phraseDuPartage, sansFiltre, type ChargeDuMoisType, type FiltreDuTableau, type PartsParCle,
 } from './mois-type.ts'
 
 const K = 'kamil'
@@ -96,6 +96,24 @@ describe('moisType', () => {
     expect(m.personnes[0].reste).toBeNull()
   })
 
+  it('une charge dont aucun participant n’est encore là ne compte pas : la base ne lui crée pas de ligne', () => {
+    const m = moisType({
+      charges: [charge(), charge({ libelle: 'Perso Thauba', montant_cents: 10_000, commun: false, participants: [T] })],
+      parts: { foyer: { [K]: 10_000 }, prorata: { [K]: 10_000 }, moitie: { [K]: 10_000 } },
+      membres: [K, T], revenus: REVENUS, mois: NOVEMBRE,
+    })
+    const perso = m.lignes.find(l => l.libelle === 'Perso Thauba')!
+    expect(perso).toMatchObject({ plusTard: true, pourquoi: 'arrivee', parts: { [K]: 0, [T]: 0 } })
+    expect(m.total).toBe(70_000)
+    expect(m.personnes.map(p => p.total)).toEqual([70_000, 0])
+  })
+
+  it('une charge sans participant ne compte pas non plus', () => {
+    const m = moisType({ charges: [charge({ participants: [] })], parts: PARTS, membres: [K, T],
+                         revenus: REVENUS, mois: NOVEMBRE })
+    expect(m.total).toBe(0)
+  })
+
   it('une part absente (arrivée plus tard) partage entre ceux qui sont là', () => {
     const m = moisType({ charges: [charge()], parts: { ...PARTS, foyer: { [K]: 10_000 } },
                          membres: [K, T], revenus: REVENUS, mois: NOVEMBRE })
@@ -135,5 +153,13 @@ describe('filtreLesLignes', () => {
   it('cherche sans tenir compte des accents ni des majuscules', () => {
     expect(libelles({ cherche: 'TAXE fonciere' })).toEqual(['Taxe foncière'])
     expect(libelles({ cherche: '  ' })).toHaveLength(4)
+  })
+})
+
+describe('phraseDuPartage', () => {
+  it('dit la règle du foyer, et les parts égales quand un revenu manque', () => {
+    expect(phraseDuPartage({ regle: 'prorata', revenuManque: false })).toMatch(/au prorata des revenus/)
+    expect(phraseDuPartage({ regle: 'moitie', revenuManque: false })).toMatch(/moitié-moitié/)
+    expect(phraseDuPartage({ regle: 'prorata', revenuManque: true })).toMatch(/parts égales/)
   })
 })

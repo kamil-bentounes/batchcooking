@@ -49,7 +49,7 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
   const { data: cycle, isPending: chargeCycle } = useCycle()
   /* Une session interrompue n'est plus « le cycle courant » : sans cette lecture, la carte disait « Rien de
      prévu » au-dessus de 30 parts qui attendaient le dressage (25/10). */
-  const { data: interrompu } = useCycleInterrompu(!chargeCycle && !cycle)
+  const { data: interrompu, isLoading: chargeInterrompu } = useCycleInterrompu(!chargeCycle && !cycle)
   const { data: barquettes = [] } = useBarquettes()
   const { data: foyer } = useFoyer()
   /* ⚠️ `isPending`, pas seulement `data`. Avec `= []` en défaut, le hub
@@ -69,7 +69,7 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
      « Ajoute ton revenu » à qui l'avait posé — pour novembre. */
   const pasEncoreLa = moi !== undefined && !estLaCeMois(moi, mois)
   /* Ce qui l'attend à son arrivée, déjà posé : « rien n'est à poser avant » ne disait pas que tout l'était. */
-  const typeDeLArrivee = useMoisType(moi?.entre_le ? `${moi.entre_le.slice(0, 7)}-01` : mois)
+  const typeDeLArrivee = useMoisType(moi?.entre_le ? `${moi.entre_le.slice(0, 7)}-01` : mois, pasEncoreLa)
   const monMoisType = pasEncoreLa && typeDeLArrivee.donnees
     ? typeDeLArrivee.donnees.personnes.find(p => p.id === userId) : undefined
   /* ⚠️ Les trois lectures du chiffre, comme l'écran du mois (`etatDeLEcran`). `= []`
@@ -146,7 +146,10 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
 
         <div className="mt-5 flex flex-col gap-3.5">
           <Carte titre="Cuisine" onClick={() => va('/cuisine-accueil')}>
-            <p className="titre text-[28px] mt-5">{geste.titre}</p>
+            {/* « … » le temps de savoir s'il y a une session à reprendre : « Rien de prévu » mentirait. */}
+            <p className={`titre text-[28px] mt-5 ${chargeCycle || chargeInterrompu ? 'opacity-50' : ''}`}>
+              {chargeCycle || chargeInterrompu ? '…' : geste.titre}
+            </p>
             <p className="mt-2.5 text-[15px] text-doux">
               {!cycle && interrompu ? 'Reprends-la depuis la cuisine.' : barquettes.length === 0
                 ? 'Aucune barquette au frais'

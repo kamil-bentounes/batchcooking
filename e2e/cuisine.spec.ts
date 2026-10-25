@@ -149,7 +149,8 @@ test.describe('la cuisine, jouée au clic', () => {
     await connecte(page)
     const t0 = Date.now()
     await page.goto('/cuisine-accueil')
-    await expect(page.getByText('Rien de prévu')).toBeVisible({ timeout: 5_000 })
+    /* La session interrompue de la semaine EST l'état du moment (25/10) : plus « Rien de prévu ». */
+    await expect(page.getByRole('heading', { name: 'Session interrompue' })).toBeVisible({ timeout: 5_000 })
     expect(Date.now() - t0).toBeLessThan(5_000)
     // …et la session interrompue se reprend.
     await page.getByRole('button', { name: 'Reprendre la session interrompue' }).click()

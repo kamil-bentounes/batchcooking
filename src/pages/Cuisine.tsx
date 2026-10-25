@@ -55,7 +55,18 @@ export function Cuisine({ userId, va, cycleId }:
      parts n'ont jamais atteint le dressage. */
   const [confirmeLaFin, setConfirmeLaFin] = useState(false)
   const nonPasEncore = useRef<HTMLButtonElement>(null)
-  useEffect(() => { if (confirmeLaFin) nonPasEncore.current?.focus() }, [confirmeLaFin])
+  const jaiFini = useRef<HTMLButtonElement>(null)
+  const rendreLeFocusFin = useRef(false)
+  useEffect(() => {
+    if (confirmeLaFin) nonPasEncore.current?.focus()
+    else if (rendreLeFocusFin.current) { rendreLeFocusFin.current = false; jaiFini.current?.focus() }
+  }, [confirmeLaFin])
+  /* Pendant l'envoi, la question reste : la fermer laisserait partir le dressage sans qu'on le voie. */
+  const fermeLaFin = () => {
+    if (change.isPending) return
+    rendreLeFocusFin.current = true
+    setConfirmeLaFin(false)
+  }
   /* Le focus suit la question : elle le prend en s'ouvrant, le rend en se fermant. Sans cela le
      bouton « Interrompre » disparaissait sous le doigt et le focus tombait sur `body` — au
      clavier ou au lecteur d'écran, on ne savait plus où l'on était. */
@@ -141,6 +152,15 @@ export function Cuisine({ userId, va, cycleId }:
     id === userId ? 'toi' : id ? prenoms?.get(id) ?? null : null
 
   const fini = etat.faites === etat.total
+  const restantes = plan.filter(a => !a.done_at)
+  /* Une recette dont AUCUNE action n'est cochée sera dressée quand même : on le dit, nommément. Cuisinée sans
+     l'appli, c'est voulu ; oubliée, c'est le moment de s'en rendre compte. */
+  const sansRien = [...new Set(plan.flatMap(a => a.recettes))]
+    .filter(r => !plan.some(a => a.done_at && a.recettes.includes(r)))
+  /* `change` sert aux deux questions : une erreur de l'une ne doit pas s'afficher dans l'autre. Et un refus de
+     la base (l'autre téléphone a changé l'état) se dit en français. */
+  const erreurDuPassage = change.error && /transition de cycle interdite/.test(change.error.message)
+    ? 'La session a changé sur l’autre téléphone : reviens à l’accueil.' : change.error
 
   function sort() {
     // Quitter, c'est partir pour de bon : sinon la ligne survit, l'accueil
@@ -311,18 +331,26 @@ export function Cuisine({ userId, va, cycleId }:
         * à le déclencher : une confirmation dit ce que le geste coûte. Quitter, pour un convive,
         * ne coûte rien à l'hôte.
         */}
-      {confirmeLaFin ? (
+      {/* `!fini` : si l'autre téléphone coche la dernière action, la question tombe et « C'est cuit » prend le relais. */}
+      {confirmeLaFin && !fini ? (
         <div role="alertdialog" aria-label="Tout est cuit ?"
-             onKeyDown={e => { if (e.key === 'Escape') setConfirmeLaFin(false) }}
+             onKeyDown={e => { if (e.key === 'Escape') fermeLaFin() }}
              className="mt-12 rounded-[18px] bg-fond/8 p-4">
           <p className="text-[17px] font-semibold">Tout est cuit ?</p>
           <p className="mt-2 text-[14px] leading-relaxed opacity-75">
-            {etat.total - etat.faites} action{etat.total - etat.faites > 1 ? 's ne sont' : ' n’est'} pas
-            cochée{etat.total - etat.faites > 1 ? 's' : ''} :{' '}
-            {plan.filter(a => !a.done_at).slice(0, 4).map(a => a.label).join(', ')}
-            {etat.total - etat.faites > 4 ? '…' : ''}. Elle{etat.total - etat.faites > 1 ? 's' : ''} reste
-            {etat.total - etat.faites > 1 ? 'nt' : ''} comme ça, et tu passes au dressage : c’est là que les
-            parts deviennent des barquettes, au frigo ou au congélateur.
+            {restantes.length} action{restantes.length > 1 ? 's ne sont pas cochées' : ' n’est pas cochée'} :{' '}
+            {restantes.slice(0, 4).map(a => a.label).join(', ')}{restantes.length > 4 ? '…' : '.'}{' '}
+            {restantes.length > 1 ? 'Elles restent' : 'Elle reste'} comme ça.
+          </p>
+          {sansRien.length > 0 && (
+            <p className="mt-2 text-[14px] leading-relaxed text-safran">
+              {sansRien.length > 1
+                ? `Aucune action de ${sansRien.map(r => `« ${r} »`).join(', ')} n’est cochée : elles seront dressées quand même.`
+                : `Aucune action de « ${sansRien[0]} » n’est cochée : elle sera dressée quand même.`}
+            </p>
+          )}
+          <p className="mt-2 text-[14px] leading-relaxed opacity-75">
+            Au dressage, les parts deviennent des barquettes, au frigo ou au congélateur.
           </p>
           <div className="mt-3.5 flex gap-2.5">
             <button onClick={() => change.mutate({ id: cycle!.id, vers: 'dressage' },
@@ -331,12 +359,12 @@ export function Cuisine({ userId, va, cycleId }:
                     className="grow min-h-12 rounded-[14px] bg-safran text-encre text-[15px] font-semibold">
               Oui, au dressage
             </button>
-            <button ref={nonPasEncore} onClick={() => setConfirmeLaFin(false)}
+            <button ref={nonPasEncore} onClick={fermeLaFin} disabled={change.isPending}
                     className="grow min-h-12 rounded-[14px] border border-fond/30 text-[15px]">
               Non, je continue
             </button>
           </div>
-          <Erreur de={change.error} />
+          <Erreur de={erreurDuPassage} />
         </div>
       ) : confirmeLaSortie ? (
         <div role="alertdialog" aria-label="Interrompre la session ?"
@@ -363,13 +391,13 @@ export function Cuisine({ userId, va, cycleId }:
           {/* Chez soi seulement : le convive ne fait pas avancer la session de son hôte. Et pas quand
               tout est coché : « C'est cuit » propose déjà le dressage. */}
           {!invite && !fini && (
-            <button onClick={() => setConfirmeLaFin(true)}
+            <button ref={jaiFini} onClick={() => { change.reset(); setConfirmeLaFin(true) }}
                     className="mt-12 w-full min-h-[52px] rounded-[16px] border-[1.5px] border-safran text-safran
                                text-[16px] font-semibold">
               J’ai fini · passer au dressage
             </button>
           )}
-          <button ref={interrompre} onClick={() => invite ? sort() : setConfirmeLaSortie(true)}
+          <button ref={interrompre} onClick={() => { if (invite) sort(); else { change.reset(); setConfirmeLaSortie(true) } }}
                   disabled={invite && quitte.isPending}
                   className={`${!invite && !fini ? 'mt-2.5' : 'mt-12'} w-full min-h-12 rounded-[16px] text-[15px] opacity-60`}>
             {invite ? 'Quitter la session' : 'Interrompre la session'}

@@ -32,7 +32,7 @@ export const GESTE: Record<Etat, { titre: string; action: string; vers: string }
   dressage: { titre: 'Il reste à dresser', action: 'Dresser les barquettes', vers: '/dressage' },
   semaine: { titre: 'La semaine tourne', action: 'Voir la semaine', vers: '/semaine' },
   cloture: { titre: 'Semaine close', action: 'Lancer la suivante', vers: '/choisir' },
-  interrompue: { titre: 'Session interrompue', action: 'Reprendre', vers: '/cuisine' },
+  interrompue: { titre: 'Session interrompue', action: 'Reprendre la session interrompue', vers: '/cuisine' },
 }
 
 /** Le lundi de la semaine qui contient `d`. En heure locale, jamais en UTC. */
