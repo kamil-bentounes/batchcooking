@@ -442,7 +442,8 @@ Après leur premier dimanche (Thauba connectée, charges posées, session à 30/
   que `cycle_a_reprendre` (0117) ne regardait que la semaine du plan (21/09, ouvert le 18/09, cuisiné le 25/10).
 - **0119** : une session interrompue se reprend aussi si elle a COMMENCÉ il y a moins de 7 jours. L'accueil de la
   cuisine en fait son geste principal (« Reprendre la session interrompue », « Choisir de nouvelles recettes » en
-  second) ; le hub dit « Session interrompue ».
+  second) ; le hub dit « Session interrompue ». **Appliquée en prod le 25/10** (« vas-y » de Kamil, à blanc
+  d'abord) : prod et fichiers à 119, `cycle_a_reprendre` lit `started_at`, pas d'`execute` pour `anon`.
 - **« J'ai fini · passer au dressage »** en cuisine (hôte seulement) : passe au dressage sans cocher les actions
   restantes (ne fausse pas les durées apprises) ; la question nomme les recettes dont rien n'est coché, car elles
   seront dressées quand même. La relecture toutes les 5 s ne tourne plus hors cuisine.
