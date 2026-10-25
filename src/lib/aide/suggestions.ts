@@ -31,6 +31,8 @@ export const SUR_CET_ECRAN: Record<string, string[]> = {
   '/charges': ['À quoi sert « en commun » ?', 'Pourquoi une charge annuelle se met de côté chaque mois ?'],
   '/budget-reglages': ['Comment le partage entre nous est-il calculé ?'],
   '/epargne': ['C’est quoi une poche d’épargne ?'],
+  '/mois-type': ['Comment est calculé le mois type ?', 'Combien chacun paie par mois ?'],
+  '/toutes-les-charges': ['Comment filtrer les charges par personne ?'],
   '/reglages': ['Comment inviter quelqu’un ?'],
   '/profil': ['À quoi sert ma date d’arrivée ?'],
   '/cuisine-accueil': ['Comment se déroule une session de cuisine ?'],
@@ -48,4 +50,5 @@ export function surCetEcran(ici: string): string[] {
  *  (`/budget/2026-10` → `/budget`, `/cloture/2026-09` → `/cloture`). */
 export function ecranPourLAide(ici: string): string {
   return ici.replace(/^(\/(?:budget|cloture))\/\d{4}-\d{2}$/, '$1')
+    .replace(/^\/toutes-les-charges\/.+$/, '/toutes-les-charges')
 }

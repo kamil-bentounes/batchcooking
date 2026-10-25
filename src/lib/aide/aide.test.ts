@@ -81,6 +81,8 @@ describe('les écrans de l’aide', () => {
     expect(surCetEcran('/budget/2026-10')).toEqual(surCetEcran('/budget'))
     expect(ecranPourLAide('/charges')).toBe('/charges')
     expect(ecranPourLAide('/cloture/2026-09')).toBe('/cloture')
+    expect(ecranPourLAide('/toutes-les-charges/maison')).toBe('/toutes-les-charges')
+    expect(ecranPourLAide('/toutes-les-charges')).toBe('/toutes-les-charges')
   })
   it('un écran sans suggestion n’en invente pas', () => {
     expect(surCetEcran('/stock')).toEqual([])

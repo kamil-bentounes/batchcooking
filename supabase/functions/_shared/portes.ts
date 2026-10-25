@@ -13,6 +13,8 @@ export const PORTES = {
   charges:         { chemin: '/charges',           bouton: 'Ouvrir les charges' },
   'budget-reglages': { chemin: '/budget-reglages', bouton: 'Ouvrir les réglages du budget' },
   epargne:         { chemin: '/epargne',           bouton: 'Ouvrir l’épargne' },
+  'mois-type':     { chemin: '/mois-type',         bouton: 'Ouvrir le mois type' },
+  'toutes-les-charges': { chemin: '/toutes-les-charges', bouton: 'Ouvrir le tableau des charges' },
   inviter:         { chemin: '/reglages#inviter',  bouton: 'Ouvrir « Inviter quelqu’un »' },
   profil:          { chemin: '/profil',            bouton: 'Ouvrir mon profil' },
   motdepasse:      { chemin: '/motdepasse',        bouton: 'Ouvrir le mot de passe' },

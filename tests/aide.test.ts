@@ -255,7 +255,8 @@ describe('les écrans proposés', () => {
     const app = readFileSync('src/App.tsx', 'utf8')
     for (const { chemin } of Object.values(PORTES_FONCTION)) {
       const route = chemin.split('#')[0]
-      const connue = route === '/' || app.includes(`case '${route}'`)
+      /* `/toutes-les-charges` passe par une regex avant le `switch`, comme `/budget/AAAA-MM`. */
+      const connue = route === '/' || app.includes(`case '${route}'`) || route === '/toutes-les-charges'
       expect(connue, `${route} n’est pas une route de src/App.tsx`).toBe(true)
     }
   })
@@ -273,7 +274,7 @@ describe('le manuel', () => {
     for (const p of pages) {
       expect(p.corps.split(/\s+/).length, `${p.id} est trop longue`).toBeLessThanOrEqual(550)
       for (const e of p.ecrans) {
-        const connu = e === '/' || routes.includes(`case '${e}'`) || /^\/budget$|^\/cloture$/.test(e)
+        const connu = e === '/' || routes.includes(`case '${e}'`) || /^\/budget$|^\/cloture$|^\/toutes-les-charges$/.test(e)
         expect(connu, `${p.id} cite l’écran ${e}, qui n’est pas une route`).toBe(true)
       }
     }
