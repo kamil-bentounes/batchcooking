@@ -14,7 +14,7 @@ sources:
   - src/ui/budget/MoisType.tsx
   - src/App.tsx
   - src/lib/budget/categories.ts
-verifie_sur: 79ed802
+verifie_sur: 02dd873
 ---
 ## Ce que fait l’écran
 
@@ -35,7 +35,7 @@ verifie_sur: 79ed802
 
 ## Les lignes et les totaux
 
-- Sous chaque nom : qui paie (« Commun » ou les prénoms), le montant d’origine d’une charge trimestrielle ou annuelle (« / trim. », « / an »), la façon de payer, et « commence plus tard » pour une charge grisée, qui n’entre dans aucun total.
+- Sous chaque nom : qui paie (« Commun » ou les prénoms), le montant d’origine d’une charge trimestrielle ou annuelle (« / trim. », « / an »), la façon de payer, et « commence plus tard » ou « pas encore dans le foyer » pour une charge grisée, qui n’entre dans aucun total.
 - Un tiret remplace « 0 € » quand quelqu’un ne paie rien.
 - Les totaux suivent les filtres : la dernière ligne dit « Total filtré ». Sans filtre elle dit « Total par mois », suivie du revenu et de « Il reste » de chacun.
 - Si rien ne correspond : « Aucune charge ne correspond à ces filtres. »

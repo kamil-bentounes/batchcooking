@@ -18,7 +18,7 @@ sources:
   - src/lib/suivi.ts
   - supabase/migrations/0017_triggers_lot1.sql
   - src/lib/peremption.ts
-verifie_sur: 78ffdc2
+verifie_sur: 02dd873
 ---
 ## Ce que fait l’appli
 

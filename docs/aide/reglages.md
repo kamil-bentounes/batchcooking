@@ -23,7 +23,7 @@ sources:
   - supabase/migrations/0027_ecriture_croisee.sql
   - supabase/migrations/0035_amis.sql
   - supabase/migrations/0037_cuisiner_ensemble.sql
-verifie_sur: a9b88fa
+verifie_sur: 02dd873
 ---
 ## Où
 

@@ -17,7 +17,7 @@ sources:
   - src/pages/Cloture.tsx
   - src/lib/budget/cloture.ts
   - supabase/migrations/0108_budget_cloture.sql
-verifie_sur: 79ed802
+verifie_sur: 02dd873
 ---
 Clôturer un mois, c'est le fermer une fois fini. Cette page dit quand c'est possible et quand Popote te le rappelle.
 
