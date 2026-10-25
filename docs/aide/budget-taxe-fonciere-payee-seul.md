@@ -23,7 +23,7 @@ sources:
   - supabase/migrations/0107_budget_solde.sql
   - supabase/migrations/0108_budget_cloture.sql
   - supabase/functions/accept-invite/index.ts
-verifie_sur: e058ce7
+verifie_sur: 79ed802
 ---
 ## Ce que fait l’appli
 

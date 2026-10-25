@@ -19,7 +19,7 @@ sources:
   - supabase/migrations/0085_ce_quon_reconnait.sql
   - supabase/migrations/0096_budget_facon.sql
   - supabase/migrations/0098_budget_lignes_nees.sql
-verifie_sur: e058ce7
+verifie_sur: 79ed802
 ---
 Une charge est une dépense qui revient (loyer, assurance, taxe foncière). Tu les poses toutes au même endroit : le bouton « Mes charges » de l’écran du mois ouvre la page « Les charges ».
 

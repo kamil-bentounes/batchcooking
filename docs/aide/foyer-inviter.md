@@ -16,7 +16,7 @@ sources:
   - supabase/functions/accept-invite/index.ts
   - supabase/migrations/0071_invitation_trente_jours.sql
   - supabase/migrations/0089_le_lien_suffit.sql
-verifie_sur: a9b88fa
+verifie_sur: 79ed802
 ---
 ## Ce que fait l’appli
 

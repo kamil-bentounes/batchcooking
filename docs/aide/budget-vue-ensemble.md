@@ -16,15 +16,16 @@ sources:
   - src/lib/budget/mois.ts
   - src/lib/budget/categories.ts
   - src/lib/donnees/budget.ts
+  - src/lib/budget/mois-type.ts
   - supabase/migrations/0096_budget_facon.sql
   - supabase/migrations/0098_budget_lignes_nees.sql
   - supabase/migrations/0100_budget_mois_gele.sql
   - supabase/migrations/0102_budget_mois_suivis.sql
   - supabase/migrations/0108_budget_cloture.sql
   - supabase/migrations/0114_budget_donnees.sql
-verifie_sur: e058ce7
+verifie_sur: 79ed802
 ---
-Popote ne sert pas qu'à cuisiner : elle tient aussi le budget du foyer. Sur l'accueil (le hub), il y a deux cartes : « Cuisine » et « Budget ». La carte « Budget » te donne le chiffre qui compte : ce qu'il te reste ce mois-ci.
+Popote tient aussi le budget du foyer. L'accueil a deux cartes : « Cuisine » et « Budget ». La carte « Budget » donne le chiffre qui compte : ce qu'il te reste ce mois-ci.
 
 ## Ce que fait le budget
 
@@ -43,9 +44,13 @@ Les parts se calculent au prorata des revenus, ou en « Moitié-moitié » : tu 
 
 Tant que le revenu de quelqu'un qui est dans le foyer ce mois-là manque, tout se partage à parts égales.
 
+## Le mois type
+
+Carte « Le mois type » de l'écran du mois, ou avant ton arrivée : tes charges ramenées au mois, et ce que chacun en paie (« budget-mois-type »).
+
 ## La logique du mois
 
-- Le mois s'ouvre tout seul. La première fois que quelqu'un ouvre le hub ou le budget, Popote crée les lignes du mois. Un mois passé que personne n'avait ouvert est rattrapé à l'ouverture (jusqu'à deux ans en arrière).
+- Le mois s'ouvre tout seul. La première fois que quelqu'un ouvre le hub ou le budget, Popote crée les lignes du mois. Un mois passé non ouvert est rattrapé à l'ouverture (jusqu'à deux ans en arrière).
 - Un mois à venir ne s'ouvre jamais : on ne peut pas le consulter.
 - Un mois reste ouvert jusqu'à sa clôture. Le mois en cours ne se clôture jamais : on le clôture à partir du 1er du mois suivant.
 - Une fois clôturé, un mois est figé : plus aucune dépense à y déclarer. Seul « Revenir dessus » le rouvre.

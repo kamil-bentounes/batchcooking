@@ -5,10 +5,7 @@ ecrans: [/cuisine]
 questions:
   - Comment fonctionne l’écran de cuisine ?
   - Que veut dire « Je prends » et « C’est fait » ?
-  - Comment interrompre la session de cuisine ?
-  - Comment reprendre une session interrompue ?
   - Que signifie « Pendant ce temps » ?
-  - Que faire quand tout est cuit ?
 sources:
   - src/pages/Cuisine.tsx
   - src/lib/donnees/session.ts
@@ -16,7 +13,7 @@ sources:
   - src/lib/donnees/cycle.ts
   - supabase/migrations/0013_cycle.sql
   - supabase/migrations/0117_cuisine_corrections.sql
-verifie_sur: bd10d8c
+verifie_sur: 79ed802
 ---
 ## Ce que fait l’appli
 
@@ -39,20 +36,16 @@ verifie_sur: bd10d8c
 - Un geste n’est proposé que lorsque ceux dont il dépend sont faits.
 - Deux téléphones suivent la même session en direct.
 - Une action qui cuit seule se prend aussi, mais ne se termine pas seule : à 0:00 celui qui l’a prise appuie sur « C’est fait ».
-- L’appli mesure la durée réelle de chaque geste sans te la demander ; « C’est fait » sans « Je prends » compte le début à la durée prévue en arrière.
+- L’appli mesure la durée réelle de chaque geste ; « C’est fait » sans « Je prends » compte le début à la durée prévue en arrière.
 
-## Quand tout est cuit
+## Quand tout est cuit, ou fini
 
-« C’est cuit. », avec « N actions en … ». **« Passer au dressage »** ouvre l’écran suivant.
-
-## Interrompre, reprendre
-
-« Interrompre la session » demande : « Interrompre la session ? », « Non, je continue » ou « Oui, interrompre ». Tu pourras la reprendre depuis l’accueil (« Reprendre la session interrompue », quand aucune semaine n’est ouverte), mais la semaine n’aura pas d’autre session.
+« C’est cuit. » puis « Passer au dressage » ; « J’ai fini », « Interrompre » et la reprise : voir « cuisine-session-fin ».
 
 ## Si tu es invité
 
-Un ami convié (voir « cuisine-session-partagee ») lit : « Tu cuisines chez quelqu’un d’autre : tu prends des gestes, tu ne touches pas au plan. » Il ne peut ni interrompre ni faire avancer la session ; il a « Quitter la session » puis « Revenir chez moi ». Le dressage revient à l’hôte.
+Un ami convié (voir « cuisine-session-partagee ») prend des gestes, ne touche pas au plan : ni « Interrompre », ni « J’ai fini ». Il a « Quitter la session » puis « Revenir chez moi ». Le dressage revient à l’hôte.
 
 ## Ce que l’appli ne fait pas
 
-Il n’existe pas aujourd’hui de notification ni de sonnerie quand un compte à rebours arrive à 0:00 : tu regardes l’écran.
+Il n’existe pas aujourd’hui de notification ni de sonnerie à 0:00 : tu regardes l’écran.

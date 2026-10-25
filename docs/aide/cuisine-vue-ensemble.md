@@ -20,29 +20,30 @@ sources:
   - src/lib/peremption.ts
   - supabase/migrations/0013_cycle.sql
   - supabase/migrations/0117_cuisine_corrections.sql
-verifie_sur: e058ce7
+  - supabase/migrations/0119_reprendre_une_session_recente.sql
+verifie_sur: 79ed802
 ---
 ## Ce que fait l’appli
 
-On choisit les recettes maintenant, on cuisine dimanche, on mange la semaine d’après. L’accueil de la cuisine (carte « Cuisine » de l’accueil de Popote) ne pose qu’une question, « et maintenant ? » : un titre et un gros bouton, qui changent selon l’avancement.
+On choisit les recettes maintenant, on cuisine dimanche, on mange la semaine d’après. L’accueil de la cuisine (carte « Cuisine » de l’accueil de Popote) ne pose qu’une question, « et maintenant ? » : un titre et un gros bouton.
 
 ## Les états, dans l’ordre
 
-1. **Rien de prévu** : « Choisir les recettes » ouvre la semaine et mène à « Choisir ». Tant que tu n’as pas touché « Faire la liste », l’accueil reste là, même avec des recettes retenues.
+1. **Rien de prévu** : « Choisir les recettes » ouvre la semaine et mène à « Choisir ». Tant que tu n’as pas touché « Faire la liste », l’accueil reste là.
 2. **Votre liste est prête** : « Je pars faire les courses ».
 3. **Tout est là** : « Voir le plan de dimanche ».
 4. **Session en cours** : « Reprendre la cuisine ».
 5. **Il reste à dresser** : « Dresser les barquettes ».
 6. **La semaine tourne** : « Voir la semaine ». Si un repas est prévu aujourd’hui, l’accueil l’affiche avec « Je l’ai mangé » et « Voir toute la semaine ».
 
-« Clore et préparer la semaine prochaine » (dans « Bilan ») referme la semaine : retour à « Rien de prévu ». « Faire la liste » traverse « Recettes en cours de choix » sans s’y arrêter. « Semaine close » et « Session interrompue » ne s’affichent jamais. La ligne « N actions, … les mains prises » sous « Tout est là » n’apparaît que si un « Commencer la session » a échoué en route (le plan n’est enregistré qu’alors).
+« Clore et préparer la semaine prochaine » (dans « Bilan ») referme la semaine : retour à « Rien de prévu ». « Semaine close » ne s’affiche jamais. « Session interrompue » non plus ici : le titre reste « Rien de prévu », avec « Reprendre la session interrompue » sous le gros bouton ; la carte « Cuisine » de l’accueil de Popote, elle, le dit. La ligne « N actions, … les mains prises » sous « Tout est là » n’apparaît que si « Commencer la session » a échoué en route.
 
 ## Les règles
 
 - Un foyer n’a **qu’une semaine ouverte à la fois**.
 - « Choisir les recettes » ouvre la semaine du **lundi suivant** ; on cuisine le dimanche, la veille. Par défaut : **10 parts** à couvrir.
 - Rouvrir la même semaine est refusé : « Cette semaine a déjà eu sa session : reprends-la, ou attends la semaine suivante. » Une semaine close ne se reprend pas.
-- « Interrompre la session » se fait depuis l’écran de cuisine. Sans semaine ouverte, l’accueil propose « Reprendre la session interrompue » (semaine courante, dernière ou à venir). Une semaine interrompue ne se rouvre pas : « Cette semaine a une session interrompue : reprends-la. »
+- « Interrompre la session » se fait depuis l’écran de cuisine ; la reprise a ses règles (voir « cuisine-session-fin »). Une semaine interrompue ne se rouvre pas : « Cette semaine a une session interrompue : reprends-la. »
 
 ## Aussi sur l’accueil
 

@@ -16,7 +16,7 @@ sources:
   - supabase/migrations/0037_cuisiner_ensemble.sql
   - supabase/migrations/0038_convive_frontiere.sql
   - supabase/migrations/0043_amitie_pas_transitive.sql
-verifie_sur: bd10d8c
+verifie_sur: 79ed802
 ---
 ## Ce que fait l’appli
 
@@ -34,7 +34,7 @@ Sur l’accueil de la cuisine, l’ami voit « … t’invite à cuisiner. » et
 
 ## Ce que fait le convié
 
-Il voit le même plan en direct et prend des gestes (« Je prends », « C’est fait »). Il lit : « Tu cuisines chez quelqu’un d’autre : tu prends des gestes, tu ne touches pas au plan. » Il ne réordonne rien, ne supprime rien, n’interrompt pas la session et ne la fait pas avancer. Le dressage revient à l’hôte. Il peut « Quitter la session » et, à la fin (« C’est cuit. »), « Revenir chez moi ».
+Il voit le même plan en direct et prend des gestes (« Je prends », « C’est fait »). Il lit : « Tu cuisines chez quelqu’un d’autre : tu prends des gestes, tu ne touches pas au plan. » Il ne réordonne rien, ne supprime rien, n’interrompt pas la session et ne la fait pas avancer : « J’ai fini · passer au dressage » ne s’affiche que chez l’hôte. Le dressage revient à l’hôte. Il peut « Quitter la session » et, à la fin (« C’est cuit. »), « Revenir chez moi ».
 
 Il voit le nom de tes recettes, pas celui des recettes qu’un autre foyer t’a prêtées.
 

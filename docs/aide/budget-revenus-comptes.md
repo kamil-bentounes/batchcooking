@@ -20,7 +20,7 @@ sources:
   - supabase/migrations/0076_apres_la_regularisation.sql
   - supabase/migrations/0106_budget_factures.sql
   - supabase/migrations/0114_budget_donnees.sql
-verifie_sur: e058ce7
+verifie_sur: 79ed802
 ---
 Tout se pose dans « Réglages du budget » : le bouton « Revenus » de l’écran du mois.
 

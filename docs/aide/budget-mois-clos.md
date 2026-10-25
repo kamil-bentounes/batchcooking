@@ -23,7 +23,7 @@ sources:
   - supabase/migrations/0100_budget_mois_gele.sql
   - supabase/migrations/0108_budget_cloture.sql
   - supabase/migrations/0109_budget_rouvre.sql
-verifie_sur: bd10d8c
+verifie_sur: 79ed802
 ---
 ## Ce que dit un mois clôturé
 
