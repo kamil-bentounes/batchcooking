@@ -27,7 +27,7 @@ Tes charges **telles qu’elles sont posées**, ramenées au mois, et ce que cha
 
 ## Où le trouver
 
-- Avant ton arrivée dans le foyer, l’écran du budget le montre à la place de « Pas encore », pour le mois où tu entres. La carte « Budget » de l’accueil en dit un mot : « Ton mois type : X € de charges, il te reste Y €. »
+- Avant ton arrivée dans le foyer, l’écran du budget le montre pour le mois où tu entres (« Pas encore » tant que rien n’est posé). La carte « Budget » de l’accueil en dit un mot : « Ton mois type : X € de charges, il te reste Y €. »
 - Ensuite : la carte **« Le mois type »** de l’écran du budget.
 
 ## Comment il est calculé

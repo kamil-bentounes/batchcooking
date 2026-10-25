@@ -36,7 +36,7 @@ L'écran du mois s'ouvre depuis la carte « Budget » de l'accueil. Il montre un
 ## Quand l'écran est vide ou prudent
 
 - **« Rien de posé »** : sur le mois en cours, « Aucune charge ce mois-ci. On commence par là. » avec un bouton : « Commencer par les revenus et les comptes » si aucun compte n'existe, sinon « Poser les charges ». Sur un mois passé : « Aucune charge n’était posée ce mois-là. »
-- **Avant ton arrivée** dans le foyer, sur un mois vide : l'écran montre le mois type du mois où tu entres, et non plus « Pas encore » (« budget-mois-type »).
+- **Avant ton arrivée** dans le foyer, sur un mois vide : l'écran montre le mois type du mois où tu entres (« budget-mois-type ») ; sans aucune charge posée, il dit « Pas encore ».
 - **Une panne de lecture** : « Je n’ai pas pu lire le budget… » et le bouton « Réessayer ». Aucun chiffre avant d'avoir tout lu.
 
 ## À savoir

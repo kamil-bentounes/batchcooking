@@ -41,7 +41,7 @@ Avant ton arrivée :
 
 - tu ne portes aucune part et on ne te demande aucun revenu ;
 - la carte Budget de l'accueil dit **« Commence en novembre »**, avec « Ton mois type : 1 850 € de charges, il te reste 420 €. » si des charges sont posées, sinon « Tu entres dans le foyer à cette date : rien n’est à poser avant. » ;
-- l'écran du mois dit « Tu n’es pas encore dans le foyer : tu y entres en novembre. Ce mois-là ne te compte aucune part. » (« Tu n’étais pas encore… » sur un mois passé). Sur un mois vide, il montre le **mois type** de ton arrivée (« budget-mois-type »), non plus « Pas encore » ;
+- l'écran du mois dit « Tu n’es pas encore dans le foyer : tu y entres en novembre. Ce mois-là ne te compte aucune part. » (« Tu n’étais pas encore… » sur un mois passé). Sur un mois vide, il montre le **mois type** de ton arrivée (« budget-mois-type ») ; tant qu’aucune charge n’est posée, il dit « Pas encore » ;
 - aucun bandeau « … est fini : on le clôture ? » ne paraît pour ces mois.
 
 ## Ton revenu et ton arrivée

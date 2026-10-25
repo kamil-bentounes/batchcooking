@@ -15,7 +15,7 @@
  * Et le texte reste à l'encre : la couleur marque, elle n'écrit pas.
  */
 import { useEffect, useState } from 'react'
-import { Attente } from '../coque.tsx'
+import { Attente, Vide } from '../coque.tsx'
 import { moisType, phraseDuPartage, type CategorieType, type MoisType } from '../../lib/budget/mois-type.ts'
 import type { Categorie } from '../../lib/budget/categories.ts'
 import { nomDuMois, revenuDuMois } from '../../lib/budget/mois.ts'
@@ -194,6 +194,11 @@ export function TableauDeBord({ mois, va, avant = false }: {
   if (etat === 'chargement') return <Attente />
   if (etat === 'erreur' || !donnees) {
     return <p role="alert" className="mt-6 text-[15px] text-doux">{messageDeLecture(erreur)}</p>
+  }
+  if (donnees.lignes.length === 0 && avant) {
+    /* Rien de posé pour son arrivée : la phrase d'avant, et aucune porte qui daterait le mois courant. */
+    return <Vide titre="Pas encore"
+                 texte={`Tu entres dans le foyer en ${nomDuMois(mois)} : rien n’est à poser avant.`} />
   }
   if (donnees.lignes.length === 0) {
     return (
