@@ -92,8 +92,8 @@ export function ToutesLesCharges({ userId, retour, categorie, qui }: {
     <Passage retour={retour} retourTexte="Budget">
       <h1 className="titre text-[36px] leading-tight">Toutes nos charges</h1>
       <p className="mt-2 text-[15px] text-doux">
-        {lignes.length} ligne{lignes.length > 1 ? 's' : ''}, par mois à partir de {nomDuMois(mois)}, et ce que
-        chacun en paie.
+        {lignes.length} ligne{lignes.length > 1 ? 's' : ''}, par mois à partir {/^[aeiouy]/.test(nomDuMois(mois)) ? 'd’' : 'de '}
+        {nomDuMois(mois)}, et ce que chacun en paie.
       </p>
 
       <label className="mt-5 flex flex-col gap-1.5 text-[12px] text-doux">

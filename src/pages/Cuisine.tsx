@@ -158,7 +158,8 @@ export function Cuisine({ userId, va, cycleId }:
 
   return (
     <Sombre>
-      <header className="flex items-center justify-between">
+      {/* `pr-11` : le « ? » de l'aide flotte en haut à droite, et couvrait les avatars. */}
+      <header className="flex items-center justify-between pr-11">
         <span className="text-[14px] opacity-60">
           Session en cours · {duree(etat.ecoulesMin)}
         </span>
