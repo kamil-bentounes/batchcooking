@@ -17,7 +17,7 @@
  *    une faute.
  */
 import { Marque } from '../ui/coque.tsx'
-import { useCycle, GESTE } from '../lib/donnees/cycle.ts'
+import { useCycle, useCycleInterrompu, GESTE } from '../lib/donnees/cycle.ts'
 import { useBarquettes } from '../lib/donnees/barquettes.ts'
 import { aDesObjectifs, bandeauDuProfil, useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
 import { useClotures, useMois, useRevenus, useSaisies, moisDe, eurosRonds } from '../lib/donnees/budget.ts'
@@ -27,6 +27,7 @@ import {
 } from '../lib/budget/mois.ts'
 import { etatDeLEcran, messageDeLecture } from '../lib/budget/ecran.ts'
 import { BoutonAide } from '../ui/Aide.tsx'
+import { useMoisType } from '../ui/budget/MoisType.tsx'
 
 function Carte({ titre, onClick, children }:
   { titre: string; onClick: () => void; children: React.ReactNode }) {
@@ -45,7 +46,10 @@ function Carte({ titre, onClick, children }:
 
 export function Hub({ userId, va }: { userId: string; va: (v: string) => void }) {
   const mois = moisDe()
-  const { data: cycle } = useCycle()
+  const { data: cycle, isPending: chargeCycle } = useCycle()
+  /* Une session interrompue n'est plus « le cycle courant » : sans cette lecture, la carte disait « Rien de
+     prévu » au-dessus de 30 parts qui attendaient le dressage (25/10). */
+  const { data: interrompu } = useCycleInterrompu(!chargeCycle && !cycle)
   const { data: barquettes = [] } = useBarquettes()
   const { data: foyer } = useFoyer()
   /* ⚠️ `isPending`, pas seulement `data`. Avec `= []` en défaut, le hub
@@ -64,6 +68,10 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
      garde, le hub lui lisait « Il te reste 2 400 € en octobre » sur le revenu d'un autre mois, ou
      « Ajoute ton revenu » à qui l'avait posé — pour novembre. */
   const pasEncoreLa = moi !== undefined && !estLaCeMois(moi, mois)
+  /* Ce qui l'attend à son arrivée, déjà posé : « rien n'est à poser avant » ne disait pas que tout l'était. */
+  const typeDeLArrivee = useMoisType(moi?.entre_le ? `${moi.entre_le.slice(0, 7)}-01` : mois)
+  const monMoisType = pasEncoreLa && typeDeLArrivee.donnees
+    ? typeDeLArrivee.donnees.personnes.find(p => p.id === userId) : undefined
   /* ⚠️ Les trois lectures du chiffre, comme l'écran du mois (`etatDeLEcran`). `= []`
      sans `isPending` disait « Ajoute ton revenu » à qui l'avait posé ; une panne du mois
      se lisait « Rien de posé » ; une panne des saisies comptait le PRÉVU pour du déclaré,
@@ -95,7 +103,7 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
   const suite = clotures.data === undefined ? null
     : ligneDuHub({ aCloturer, aDire: aDire(depenses, saisies.data ?? [], false),
                    noms: depenses.filter(l => estADire(l, saisies.data ?? [], false)).map(l => l.libelle) })
-  const geste = GESTE[cycle?.state ?? 'vide']
+  const geste = GESTE[cycle?.state ?? (interrompu ? 'interrompue' : 'vide')]
   /* Seul dans le foyer : la porte de l'invitation est ICI. Elle vivait dans les réglages de la
      cuisine, que le hub ne montre nulle part — Kamil cherchait « Réglages » sur le premier écran,
      et l'avatar mène au profil. Elle disparaît dès qu'on est deux. */
@@ -140,7 +148,7 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
           <Carte titre="Cuisine" onClick={() => va('/cuisine-accueil')}>
             <p className="titre text-[28px] mt-5">{geste.titre}</p>
             <p className="mt-2.5 text-[15px] text-doux">
-              {barquettes.length === 0
+              {!cycle && interrompu ? 'Reprends-la depuis la cuisine.' : barquettes.length === 0
                 ? 'Aucune barquette au frais'
                 : `${barquettes.length} barquette${barquettes.length > 1 ? 's' : ''}`}
             </p>
@@ -159,7 +167,11 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
               <>
                 <p className="titre text-[28px] mt-5">Commence en {nomDuMois(`${moi!.entre_le!.slice(0, 7)}-01`)}</p>
                 <p className="mt-2.5 text-[15px] text-doux">
-                  Tu entres dans le foyer à cette date : rien n’est à poser avant.
+                  {monMoisType && monMoisType.total > 0
+                    ? `Ton mois type : ${eurosRonds(monMoisType.total)} de charges${monMoisType.reste === null ? ''
+                        : monMoisType.reste < 0 ? `, il te manque ${eurosRonds(-monMoisType.reste)}`
+                        : `, il te reste ${eurosRonds(monMoisType.reste)}`}.`
+                    : 'Tu entres dans le foyer à cette date : rien n’est à poser avant.'}
                 </p>
               </>
             ) : depenses.length === 0 ? (

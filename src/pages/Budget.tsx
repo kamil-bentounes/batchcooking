@@ -40,6 +40,7 @@ import { FeuillesDuMois, type Ouverte } from '../ui/budget/FeuillesDuMois.tsx'
 import { FiltreDuMois } from '../ui/budget/Filtre.tsx'
 import { Gestes } from '../ui/budget/Gestes.tsx'
 import { Recap } from '../ui/budget/Recap.tsx'
+import { TableauDeBord } from '../ui/budget/MoisType.tsx'
 import { BoutonAide } from '../ui/Aide.tsx'
 
 export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = null }: {
@@ -219,9 +220,10 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
           </button>
         ) : lignes.length === 0 ? (
           pasEncoreLa ? (
-            /* Pas de porte : « Commencer par les revenus » daterait octobre, un mois qui n'est pas le sien. */
-            <Vide titre="Pas encore"
-                  texte={`Tu entres dans le foyer en ${nomDuMois(`${moi!.entre_le!.slice(0, 7)}-01`)} : rien n’est à poser avant.`} />
+            /* Pas de porte vers les revenus : « Commencer par les revenus » daterait octobre, un mois qui
+               n'est pas le sien. Mais « Pas encore » tout seul cachait ce qui était déjà posé pour son
+               arrivée : le mois type le montre, calculé pour le mois où il entre. */
+            <TableauDeBord mois={`${moi!.entre_le!.slice(0, 7)}-01`} va={va} avant />
           ) : (
           <>
             <Vide titre={vide.titre} texte={vide.texte} />
@@ -279,6 +281,16 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
               </p>
             )}
             <CarteEpargne va={va} />
+            {/* Le mois type et le tableau de toutes les charges, une fois le mois commencé. */}
+            <button onClick={() => va('/mois-type')}
+                    className="mt-3.5 w-full flex items-center justify-between gap-3 rounded-[22px] bg-surface
+                               shadow-carte px-4 min-h-[60px] text-left">
+              <span>
+                <span className="block text-[16px] font-semibold">Le mois type</span>
+                <span className="block text-[13px] text-doux">Vos charges par catégorie, et ce que chacun paie</span>
+              </span>
+              <span aria-hidden="true" className="text-[20px] text-doux">›</span>
+            </button>
 
             <div className="mt-8 flex items-baseline justify-between">
               <h2 className="titre text-[24px]">Par catégorie</h2>

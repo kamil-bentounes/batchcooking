@@ -17,6 +17,7 @@ import { maintenant, moisCourantDeParis } from '../horloge.ts'
 import { dernierJour, moisDeDepart, type Saisie as SaisieDuMois } from '../budget/mois.ts'
 import type { Categorie, Mode } from '../budget/categories.ts'
 import { cleNonSoldees, oublieNonSoldees, retientNonSoldees } from '../budget/non-soldees.ts'
+import type { PartsParCle } from '../budget/mois-type.ts'
 
 export const CLE = {
   mois: (m: string) => ['budget-mois', m] as const,
@@ -520,6 +521,24 @@ export function useRegle() {
   })
 }
 
+/**
+ * Les parts de chacun pour un mois, telles que la base les calcule (`parts_du_foyer`) : la clé du foyer,
+ * et chacune des deux clés qu'une charge peut porter. C'est sur elles que le mois type partage — jamais
+ * sur un prorata recompté ici, qui oublierait l'arrivée, le revenu manquant ou l'arrondi de la base.
+ */
+export function usePartsDuFoyer(mois: string) {
+  return useQuery({
+    queryKey: ['parts-du-foyer', mois],
+    queryFn: async (): Promise<PartsParCle> => {
+      const lis = async (cle: 'prorata' | 'moitie' | null) => Object.fromEntries(
+        ou(await supabase.rpc('parts_du_foyer', { le_mois: mois, ...(cle ? { la_cle: cle } : {}) }))
+          .map(p => [p.user_profile_id, p.part_bps]))
+      const [foyer, prorata, moitie] = await Promise.all([lis(null), lis('prorata'), lis('moitie')])
+      return { foyer, prorata, moitie }
+    },
+  })
+}
+
 /* Comme un revenu : une nouvelle règle est un FAIT DATÉ, pas une correction.
    Deux changements le même mois sont la même intention : un `upsert`, une seule
    transaction. */
@@ -702,7 +721,7 @@ export function useRangeCompte() {
    et l'identifiant neuf le comptait deux fois. */
 const CE_QUE_L_ARGENT_TOUCHE = ['budget-mois', 'saisies', 'factures', 'cloture',
   'etat-de-l-annee', 'apercu-des-soldes', 'budget-charges', 'budget-poches', 'budget-solde',
-  'budget-revenus']
+  'budget-revenus', 'parts-du-foyer']
 export function relisLeBudget(qc: QueryClient) {
   return Promise.all(CE_QUE_L_ARGENT_TOUCHE.map(cle => qc.invalidateQueries({ queryKey: [cle] })))
 }

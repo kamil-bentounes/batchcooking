@@ -50,6 +50,12 @@ export function Cuisine({ userId, va, cycleId }:
   const retire = useRetireConvive()
   const quitte = useQuitteSession()
   const [confirmeLaSortie, setConfirmeLaSortie] = useState(false)
+  /* « J'ai fini » : la session finit quand la cuisine est finie, pas quand chaque action est cochée. Le
+     25/10, arrivé à 30 actions sur 34, Kamil n'avait que « Interrompre » pour dire « c'est fini » — et ses
+     parts n'ont jamais atteint le dressage. */
+  const [confirmeLaFin, setConfirmeLaFin] = useState(false)
+  const nonPasEncore = useRef<HTMLButtonElement>(null)
+  useEffect(() => { if (confirmeLaFin) nonPasEncore.current?.focus() }, [confirmeLaFin])
   /* Le focus suit la question : elle le prend en s'ouvrant, le rend en se fermant. Sans cela le
      bouton « Interrompre » disparaissait sous le doigt et le focus tombait sur `body` — au
      clavier ou au lecteur d'écran, on ne savait plus où l'on était. */
@@ -304,7 +310,34 @@ export function Cuisine({ userId, va, cycleId }:
         * à le déclencher : une confirmation dit ce que le geste coûte. Quitter, pour un convive,
         * ne coûte rien à l'hôte.
         */}
-      {confirmeLaSortie ? (
+      {confirmeLaFin ? (
+        <div role="alertdialog" aria-label="Tout est cuit ?"
+             onKeyDown={e => { if (e.key === 'Escape') setConfirmeLaFin(false) }}
+             className="mt-12 rounded-[18px] bg-fond/8 p-4">
+          <p className="text-[17px] font-semibold">Tout est cuit ?</p>
+          <p className="mt-2 text-[14px] leading-relaxed opacity-75">
+            {etat.total - etat.faites} action{etat.total - etat.faites > 1 ? 's ne sont' : ' n’est'} pas
+            cochée{etat.total - etat.faites > 1 ? 's' : ''} :{' '}
+            {plan.filter(a => !a.done_at).slice(0, 4).map(a => a.label).join(', ')}
+            {etat.total - etat.faites > 4 ? '…' : ''}. Elle{etat.total - etat.faites > 1 ? 's' : ''} reste
+            {etat.total - etat.faites > 1 ? 'nt' : ''} comme ça, et tu passes au dressage : c’est là que les
+            parts deviennent des barquettes, au frigo ou au congélateur.
+          </p>
+          <div className="mt-3.5 flex gap-2.5">
+            <button onClick={() => change.mutate({ id: cycle!.id, vers: 'dressage' },
+                                                 { onSuccess: () => va('/dressage') })}
+                    disabled={change.isPending}
+                    className="grow min-h-12 rounded-[14px] bg-safran text-encre text-[15px] font-semibold">
+              Oui, au dressage
+            </button>
+            <button ref={nonPasEncore} onClick={() => setConfirmeLaFin(false)}
+                    className="grow min-h-12 rounded-[14px] border border-fond/30 text-[15px]">
+              Non, je continue
+            </button>
+          </div>
+          <Erreur de={change.error} />
+        </div>
+      ) : confirmeLaSortie ? (
         <div role="alertdialog" aria-label="Interrompre la session ?"
              onKeyDown={e => { if (e.key === 'Escape') ferme() }}
              className="mt-12 rounded-[18px] bg-fond/8 p-4">
@@ -326,9 +359,18 @@ export function Cuisine({ userId, va, cycleId }:
         </div>
       ) : (
         <>
+          {/* Chez soi seulement : le convive ne fait pas avancer la session de son hôte. Et pas quand
+              tout est coché : « C'est cuit » propose déjà le dressage. */}
+          {!invite && !fini && (
+            <button onClick={() => setConfirmeLaFin(true)}
+                    className="mt-12 w-full min-h-[52px] rounded-[16px] border-[1.5px] border-safran text-safran
+                               text-[16px] font-semibold">
+              J’ai fini · passer au dressage
+            </button>
+          )}
           <button ref={interrompre} onClick={() => invite ? sort() : setConfirmeLaSortie(true)}
                   disabled={invite && quitte.isPending}
-                  className="mt-12 w-full min-h-12 rounded-[16px] text-[15px] opacity-60">
+                  className={`${!invite && !fini ? 'mt-2.5' : 'mt-12'} w-full min-h-12 rounded-[16px] text-[15px] opacity-60`}>
             {invite ? 'Quitter la session' : 'Interrompre la session'}
           </button>
           <Erreur de={quitte.error} />

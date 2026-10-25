@@ -70,6 +70,21 @@ describe('1 · la session interrompue se retrouve', () => {
     expect(derniere.id).not.toBe(vieille.id)
   })
 
+  it('0119 · un plan de septembre COMMENCÉ cette semaine se reprend ; commencé il y a dix jours, non', async () => {
+    await videLesCycles(alice)
+    const auj = await aujourdhui()
+    const ilYa = (jours: number) => new Date(Date.now() - jours * 86_400_000).toISOString()
+    /* Le cas du 25/10 : ouvert le 18/09 pour la semaine du 21/09, cuisiné un mois plus tard. */
+    const { data: vieux, error } = await admin().from('cycle')
+      .insert({ household_id: alice.householdId, week_of: lundi(auj, -5), state: 'interrompue', started_at: ilYa(10) })
+      .select().single()
+    expect(error).toBeNull()
+    expect((await alice.client.rpc('cycle_a_reprendre')).data, 'commencée il y a dix jours').toBeNull()
+    await admin().from('cycle').update({ started_at: ilYa(0.1) }).eq('id', vieux!.id)
+    expect((await alice.client.rpc('cycle_a_reprendre')).data, 'la session de ce dimanche était perdue')
+      .toBe(vieux!.id)
+  })
+
   it('prend la plus récente quand il y en a deux', async () => {
     await videLesCycles(alice)
     const auj = await aujourdhui()

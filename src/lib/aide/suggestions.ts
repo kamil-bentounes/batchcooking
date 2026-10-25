@@ -14,13 +14,14 @@
 export const SANS_BOUTON_D_ENTETE = [
   '/charges', '/budget-reglages', '/epargne', '/profil', '/semaine', '/stock', '/bilan', '/choisir', '/magasin',
   '/plan', '/cuisine', '/dressage', '/inventer', '/photo', '/ticket', '/peser', '/importer', '/objectifs',
-  '/reglages', '/motdepasse',
+  '/reglages', '/motdepasse', '/mois-type',
 ]
 
 export function aLeBoutonDansSonEntete(ici: string): boolean {
   if (SANS_BOUTON_D_ENTETE.includes(ici)) return false
   if (/^\/cloture\/\d{4}-(0[1-9]|1[0-2])$/.test(ici)) return false
   if (/^\/cuisine\/./.test(ici)) return false
+  if (/^\/toutes-les-charges(\/|$)/.test(ici)) return false
   return true
 }
 

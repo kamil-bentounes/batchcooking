@@ -20,6 +20,8 @@ import { Cloture } from './pages/Cloture.tsx'
 import { Charges } from './pages/Charges.tsx'
 import { BudgetReglages } from './pages/BudgetReglages.tsx'
 import { Epargne } from './pages/Epargne.tsx'
+import { MoisType } from './pages/MoisType.tsx'
+import { ToutesLesCharges } from './pages/ToutesLesCharges.tsx'
 import { Profil } from './pages/Profil.tsx'
 import { Accueil } from './pages/Accueil.tsx'
 import { Choisir } from './pages/Choisir.tsx'
@@ -272,6 +274,14 @@ export default function App() {
                     retour={() => (window.history.length > 1 ? retour() : va('/budget'))} />
   }
 
+  /* Toutes les charges, déjà filtrées sur une catégorie (et une personne) quand on vient de sa carte
+     (`/toutes-les-charges/maison`, `/toutes-les-charges/maison/<id>`). */
+  const tableau = ici.match(/^\/toutes-les-charges(?:\/([a-z_]+)(?:\/([0-9a-f-]{36}))?)?$/)
+  if (tableau) {
+    return <ToutesLesCharges key={ici} userId={moi} categorie={tableau[1]} qui={tableau[2]}
+                             retour={() => (window.history.length > 1 ? retour() : va('/budget'))} />
+  }
+
   switch (ici) {
     /* Les deux univers. `/` est le hub — il ne porte pas de barre du bas, c'est
        l'écran qu'on quitte immédiatement — et `/cuisine-accueil` est l'accueil
@@ -280,6 +290,7 @@ export default function App() {
     case '/charges': return <Charges userId={moi} retour={() => va('/budget')} />
     case '/budget-reglages': return <BudgetReglages userId={moi} retour={() => va('/budget')} />
     case '/epargne': return <Epargne userId={moi} retour={() => va('/budget')} />
+    case '/mois-type': return <MoisType userId={moi} va={va} retour={() => va('/budget')} />
     case '/profil':
       return <Profil userId={moi} onFini={() => va('/')} retour={() => va('/')} />
     case '/cuisine-accueil': return <Accueil userId={moi} va={va} />
