@@ -24,7 +24,7 @@ verifie_sur: 78ffdc2
 
 ## Comment faire
 
-1. Dans « Ce que j’ai », « Peser ce qu’on compte à l’unité ». La liste vient des recettes retenues de la semaine ; les aliments les plus utilisés passent d’abord.
+1. Sous le frigo, « Peser ce qu’on compte à l’unité ». La liste vient des recettes retenues de la semaine ; les aliments les plus utilisés passent d’abord.
 2. Touche un aliment. Chaque ligne montre un exemple de recette (« 2 oignons ») et un poids de référence : « on compte 110 g en attendant », ou « aucun poids de référence ».
 3. Remplis « Combien » et « Pèsent, en grammes ». Pèse ce que tu mets dedans (oignon épluché, poivron épépiné).
 4. « Enregistrer · encore N après » (« Enregistrer · la dernière » pour la dernière).

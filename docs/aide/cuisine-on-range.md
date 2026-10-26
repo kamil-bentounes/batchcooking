@@ -6,7 +6,7 @@ questions:
   - Comment choisir ce qui va au frigo et ce qui va au congélateur ?
   - Combien de temps se garde une barquette ?
   - Que veut dire « La session a pris » ?
-  - Pourquoi mes ingrédients ont disparu de « Ce que j’ai » ?
+  - Pourquoi mes ingrédients ont disparu du frigo ?
   - Comment changer l’heure de rangement ?
   - Que fait « Ranger les barquettes » ?
 sources:
@@ -17,7 +17,7 @@ sources:
   - src/App.tsx
   - supabase/migrations/0047_peremption_donnee.sql
   - supabase/migrations/0120_la_session_prend_dans_le_stock.sql
-verifie_sur: 7409ab5
+verifie_sur: d61ae46
 ---
 ## Ce que fait l’écran
 
@@ -34,11 +34,11 @@ Une carte par recette : le total, une barre frigo / congélateur, « Frigo · N 
 
 ## « La session a pris »
 
-Les ingrédients des recettes sortent de « Ce que j’ai » : une puce par ingrédient (« Poireaux 1,5 kg »). Touche-la, écris « il en reste … » puis « Corriger » (ou « Comme prévu »). Un stock tombé à zéro disparaît. L’appli ne touche ni à ce qui n’a pas de quantité, ni à ce qu’elle ne sait pas calculer (un pot, une ligne de recette sans poids) : « Reste au frigo : … » les liste. Le retrait n’a lieu qu’**une fois** par session.
+Les ingrédients des recettes sortent du frigo et du placard : une puce par ingrédient (« Poireaux 1,5 kg »). Touche-la, écris « il en reste … » puis « Corriger » (ou « Comme prévu »). Un stock tombé à zéro disparaît. L’appli ne touche ni à ce qui n’a pas de quantité, ni à ce qu’elle ne sait pas calculer (un pot, une ligne de recette sans poids) : « Reste au frigo : … » les liste. Le retrait n’a lieu qu’**une fois** par session.
 
 ## Ranger
 
-**« Ranger les N barquettes »** crée les barquettes avec leur lieu, retire les ingrédients, passe la semaine à « La semaine tourne » et ouvre le frigo (aujourd’hui : « Ce que j’ai »). Rien n’est posé tout seul sur les jours : tu choisis ce que tu manges quand.
+**« Ranger les N barquettes »** crée les barquettes avec leur lieu, retire les ingrédients, passe la semaine à « La semaine tourne » et ouvre le frigo (écran « Frigo »). Rien n’est posé tout seul sur les jours : tu choisis ce que tu manges quand.
 
 ## Si ça échoue
 

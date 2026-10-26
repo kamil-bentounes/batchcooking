@@ -1,7 +1,7 @@
 ---
 id: cuisine-ajout-stock
 titre: Ajouter à la main un produit ou un plat acheté
-ecrans: [/stock]
+ecrans: [/frigo]
 questions:
   - Comment ajouter un produit au congélateur ?
   - Comment ajouter un plat acheté tout prêt ?
@@ -11,22 +11,22 @@ questions:
   - Combien d’étiquettes puis-je lire par mois ?
 sources:
   - src/pages/AjoutManuel.tsx
-  - src/pages/Stock.tsx
+  - src/pages/Frigo.tsx
   - src/lib/donnees/barquettes.ts
   - src/lib/donnees/bilan.ts
   - src/lib/quantite.ts
   - supabase/functions/etiquette/index.ts
   - supabase/migrations/0047_peremption_donnee.sql
   - supabase/migrations/0048_stock_congele.sql
-verifie_sur: 7409ab5
+verifie_sur: d61ae46
 ---
 ## Ce que fait l’appli
 
-Dans « Ce que j’ai », **« + À la main »** ajoute ce que tu n’as pas cuisiné. Au frigo et au congélateur, choisis d’abord « Un produit » (un ingrédient, il compte dans tes courses) ou « Un plat » (un repas, il compte dans ta semaine). Le placard ne prend que des produits.
+Dans le frigo, porte ouverte, **« + Ajouter au frigo »** (ou **« + Ajouter au congélateur »**) ajoute ce que tu n’as pas cuisiné ; au placard, « Le placard » puis « + Ajouter au placard ». Au frigo et au congélateur, choisis d’abord « Un produit » (un ingrédient, il compte dans tes courses) ou « Un plat » (un repas, il compte dans ta semaine). Le placard ne prend que des produits.
 
 ## Un produit
 
-Le nom (champ « Ce qu’il y a »), une quantité facultative (plus grande que zéro) et l’unité (g, ml ou u), puis « Ajouter ». Au congélateur, deux dates : « Congelé le » (aujourd’hui par défaut) et « À manger avant » (3 mois plus tard, jamais avant la mise au froid) ; changer la première recale la seconde. Cette date n’est pas affichée ensuite.
+Le nom (champ « Ce qu’il y a »), une quantité facultative (plus grande que zéro) et l’unité (g, ml ou u), puis « Ajouter ». Au congélateur, deux dates : « Congelé le » (aujourd’hui par défaut) et « À manger avant » (3 mois plus tard, jamais avant la mise au froid) ; changer la première recale la seconde. Elle se relit dans la fiche de l’ingrédient (« À manger avant »).
 
 ## Un plat
 

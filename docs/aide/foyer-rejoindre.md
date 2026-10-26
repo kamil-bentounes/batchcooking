@@ -16,7 +16,7 @@ sources:
   - supabase/migrations/0089_le_lien_suffit.sql
   - supabase/migrations/0071_invitation_trente_jours.sql
   - supabase/migrations/0103_budget_arrivees.sql
-verifie_sur: 7409ab5
+verifie_sur: d61ae46
 ---
 ## Ce que fait l’appli
 

@@ -41,7 +41,7 @@ verifie_sur: e058ce7
 
 ## Quand tu coches
 
-L’article entre dans « Ce que j’ai », selon son rayon (« cuisine-stock »), sauf Entretien et Hygiène, non rangés. Décocher le retire ; l’ordre des rayons appris reste.
+L’article entre dans le frigo, le congélateur ou le placard, selon son rayon (« cuisine-stock »), sauf Entretien et Hygiène, non rangés. Décocher le retire ; l’ordre des rayons appris reste.
 
 ## Terminer
 
