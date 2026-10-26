@@ -3392,6 +3392,16 @@ export type Database = {
           unite: string
         }[]
       }
+      choisir_un_repas: {
+        Args: {
+          p_choix: Json
+          p_day: string
+          p_meal: string
+          p_today: string
+          p_users: string[]
+        }
+        Returns: Json
+      }
       cible_de: {
         Args: { annee: number; comme_soldee?: boolean; la_charge: string }
         Returns: {
