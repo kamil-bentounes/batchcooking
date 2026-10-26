@@ -4,11 +4,9 @@ titre: Le frigo : plats, ingrédients, congélateur, placard
 ecrans: [/frigo]
 questions:
   - À quoi sert le frigo dans l’appli ?
-  - Comment congeler ou sortir une barquette du congélateur ?
   - Que dit l’aimant sur la porte du frigo ?
-  - Comment corriger la date d’une barquette ?
   - Combien de temps se garde une barquette au congélateur ?
-  - Comment ajouter la photo d’un plat ?
+  - Comment retirer un ingrédient fini ?
   - Le stock diminue-t-il quand je cuisine ?
 sources:
   - src/pages/Frigo.tsx
@@ -51,23 +49,11 @@ Touche une porte : elle pivote, puis l’intérieur prend l’écran. « Fermer 
 
 Le stock se remplit en cochant la liste de courses (le rayon décide du lieu : « Surgelés » au congélateur ; « Frais », « Fruits et légumes », « Boucherie, poissonnerie » au frigo ; le reste au placard ; pas Entretien ni Hygiène), à la main, par photo, et au dressage (« cuisine-on-range »).
 
-## La fiche d’un plat
-
-Touche une carte : lieu, nom, nombre de parts, macros par part, les repas où il est posé (« Prévues pour vous deux », « Prévues pour Kamil », ou « Pas encore »), les dates.
-
-- **Dates** : « Au frigo depuis » ou « Congelés le » (pas dans le futur) recalcule « À manger avant » : **4 jours** au frigo, **90 jours** au congélateur. Une part décongelée se mange dans les **24 heures** : pas de « depuis » pour elle. « À manger avant », saisie à la main, prime (jusqu’à 23 h 59 ce jour-là). Tout s’applique à toutes les parts du plat.
-- **Au frigo** : « En manger une maintenant » (ton repas du moment : matin avant 10 h, midi avant 16 h, sinon soir ; refusé s’il est déjà noté mangé ; si toutes les parts sont posées, celle du repas le plus lointain est prise et ce repas la perd), « Congeler » et « Jeter » (« combien ? » s’il y en a plusieurs ; les parts non posées d’abord).
-- **Au congélateur** : « Je les sors du congélateur » (celles posées aujourd’hui ou demain, sinon « combien ? »), « Changer le repas » (mène à « La semaine »), « Jeter ». Si c’est pour ce soir, une note te dit de les sortir ou de passer au micro-ondes.
-
-Mots d’urgence au frigo : « encore N jours », « demain dernier délai », « à manger aujourd'hui », « périmée ». Au congélateur : « N j au congélateur », puis « à sortir sous N j ».
+Touche une carte pour ouvrir sa **fiche** (« cuisine-fiche-plat » : dates, congeler, sortir, jeter, photo).
 
 ## Un ingrédient
 
 Quantité (« Enregistrer »), lieu (Frigo, Congélateur, Placard : le congélateur date la mise au froid), « À manger avant » (« Retirer la date »), « Fini » (supprime, sans confirmation).
-
-## La photo d’un plat
-
-« Prendre le plat en photo » (ensuite « Changer la photo ») n’existe que pour une recette **à ton foyer** (collée, inventée ou saisie), pas pour le catalogue. Elle est réduite (1 400 px), envoyée dans un seau public à ton foyer (2 Mo, JPEG, PNG ou WebP au plus) et devient la photo de la recette.
 
 ## Ce que l’appli ne fait pas
 
