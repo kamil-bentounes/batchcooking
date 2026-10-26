@@ -30,7 +30,7 @@ import { Plan } from './pages/Plan.tsx'
 import { Cuisine } from './pages/Cuisine.tsx'
 import { Dressage } from './pages/Dressage.tsx'
 import { Semaine } from './pages/Semaine.tsx'
-import { Stock } from './pages/Stock.tsx'
+import { Frigo } from './pages/Frigo.tsx'
 import { Bilan } from './pages/Bilan.tsx'
 import { Inventer } from './pages/Inventer.tsx'
 import { Photo } from './pages/Photo.tsx'
@@ -254,12 +254,10 @@ export default function App() {
   if (amitie) return <AccepteAmi jeton={amitie[1]} va={va} />
   if (sessionAmie) return <Cuisine userId={moi} va={va} cycleId={sessionAmie[1]} />
 
-  /* ⚠️ PROVISOIRE, jusqu'au chantier 2 (le frigo dessiné). « On range » mène à `/frigo` ; l'écran
-     n'existe pas encore, et rien ne doit déposer sur le hub. D'ici là, c'est « Ce que j'ai » (`/stock`).
-     Hors du `switch` exprès : un `case` ferait de `/frigo` un écran à ranger dans l'aide
-     (`aide.test.ts`), et il n'en est pas un. Au chantier 2, `/frigo` devient l'écran et `/stock`
-     redirige vers lui. */
-  if (ici === '/frigo') return <Redirige vers="/stock" remplace={remplace} />
+  /* `/stock` était « Ce que j'ai » : le frigo l'a remplacé (26/10/2026). On ne laisse pas un lien enregistré, une
+     notification ou l'aide tomber sur le hub. Hors du `switch` exprès : un `case` ferait de `/stock` un écran à
+     ranger dans l'aide (`aide.test.ts`), et ce n'en est plus un. */
+  if (ici === '/stock') return <Redirige vers="/frigo" remplace={remplace} />
 
   /* Un mois donné du budget : la clôture y ramène, sur le mois qu'elle vient de
      fermer. `key` : sans elle, React garderait l'écran déjà monté, et son mois
@@ -304,7 +302,7 @@ export default function App() {
 
     // Les quatre destinations permanentes.
     case '/semaine': return <Semaine userId={moi} va={va} />
-    case '/stock': return <Stock va={va} />
+    case '/frigo': return <Frigo userId={moi} va={va} />
     case '/bilan': return <Bilan va={va} userId={moi} />
 
     // Les passages du cycle : une seule sortie, pas de barre du bas.

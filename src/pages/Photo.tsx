@@ -91,11 +91,11 @@ export function Photo({ retour, va }: { retour: () => void; va: (v: string) => v
         lieu: a.lieu,
       })
     }
-    va('/stock')
+    va('/frigo')
   }
 
   return (
-    <Passage retour={retour} retourTexte="Ce que j’ai">
+    <Passage retour={retour} retourTexte="Frigo">
       <h1 className="titre text-[40px]">Photo<br />du frigo</h1>
       <p className="mt-3.5 text-[15px] text-doux max-w-[34ch]">
         Le modèle propose, tu valides. Rien n’entre à l’inventaire sans que tu
@@ -207,7 +207,7 @@ export function Photo({ retour, va }: { retour: () => void; va: (v: string) => v
             <p className="text-[13px] text-doux leading-relaxed">
               {lecture.commentaire
                 ?? 'Décoche ce qui n’y est pas, coche ce que le modèle a raté. '
-                 + 'Tu pourras toujours retirer une ligne depuis « Ce que j’ai ».'}
+                 + 'Tu pourras toujours retirer une ligne depuis le frigo.'}
             </p>
           </Surface>
 

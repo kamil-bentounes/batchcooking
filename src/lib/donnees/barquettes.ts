@@ -284,36 +284,6 @@ export function useSaute() {
   })
 }
 
-export function useDeplaceBarquette() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async ({ id, vers }: { id: string; vers: 'frigo' | 'congelateur' }) =>
-      // expires_at est recalculée par le trigger : sortir du congélateur, c'est
-      // décongeler, et une part décongelée se mange le lendemain.
-      ou(await supabase.from('portion').update({ location: vers }).eq('id', id).select().single()),
-    onSuccess: () => qc.invalidateQueries(),
-  })
-}
-
-export function useJette() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (id: string) =>
-      ou(await supabase.from('portion').update({ state: 'jetee' }).eq('id', id).select().single()),
-    onSuccess: () => qc.invalidateQueries(),
-  })
-}
-
-/** Le bouton supprimer, partout, sans exception : c'est une demande explicite. */
-export function useSupprimeBarquette() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (id: string) =>
-      ou(await supabase.from('portion').delete().eq('id', id).select()),
-    onSuccess: () => qc.invalidateQueries(),
-  })
-}
-
 /** Ce qu'on a mangé en plus, ou à la place : le carré de chocolat compte aussi. */
 /**
  * La case d'un repas, créée à la demande.

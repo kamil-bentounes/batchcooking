@@ -12,7 +12,7 @@
  * `App.tsx` pour qu'un écran ajouté ne soit pas oublié ici.
  */
 export const SANS_BOUTON_D_ENTETE = [
-  '/charges', '/budget-reglages', '/epargne', '/profil', '/semaine', '/stock', '/bilan', '/choisir', '/magasin',
+  '/charges', '/budget-reglages', '/epargne', '/profil', '/semaine', '/frigo', '/bilan', '/choisir', '/magasin',
   '/plan', '/cuisine', '/dressage', '/inventer', '/photo', '/ticket', '/peser', '/importer', '/objectifs',
   '/reglages', '/motdepasse', '/mois-type',
 ]
@@ -36,6 +36,7 @@ export const SUR_CET_ECRAN: Record<string, string[]> = {
   '/reglages': ['Comment inviter quelqu’un ?'],
   '/profil': ['À quoi sert ma date d’arrivée ?'],
   '/cuisine-accueil': ['Comment se déroule une session de cuisine ?'],
+  '/frigo': ['Comment congeler ou sortir une barquette du congélateur ?', 'Que dit l’aimant sur la porte du frigo ?'],
 }
 
 export const SOUVENT: string[] = ['Comment inviter Thauba ?', 'C’est quoi le prorata ?']

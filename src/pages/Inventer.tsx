@@ -168,7 +168,7 @@ function Invente({ userId, retour, va }: {
       {perimetre !== 'libre' && (
         <p className="mt-3 text-[14px] text-doux">
           {stock.length === 0
-            ? 'Tes placards sont vides dans l’app : ajoute ce que tu as depuis « Ce que j’ai ».'
+            ? 'Tes placards sont vides dans l’app : ajoute ce que tu as depuis le frigo.'
             : <>On pioche dans les <strong className="text-encre font-medium">
                 {stock.length} aliments</strong> de tes placards{stockTexte && ` — ${stockTexte}…`}</>}
         </p>

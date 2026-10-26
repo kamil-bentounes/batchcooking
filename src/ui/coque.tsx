@@ -10,7 +10,7 @@ import type { ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { enFrancais } from '../lib/reseau.ts'
 
-export type Destination = 'accueil' | 'semaine' | 'stock' | 'bilan'
+export type Destination = 'accueil' | 'semaine' | 'frigo' | 'bilan'
 
 const DESTINATIONS: { cle: Destination; vers: string; texte: string; dessin: ReactNode }[] = [
   {
@@ -22,8 +22,9 @@ const DESTINATIONS: { cle: Destination; vers: string; texte: string; dessin: Rea
     dessin: <><rect x="3" y="4.5" width="15" height="14" rx="2.5" /><path d="M3 9h15M7.5 2.5v4M13.5 2.5v4" /></>,
   },
   {
-    cle: 'stock', vers: '/stock', texte: 'Ce que j’ai',
-    dessin: <><rect x="5" y="2.5" width="11" height="16" rx="2.5" /><path d="M5 8.5h11M8.2 5.5v1M8.2 11.5v1.5" /></>,
+    // Le frigo américain : deux portes, une poignée sur chacune.
+    cle: 'frigo', vers: '/frigo', texte: 'Frigo',
+    dessin: <><rect x="3.5" y="2" width="14" height="17" rx="2.5" /><path d="M10.5 2v17M8.7 7v3.5M12.3 7v3.5" /></>,
   },
   {
     cle: 'bilan', vers: '/bilan', texte: 'Bilan',

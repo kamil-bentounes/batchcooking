@@ -85,6 +85,6 @@ describe('les écrans de l’aide', () => {
     expect(ecranPourLAide('/toutes-les-charges')).toBe('/toutes-les-charges')
   })
   it('un écran sans suggestion n’en invente pas', () => {
-    expect(surCetEcran('/stock')).toEqual([])
+    expect(surCetEcran('/semaine')).toEqual([])
   })
 })
