@@ -110,7 +110,7 @@ export function Retenues({
             </li>
           ) : (
             <li key={c.id} className="snap-start shrink-0 w-[138px] relative rounded-[18px] bg-fond/8
-                                      overflow-hidden">
+                                      overflow-hidden flex flex-col">
               <Photo url={c.recipe.image_url} glyphe={36} className="block h-[84px] w-full" />
               {/* 44 px de cible, 32 de dessin. */}
               <button type="button" onClick={() => surRetire(c.id)}
@@ -120,11 +120,12 @@ export function Retenues({
                   <Icone nom="fermer" taille={16} />
                 </span>
               </button>
-              <p className="h-[42px] px-2.5 pt-2 text-[13px] leading-[1.2] font-semibold line-clamp-2
+              {/* Le titre se lit en entier (quatre lignes au plus) : la carte grandit avec lui. */}
+              <p className="min-h-[42px] px-2.5 pt-2 text-[13px] leading-[1.2] font-semibold line-clamp-4
                             text-fond [overflow-wrap:anywhere]">
                 {c.recipe.title}
               </p>
-              <div className="flex items-center justify-between px-0.5 pb-1.5">
+              <div className="mt-auto flex items-center justify-between px-0.5 pb-1.5">
                 <button type="button" aria-label={`Une part de moins, ${c.recipe.title}`}
                         disabled={c.servings <= 1} className={`${pas} bg-fond/14`}
                         onClick={() => surParts(c.recipe_id, c.servings - 1)}>

@@ -72,7 +72,7 @@ export function Vignette({ recette: r, prise, manques, surInfo, surAjoute }: {
 
         <div className="mt-2.5 flex flex-wrap gap-2">
           {r.yield_servings ? (
-            <span className={`${tag} bg-piste text-doux`}>
+            <span className={`${tag} bg-piste text-encre`}>
               <Icone nom="pot" taille={15} />{parts(r.yield_servings)}
             </span>
           ) : null}

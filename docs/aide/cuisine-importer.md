@@ -34,7 +34,7 @@ Tu colles une recette d’un carnet, d’un message ou d’un site, et elle rejo
 ## Ce qui est signalé
 
 - « À compléter » : ingrédients non reconnus, étapes sans durée.
-- « pas reconnu — il ne comptera pas dans les macros ».
+- « reconnu : » suivi du nom de l’aliment retenu, ou « pas reconnu — il ne comptera pas dans les macros ».
 - « durée manquante » : tape les minutes.
 
 ## Les règles
