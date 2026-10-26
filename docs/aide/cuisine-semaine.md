@@ -19,10 +19,11 @@ sources:
   - src/lib/choix.ts
   - src/lib/semaine.ts
   - src/lib/reperes.ts
+  - src/lib/aliments/ordre.ts
   - src/lib/donnees/barquettes.ts
   - supabase/migrations/0123_choisir_un_repas.sql
   - src/lib/peremption.ts
-verifie_sur: fd13da7
+verifie_sur: e4c18ef
 ---
 ## Ce que fait l’appli
 
@@ -34,7 +35,7 @@ Le bandeau du haut montre les sept jours. Sous chaque jour, deux points, midi pu
 
 1. Sur un jour, la carte vide dit **« + Choisir le midi »** (ou « le soir »). Touche-la : une feuille s’ouvre (« Lundi midi »).
 2. **« Pour »** : « Vous deux » (tout le foyer) ou une seule personne, par son prénom.
-3. Choisis : **« Au frigo »** (ce qui presse d’abord, avec le nombre de barquettes libres), **« Au congélateur »** (à sortir la veille), ou **« Autre chose »** : ce que tu reprends souvent, les repères du repas (« Restaurant » 900 kcal, « Sandwich » 550…), et **« On saute ce repas »**.
+3. Choisis : **« Au frigo »** (ce qui presse d’abord, avec le nombre de barquettes libres), **« Au congélateur »** (à sortir la veille), ou **« Autre chose »** : **nos aliments** d’abord, avec leurs vraies valeurs, un geste = une unité (voir « cuisine-nos-aliments ») ; puis ce que tu reprends souvent, les repères du repas (« Restaurant » 900 kcal, « Sandwich » 550…) et **« On saute ce repas »**. Un repère qu’un de nos aliments remplace n’apparaît plus.
 
 Choisir un plat pose une barquette libre dans la case de **chaque** personne visée, la plus pressée d’abord. Pour chacune, l’appli prend d’abord une barquette faite pour elle, puis une sans destinataire, puis celle d’un autre en dernier recours. Pas assez pour tout le monde : la ligne est grisée (« il en faut 2, 1 libre »).
 

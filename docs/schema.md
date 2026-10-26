@@ -69,6 +69,7 @@ leur charge ne porte que l'identifiant.
 | Les barquettes | `portion`, `portion_event` | L'unité de suivi, et son journal |
 | La semaine | `meal_slot`, `meal_extra`, `frequent_food` | Ce qui est prévu, ce qui a été mangé en plus |
 | L'inventaire | `stock_item` | Frigo, congélateur, placard |
+| Nos aliments | `aliment` (0124) | Ce que le foyer mange, avec ses vraies valeurs pour 100 g, l'unité (« pot ») et son poids, le code-barres, la source (`main`, `etiquette`, `code_barres`). Un geste écrit une COPIE d'une unité dans `meal_extra` |
 
 ## Les tables des lots 0c, 4, 5 et 6
 

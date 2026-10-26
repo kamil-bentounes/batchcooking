@@ -6,15 +6,17 @@ questions:
   - Comment noter mon petit déjeuner ?
   - Comment noter une collation ?
   - Comment ajouter un yaourt en plus de mon plat ?
+  - Pourquoi mon yaourt n’a pas les mêmes calories que le repère « Yaourt » ?
   - Comment effacer ce que j’ai noté en plus ?
   - Les calories d’un jour sans rien coché comptent-elles pour zéro ?
 sources:
   - src/pages/Semaine.tsx
   - src/ui/semaine/EnPlus.tsx
   - src/lib/reperes.ts
+  - src/lib/aliments/ordre.ts
   - src/lib/donnees/barquettes.ts
   - src/lib/semaine.ts
-verifie_sur: fd13da7
+verifie_sur: e4c18ef
 ---
 ## Ce que fait l’appli
 
@@ -24,8 +26,9 @@ verifie_sur: fd13da7
 
 - Sous **« Autres moments »**, « Mangé sans barquette ? » propose **« Petit déjeuner »** et **« Collation »** (ceux que tu n’as pas déjà notés ce jour-là). Touche-en un, puis choisis un repère ou écris la tienne.
 - Sur la carte d’un plat, **« + ce que j’ai mangé en plus »** ouvre trois façons d’écrire :
+  - « Nos aliments » : ceux du foyer, avec leurs vraies valeurs — un geste = une unité, un pot (voir « cuisine-nos-aliments ») ;
   - « Ce que tu reprends souvent » : tes habitudes ;
-  - « Un repère, pas une pesée » : des repères en un geste, selon le repas — « Restaurant » 900 kcal, « Sandwich » 550, « Pizza » 850, « Yaourt » 60. Rien ne les distingue ensuite d’une saisie ;
+  - « Un repère, pas une pesée » : des repères en un geste, selon le repas — « Restaurant » 900 kcal, « Sandwich » 550, « Pizza » 850, « Yaourt » 60. Un repère qu’un de nos aliments remplace (« Yaourt dessert protéiné » pour « Yaourt ») n’apparaît plus. Rien ne les distingue ensuite d’une saisie ;
   - « Autre chose », ses kcal et ses g de protéines, puis « Ajouter ».
 - **« retirer »** efface un en-plus.
 
