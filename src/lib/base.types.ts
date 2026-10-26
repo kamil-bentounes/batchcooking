@@ -480,6 +480,7 @@ export type Database = {
           servings_target: number
           started_at: string | null
           state: string
+          stock_retire_le: string | null
           week_of: string
         }
         Insert: {
@@ -492,6 +493,7 @@ export type Database = {
           servings_target?: number
           started_at?: string | null
           state?: string
+          stock_retire_le?: string | null
           week_of: string
         }
         Update: {
@@ -504,6 +506,7 @@ export type Database = {
           servings_target?: number
           started_at?: string | null
           state?: string
+          stock_retire_le?: string | null
           week_of?: string
         }
         Relationships: [
@@ -3376,6 +3379,19 @@ export type Database = {
       arc_sien: { Args: { apres: string; avant: string }; Returns: boolean }
       aujourdhui: { Args: never; Returns: string }
       categorie_de_l_article: { Args: { article: string }; Returns: string }
+      ce_que_la_session_prend: {
+        Args: { p_cycle: string }
+        Returns: {
+          calculable: boolean
+          libelle: string
+          lieu: string
+          prise: number
+          quantite: number
+          reste: number
+          stock_item_id: string
+          unite: string
+        }[]
+      }
       cible_de: {
         Args: { annee: number; comme_soldee?: boolean; la_charge: string }
         Returns: {
@@ -3585,6 +3601,10 @@ export type Database = {
       retire_charge: {
         Args: { avec_les_saisies?: boolean; p_charge: string }
         Returns: string
+      }
+      retire_du_stock: {
+        Args: { p_cycle: string; p_restes?: Json }
+        Returns: number
       }
       retire_une_facture: { Args: { la_facture: string }; Returns: undefined }
       rouvre_le_mois: { Args: { le_mois: string }; Returns: undefined }
