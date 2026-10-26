@@ -481,3 +481,10 @@ verify_jwt = false
 # L'aide intégrée vérifie elle aussi le jeton dans son corps (voir plus haut).
 [functions.aide]
 verify_jwt = false
+
+# Les rappels par mail : appelée chaque heure par pg_cron + pg_net, sans JWT, avec un secret d'en-tête
+# (`x-rappels-secret`, comparé à temps constant) ; l'essai (« M'envoyer un exemple ») porte le JWT de la
+# personne, que la fonction vérifie elle-même. Pas de verify_jwt : ce serait refuser le passage horaire et le
+# préflight CORS.
+[functions.rappels]
+verify_jwt = false
