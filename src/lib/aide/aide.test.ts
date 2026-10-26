@@ -85,6 +85,9 @@ describe('les écrans de l’aide', () => {
     expect(ecranPourLAide('/toutes-les-charges')).toBe('/toutes-les-charges')
   })
   it('un écran sans suggestion n’en invente pas', () => {
-    expect(surCetEcran('/semaine')).toEqual([])
+    expect(surCetEcran('/bilan')).toEqual([])
+  })
+  it('« La semaine » propose ses deux questions', () => {
+    expect(surCetEcran('/semaine')).toHaveLength(2)
   })
 })

@@ -47,12 +47,9 @@ Choisir un plat pose une barquette libre dans la case de **chaque** personne vis
 
 Sur l’accueil, « Changer » ouvre « La semaine » sur aujourd’hui avec la feuille du bon repas déjà ouverte.
 
-## Le petit déjeuner, la collation, un en-plus
-
-Sous « Autres moments », « Mangé sans barquette ? » note un petit déjeuner ou une collation pour toi. Sur un plat, « + ce que j’ai mangé en plus » ajoute un repère ou une saisie libre (« Autre chose », kcal, protéines) ; « retirer » l’efface.
+Le petit déjeuner, la collation et ce qu’on mange en plus d’un plat se notent à part : voir « cuisine-semaine-en-plus ».
 
 ## Les règles
 
 - « On saute ce repas » est une réponse : le jour est renseigné, sans rien compter. **Un repas jamais choisi n’est pas un repas à zéro** : c’est un trou, hors des moyennes du bilan.
-- Une barquette ne compte dans les calories que si le repas est **mangé** ; un en-plus compte toujours.
 - Choisir autre chose pour un repas remplace le plat : ses en-plus s’en vont avec lui.
