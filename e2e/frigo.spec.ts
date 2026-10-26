@@ -409,8 +409,15 @@ test('les ingrédients : quantité, lieu, date, « Fini » — et le placard', a
   /* Le congélateur pose la date de mise au froid (contrainte `stock_item_congele_date`). */
   await f.getByRole('radio', { name: 'Congélateur' }).click()
   await expect.poll(async () => (await db.from('stock_item').select('location, frozen_at').eq('household_id', foyer.householdId).eq('label', 'Yaourts dessert protéinés').single()).data!.frozen_at, { timeout: 10_000 }).not.toBeNull()
+  /* L9 : sa péremption suit le lieu, comme celle d'une barquette — trois mois au congélateur… */
+  const ligne = async () => (await db.from('stock_item').select('location, frozen_at, expires_at').eq('household_id', foyer.householdId).eq('label', 'Yaourts dessert protéinés').single()).data!
+  await expect.poll(async () => new Date((await ligne()).expires_at ?? 0).getTime() - Date.now(), { timeout: 10_000 }).toBeGreaterThan(89 * JOUR_MS)
   await f.getByRole('radio', { name: 'Frigo' }).click()
-  await expect.poll(async () => (await db.from('stock_item').select('location, frozen_at').eq('household_id', foyer.householdId).eq('label', 'Yaourts dessert protéinés').single()).data!.frozen_at, { timeout: 10_000 }).toBeNull()
+  await expect.poll(async () => (await ligne()).frozen_at, { timeout: 10_000 }).toBeNull()
+  /* … et vingt-quatre heures à la sortie. */
+  const reste = new Date((await ligne()).expires_at!).getTime() - Date.now()
+  expect(reste, 'un ingrédient décongelé se mange dans les 24 h').toBeGreaterThan(22 * 60 * MIN)
+  expect(reste).toBeLessThan(25 * 60 * MIN)
   /* Une date limite : le mot d'urgence apparaît. */
   await f.getByRole('button', { name: 'Modifier : À manger avant' }).click()
   await f.getByLabel('À manger avant').fill(jourLocal(1))
@@ -467,6 +474,9 @@ test('l’accueil montre le petit frigo, les parts, le repas de ce soir et demai
   await expect(carte).toContainText('Il est au congélateur : sors-les maintenant')
   await expect(page.getByRole('region', { name: 'Demain' })).toContainText('Demain, midi et soir')
   await expect(page.getByRole('region', { name: 'Demain' })).toContainText('Lasagnes saumon-poireaux')
+  /* M9 : pendant la semaine, la carte de ce soir est LE geste de la page, et son titre l'unique <h1>. */
+  await expect(page.locator('h1')).toHaveCount(1)
+  await expect(page.locator('h1')).toHaveText('Burger de feuilles de riz')
   await capture(page, '10-accueil', true)
 
   /* « Je les sors » : les deux burgers de ce soir passent au frigo, décongelés ; la carte propose alors de les manger. */
@@ -507,4 +517,405 @@ test('rien ne dépasse la largeur de l’écran, et « prefers-reduced-motion »
   /* Sans animation : l'intérieur est là tout de suite. */
   await expect(page.getByRole('region', { name: 'Dans le frigo' })).toBeVisible({ timeout: 1_500 })
   await ctx.close()
+})
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * La revue du frigo (chantier 2) : chaque défaut trouvé a son parcours ici.
+ * Chaque test sème SES plats (un nom à lui) et les retire à la fin : les parcours d'au-dessus comptent les
+ * barquettes du foyer.
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+const MOI = () => foyer.userId
+const ELLE = () => foyer.elleId
+const ordre = ['petit_dejeuner', 'dejeuner', 'collation', 'diner']
+
+/** Une recette (à nous, sans photo) et ses barquettes, au frigo ou au congélateur. */
+async function seme(titre: string, specs: {
+  pour?: string | null; expire?: number; grams?: number; kcal?: number; protein_g?: number
+  location?: 'frigo' | 'congelateur'; expiresAt?: Date; state?: string
+}[]) {
+  const hh = foyer.householdId
+  const { data: recette } = await db.from('recipe').insert({
+    title: titre, yield_servings: 4, origin: 'manuelle', owner_household_id: hh,
+  }).select().single()
+  const { data, error } = await db.from('portion').insert(specs.map(o => ({
+    household_id: hh, recipe_id: recette!.id, label: titre, grams: o.grams ?? 500, kcal: o.kcal ?? 600,
+    protein_g: o.protein_g ?? 40, fiber_g: 5, carb_g: 60, fat_g: 20, for_user_id: o.pour ?? null,
+    location: o.location ?? 'frigo', state: o.state ?? 'au_frais',
+    prepared_at: new Date(Date.now() - 86_400_000).toISOString(),
+    ...(o.location === 'congelateur' ? { frozen_at: new Date(Date.now() - 86_400_000).toISOString() } : {}),
+    expires_at: (o.expiresAt ?? new Date(Date.now() + (o.expire ?? 2) * JOUR_MS)).toISOString(),
+  }))).select()
+  expect(error, `la semence de « ${titre} » a échoué`).toBeNull()
+  return { recette: recette!.id as string, parts: data! }
+}
+const pose = async (portionId: string, qui: string, decalage: number, meal: string) => {
+  /* Une case est unique par personne, jour et repas : celle qui y est (les parcours d'au-dessus) lâche sa place. */
+  await db.from('meal_slot').delete().eq('household_id', foyer.householdId).eq('user_profile_id', qui)
+    .eq('day', jourLocal(decalage)).eq('meal', meal)
+  const { error } = await db.from('meal_slot').insert({
+    household_id: foyer.householdId, user_profile_id: qui, day: jourLocal(decalage), meal, portion_id: portionId, state: 'prevu',
+  })
+  expect(error).toBeNull()
+}
+async function retire(...titres: string[]) {
+  const hh = foyer.householdId
+  const { data: ps } = await db.from('portion').select('id').eq('household_id', hh).in('label', titres)
+  const ids = (ps ?? []).map(p => p.id)
+  if (ids.length) {
+    await db.from('meal_slot').delete().in('portion_id', ids)
+    await db.from('portion').delete().in('id', ids)
+  }
+  await db.from('recipe').delete().eq('owner_household_id', hh).in('title', titres)
+}
+const ouvreLe = async (page: Page, porte: 'frigo' | 'congelo') => {
+  await (porte === 'frigo' ? porteDroite(page) : porteGauche(page)).click()
+  const interieur = page.getByRole('region', { name: porte === 'frigo' ? 'Dans le frigo' : 'Dans le congélateur' })
+  await expect(interieur).toBeVisible({ timeout: 5_000 })
+  return interieur
+}
+
+test('H1 · la fiche montre la part de chacun, et « En manger une maintenant » prend LA MIENNE', async ({ page }) => {
+  test.setTimeout(120_000)
+  const t = 'Chili de la revue'
+  /* La part de Thauba est la plus pressée, puis la mienne : l'ordre de péremption ne doit pas décider. */
+  const { parts: ps } = await seme(t, [
+    { pour: ELLE(), expire: 1, grams: 610, kcal: 530, protein_g: 44 },
+    { pour: MOI(), expire: 3, grams: 784, kcal: 682, protein_g: 56 },
+    { pour: MOI(), expire: 4, grams: 784, kcal: 682, protein_g: 56 },
+  ])
+  await db.from('meal_slot').delete().eq('user_profile_id', MOI()).eq('day', jourLocal(0)).eq('meal', repasEnCours())
+  try {
+    await connecte(page)
+    await page.goto('/frigo')
+    const interieur = await ouvreLe(page, 'frigo')
+    await interieur.getByRole('button', { name: new RegExp(`^${t}`) }).click()
+    const f = fiche(page, t)
+    await expect(f).toBeVisible()
+    /* Pas de moyenne qui ne correspond à aucune part : une ligne par personne. */
+    await expect(f.getByText('Kamil : 784 g, 682 kcal, 56 g de protéines')).toBeVisible()
+    await expect(f.getByText('Thauba : 610 g, 530 kcal, 44 g de protéines')).toBeVisible()
+    await expect(f.getByText(/la part$/)).toHaveCount(0)
+    await capture(page, '11-fiche-par-personne')
+    await page.setViewportSize({ width: 320, height: 700 })
+    await capture(page, '11-fiche-par-personne-320')
+    await page.setViewportSize({ width: 390, height: 844 })
+
+    await f.getByRole('button', { name: 'En manger une maintenant' }).click()
+    await expect(f.getByRole('status')).toContainText('mangée')
+    const ma = (await db.from('meal_slot').select('portion_id, state')
+      .eq('user_profile_id', MOI()).eq('day', jourLocal(0)).eq('meal', repasEnCours()).single()).data!
+    expect(ma.state).toBe('mange')
+    const mangee = ps.find(p => p.id === ma.portion_id)!
+    expect(mangee.for_user_id, 'Kamil a mangé la part de Thauba (ses calories, pas les siennes)').toBe(MOI())
+    expect((await db.from('portion').select('state').eq('id', ma.portion_id!).single()).data!.state).toBe('mangee')
+
+    /* Un repas déjà noté mangé n'est pas écrasé : on le dit. */
+    await f.getByRole('button', { name: 'En manger une maintenant' }).click()
+    await expect(f.getByRole('alert')).toContainText('déjà noté mangé')
+
+    /* L8 : une photo que le navigateur ne lit pas (HEIC…) se dit en français. */
+    await f.locator('input[type=file]').setInputFiles({ name: 'plat.heic', mimeType: 'image/heic', buffer: Buffer.from('pas une image') })
+    await expect(f.getByRole('alert')).toContainText('ne se lit pas', { timeout: 10_000 })
+    await expect(f.getByRole('alert')).not.toContainText(/decoded|InvalidState|Failed/i)
+  } finally { await retire(t) }
+})
+
+test('H2, H3, M8 · jeter lâche le repas, retirer supprime sans compter, et on dit quel repas n’a plus de barquette', async ({ page }) => {
+  test.setTimeout(120_000)
+  const t = 'Cassoulet de la revue'
+  const { parts: ps } = await seme(t, [{ expire: 3 }, { expire: 3 }])
+  await pose(ps[0].id, ELLE(), 1, 'diner')
+  await pose(ps[1].id, MOI(), 2, 'dejeuner')
+  try {
+    await connecte(page)
+    await page.goto('/frigo')
+    const interieur = await ouvreLe(page, 'frigo')
+    await interieur.getByRole('button', { name: new RegExp(`^${t}`) }).click()
+    const f = fiche(page, t)
+    await expect(f.getByRole('button', { name: 'Retirer du frigo' })).toBeVisible()
+    await expect(f.getByText('ni mangée ni jetée')).toBeVisible()
+
+    /* Jeter UNE part (les deux sont réclamées : celle du repas le plus tardif part). */
+    await f.getByRole('button', { name: 'Jeter', exact: true }).click()
+    const combien = f.getByRole('group', { name: 'Combien tu en jettes ?' })
+    await combien.getByRole('button', { name: 'Une de moins' }).click()
+    await combien.getByRole('button', { name: 'Jeter 1' }).click()
+    await expect.poll(async () => (await db.from('portion').select('state').eq('id', ps[1].id).single()).data!.state, { timeout: 10_000 }).toBe('jetee')
+    /* La case du repas ne reste pas pointée sur une part jetée… */
+    expect((await db.from('meal_slot').select('portion_id').eq('household_id', foyer.householdId).eq('user_profile_id', MOI()).eq('day', jourLocal(2)).eq('meal', 'dejeuner').single()).data!.portion_id).toBeNull()
+    /* … et l'autre repas garde la sienne. */
+    expect((await db.from('meal_slot').select('portion_id').eq('household_id', foyer.householdId).eq('user_profile_id', ELLE()).eq('day', jourLocal(1)).eq('meal', 'diner').single()).data!.portion_id).toBe(ps[0].id)
+    await expect(f.getByRole('status')).toContainText('1 part jetée')
+    await expect(f.getByRole('status')).toContainText('n’a plus de barquette')
+
+    /* Retirer la dernière : ni mangée ni jetée. */
+    await f.getByRole('button', { name: 'Retirer du frigo' }).click()
+    await expect.poll(async () => (await db.from('portion').select('id').eq('id', ps[0].id)).data!.length, { timeout: 10_000 }).toBe(0)
+    expect((await db.from('portion_event').select('kind').eq('portion_id', ps[0].id)).data, 'retirer ne compte pas comme jeté').toEqual([])
+    expect((await db.from('meal_slot').select('portion_id').eq('household_id', foyer.householdId).eq('user_profile_id', ELLE()).eq('day', jourLocal(1)).eq('meal', 'diner').single()).data!.portion_id).toBeNull()
+    await expect(interieur.getByRole('status')).toContainText('retirée du frigo')
+    await expect(interieur.getByRole('button', { name: new RegExp(`^${t}`) })).toHaveCount(0)
+  } finally { await retire(t) }
+})
+
+test('M1 · tant que les repas ne sont pas lus, la porte ne dit pas « rien de prévu » et la fiche ne fait rien', async ({ page }) => {
+  test.setTimeout(120_000)
+  const t = 'Gratin des repas'
+  const { parts: ps } = await seme(t, [{ expire: 3 }])
+  await pose(ps[0].id, MOI(), 0, 'diner')
+  try {
+    await connecte(page)
+    /* Lecture lente : pendant l'attente, ni dessin ni « Rien de prévu ce soir ». */
+    await page.route('**/rest/v1/meal_slot*', async route => { await new Promise(r => setTimeout(r, 3_000)); await route.continue() })
+    await page.goto('/frigo')
+    await expect(page.getByRole('heading', { name: 'Le frigo' })).toBeVisible()
+    await expect(page.locator('[data-afficheur]')).toHaveCount(0)
+    await expect(page.getByText('Rien de prévu ce soir')).toHaveCount(0)
+    await expect(page.locator('[data-afficheur]')).toContainText(`Ce soir`, { timeout: 15_000 })
+    await page.unroute('**/rest/v1/meal_slot*')
+
+    /* Lecture en panne : la porte dit qu'elle ne sait pas, le magnet se tait, l'erreur est dite. */
+    await page.route('**/rest/v1/meal_slot*', route => route.abort())
+    await page.reload()
+    await expect(page.getByRole('alert')).toBeVisible({ timeout: 40_000 })
+    await expect(page.locator('[data-afficheur]')).toContainText('Indisponible')
+    await expect(page.getByText('Rien de prévu ce soir')).toHaveCount(0)
+    await expect(page.locator('[data-magnet]')).toHaveCount(0)
+    const interieur = await ouvreLe(page, 'frigo')
+    await expect(interieur.getByRole('alert')).toBeVisible()
+    await interieur.getByRole('button', { name: new RegExp(`^${t}`) }).click()
+    const f = fiche(page, t)
+    await expect(f.getByRole('button', { name: 'En manger une maintenant' })).toBeDisabled()
+    await expect(f.getByRole('button', { name: 'Jeter', exact: true })).toBeDisabled()
+    await expect(f.getByRole('button', { name: 'Retirer du frigo' })).toBeDisabled()
+    await expect(f.getByRole('button', { name: 'Congeler', exact: true })).toBeDisabled()
+    await page.unroute('**/rest/v1/meal_slot*')
+  } finally { await retire(t) }
+})
+
+test('M2, M3, M5, M6 · l’urgence quand tout est réclamé, le magnet qui dit « à jeter », les portes décrites, l’intérieur modal', async ({ page }) => {
+  test.setTimeout(120_000)
+  const hier = new Date(Date.now() - JOUR_MS)
+  await seme('Soupe de la revue', [{ expiresAt: hier }, { expiresAt: hier }])
+  /* Un plat entièrement réclamé APRÈS sa péremption (dans 36 h : « demain dernier délai »). */
+  const gratin = await seme('Gratin de la revue', [{ expiresAt: new Date(Date.now() + 36 * 3_600_000) }, { expiresAt: new Date(Date.now() + 36 * 3_600_000) }])
+  await pose(gratin.parts[0].id, MOI(), 4, 'diner')
+  await pose(gratin.parts[1].id, ELLE(), 4, 'diner')
+  /* Un plat pour ce soir, sur le distributeur. */
+  const tajine = await seme('Tajine de la revue', [{ expire: 3 }])
+  await db.from('meal_slot').delete().eq('user_profile_id', MOI()).eq('day', jourLocal(0)).eq('meal', 'diner')
+  await pose(tajine.parts[0].id, MOI(), 0, 'diner')
+  try {
+    await connecte(page)
+    await page.goto('/frigo')
+    await expect(porteDroite(page)).toBeVisible({ timeout: 20_000 })
+
+    /* M3 : une part DÉJÀ périmée, libre : « à jeter », pas « à prévoir avant ce soir ». */
+    await expect(page.locator('[data-magnet]')).toHaveText('2 soupes à jeter')
+    /* M5 : ce que disent le distributeur et le magnet est dans la description des portes. */
+    await expect(porteGauche(page)).toHaveAccessibleDescription(/Ce soir.*Tajine de la revue/)
+    await expect(porteDroite(page)).toHaveAccessibleDescription('2 soupes à jeter')
+
+    const interieur = await ouvreLe(page, 'frigo')
+    /* M2 : la ligne d'un plat dont TOUTES les parts sont posées, après sa péremption. */
+    await expect(interieur.getByRole('button', { name: /^Soupe de la revue, 2 parts, périmée/ })).toBeVisible()
+    await expect(interieur.getByRole('button', { name: /^Gratin de la revue, 2 parts, demain dernier délai/ })).toBeVisible()
+    await capture(page, '12-urgence-et-reclame')
+
+    /* M6 : la page derrière est inerte tant que l'intérieur est ouvert… */
+    expect(await page.locator('[inert] main').count(), 'le frigo fermé reste atteignable derrière l’intérieur').toBe(1)
+    expect(await page.locator('[inert] nav').count(), 'la barre du bas reste atteignable derrière l’intérieur').toBe(1)
+    await expect(interieur.getByRole('heading', { name: 'Frigo' })).toBeFocused()
+    /* … et Échap le ferme d'où que soit le focus. */
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+    await page.keyboard.press('Escape')
+    await expect(interieur).toBeHidden({ timeout: 5_000 })
+    await expect(porteDroite(page)).toBeFocused({ timeout: 5_000 })
+    expect(await page.locator('[inert] main').count(), 'la page reste inerte après la fermeture').toBe(0)
+  } finally { await retire('Soupe de la revue', 'Gratin de la revue', 'Tajine de la revue') }
+})
+
+test('M4 · on ne sort pas de demain soir le matin : la part décongelée vit 24 h', async ({ page }) => {
+  test.setTimeout(120_000)
+  const t = 'Quiche de la revue'
+  const q = await seme(t, [{ location: 'congelateur', expire: 80 }, { location: 'congelateur', expire: 80 }])
+  await pose(q.parts[0].id, MOI(), 1, 'diner')
+  await pose(q.parts[1].id, ELLE(), 1, 'diner')
+  const heure = (h: number, m: number) => page.evaluate(([hh, mm]) => {
+    const d = new Date(); d.setHours(hh, mm, 0, 0); localStorage.setItem('popote.maintenant', d.toISOString())
+  }, [h, m])
+  try {
+    await connecte(page)
+    await page.goto('/frigo')
+    await heure(8, 30)
+    await page.reload()
+    const interieur = await ouvreLe(page, 'congelo')
+    /* Le matin : on le dit, on ne le sort pas. */
+    await expect(interieur.getByRole('button', { name: new RegExp(`^${t}, 2 parts, Demain soir : à sortir dès 19 h`) })).toBeVisible()
+    await expect(page.locator('[data-magnet]'), 'le magnet dit « sors-les » avant l’heure').not.toContainText('Quiche')
+    await interieur.getByRole('button', { name: new RegExp(`^${t}`) }).click()
+    const f = fiche(page, t)
+    await expect(f.getByText('C’est pour demain soir : sors-les à partir de 19 h')).toBeVisible()
+    await f.getByRole('button', { name: 'Je les sors du congélateur' }).click()
+    /* Rien n'est posé pour AUJOURD'HUI : on demande combien, on ne sort pas les parts de demain d'office. */
+    await expect(f.getByRole('group', { name: 'Combien tu en sors du congélateur ?' })).toBeVisible()
+    expect((await parts(t)).map(p => p.location)).toEqual(['congelateur', 'congelateur'])
+    await f.press('Escape')
+
+    /* Le soir venu : « à sortir maintenant », et les deux parts de demain sortent. */
+    await interieur.getByRole('button', { name: 'Fermer la porte' }).click()
+    await heure(19, 30)
+    await page.reload()
+    await expect(page.locator('[data-magnet]')).toHaveText('Sors les 2 quiches : c’est demain soir', { timeout: 15_000 })
+    const interieur2 = await ouvreLe(page, 'congelo')
+    await expect(interieur2.getByRole('button', { name: new RegExp(`^${t}, 2 parts, Demain soir : à sortir maintenant`) })).toBeVisible()
+    await interieur2.getByRole('button', { name: new RegExp(`^${t}`) }).click()
+    await fiche(page, t).getByRole('button', { name: 'Je les sors du congélateur' }).click()
+    await expect.poll(async () => (await parts(t)).map(p => `${p.location}/${p.state}`).join(), { timeout: 10_000 })
+      .toBe('frigo/decongelee,frigo/decongelee')
+  } finally {
+    await page.evaluate(() => localStorage.removeItem('popote.maintenant')).catch(() => {})
+    await retire(t)
+  }
+})
+
+test('M7 · placard → un ingrédient → on le ferme : on revient sur la liste du placard', async ({ page }) => {
+  test.setTimeout(120_000)
+  await connecte(page)
+  await page.goto('/frigo')
+  await expect(porteDroite(page)).toBeVisible({ timeout: 20_000 })
+  await page.getByRole('button', { name: 'Le placard' }).click()
+  const placard = page.getByRole('dialog', { name: 'Le placard' })
+  await expect(placard).toBeVisible()
+  await placard.getByRole('button', { name: /Tortillas/ }).click()
+  const f = fiche(page, 'Tortillas')
+  await expect(f).toBeVisible()
+  await f.press('Escape')
+  await expect(f).toBeHidden()
+  await expect(placard, 'la liste du placard n’est pas revenue').toBeVisible()
+  await expect(placard.getByRole('button', { name: /Tortillas/ })).toBeVisible()
+  /* Et fermer le placard le ferme pour de bon. */
+  await placard.press('Escape')
+  await expect(placard).toBeHidden()
+})
+
+test('L4, L5 · une date inchangée n’écrit rien ; le focus entre dans le champ et revient sur « Modifier »', async ({ page }) => {
+  test.setTimeout(120_000)
+  const t = 'Flan de la revue'
+  const a = new Date(Date.now() + 2 * JOUR_MS); a.setHours(10, 0, 0, 0)
+  const b = new Date(Date.now() + 3 * JOUR_MS); b.setHours(15, 0, 0, 0)
+  await seme(t, [{ expiresAt: a }, { expiresAt: b }])
+  const fins = async () => (await parts(t)).map(p => new Date(p.expires_at).getTime()).sort()
+  try {
+    await connecte(page)
+    await page.goto('/frigo')
+    const interieur = await ouvreLe(page, 'frigo')
+    await interieur.getByRole('button', { name: new RegExp(`^${t}`) }).click()
+    const f = fiche(page, t)
+    const modifier = f.getByRole('button', { name: 'Modifier : À manger avant' })
+    await modifier.click()
+    /* L5 : le focus entre dans le champ… */
+    await expect(f.getByLabel('À manger avant')).toBeFocused()
+    /* L4 : enregistrer SANS changer ne réécrit rien (les deux péremptions restent distinctes). */
+    await f.getByRole('button', { name: 'Enregistrer' }).click()
+    /* … et revient sur « Modifier ». */
+    await expect(modifier).toBeFocused()
+    await page.waitForTimeout(800)
+    expect(await fins(), 'une date inchangée a réécrasé les péremptions').toEqual([a.getTime(), b.getTime()])
+
+    /* Annuler rend aussi le focus. */
+    await modifier.click()
+    await expect(f.getByLabel('À manger avant')).toBeFocused()
+    await f.getByRole('button', { name: 'Annuler' }).click()
+    await expect(modifier).toBeFocused()
+
+    /* Une vraie correction : le jour de la seconde. La seconde garde son heure, la première s'y aligne. */
+    await modifier.click()
+    await f.getByLabel('À manger avant').fill(jourLocal(3))
+    await f.getByRole('button', { name: 'Enregistrer' }).click()
+    await expect.poll(fins, { timeout: 10_000 }).toEqual([b.getTime(), new Date(`${jourLocal(3)}T23:59:00`).getTime()].sort())
+  } finally { await retire(t) }
+})
+
+test('L7 · à 320 px le frigo tient, et l’intérieur ne charge ses photos qu’à l’ouverture', async ({ browser }) => {
+  test.setTimeout(120_000)
+  const ctx = await browser.newContext({ viewport: { width: 320, height: 700 }, locale: 'fr-FR', timezoneId: 'Europe/Paris' })
+  const page = await ctx.newPage()
+  const { image_url: photo } = (await db.from('recipe').select('image_url').eq('id', recettes['Pizza vietnamienne protéinée']).single()).data!
+  expect(photo, 'la pizza devrait avoir une photo à ce stade du banc').toBeTruthy()
+  const requetes: string[] = []
+  page.on('request', r => { if (r.url().includes('photos-des-plats')) requetes.push(r.url()) })
+  try {
+    await connecte(page)
+    await page.goto('/frigo')
+    await expect(porteDroite(page)).toBeVisible({ timeout: 20_000 })
+    await page.waitForTimeout(1500)
+    const frigo = await page.locator('[data-frigo=ferme]').boundingBox()
+    expect(frigo!.x, 'le frigo déborde à gauche').toBeGreaterThanOrEqual(0)
+    expect(frigo!.x + frigo!.width, 'le frigo déborde à droite à 320 px').toBeLessThanOrEqual(320.5)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+    /* Les deux portes restent des cibles de 44 px. */
+    for (const porte of [porteGauche(page), porteDroite(page)]) {
+      const r = (await porte.boundingBox())!
+      expect(r.width).toBeGreaterThanOrEqual(44)
+    }
+    await capture(page, '01-frigo-ferme-320', true)
+    expect(requetes.filter(u => u === photo), 'la photo d’un plat du congélateur est demandée avant d’ouvrir la porte').toEqual([])
+    await ouvreLe(page, 'congelo')
+    await expect.poll(() => requetes.filter(u => u === photo).length, { timeout: 10_000 }).toBeGreaterThan(0)
+  } finally { await ctx.close() }
+})
+
+test('M9 · hors semaine, le geste du cycle vient avant la carte de ce soir, et la page n’a qu’un <h1>', async ({ browser }) => {
+  test.setTimeout(120_000)
+  const f2 = await amorce({ cycleEtat: 'en_cuisine', budget: false })
+  try {
+    const hh = f2.householdId
+    const { data: p } = await db.from('portion').insert({
+      household_id: hh, label: 'Dahl du soir', grams: 400, kcal: 600, protein_g: 30, fiber_g: 5, carb_g: 60, fat_g: 20,
+    }).select().single()
+    await db.from('meal_slot').delete().eq('household_id', hh).eq('day', jourLocal(0))
+    await db.from('meal_slot').insert({
+      household_id: hh, user_profile_id: f2.userId, day: jourLocal(0), meal: 'diner', portion_id: p!.id, state: 'prevu',
+    })
+    for (const largeur of [390, 320]) {
+      const ctx = await browser.newContext({ viewport: { width: largeur, height: 844 }, locale: 'fr-FR', timezoneId: 'Europe/Paris' })
+      const page = await ctx.newPage()
+      await page.goto('/')
+      await page.getByLabel(/e-?mail/i).fill(f2.email)
+      await page.getByLabel(/mot de passe/i).fill(MOT_DE_PASSE)
+      await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+      await expect(page.getByRole('heading', { name: 'Popote' })).toBeVisible({ timeout: 15_000 })
+      await page.goto('/cuisine-accueil')
+      const carte = page.getByRole('region', { name: 'Le prochain repas' })
+      await expect(carte).toBeVisible({ timeout: 20_000 })
+      await expect(page.locator('h1')).toHaveCount(1)
+      await expect(page.locator('h1')).toHaveText('Session en cours')
+      await expect(carte.getByRole('heading', { level: 2 })).toHaveText('Dahl du soir')
+      const geste = (await page.getByRole('button', { name: 'Reprendre la cuisine' }).boundingBox())!
+      const bloc = (await carte.boundingBox())!
+      expect(geste.y + geste.height, 'le geste du cycle doit être AVANT la carte de ce soir').toBeLessThan(bloc.y)
+      expect(geste.y + geste.height, 'le geste du cycle est sous le pli').toBeLessThan(844 - 80)
+      await page.waitForTimeout(500)
+      await page.screenshot({ path: `${CAPTURES}/13-accueil-en-cuisine-${largeur}.png`, fullPage: true })
+      await ctx.close()
+    }
+  } finally { await efface(f2) }
+})
+
+test('L10 · la liste de courses accorde « 3 pots »', async ({ page }) => {
+  test.setTimeout(120_000)
+  const { data: magasin } = await db.from('store').select('id').eq('household_id', foyer.householdId).limit(1).single()
+  const { data: article } = await db.from('shopping_item').insert({
+    cycle_id: foyer.cycleId, household_id: foyer.householdId, store_id: magasin!.id,
+    label: 'yaourts de la revue', aisle: 'Frais', quantity: 3, unit: 'pot',
+  }).select().single()
+  try {
+    await connecte(page)
+    await page.goto('/magasin')
+    const ligne = page.getByRole('listitem').filter({ hasText: 'yaourts de la revue' })
+    await expect(ligne).toBeVisible({ timeout: 20_000 })
+    await expect(ligne).toContainText('3 pots')
+  } finally { await db.from('shopping_item').delete().eq('id', article!.id) }
 })
