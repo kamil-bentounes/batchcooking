@@ -200,7 +200,7 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
       )}
 
       {/* L'équipement, en dernier : on le règle une fois, on le relit rarement. */}
-      <Titre>Ce dont tu disposes</Titre>
+      {choisis.length > 0 && <Titre>Ce dont tu disposes</Titre>}
       {choisis.length > 0 && (
         <div className="rounded-[22px] bg-surface px-4 py-3.5 flex items-center gap-3.5
                         shadow-[inset_0_0_0_1.5px_var(--color-brume)]">
@@ -227,7 +227,7 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
       )}
       {/* `precedent` d'abord : l'état initial de la carte se pose UNE fois, au montage. */}
       {carteOuverte && (
-        <Equipement catalogue={catalogue}
+        <Equipement catalogue={catalogue} seul={choisis.length === 0}
                     depart={equipementInitial({ propres: capacites, derniere: precedent ?? {}, catalogue })}
                     surValide={codes => {
                       choisitAppareils.mutate({ cycleId: cycle.id, codes })
@@ -256,7 +256,7 @@ function Chiffre3({ valeur, legende, sable }: { valeur: string; legende: string;
     <div className={`rounded-[18px] p-3 ${sable ? 'bg-sable' : 'bg-piste'}`}>
       <p className={`chiffre text-[26px] font-semibold leading-none tracking-[-.02em]
                      ${sable ? 'text-ocre' : ''}`}>{valeur}</p>
-      <p className="mt-1.5 text-[12.5px] leading-[1.25] text-doux">{legende}</p>
+      <p className={`mt-1.5 text-[12.5px] leading-[1.25] ${sable ? 'text-doux' : 'text-encre'}`}>{legende}</p>
     </div>
   )
 }
@@ -351,8 +351,10 @@ function Frise({ plan, nomAppareil }:
 }
 
 /** L'équipement du jour : il change d'une session à l'autre (D8). */
-function Equipement({ catalogue, depart, surValide }: {
+function Equipement({ catalogue, depart, surValide, seul }: {
   catalogue: { code: string; label: string; default_capacity: number }[]
+  /** Aucun appareil choisi : pas de ligne de résumé au-dessus, la carte prend sa place. */
+  seul: boolean
   /** Ce qui arrive coché : la dernière session du foyer, sinon le catalogue (`equipementInitial`). */
   depart: Record<string, number>
   surValide: (codes: Record<string, number>) => void
@@ -360,7 +362,7 @@ function Equipement({ catalogue, depart, surValide }: {
   const [choix, setChoix] = useState<Record<string, number>>(depart)
 
   return (
-    <Surface className="mt-3 shadow-carte">
+    <Surface className={`${seul ? 'mt-8' : 'mt-3'} shadow-carte`}>
       <p className="text-[15px] font-semibold">Ce dont tu disposes aujourd’hui</p>
       <p className="text-[13.5px] text-doux mt-1.5">
         Le nombre dit combien de plats l’appareil prend à la fois. C’est lui qui
