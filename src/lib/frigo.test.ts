@@ -3,6 +3,7 @@ import {
   afficheur, ariaDeCarte, auPlusTard, etagereDe, groupeLesParts, macrosDuGroupe, magnet, motDuPlat,
   nomCourt, noteDeLaFiche, partsAChoisir, partsASortir, partsLibres, peremptionApres, prevuesPour,
   pourQui, pressesGroupees, quand, repasDuJour, repasEnCours, repasEnMots, soustitreDuCongelo, soustitreDuFrigo, NOTE_DU_SOIR,
+  borne, ecrituresDesDates, peremptionDeplacee, phraseDesRepasLibres, sortableDes,
 } from './frigo.ts'
 import type { Part, Prevu } from './frigo.ts'
 
@@ -156,7 +157,7 @@ describe('la porte gauche : l’afficheur', () => {
 describe('la porte droite : le magnet', () => {
   const burgers = fois(2, { label: 'Burger de feuilles de riz', location: 'congelateur' })
   const pizzas = fois(2, { label: 'Pizza vietnamienne protéinée', location: 'frigo' })
-  const lasagnes = fois(6, { label: 'Lasagnes', location: 'frigo' })
+  const lasagnes = fois(6, { label: 'Lasagnes', location: 'frigo', expires_at: new Date(2026, 9, 30, 21, 26).toISOString() })
   const tout = [...burgers, ...pizzas, ...lasagnes]
 
   it('1 · des congelées posées sur ce soir passent avant tout', () => {
@@ -165,7 +166,7 @@ describe('la porte droite : le magnet', () => {
   })
   it('1 · demain aussi, et au singulier', () => {
     const prevus = [prevu(burgers[0], '2026-10-27', 'diner')]
-    expect(magnet(tout, prevus, LUNDI)?.texte).toBe('Sors 1 burger : c’est demain')
+    expect(magnet(tout, prevus, LUNDI)?.texte).toBe('Sors 1 burger : c’est demain soir')
   })
   it('1 · avant le frigo qui presse', () => {
     const prevus = [prevu(burgers[0], '2026-10-27', 'diner')]
@@ -251,7 +252,7 @@ describe('la fiche', () => {
     const b = fois(2, { label: 'Burger', location: 'congelateur' })
     const [g] = groupeLesParts(b)
     expect(noteDeLaFiche(g, [prevu(b[0], '2026-10-26', 'diner')], LUNDI)).toBe(NOTE_DU_SOIR)
-    expect(noteDeLaFiche(g, [prevu(b[0], '2026-10-27', 'diner')], LUNDI)).toBe('')
+    expect(noteDeLaFiche(g, [prevu(b[0], '2026-10-30', 'diner')], LUNDI)).toBe('')
     const f = fois(2, { label: 'Pizza', location: 'frigo' })
     expect(noteDeLaFiche(groupeLesParts(f)[0], [prevu(f[0], '2026-10-26', 'diner')], LUNDI)).toBe('')
   })
@@ -260,7 +261,7 @@ describe('la fiche', () => {
       part({ label: 'L', location: 'frigo', grams: 784, kcal: 682, protein_g: 56 }),
       part({ label: 'L', location: 'frigo', grams: 784, kcal: 682, protein_g: 56 }),
     ])
-    expect(macrosDuGroupe(g)).toBe('784 g, 682 kcal et 56 g de protéines la part')
+    expect(macrosDuGroupe(g)).toEqual(['784 g, 682 kcal et 56 g de protéines la part'])
   })
   it('« À manger avant » : la date, et au frigo ce qu’en dit l’urgence', () => {
     const f = groupeLesParts(fois(1, { label: 'Pizza', location: 'frigo' }))[0]
@@ -374,5 +375,231 @@ describe('« À manger bientôt » : un plat, une ligne', () => {
       b('Dahl', new Date(2026, 9, 27, 8)), b('Dahl', new Date(2026, 9, 28, 8)),
     ], aujourdhui)
     expect(lignes.map(l => [l.label, l.n])).toEqual([['Dahl', 1], ['Dahl', 1]])
+  })
+})
+
+// ── La revue du frigo (chantier 2) ──────────────────────────────────────────
+
+describe('H1 · les portions sont PAR PERSONNE : la fiche ne montre pas une moyenne qui ne correspond à aucune part', () => {
+  it('des parts différentes selon la personne : une ligne par personne', () => {
+    const [g] = groupeLesParts([
+      part({ label: 'Lasagnes', location: 'frigo', grams: 784, kcal: 682, protein_g: 56, for_user_id: KAMIL }),
+      part({ label: 'Lasagnes', location: 'frigo', grams: 610, kcal: 530, protein_g: 44, for_user_id: THAUBA }),
+      part({ label: 'Lasagnes', location: 'frigo', grams: 784, kcal: 682, protein_g: 56, for_user_id: KAMIL }),
+    ])
+    expect(macrosDuGroupe(g, MEMBRES)).toEqual([
+      'Kamil : 784 g, 682 kcal, 56 g de protéines',
+      'Thauba : 610 g, 530 kcal, 44 g de protéines',
+    ])
+  })
+  it('des parts pour personne qui diffèrent : « Pour tous », les deux valeurs', () => {
+    const [g] = groupeLesParts([
+      part({ label: 'L', location: 'frigo', grams: 700, kcal: 600, protein_g: 50, for_user_id: null }),
+      part({ label: 'L', location: 'frigo', grams: 800, kcal: 700, protein_g: 60, for_user_id: null }),
+    ])
+    expect(macrosDuGroupe(g, MEMBRES)).toEqual(['Pour tous : 700 g, 600 kcal, 50 g de protéines ou 800 g, 700 kcal, 60 g de protéines'])
+  })
+  it('la même valeur pour tous, quel que soit le destinataire : la phrase d’avant, une seule valeur', () => {
+    const [g] = groupeLesParts([
+      part({ label: 'L', location: 'frigo', grams: 784, kcal: 682, protein_g: 56, for_user_id: KAMIL }),
+      part({ label: 'L', location: 'frigo', grams: 784, kcal: 682, protein_g: 56, for_user_id: THAUBA }),
+    ])
+    expect(macrosDuGroupe(g, MEMBRES)).toEqual(['784 g, 682 kcal et 56 g de protéines la part'])
+  })
+})
+
+describe('M2 · l’urgence se dit aussi quand tout est réclamé', () => {
+  const lasagnes = () => fois(2, { label: 'Lasagnes', location: 'frigo', expires_at: new Date(2026, 9, 28, 14).toISOString() })
+  it('un repas posé APRÈS la péremption : le mot d’urgence, pas le planning', () => {
+    const l = lasagnes()
+    const [g] = groupeLesParts(l)
+    const prevus = [prevu(l[0], '2026-10-29', 'diner'), prevu(l[1], '2026-10-29', 'diner', THAUBA)]
+    // Lundi 20 h : il reste 42 h, « demain dernier délai », en orange.
+    expect(quand(g, prevus, LUNDI)).toEqual({ texte: 'demain dernier délai', encre: '#8F5A0D' })
+  })
+  it('périmée : le mot « périmée », en rouge', () => {
+    const l = fois(2, { label: 'Pizza', location: 'frigo', expires_at: new Date(2026, 9, 26, 12).toISOString() })
+    const [g] = groupeLesParts(l)
+    const prevus = l.map(p => prevu(p, '2026-10-27', 'diner'))
+    expect(quand(g, prevus, LUNDI)).toEqual({ texte: 'périmée', encre: '#9A3526' })
+  })
+  it('une seule des parts est périmée : on dit combien', () => {
+    const a = part({ label: 'Pizza', location: 'frigo', expires_at: new Date(2026, 9, 26, 12).toISOString() })
+    const b = part({ label: 'Pizza', location: 'frigo' })
+    const [g] = groupeLesParts([a, b])
+    expect(quand(g, [prevu(b, '2026-10-27', 'diner')], LUNDI).texte).toBe('1 périmée')
+  })
+  it('réclamée avant sa péremption : le planning, comme avant', () => {
+    const l = lasagnes()
+    const [g] = groupeLesParts(l)
+    const prevus = [prevu(l[0], '2026-10-27', 'diner'), prevu(l[1], '2026-10-27', 'diner', THAUBA)]
+    expect(quand(g, prevus, LUNDI).texte).toBe('mar. soir')
+  })
+  it('une réclamation d’un jour PASSÉ ne compte pas : la part est libre', () => {
+    const l = fois(2, { label: 'Pizza', location: 'frigo', expires_at: new Date(2026, 9, 27, 22).toISOString() })
+    const [g] = groupeLesParts(l)
+    const vieux = [prevu(l[0], '2026-10-24', 'diner'), prevu(l[1], '2026-10-25', 'diner')]
+    expect(partsLibres(g, vieux, LUNDI)).toHaveLength(2)
+    expect(partsLibres(g, vieux)).toHaveLength(0)
+    expect(quand(g, vieux, LUNDI).texte, 'les parts sont libres et pressent : le mot').toBe('demain dernier délai')
+    expect(prevuesPour(g, vieux, MEMBRES, LUNDI).puces, 'les jours passés ne sont pas listés').toEqual([])
+    expect(partsAChoisir(g, vieux, 1, LUNDI).map(p => p.id)).toEqual([g.parts[0].id])
+  })
+})
+
+describe('M3 · le magnet', () => {
+  it('une part DÉJÀ périmée : « à jeter », pas « à prévoir avant ce soir »', () => {
+    const t = fois(2, { label: 'Pizza vietnamienne', location: 'frigo', expires_at: new Date(2026, 9, 26, 9).toISOString() })
+    expect(magnet(t, [], LUNDI)?.texte).toBe('2 pizzas à jeter')
+  })
+  it('périmées et pas périmées dans le même plat : on ne jette que les périmées', () => {
+    const t = [
+      part({ label: 'Soupe', location: 'frigo', expires_at: new Date(2026, 9, 25, 9).toISOString() }),
+      part({ label: 'Soupe', location: 'frigo', expires_at: new Date(2026, 9, 27, 9).toISOString() }),
+    ]
+    expect(magnet(t, [], LUNDI)?.texte).toBe('1 soupe à jeter')
+  })
+  it('le congelé nomme le repas : « c’est ce midi », « c’est demain soir »', () => {
+    const b = fois(2, { label: 'Burger', location: 'congelateur' })
+    expect(magnet(b, [prevu(b[0], '2026-10-27', 'dejeuner')], MARDI)?.texte).toBe('Sors 1 burger : c’est ce midi')
+    expect(magnet(b, [prevu(b[0], '2026-10-27', 'diner')], LUNDI)?.texte).toBe('Sors 1 burger : c’est demain soir')
+  })
+  it('à urgence égale, l’ordre ne change pas d’un rendu à l’autre (le nom du plat départage)', () => {
+    const meme = new Date(2026, 9, 28, 10).toISOString()
+    const a = fois(1, { label: 'Soupe', location: 'frigo', expires_at: meme })
+    const b = fois(1, { label: 'Pizza', location: 'frigo', expires_at: meme })
+    expect(magnet([...a, ...b], [], MARDI)?.texte).toContain('pizza')
+    expect(magnet([...b, ...a], [], MARDI)?.texte).toContain('pizza')
+    const c1 = fois(1, { label: 'Soupe', location: 'congelateur' })
+    const c2 = fois(1, { label: 'Pizza', location: 'congelateur' })
+    const prevus = [prevu(c1[0], '2026-10-27', 'diner'), prevu(c2[0], '2026-10-27', 'diner')]
+    expect(magnet([...c1, ...c2], prevus, MARDI)?.texte).toContain('pizza')
+    expect(magnet([...c2, ...c1], prevus, MARDI)?.texte).toContain('pizza')
+  })
+  it('les repas pas lus : pas de magnet, et l’afficheur ne dit pas « rien de prévu »', () => {
+    const t = fois(2, { label: 'Pizza', location: 'frigo', expires_at: new Date(2026, 9, 27, 9).toISOString() })
+    expect(magnet(t, null, LUNDI)).toBeNull()
+    expect(afficheur(null, t, KAMIL, LUNDI)).toEqual({ titre: 'Indisponible', plat: null })
+    expect(quand(groupeLesParts(t)[0], null, LUNDI).texte, 'sans les repas, la carte ne prétend pas que la part est libre ou posée').toBe('à manger aujourd\'hui')
+  })
+})
+
+describe('M4 · sortir du congélateur : une part décongelée vit 24 h', () => {
+  const b = fois(3, { label: 'Burger', location: 'congelateur' })
+  const [g] = groupeLesParts(b)
+  const matin = new Date(2026, 9, 26, 8, 30)
+  it('sortable la veille à l’heure du repas, jamais avant', () => {
+    expect(sortableDes('2026-10-27', 'diner')).toEqual(new Date(2026, 9, 26, 19, 0))
+    expect(sortableDes('2026-10-27', 'dejeuner')).toEqual(new Date(2026, 9, 26, 12, 0))
+  })
+  it('le matin, les parts de demain soir ne sortent PAS : elles périraient avant le repas', () => {
+    const prevus = [prevu(g.parts[0], '2026-10-26', 'diner'), prevu(g.parts[1], '2026-10-27', 'diner')]
+    expect(partsASortir(g, prevus, matin)?.map(p => p.id)).toEqual([g.parts[0].id])
+  })
+  it('le soir, celles de demain sortent aussi', () => {
+    const prevus = [prevu(g.parts[0], '2026-10-26', 'diner'), prevu(g.parts[1], '2026-10-27', 'diner')]
+    expect(partsASortir(g, prevus, LUNDI)?.map(p => p.id).sort()).toEqual([g.parts[0].id, g.parts[1].id].sort())
+  })
+  it('rien pour aujourd’hui, demain soir seulement et il est tôt : on ne sort rien, et on le dit', () => {
+    const prevus = [prevu(g.parts[0], '2026-10-27', 'diner')]
+    expect(partsASortir(g, prevus, matin)).toBeNull()
+    expect(quand(g, prevus, matin).texte).toBe('Demain soir : à sortir dès 19 h')
+    expect(noteDeLaFiche(g, prevus, matin)).toBe(
+      'C’est pour demain soir : sors-les à partir de 19 h, une part décongelée se mange dans les 24 heures.')
+    expect(magnet(b, prevus, matin), 'le magnet ne dit pas « sors-les » avant l’heure').toBeNull()
+  })
+  it('le soir venu : « Demain soir : à sortir maintenant », et le magnet le dit', () => {
+    const prevus = [prevu(g.parts[0], '2026-10-27', 'diner')]
+    expect(quand(g, prevus, LUNDI).texte).toBe('Demain soir : à sortir maintenant')
+    expect(noteDeLaFiche(g, prevus, LUNDI)).toContain('sors-les maintenant')
+    expect(magnet(b, prevus, LUNDI)?.texte).toBe('Sors 1 burger : c’est demain soir')
+  })
+})
+
+describe('les égalités ne changent pas l’ordre', () => {
+  it('deux plats qui périment ensemble : le nom, puis la clé', () => {
+    const meme = new Date(2026, 9, 29, 21).toISOString()
+    const a = part({ label: 'Soupe', location: 'frigo', expires_at: meme, recipe_id: 'r1' })
+    const b = part({ label: 'Pizza', location: 'frigo', expires_at: meme, recipe_id: 'r2' })
+    expect(groupeLesParts([a, b]).map(x => x.label)).toEqual(['Pizza', 'Soupe'])
+    expect(groupeLesParts([b, a]).map(x => x.label)).toEqual(['Pizza', 'Soupe'])
+  })
+})
+
+describe('L6 · le nombre choisi suit le groupe qui rétrécit', () => {
+  it('borné entre 1 et le maximum', () => {
+    expect(borne(5, 3)).toBe(3)
+    expect(borne(2, 3)).toBe(2)
+    expect(borne(0, 3)).toBe(1)
+    expect(borne(4, 0)).toBe(1)
+  })
+})
+
+describe('M8 · la phrase des repas qui ont perdu leur part', () => {
+  it('un repas de moi : « Le dîner de dimanche n’a plus de barquette. »', () => {
+    expect(phraseDesRepasLibres([{ day: '2026-11-01', meal: 'diner', user_profile_id: KAMIL }], KAMIL, MEMBRES, LUNDI))
+      .toBe('Le dîner de dimanche n’a plus de barquette.')
+  })
+  it('un repas d’un autre, demain, aujourd’hui ; plusieurs', () => {
+    expect(phraseDesRepasLibres([{ day: '2026-10-27', meal: 'dejeuner', user_profile_id: THAUBA }], KAMIL, MEMBRES, LUNDI))
+      .toBe('Le déjeuner de demain (Thauba) n’a plus de barquette.')
+    expect(phraseDesRepasLibres([
+      { day: '2026-10-26', meal: 'diner', user_profile_id: KAMIL },
+      { day: '2026-10-28', meal: 'collation', user_profile_id: KAMIL },
+    ], KAMIL, MEMBRES, LUNDI)).toBe('Le dîner d’aujourd’hui et la collation de mercredi n’ont plus de barquette.')
+  })
+  it('rien de libéré : rien à dire', () => {
+    expect(phraseDesRepasLibres([], KAMIL, MEMBRES, LUNDI)).toBe('')
+  })
+})
+
+describe('L4 · corriger une date n’écrit que ce qui change, part par part', () => {
+  const t1 = new Date(2026, 9, 28, 14).toISOString()
+  const t2 = new Date(2026, 9, 29, 21).toISOString()
+  const a = part({ label: 'L', location: 'frigo', expires_at: t1 })
+  const b = part({ label: 'L', location: 'frigo', expires_at: t2 })
+  const c = part({ label: 'L', location: 'frigo', expires_at: t2 })
+  it('une date déjà celle de la part : rien à écrire', () => {
+    expect(ecrituresDesDates([a], { expires_at: t1 })).toEqual([])
+  })
+  it('une nouvelle date pour tous : une seule écriture', () => {
+    const e = ecrituresDesDates([a, b, c], { expires_at: new Date(2026, 10, 2).toISOString() })
+    expect(e).toHaveLength(1)
+    expect(e[0].ids.sort()).toEqual([a.id, b.id, c.id].sort())
+  })
+  it('des parts qui ont déjà la date voulue sont sautées, les autres écrites', () => {
+    const e = ecrituresDesDates([a, b, c], { expires_at: t2 })
+    expect(e).toEqual([{ ids: [a.id], champs: { expires_at: t2 } }])
+  })
+  it('au jour près : une part déjà ce jour-là garde son heure', () => {
+    const e = ecrituresDesDates([a, b], { expires_at: new Date(2026, 9, 29, 23, 59).toISOString() }, { expiresParJour: true })
+    expect(e).toEqual([{ ids: [a.id], champs: { expires_at: new Date(2026, 9, 29, 23, 59).toISOString() } }])
+  })
+  it('des écritures différentes selon la part : une requête par écriture', () => {
+    const depart = new Date(2026, 9, 24, 12).toISOString()
+    const p1 = part({ label: 'L', location: 'frigo', prepared_at: depart, expires_at: t1 })
+    const p2 = part({ label: 'L', location: 'frigo', prepared_at: new Date(2026, 9, 25, 12).toISOString(), expires_at: t1 })
+    const e = ecrituresDesDates([p1, p2], { prepared_at: depart, expires_at: t2 })
+    expect(e).toEqual([
+      { ids: [p1.id, p2.id].slice(0, 1), champs: { expires_at: t2 } },
+      { ids: [p2.id], champs: { prepared_at: depart, expires_at: t2 } },
+    ])
+  })
+})
+
+describe('L9 · déplacer un ingrédient recalcule sa péremption, comme une barquette', () => {
+  const now = new Date(2026, 9, 26, 12)
+  it('vers le congélateur : trois mois', () => {
+    expect(peremptionDeplacee('frigo', 'congelateur', now)).toEqual({ expires_at: new Date(2027, 0, 24, 12).toISOString() })
+    expect(peremptionDeplacee('placard', 'congelateur', now)?.expires_at).toBe(new Date(2027, 0, 24, 12).toISOString())
+  })
+  it('du congélateur au frigo : vingt-quatre heures ; au placard : plus de date', () => {
+    expect(peremptionDeplacee('congelateur', 'frigo', now)).toEqual({ expires_at: new Date(2026, 9, 27, 12).toISOString() })
+    expect(peremptionDeplacee('congelateur', 'placard', now)).toEqual({ expires_at: null })
+  })
+  it('entre le frigo et le placard, ou sans déplacement : la date reste', () => {
+    expect(peremptionDeplacee('frigo', 'placard', now)).toBeNull()
+    expect(peremptionDeplacee('placard', 'frigo', now)).toBeNull()
+    expect(peremptionDeplacee('frigo', 'frigo', now)).toBeNull()
   })
 })

@@ -11,6 +11,7 @@
  * lecteurs d'écran (`aria-expanded`).
  */
 
+import { useId } from 'react'
 import type { Ref } from 'react'
 import type { Afficheur, Magnet } from '../../lib/frigo.ts'
 import {
@@ -19,6 +20,10 @@ import {
 } from './inox.ts'
 
 export type Porte = 'congelo' | 'frigo'
+
+/** La taille du dessin, en px, avant réduction. */
+export const LARGEUR = 302
+export const HAUTEUR = 600
 
 const PORTE: React.CSSProperties = {
   position: 'absolute', top: 20, width: 149, height: 560, padding: 0, border: 0, background: 'transparent',
@@ -36,12 +41,20 @@ export type PropsFrigoFerme = {
   demain: string | null
   refCongelo?: Ref<HTMLButtonElement>
   refFrigo?: Ref<HTMLButtonElement>
+  /** Le dessin est réduit à cette échelle (≤ 1) quand l'écran est plus étroit que lui. */
+  echelle?: number
 }
 
-export function FrigoFerme({ ouverte, surOuvre, afficheur, magnet, demain, refCongelo, refFrigo }: PropsFrigoFerme) {
+export function FrigoFerme({ ouverte, surOuvre, afficheur, magnet, demain, refCongelo, refFrigo, echelle = 1 }: PropsFrigoFerme) {
+  const idAfficheur = useId()
+  const idMagnet = useId()
   return (
+    <div style={{ width: LARGEUR * echelle, height: HAUTEUR * echelle, margin: '0 auto' }}>
     <div data-frigo="ferme"
-         style={{ position: 'relative', width: 302, height: 600, margin: '0 auto', perspective: 1700 }}>
+         style={{
+           position: 'relative', width: LARGEUR, height: HAUTEUR, perspective: 1700,
+           transform: echelle < 1 ? `scale(${echelle})` : undefined, transformOrigin: 'top left',
+         }}>
       <div aria-hidden="true"
            style={{ position: 'absolute', left: 6, right: 6, bottom: -22, height: 34, borderRadius: '50%', background: OMBRE_AU_SOL }} />
 
@@ -80,7 +93,7 @@ export function FrigoFerme({ ouverte, surOuvre, afficheur, magnet, demain, refCo
 
       {/* Porte gauche : le congélateur. */}
       <button ref={refCongelo} type="button" onClick={() => surOuvre('congelo')}
-              aria-label="Ouvrir le congélateur" aria-expanded={ouverte === 'congelo'}
+              aria-label="Ouvrir le congélateur" aria-describedby={idAfficheur} aria-expanded={ouverte === 'congelo'}
               style={{
                 ...PORTE, left: 0, transformOrigin: 'left center',
                 transform: ouverte === 'congelo' ? 'rotateY(-108deg)' : 'rotateY(0deg)',
@@ -92,7 +105,7 @@ export function FrigoFerme({ ouverte, surOuvre, afficheur, magnet, demain, refCo
             background: 'linear-gradient(180deg, #33393D, #15191C)',
             boxShadow: 'inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.5)',
           }}>
-            <div data-afficheur="" style={{
+            <div data-afficheur="" id={idAfficheur} style={{
               position: 'absolute', left: 8, right: 8, top: 8, padding: '7px 8px', borderRadius: 6,
               background: '#0C1012', boxShadow: 'inset 0 0 0 1px rgba(255, 255, 255, 0.06)', textAlign: 'left',
             }}>
@@ -131,7 +144,7 @@ export function FrigoFerme({ ouverte, surOuvre, afficheur, magnet, demain, refCo
 
       {/* Porte droite : le frigo. */}
       <button ref={refFrigo} type="button" onClick={() => surOuvre('frigo')}
-              aria-label="Ouvrir le frigo" aria-expanded={ouverte === 'frigo'}
+              aria-label="Ouvrir le frigo" aria-describedby={magnet ? idMagnet : undefined} aria-expanded={ouverte === 'frigo'}
               style={{
                 ...PORTE, left: 153, transformOrigin: 'right center',
                 transform: ouverte === 'frigo' ? 'rotateY(108deg)' : 'rotateY(0deg)',
@@ -141,7 +154,7 @@ export function FrigoFerme({ ouverte, surOuvre, afficheur, magnet, demain, refCo
           <div style={{ position: 'absolute', left: 9, top: 150, width: 11, height: 290, borderRadius: 6, ...POIGNEE_DROITE }} />
           {/* Le magnet : ce qui presse. */}
           {magnet && (
-            <div data-magnet="" style={{
+            <div data-magnet="" id={idMagnet} style={{
               position: 'absolute', left: 34, top: 84, width: 98, padding: '16px 10px 10px', boxSizing: 'border-box',
               background: '#E8A33D', color: '#1C2B23', borderRadius: 3, transform: 'rotate(2.5deg)',
               boxShadow: '0 6px 12px rgba(28, 43, 35, 0.22)', textAlign: 'left',
@@ -175,6 +188,7 @@ export function FrigoFerme({ ouverte, surOuvre, afficheur, magnet, demain, refCo
       {/* La plinthe. */}
       <div aria-hidden="true"
            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 20, borderRadius: '0 0 10px 10px', ...PLINTHE }} />
+    </div>
     </div>
   )
 }

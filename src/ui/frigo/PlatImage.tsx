@@ -2,12 +2,12 @@
  * La photo d'un plat, ou « pas encore de photo » : l'appareil photo en trait, jamais une image vide.
  *
  * Un LIEN vers la photo du site (`referrerPolicy`, comme `ui/recettes/Photo`) ou vers la nôtre (le seau des
- * photos de plats). Une adresse qui ne charge plus bascule sur l'appareil photo, et on s'en souvient jusqu'au
- * rechargement : on ne la redemande pas à chaque carte.
+ * photos de plats). Une adresse qui ne charge pas bascule sur l'appareil photo, et on s'en souvient UN MOMENT
+ * (`DELAI_ECHEC`) : on ne la redemande pas à chaque carte, mais une coupure de réseau d'une seconde ne
+ * condamne pas la photo jusqu'au prochain rechargement de la page.
  */
 import { useState } from 'react'
-
-const enEchec = new Set<string>()
+import { echecRecent, noteUnEchec } from './echec-image.ts'
 
 export function Appareil({ taille }: { taille: number }) {
   return (
@@ -22,7 +22,7 @@ export function PlatImage({ url, filtre, glyphe = 26, texte = true }: {
   url: string | null; filtre?: string; glyphe?: number; texte?: boolean
 }) {
   const [, redessine] = useState(0)
-  if (!url || enEchec.has(url)) {
+  if (!url || echecRecent(url)) {
     return (
       <span data-photo="vide" className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-doux">
         <Appareil taille={glyphe} />
@@ -32,7 +32,7 @@ export function PlatImage({ url, filtre, glyphe = 26, texte = true }: {
   }
   return (
     <img src={url} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer"
-         onError={() => { enEchec.add(url); redessine(n => n + 1) }}
+         onError={() => { noteUnEchec(url); redessine(n => n + 1) }}
          className="block size-full object-cover" style={filtre ? { filter: filtre } : undefined} />
   )
 }

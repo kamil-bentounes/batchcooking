@@ -26,6 +26,8 @@ export type Part = {
   prepared_at: string
   frozen_at: string | null
   expires_at: string
+  /** Pour qui est cette part (les grammes et les calories ne sont pas les mêmes pour deux personnes) ; `null` : pour n'importe qui. */
+  for_user_id?: string | null
 }
 
 /** Un repas posé sur une barquette : une ligne `meal_slot` encore « prévue ». */
@@ -89,8 +91,10 @@ export function groupeLesParts<P extends Part>(parts: P[]): Groupe<P>[] {
     g.parts.push(p)
   }
   const groupes = [...par.values()]
-  for (const g of groupes) g.parts.sort((a, b) => a.expires_at.localeCompare(b.expires_at))
-  return groupes.sort((a, b) => a.parts[0].expires_at.localeCompare(b.parts[0].expires_at))
+  /* Des égalités départagées par l'identifiant : deux rendus du même foyer rendent le même ordre. */
+  for (const g of groupes) g.parts.sort((a, b) => a.expires_at.localeCompare(b.expires_at) || a.id.localeCompare(b.id))
+  return groupes.sort((a, b) => a.parts[0].expires_at.localeCompare(b.parts[0].expires_at)
+    || a.label.localeCompare(b.label) || a.cle.localeCompare(b.cle))
 }
 
 // ── Les repas posés ─────────────────────────────────────────────────────────
@@ -133,41 +137,89 @@ export function repasEnCours(maintenant: Date): Repas {
   return h < 10 ? 'petit_dejeuner' : h < 16 ? 'dejeuner' : 'diner'
 }
 
-/** Les repas posés sur les barquettes de ce groupe, dans l'ordre du calendrier. */
-export function prevusDe(g: Groupe, prevus: Prevu[]): Prevu[] {
+/** Les repas d'aujourd'hui et d'après : un repas posé AVANT aujourd'hui est un repas passé que personne n'a noté, pas une réservation. */
+export function prevusAVenir(prevus: Prevu[], maintenant: Date): Prevu[] {
+  const j = jour(maintenant)
+  return prevus.filter(r => r.day >= j)
+}
+
+/** Les repas posés sur les barquettes de ce groupe, dans l'ordre du calendrier. Avec `maintenant`, sans les jours passés. */
+export function prevusDe(g: Groupe, prevus: Prevu[], maintenant?: Date): Prevu[] {
   const ids = new Set(g.parts.map(p => p.id))
-  return prevus.filter(r => r.portion_id && ids.has(r.portion_id))
-    .sort((a, b) => a.day.localeCompare(b.day) || ordreDuRepas(a.meal) - ordreDuRepas(b.meal))
+  return (maintenant ? prevusAVenir(prevus, maintenant) : prevus)
+    .filter(r => r.portion_id && ids.has(r.portion_id))
+    .sort((a, b) => a.day.localeCompare(b.day) || ordreDuRepas(a.meal) - ordreDuRepas(b.meal) || a.id.localeCompare(b.id))
 }
 
 const ordreDuRepas = (m: string) => ['petit_dejeuner', 'dejeuner', 'collation', 'diner'].indexOf(m)
 
-/** Les barquettes du groupe qu'aucun repas ne réclame. */
-export function partsLibres<P extends Part>(g: Groupe<P>, prevus: Prevu[]): P[] {
-  const posees = new Set(prevus.map(r => r.portion_id))
+/**
+ * Les barquettes du groupe qu'aucun repas ne réclame. Avec `maintenant`, les réclamations d'avant aujourd'hui
+ * ne comptent pas (un repas passé qu'on n'a pas noté ne retient pas sa part).
+ */
+export function partsLibres<P extends Part>(g: Groupe<P>, prevus: Prevu[], maintenant?: Date): P[] {
+  const posees = new Set((maintenant ? prevusAVenir(prevus, maintenant) : prevus).map(r => r.portion_id))
   return g.parts.filter(p => !posees.has(p.id))
 }
 
-/** Les barquettes du groupe posées sur un repas d'aujourd'hui ou de demain. */
-export function partsPourBientot<P extends Part>(
-  g: Groupe<P>, prevus: Prevu[], maintenant: Date, jusquaDemain = true,
-): P[] {
-  const limite = jusquaDemain ? 1 : 0
-  const ids = new Set(prevus
-    .filter(r => { const e = ecartEnJours(r.day, maintenant); return e >= 0 && e <= limite })
-    .map(r => r.portion_id))
-  return g.parts.filter(p => ids.has(p.id))
+// ── L'heure des repas, et quand on peut sortir du congélateur ───────────────
+
+/** L'heure où l'on se met à table : de quoi dire si une part sera encore bonne, et quand la sortir. */
+const HEURE_DU_REPAS: Record<string, number> = { petit_dejeuner: 8, dejeuner: 12, collation: 16, diner: 19 }
+
+function momentDuRepas(j: string, repas: string): Date {
+  const d = lisLeJour(j)
+  d.setHours(HEURE_DU_REPAS[repas] ?? 12, 0, 0, 0)
+  return d
+}
+
+/**
+ * À partir de quand on peut sortir du congélateur une part posée sur ce repas : vingt-quatre heures avant. Une
+ * part décongelée se mange dans les 24 h (`tg_portion_peremption`, 0047) : sortie plus tôt, elle périrait
+ * avant le repas. Le jour même, c'est donc toujours possible ; la veille, seulement à l'heure du repas.
+ */
+export function sortableDes(j: string, repas: string): Date {
+  return new Date(momentDuRepas(j, repas).getTime() - 24 * 3_600_000)
+}
+
+/** « ce soir », « demain soir », sinon « mar. soir » : le repas comme on le dit pour sortir une part. */
+function repasPourSortir(j: string, repas: string, maintenant: Date): string {
+  return ecartEnJours(j, maintenant) === 1 ? `demain ${MOT_REPAS[repas] ?? repas}` : repasEnMots(j, repas, maintenant)
+}
+
+const majuscule = (t: string) => `${t[0].toUpperCase()}${t.slice(1)}`
+
+/** Le premier repas à venir de ce groupe dont la part peut sortir MAINTENANT (aujourd'hui, ou demain si l'heure y est). */
+function premierASortir(g: Groupe, prevus: Prevu[], maintenant: Date): Prevu | null {
+  return prevusDe(g, prevus, maintenant).find(r => sortableDes(r.day, r.meal).getTime() <= maintenant.getTime()) ?? null
+}
+
+/** Le premier repas de DEMAIN dont la part ne peut pas encore sortir, et l'heure à partir de laquelle elle le peut. */
+function premierPlusTard(g: Groupe, prevus: Prevu[], maintenant: Date): { r: Prevu; des: Date } | null {
+  const r = prevusDe(g, prevus, maintenant)
+    .find(x => ecartEnJours(x.day, maintenant) === 1 && sortableDes(x.day, x.meal).getTime() > maintenant.getTime())
+  return r ? { r, des: sortableDes(r.day, r.meal) } : null
+}
+
+/**
+ * Les parts à sortir du congélateur MAINTENANT : celles posées sur un repas d'aujourd'hui, et sur un repas de
+ * demain quand l'heure y est (voir `sortableDes`) ; sinon `null` (c'est à la personne de dire combien).
+ */
+export function partsASortir<P extends Part>(g: Groupe<P>, prevus: Prevu[], maintenant: Date): P[] | null {
+  const prets = prevusDe(g, prevus, maintenant).filter(r => sortableDes(r.day, r.meal).getTime() <= maintenant.getTime())
+  const parts = g.parts.filter(p => prets.some(r => r.portion_id === p.id))
+  return parts.length > 0 ? parts : null
 }
 
 /**
  * « Prévues pour vous deux » / « Prévues pour Kamil » et les puces qui vont avec.
  * Quand les repas n'ont pas tous le même public, la puce le dit (« mar. midi · Kamil ») et le titre reste
- * « Prévues ».
+ * « Prévues ». Les repas d'avant aujourd'hui n'y sont plus.
  */
 export function prevuesPour(
   g: Groupe, prevus: Prevu[], membres: { id: string; prenom: string }[], maintenant: Date,
 ): { titre: string; puces: string[] } {
-  const mes = prevusDe(g, prevus)
+  const mes = prevusDe(g, prevus, maintenant)
   const accord = g.parts.length > 1 ? 'Prévues' : 'Prévue'
   if (mes.length === 0) return { titre: accord, puces: [] }
   const parRepas = new Map<string, { j: string; m: string; qui: Set<string> }>()
@@ -209,34 +261,67 @@ const OCRE = 'var(--color-ocre)'
 const DOUX = 'var(--color-doux)'
 const GLACE = 'var(--color-congel-encre)'
 
-/** La ligne sous le nom d'une carte : le plus pressé d'abord, puis ce qui est prévu, puis l'urgence. */
-export function quand(g: Groupe, prevus: Prevu[], maintenant: Date): Quand {
-  const mes = prevusDe(g, prevus)
+/**
+ * Ce qui presse déjà, et que le calendrier ne rattrape pas : des parts PÉRIMÉES, ou réclamées par un repas
+ * d'APRÈS leur péremption. Le mot d'urgence, dans sa couleur — le planning (« mar. midi → mer. midi ») dirait
+ * le contraire de ce qui est vrai.
+ */
+function enRetard(g: Groupe, mes: Prevu[], maintenant: Date): Quand | null {
+  const n = g.parts.length
+  const perimees = g.parts.filter(p => new Date(p.expires_at).getTime() <= maintenant.getTime())
+  if (perimees.length > 0) {
+    const u = urgence(perimees[0].expires_at, g.location, maintenant)
+    const k = perimees.length
+    return { texte: k === n ? u.mot : `${k} périmée${k > 1 ? 's' : ''}`, encre: u.encre }
+  }
+  let pire: { p: Part; r: Prevu } | null = null
+  for (const r of mes) {
+    const p = g.parts.find(x => x.id === r.portion_id)
+    if (p && momentDuRepas(r.day, r.meal).getTime() > new Date(p.expires_at).getTime()
+        && (!pire || p.expires_at < pire.p.expires_at)) pire = { p, r }
+  }
+  if (!pire) return null
+  const u = urgence(pire.p.expires_at, g.location, maintenant)
+  return u.niveau !== 'ok'
+    ? { texte: u.mot, encre: u.encre }
+    : { texte: `périme avant ${repasEnMots(pire.r.day, pire.r.meal, maintenant)}`, encre: OCRE }
+}
+
+/**
+ * La ligne sous le nom d'une carte : ce qui est périmé ou le sera avant son repas, puis ce qu'il faut sortir,
+ * puis le plus pressé, puis ce qui est prévu, puis l'urgence. `prevus` `null` : les repas ne sont pas lus
+ * (chargement, erreur) — la carte ne dit que ce que la barquette sait d'elle-même.
+ */
+export function quand(g: Groupe, prevus: Prevu[] | null, maintenant: Date): Quand {
   const u = urgence(g.parts[0].expires_at, g.location, maintenant)
+  const repos = g.location === 'congelateur' ? GLACE : DOUX
+  if (prevus === null) return { texte: u.mot, encre: u.niveau !== 'ok' ? u.encre : repos }
+  const mes = prevusDe(g, prevus, maintenant)
+  const retard = enRetard(g, mes, maintenant)
+  if (retard) return retard
   if (g.location === 'congelateur') {
-    const bientot = mes.filter(r => { const e = ecartEnJours(r.day, maintenant); return e >= 0 && e <= 1 })
-    if (bientot.length > 0) {
-      const r = bientot[0]
-      const aujourdhui = ecartEnJours(r.day, maintenant) === 0
-      const mots = repasEnMots(r.day, r.meal, maintenant)
+    const pret = premierASortir(g, prevus, maintenant)
+    if (pret) {
+      return { texte: `${majuscule(repasPourSortir(pret.day, pret.meal, maintenant))} : à sortir maintenant`, encre: OCRE }
+    }
+    const plusTard = premierPlusTard(g, prevus, maintenant)
+    if (plusTard) {
+      const { r, des } = plusTard
       return {
-        texte: aujourdhui
-          ? `${mots[0].toUpperCase()}${mots.slice(1)} : à sortir maintenant`
-          : 'Demain : à sortir ce soir',
-        encre: OCRE,
+        texte: `${majuscule(repasPourSortir(r.day, r.meal, maintenant))} : à sortir dès ${des.getHours()} h`, encre: OCRE,
       }
     }
   }
-  const libres = partsLibres(g, prevus).length
+  const libres = partsLibres(g, prevus, maintenant).length
   if (g.location === 'frigo' && libres > 0 && u.niveau !== 'ok') {
     return { texte: u.mot, encre: u.encre }
   }
   if (mes.length > 0) {
     const premier = repasEnMots(mes[0].day, mes[0].meal, maintenant)
     const dernier = repasEnMots(mes[mes.length - 1].day, mes[mes.length - 1].meal, maintenant)
-    return { texte: premier === dernier ? premier : `${premier} → ${dernier}`, encre: g.location === 'congelateur' ? GLACE : DOUX }
+    return { texte: premier === dernier ? premier : `${premier} → ${dernier}`, encre: repos }
   }
-  return { texte: u.mot, encre: u.niveau !== 'ok' ? u.encre : g.location === 'congelateur' ? GLACE : DOUX }
+  return { texte: u.mot, encre: u.niveau !== 'ok' ? u.encre : repos }
 }
 
 /** Le texte lu par un lecteur d'écran sur la carte : « Lasagnes, 6 parts, mar. midi → mer. midi ». */
@@ -249,8 +334,12 @@ export function ariaDeCarte(g: Groupe, q: Quand): string {
 
 export type Afficheur = { titre: string; plat: string | null }
 
-/** Ce que l'afficheur du congélateur dit : le dîner de ce soir pour cette personne, ou rien. */
-export function afficheur(prevus: Prevu[], parts: Part[], moi: string, maintenant: Date): Afficheur {
+/**
+ * Ce que l'afficheur du congélateur dit : le dîner de ce soir pour cette personne, ou rien.
+ * `prevus` `null` : les repas ne sont pas lus — on ne dit pas « rien de prévu » de ce qu'on n'a pas lu.
+ */
+export function afficheur(prevus: Prevu[] | null, parts: Part[], moi: string, maintenant: Date): Afficheur {
+  if (prevus === null) return { titre: 'Indisponible', plat: null }
   const j = jour(maintenant)
   const mien = prevus.find(r => r.user_profile_id === moi && r.day === j && r.meal === 'diner' && r.portion_id)
   const part = mien && parts.find(p => p.id === mien.portion_id)
@@ -265,44 +354,48 @@ export type Magnet = { texte: string; sorsLesAujourdhui: boolean }
 
 /**
  * Le plus pressé, et un seul :
- *  1. des barquettes congelées posées sur un repas d'aujourd'hui ou de demain : « Sors les 2 burgers :
- *     c'est ce soir » (c'est ce qui se fait la veille) ;
- *  2. sinon, des barquettes du frigo qui périment sous 72 h et que rien ne réclame : « 2 pizzas à prévoir
- *     avant jeudi » ;
- *  3. sinon rien : pas de magnet.
+ *  1. des barquettes congelées posées sur un repas d'aujourd'hui, ou de demain quand on peut déjà les sortir
+ *     (voir `sortableDes`) : « Sors les 2 burgers : c'est ce soir », « … : c'est demain soir » — le repas
+ *     nommé, c'est ce qui se fait la veille ;
+ *  2. sinon, des barquettes du frigo périmées (« 2 pizzas à jeter »), ou qui périment sous 72 h et que rien ne
+ *     réclame : « 2 pizzas à prévoir avant jeudi » ;
+ *  3. sinon rien : pas de magnet. Les repas pas lus (`null`) : pas de magnet non plus — on ne dirait pas
+ *     « libre » d'une part que des repas réclament peut-être.
+ * À urgence égale, le nom du plat départage : deux rendus du même foyer disent la même chose.
  */
-export function magnet(parts: Part[], prevus: Prevu[], maintenant: Date): Magnet | null {
+export function magnet(parts: Part[], prevus: Prevu[] | null, maintenant: Date): Magnet | null {
+  if (prevus === null) return null
   const groupes = groupeLesParts(parts)
   const congeles = groupes.filter(g => g.location === 'congelateur')
-    .map(g => ({ g, bientot: partsPourBientot(g, prevus, maintenant) }))
-    .filter(x => x.bientot.length > 0)
-    .map(x => {
-      const jours = prevus.filter(r => x.bientot.some(p => p.id === r.portion_id))
-        .map(r => ecartEnJours(r.day, maintenant))
-      return { ...x, plusTot: Math.min(...jours) }
-    })
-    .sort((a, b) => a.plusTot - b.plusTot)
+    .map(g => ({ g, r: premierASortir(g, prevus, maintenant), bientot: partsASortir(g, prevus, maintenant) ?? [] }))
+    .filter((x): x is { g: Groupe; r: Prevu; bientot: Part[] } => x.r !== null && x.bientot.length > 0)
+    .sort((a, b) =>
+      momentDuRepas(a.r.day, a.r.meal).getTime() - momentDuRepas(b.r.day, b.r.meal).getTime()
+      || a.g.label.localeCompare(b.g.label) || a.g.cle.localeCompare(b.g.cle))
   if (congeles.length > 0) {
-    const { g, bientot, plusTot } = congeles[0]
+    const { g, r, bientot } = congeles[0]
     const n = bientot.length
     return {
-      texte: `Sors ${n > 1 ? `les ${n}` : '1'} ${motDuPlat(g.label, n)} : c’est ${plusTot === 0 ? 'ce soir' : 'demain'}`,
-      sorsLesAujourdhui: plusTot === 0,
+      texte: `Sors ${n > 1 ? `les ${n}` : '1'} ${motDuPlat(g.label, n)} : c’est ${repasPourSortir(r.day, r.meal, maintenant)}`,
+      sorsLesAujourdhui: ecartEnJours(r.day, maintenant) === 0,
     }
   }
   const limite = maintenant.getTime() + 72 * 3_600_000
   const presses = groupes.filter(g => g.location === 'frigo')
     .map(g => ({
       g,
-      libres: partsLibres(g, prevus).filter(p => {
-        const t = new Date(p.expires_at).getTime()
-        return t <= limite
-      }),
+      libres: partsLibres(g, prevus, maintenant).filter(p => new Date(p.expires_at).getTime() <= limite),
     }))
     .filter(x => x.libres.length > 0)
-    .sort((a, b) => a.libres[0].expires_at.localeCompare(b.libres[0].expires_at))
+    .sort((a, b) => a.libres[0].expires_at.localeCompare(b.libres[0].expires_at)
+      || a.g.label.localeCompare(b.g.label) || a.g.cle.localeCompare(b.g.cle))
   if (presses.length > 0) {
     const { g, libres } = presses[0]
+    const perimees = libres.filter(p => new Date(p.expires_at).getTime() <= maintenant.getTime())
+    if (perimees.length > 0) {
+      const k = perimees.length
+      return { texte: `${k} ${motDuPlat(g.label, k)} à jeter`, sorsLesAujourdhui: false }
+    }
     const n = libres.length
     return { texte: `${n} ${motDuPlat(g.label, n)} à prévoir avant ${avant(new Date(libres[0].expires_at), maintenant)}`, sorsLesAujourdhui: false }
   }
@@ -322,18 +415,83 @@ function avant(fin: Date, maintenant: Date): string {
 /** « C'est pour ce soir : … » quand des barquettes encore congelées sont posées sur un repas d'aujourd'hui. */
 export const NOTE_DU_SOIR =
   'C’est pour ce soir : sors-les maintenant, ou passe-les au micro-ondes avant de manger.'
+const DANS_LES_24_H = 'une part décongelée se mange dans les 24 heures'
 
+/**
+ * La note de la fiche d'un plat congelé : pour ce soir, sors-les ; pour demain, à partir de quand — une part
+ * décongelée se mange dans les 24 heures, sortie le matin elle périrait avant le dîner du lendemain.
+ */
 export function noteDeLaFiche(g: Groupe, prevus: Prevu[], maintenant: Date): string {
-  return g.location === 'congelateur' && partsPourBientot(g, prevus, maintenant, false).length > 0
-    ? NOTE_DU_SOIR : ''
+  if (g.location !== 'congelateur') return ''
+  const mes = prevusDe(g, prevus, maintenant)
+  if (mes.some(r => ecartEnJours(r.day, maintenant) === 0)) return NOTE_DU_SOIR
+  const demain = mes.find(r => ecartEnJours(r.day, maintenant) === 1)
+  if (!demain) return ''
+  const des = sortableDes(demain.day, demain.meal)
+  const pour = repasPourSortir(demain.day, demain.meal, maintenant)
+  return des.getTime() <= maintenant.getTime()
+    ? `C’est pour ${pour} : sors-les maintenant, ${DANS_LES_24_H}.`
+    : `C’est pour ${pour} : sors-les à partir de ${des.getHours()} h, ${DANS_LES_24_H}.`
 }
 
-/** « 784 g, 682 kcal et 56 g de protéines la part » (la moyenne du groupe). */
-export function macrosDuGroupe(g: Groupe): string {
-  const n = g.parts.length
-  const moy = (cle: 'grams' | 'kcal' | 'protein_g') =>
-    Math.round(g.parts.reduce((s, p) => s + Number(p[cle]), 0) / n)
-  return `${moy('grams')} g, ${moy('kcal')} kcal et ${moy('protein_g')} g de protéines la part`
+/**
+ * Ce que pèse une part, dit comme il faut : « 784 g, 682 kcal et 56 g de protéines la part » quand toutes les
+ * parts sont pareilles ; sinon une ligne PAR PERSONNE (« Kamil : 784 g, 682 kcal, 56 g de protéines ») — les
+ * portions sont faites pour quelqu'un (`for_user_id`), et une moyenne ne serait la part de personne.
+ */
+export function macrosDuGroupe(g: Groupe, membres: { id: string; prenom: string }[] = []): string[] {
+  const dit = (p: Part) =>
+    `${Math.round(Number(p.grams))} g, ${Math.round(Number(p.kcal))} kcal, ${Math.round(Number(p.protein_g))} g de protéines`
+  const distinctes = new Set(g.parts.map(dit))
+  if (distinctes.size <= 1) {
+    const p = g.parts[0]
+    return [`${Math.round(Number(p.grams))} g, ${Math.round(Number(p.kcal))} kcal et ${Math.round(Number(p.protein_g))} g de protéines la part`]
+  }
+  const parQui = new Map<string | null, Set<string>>()
+  for (const p of g.parts) {
+    const k = p.for_user_id ?? null
+    if (!parQui.has(k)) parQui.set(k, new Set())
+    parQui.get(k)!.add(dit(p))
+  }
+  const rang = (k: string | null) => k === null ? 1e6 : (i => i < 0 ? 1e5 : i)(membres.findIndex(m => m.id === k))
+  return [...parQui.entries()]
+    .sort(([a], [b]) => rang(a) - rang(b))
+    .map(([k, valeurs]) => {
+      const nom = k === null ? 'Pour tous' : membres.find(m => m.id === k)?.prenom ?? 'quelqu’un'
+      return `${nom} : ${[...valeurs].join(' ou ')}`
+    })
+}
+
+/** Un nombre choisi dans `Combien`, ramené entre 1 et `max` : le groupe peut rétrécir pendant qu'on décide. */
+export function borne(n: number, max: number): number {
+  return Math.max(1, Math.min(n, Math.max(1, max)))
+}
+
+// ── Les repas qui lâchent leur part ─────────────────────────────────────────
+
+const GENRE_REPAS: Record<string, string> = {
+  petit_dejeuner: 'le petit déjeuner', dejeuner: 'le déjeuner', diner: 'le dîner', collation: 'la collation',
+}
+
+/**
+ * « Le dîner de dimanche n'a plus de barquette. » : les repas qu'un geste vient de priver de leur part
+ * (la base les rend). Pour un repas d'un autre membre, son prénom suit. `''` sans repas libéré.
+ */
+export function phraseDesRepasLibres(
+  libres: { day: string; meal: string; user_profile_id: string }[],
+  moi: string, membres: { id: string; prenom: string }[], maintenant: Date,
+): string {
+  if (libres.length === 0) return ''
+  const dits = libres.map(l => {
+    const e = ecartEnJours(l.day, maintenant)
+    const d = lisLeJour(l.day)
+    const quand = e === 0 ? 'd’aujourd’hui' : e === 1 ? 'de demain'
+      : `de ${JOUR_ENTIER[d.getDay()]}${e > 6 ? ` ${d.getDate()}` : ''}`
+    const qui = l.user_profile_id === moi ? '' : ` (${membres.find(m => m.id === l.user_profile_id)?.prenom ?? 'quelqu’un'})`
+    return `${GENRE_REPAS[l.meal] ?? l.meal} ${quand}${qui}`
+  })
+  const liste = dits.length > 1 ? `${dits.slice(0, -1).join(', ')} et ${dits[dits.length - 1]}` : dits[0]
+  return `${majuscule(liste)} ${dits.length > 1 ? 'n’ont' : 'n’a'} plus de barquette.`
 }
 
 /**
@@ -349,6 +507,56 @@ export function peremptionApres(lieu: Lieu, etat: string, debut: Date): Date | n
   if (lieu === 'congelateur') return plusDeJours(debut, JOURS_AU_CONGELO)
   if (etat === 'decongelee') return null
   return plusDeJours(debut, JOURS_AU_FRAIS)
+}
+
+export type ChampsDates = { prepared_at?: string; frozen_at?: string; expires_at?: string }
+
+/**
+ * Ce qu'il faut ÉCRIRE pour que les parts d'un groupe aient ces dates — et seulement ce qui change, part par
+ * part. Écrire la même date sur toutes réécrasait des péremptions DIFFÉRENTES (deux parts rangées à des
+ * heures différentes) par celle de la première, même quand on n'avait rien changé. Les parts qui demandent
+ * la même écriture sont regroupées : une requête. `expiresParJour` : « À manger avant » se saisit au jour près,
+ * une part déjà ce jour-là garde son heure.
+ */
+export function ecrituresDesDates(
+  parts: Part[], voulu: ChampsDates, { expiresParJour = false }: { expiresParJour?: boolean } = {},
+): { ids: string[]; champs: ChampsDates }[] {
+  const lots = new Map<string, { ids: string[]; champs: ChampsDates }>()
+  for (const p of parts) {
+    const champs: ChampsDates = {}
+    for (const k of ['prepared_at', 'frozen_at', 'expires_at'] as const) {
+      const v = voulu[k]
+      if (v === undefined) continue
+      const actuel = p[k]
+      const pareil = actuel != null && (k === 'expires_at' && expiresParJour
+        ? jour(new Date(actuel)) === jour(new Date(v))
+        : new Date(actuel).getTime() === new Date(v).getTime())
+      if (!pareil) champs[k] = v
+    }
+    if (Object.keys(champs).length === 0) continue
+    const cle = JSON.stringify(champs)
+    const lot = lots.get(cle)
+    if (lot) lot.ids.push(p.id)
+    else lots.set(cle, { ids: [p.id], champs })
+  }
+  return [...lots.values()]
+}
+
+/**
+ * La péremption d'un INGRÉDIENT qu'on déplace, comme celle d'une barquette (`tg_portion_peremption`) :
+ *  · vers le congélateur : trois mois à partir de maintenant ;
+ *  · du congélateur au frigo : une décongélation, vingt-quatre heures ;
+ *  · du congélateur au placard : plus de date (sortie du froid, la date de congélation ne dit plus rien) ;
+ *  · entre le frigo et le placard : la date saisie reste, c'est celle de l'emballage.
+ * `null` : on ne touche pas à `expires_at`.
+ */
+export function peremptionDeplacee(de: string, vers: string, maintenant: Date): { expires_at: string | null } | null {
+  if (de === vers) return null
+  if (vers === 'congelateur') return { expires_at: plusDeJours(maintenant, JOURS_AU_CONGELO).toISOString() }
+  if (de === 'congelateur') {
+    return { expires_at: vers === 'frigo' ? plusDeJours(maintenant, 1).toISOString() : null }
+  }
+  return null
 }
 
 export type Presse = { label: string; n: number; u: Urgence }
@@ -379,29 +587,21 @@ export function auPlusTard(g: Groupe, maintenant: Date): string {
   return g.location === 'frigo' ? `${date}, ${urgence(fin, 'frigo', maintenant).mot}` : date
 }
 
-/** Les parts à bouger pour « Congeler » ou « Jeter » : les libres d'abord, puis celles posées le plus tard. */
-export function partsAChoisir<P extends Part>(g: Groupe<P>, prevus: Prevu[], n: number): P[] {
-  const libres = partsLibres(g, prevus)
+/**
+ * Les parts à bouger pour « Congeler » ou « Jeter » : les libres d'abord, puis celles posées le plus tard. Avec
+ * `maintenant`, un repas d'avant aujourd'hui ne réclame plus sa part.
+ */
+export function partsAChoisir<P extends Part>(g: Groupe<P>, prevus: Prevu[], n: number, maintenant?: Date): P[] {
+  const libres = partsLibres(g, prevus, maintenant)
   const dernier = new Map<string, string>()
-  for (const r of prevus) {
+  for (const r of maintenant ? prevusAVenir(prevus, maintenant) : prevus) {
     if (!r.portion_id) continue
     const v = `${r.day}|${ordreDuRepas(r.meal)}`
     if (!dernier.has(r.portion_id) || v > dernier.get(r.portion_id)!) dernier.set(r.portion_id, v)
   }
   const posees = g.parts.filter(p => dernier.has(p.id))
-    .sort((a, b) => dernier.get(b.id)!.localeCompare(dernier.get(a.id)!))
+    .sort((a, b) => dernier.get(b.id)!.localeCompare(dernier.get(a.id)!) || a.id.localeCompare(b.id))
   return [...libres, ...posees].slice(0, n)
-}
-
-/**
- * Les parts à sortir du congélateur : celles posées sur un repas d'aujourd'hui ou de demain si il y en a ;
- * sinon `null` (c'est à la personne de dire combien).
- */
-export function partsASortir<P extends Part>(
-  g: Groupe<P>, prevus: Prevu[], maintenant: Date,
-): P[] | null {
-  const bientot = partsPourBientot(g, prevus, maintenant)
-  return bientot.length > 0 ? bientot : null
 }
 
 // ── Les ingrédients ─────────────────────────────────────────────────────────

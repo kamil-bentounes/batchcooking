@@ -4,6 +4,7 @@
  * et revient à ce qui avait ouvert la question.
  */
 import { useEffect, useRef, useState } from 'react'
+import { borne } from '../../lib/frigo.ts'
 
 export function Combien({ titre, max, defaut, oui, surOui, surNon, enCours = false }: {
   titre: string
@@ -15,7 +16,9 @@ export function Combien({ titre, max, defaut, oui, surOui, surNon, enCours = fal
   surNon: () => void
   enCours?: boolean
 }) {
-  const [n, setN] = useState(Math.min(Math.max(1, defaut), max))
+  const [choisi, setN] = useState(borne(defaut, max))
+  /* `max` peut rétrécir pendant qu'on décide (un autre téléphone mange une part) : le nombre suit. */
+  const n = borne(choisi, max)
   const reglage = useRef<HTMLDivElement>(null)
   const avant = useRef<Element | null>(null)
   useEffect(() => {
@@ -32,11 +35,11 @@ export function Combien({ titre, max, defaut, oui, surOui, surNon, enCours = fal
          className="mt-4 rounded-[18px] bg-sable p-4">
       <p className="text-[16px] leading-snug">{titre}</p>
       <div ref={reglage} className="mt-3 flex items-center gap-3">
-        <button type="button" onClick={() => setN(v => Math.max(1, v - 1))} disabled={n <= 1}
+        <button type="button" onClick={() => setN(borne(n - 1, max))} disabled={n <= 1}
                 aria-label="Une de moins"
                 className="size-11 rounded-[14px] bg-surface text-[22px] leading-none disabled:opacity-40">−</button>
         <output aria-live="polite" className="chiffre min-w-10 text-center text-[28px]">{n}</output>
-        <button type="button" onClick={() => setN(v => Math.min(max, v + 1))} disabled={n >= max}
+        <button type="button" onClick={() => setN(borne(n + 1, max))} disabled={n >= max}
                 aria-label="Une de plus"
                 className="size-11 rounded-[14px] bg-surface text-[22px] leading-none disabled:opacity-40">+</button>
         <span className="text-[14px] text-doux">sur {max}</span>

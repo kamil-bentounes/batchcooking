@@ -5,7 +5,9 @@
  *
  * Le calcul est dans `lib/frigo.ts` ; ici, la base. Chaque geste écrit ce que la base ne devine pas, et
  * laisse le reste à ses déclencheurs : manger consomme la barquette (`tg_meal_slot_consomme`), congeler ou
- * sortir recalcule la péremption (`tg_portion_peremption`).
+ * sortir recalcule la péremption (`tg_portion_peremption`). Manger, jeter et retirer touchent aussi aux REPAS
+ * qui réclament la part : ce sont des fonctions de la base (`mange_une_part`, `ecarte_des_parts`, 0122), une
+ * transaction chacune, pas trois requêtes du client.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
@@ -14,11 +16,10 @@ import type { Database } from '../base.types.ts'
 
 type Update<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Update']
 import { jour } from '../semaine.ts'
-import type { Repas } from '../semaine.ts'
 import { prepare } from '../photo.ts'
-import { enFrancais } from '../reseau.ts'
-import { partsAChoisir, repasEnCours } from '../frigo.ts'
-import type { Groupe, Part, Prevu } from '../frigo.ts'
+import { enFrancais, photoEnFrancais } from '../reseau.ts'
+import { peremptionDeplacee, repasEnCours } from '../frigo.ts'
+import type { ChampsDates, Groupe, Part, Prevu } from '../frigo.ts'
 import { maintenant } from '../horloge.ts'
 
 export const CLE_FRIGO = {
@@ -111,69 +112,61 @@ export function useSortDuCongelo() {
   })
 }
 
-export function useJetteDesParts() {
+/** Les repas que le geste vient de priver de leur part, tels que la base les rend. */
+export type RepasLibere = { day: string; meal: string; user_profile_id: string }
+export type Ecarte = { n: number; libere: RepasLibere[] }
+
+/**
+ * Jeter ou retirer des parts, et lâcher les repas qui les réclamaient (`ecarte_des_parts`, 0122) :
+ *  · `jeter` : la part est jetée, elle compte comme gaspillée ;
+ *  · `retirer` : la part est supprimée, ni mangée ni jetée (une barquette mangée en douce ne doit pas rester).
+ */
+export function useEcarteDesParts() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (ids: string[]) => metsAJour(ids, { state: 'jetee' }),
+    mutationFn: async ({ ids, geste }: { ids: string[]; geste: 'jeter' | 'retirer' }): Promise<Ecarte> =>
+      ou(await supabase.rpc('ecarte_des_parts', {
+        p_ids: ids, p_geste: geste, p_day: jour(maintenant()),
+      })) as unknown as Ecarte,
     onSuccess: () => qc.invalidateQueries(),
   })
 }
 
-/** Corriger les dates d'un groupe : `prepared_at`, `frozen_at` et `expires_at` s'appliquent à toutes ses parts. */
+/**
+ * Corriger les dates d'un groupe : ce que `ecrituresDesDates` a calculé, une requête par écriture différente
+ * (les parts qui n'ont rien à changer n'en font pas).
+ */
 export function useModifieLesDates() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ ids, ...champs }: {
-      ids: string[]; prepared_at?: string; frozen_at?: string; expires_at?: string
-    }) => metsAJour(ids, champs),
+    mutationFn: async (ecritures: { ids: string[]; champs: ChampsDates }[]) => {
+      for (const e of ecritures) await metsAJour(e.ids, e.champs)
+    },
     onSuccess: () => qc.invalidateQueries(),
   })
 }
 
 /**
  * « En manger une maintenant » : une case pour moi, aujourd'hui, au repas en cours, mangée, avec une part du
- * plat.
+ * plat — en UNE fonction de la base (`mange_une_part`, 0122), qui verrouille les parts du plat :
  *
- *  · la part est la libre la plus pressée ; s'il n'y en a plus de libre, la dernière qu'un repas réclamait —
- *    ce repas-là se retrouve alors sans barquette (il reste « prévu », on le recomposera depuis la semaine) ;
- *  · ma case du repas en cours, si elle existe, est réutilisée ; si elle est déjà « mangée », on le dit
- *    plutôt que d'écraser un repas noté (D33).
+ *  · la part est d'abord celle qui est POUR MOI (`for_user_id`), puis celle de personne, celle d'un autre en
+ *    dernier recours ; à destinataire égal, une libre avant une réclamée par un repas à venir ;
+ *  · le repas qui la réclamait la lâche (il reste « prévu », sans barquette) et la base dit lequel ;
+ *  · ma case du repas en cours est réutilisée ; si elle est déjà « mangée », la base refuse plutôt que d'écraser
+ *    un repas noté (D33) ;
+ *  · deux membres qui mangent la dernière part libre en même temps : le second attend, puis la trouve prise.
  */
 export function useMangeMaintenant() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ groupe, prevus, moi }: { groupe: Groupe; prevus: Prevu[]; moi: string }) => {
-      const foyer = ou(await supabase.rpc('current_household'))
-      if (!foyer) throw new Error('Aucun foyer.')
+    mutationFn: async ({ groupe }: { groupe: Groupe }) => {
       const quand = maintenant()
-      const jourDit = jour(quand)
-      const repas: Repas = repasEnCours(quand)
-
-      const existante = (await supabase.from('meal_slot').select('id, state, portion_id')
-        .eq('user_profile_id', moi).eq('day', jourDit).eq('meal', repas).maybeSingle()).data
-      if (existante?.state === 'mange') {
-        throw new Error('Ton repas de maintenant est déjà noté mangé : change-le depuis la semaine.')
-      }
-
-      /* Ma case de ce repas porte déjà une part de ce plat : c'est celle-là qu'on mange. */
-      const ids = new Set(groupe.parts.map(p => p.id))
-      const part = existante?.portion_id && ids.has(existante.portion_id)
-        ? existante.portion_id
-        : partsAChoisir(groupe, prevus.filter(r => r.id !== existante?.id), 1)[0]?.id
-      if (!part) throw new Error('Il n’y a plus de part de ce plat.')
-
-      /* La part était réclamée par un autre repas : il la lâche. */
-      const ailleurs = prevus.filter(r => r.portion_id === part && r.id !== existante?.id).map(r => r.id)
-      if (ailleurs.length > 0) {
-        ou(await supabase.from('meal_slot').update({ portion_id: null }).in('id', ailleurs).select())
-      }
-
-      const mange = { state: 'mange' as const, eaten_at: quand.toISOString(), portion_id: part }
-      return existante
-        ? ou(await supabase.from('meal_slot').update(mange).eq('id', existante.id).select().single())
-        : ou(await supabase.from('meal_slot').insert({
-          household_id: foyer, user_profile_id: moi, day: jourDit, meal: repas, ...mange,
-        }).select().single())
+      return ou(await supabase.rpc('mange_une_part', {
+        /* `p_recipe` est nul pour un plat sans recette : le type généré ne le sait pas (argument sans défaut). */
+        p_recipe: groupe.recipeId as string, p_label: groupe.label, p_location: groupe.location,
+        p_state: groupe.state, p_day: jour(quand), p_meal: repasEnCours(quand), p_eaten_at: quand.toISOString(),
+      })) as unknown as { portion_id: string; libere: RepasLibere[] }
     },
     onSuccess: () => qc.invalidateQueries(),
   })
@@ -184,17 +177,23 @@ export function useMangeMaintenant() {
 export function useModifieIngredient() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, ...champs }: {
+    mutationFn: async ({ id, avant, ...champs }: {
       id: string
       quantity?: number | null
       location?: 'frigo' | 'congelateur' | 'placard'
       expires_at?: string | null
+      /** Où il était : de quoi recalculer sa péremption quand on le déplace. */
+      avant?: string
     }) => {
       /* La contrainte `stock_item_congele_date` : une date de mise au froid au congélateur, et nulle part
          ailleurs. Déplacer un ingrédient la pose ou la retire. */
       const froid = champs.location === undefined ? {}
         : { frozen_at: champs.location === 'congelateur' ? maintenant().toISOString() : null }
-      return ou(await supabase.from('stock_item').update({ ...champs, ...froid }).eq('id', id).select().single())
+      /* Et sa péremption suit le lieu comme celle d'une barquette (+90 j au froid, 24 h à la sortie), sauf si
+         la même écriture en donne une. */
+      const deplace = champs.location !== undefined && avant !== undefined && champs.expires_at === undefined
+        ? peremptionDeplacee(avant, champs.location, maintenant()) : null
+      return ou(await supabase.from('stock_item').update({ ...champs, ...froid, ...deplace }).eq('id', id).select().single())
     },
     onSuccess: () => qc.invalidateQueries(),
   })
@@ -221,7 +220,7 @@ export function usePhotoDuPlat() {
     mutationFn: async ({ recette, foyer, fichier, ancienne }: {
       recette: string; foyer: string; fichier: File; ancienne: string | null
     }) => {
-      const photo = await prepare(fichier)
+      const photo = await prepare(fichier).catch(e => { throw new Error(photoEnFrancais(e)) })
       const blob = await (await fetch(photo.dataUrl)).blob()
       const chemin = `${foyer}/${recette}-${Date.now()}.jpg`
       const envoi = await supabase.storage.from(SEAU).upload(chemin, blob, { contentType: 'image/jpeg' })

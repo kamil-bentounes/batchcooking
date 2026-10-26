@@ -26,6 +26,22 @@ export function jour(d: Date): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
+/**
+ * La barquette qu'une case porte VRAIMENT : celle que l'écran peut montrer.
+ *
+ * Une case « prévue » dont la part a été jetée, ou mangée par un AUTRE repas, ne porte plus rien : la
+ * montrer ferait manger ce soir une barquette qui n'existe plus, et compter ses calories. (La base lâche
+ * ces cases quand on jette ou qu'on retire — `ecarte_des_parts`, `mange_une_part`, 0122 —, mais une
+ * ancienne écriture ou un autre téléphone peut en avoir laissé une.)
+ */
+export function portionVivante<P extends { state: string }>(c: { state: string; portion: P | null }): P | null {
+  const p = c.portion
+  if (!p) return null
+  if (p.state === 'jetee') return null
+  if (p.state === 'mangee' && c.state !== 'mange') return null
+  return p
+}
+
 export type BarquetteRangeable = {
   id: string
   expires_at: string

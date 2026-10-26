@@ -12,26 +12,29 @@ import { Appareil, PlatImage } from './PlatImage.tsx'
 import { Combien } from './Combien.tsx'
 import { LigneDate } from './ChampDate.tsx'
 import {
-  auPlusTard, fondDuPlat, macrosDuGroupe, noteDeLaFiche, partsAChoisir, partsASortir, peremptionApres, prevuesPour,
+  auPlusTard, ecrituresDesDates, fondDuPlat, macrosDuGroupe, noteDeLaFiche, partsAChoisir, partsASortir,
+  peremptionApres, phraseDesRepasLibres, prevuesPour,
 } from '../../lib/frigo.ts'
 import type { Groupe, Prevu } from '../../lib/frigo.ts'
 import { depuisLeChamp, jourEtHeure, pourLeChamp } from '../../lib/ranger.ts'
 import { jour } from '../../lib/semaine.ts'
 import { maintenant } from '../../lib/horloge.ts'
 import {
-  useCongele, useJetteDesParts, useModifieLesDates, useMangeMaintenant, usePhotoDuPlat, useSortDuCongelo,
+  useCongele, useEcarteDesParts, useModifieLesDates, useMangeMaintenant, usePhotoDuPlat, useSortDuCongelo,
 } from '../../lib/donnees/frigo.ts'
-import type { RecetteDuPlat } from '../../lib/donnees/frigo.ts'
+import type { Ecarte, RecetteDuPlat } from '../../lib/donnees/frigo.ts'
 import type { Barquette } from '../../lib/donnees/barquettes.ts'
 
 const ROUGE = '#9A3526'
 const pluriel = (n: number, un: string, plusieurs: string) => (n > 1 ? plusieurs : un)
 
-type Question = 'congeler' | 'jeter' | 'sortir' | null
+type Question = 'congeler' | 'jeter' | 'retirer' | 'sortir' | null
 
-export function FichePlat({ groupe, prevus, membres, recette, foyerId, moi, va, surAnnonce, photoLien }: {
+export function FichePlat({ groupe, prevus, erreurPrevus, membres, recette, foyerId, moi, va, surAnnonce, photoLien }: {
   groupe: Groupe<Barquette>
-  prevus: Prevu[]
+  /** Les repas posés ; `null` tant qu'ils ne sont pas lus (chargement, erreur) : aucun geste ne se fie à ce qu'on ne sait pas. */
+  prevus: Prevu[] | null
+  erreurPrevus?: unknown
   membres: { id: string; prenom: string }[]
   recette: RecetteDuPlat | undefined
   foyerId: string | null
@@ -48,7 +51,7 @@ export function FichePlat({ groupe, prevus, membres, recette, foyerId, moi, va, 
   const mange = useMangeMaintenant()
   const congele = useCongele()
   const sort = useSortDuCongelo()
-  const jette = useJetteDesParts()
+  const ecarte = useEcarteDesParts()
   const dates = useModifieLesDates()
   const photo = usePhotoDuPlat()
 
@@ -56,22 +59,33 @@ export function FichePlat({ groupe, prevus, membres, recette, foyerId, moi, va, 
   const auFroid = groupe.location === 'congelateur'
   const decongelee = groupe.state === 'decongelee'
   const ids = groupe.parts.map(p => p.id)
-  const quand = prevuesPour(groupe, prevus, membres, now)
-  const note = noteDeLaFiche(groupe, prevus, now)
-  const sorties = auFroid ? partsASortir(groupe, prevus, now) : null
+  const lus = prevus !== null
+  const lesPrevus = prevus ?? []
+  const quand = prevuesPour(groupe, lesPrevus, membres, now)
+  const note = lus ? noteDeLaFiche(groupe, lesPrevus, now) : ''
+  const sorties = auFroid && lus ? partsASortir(groupe, lesPrevus, now) : null
   const peutPhotographier = !!(groupe.recipeId && recette?.owner_household_id && recette.owner_household_id === foyerId)
 
   /* ⚠️ `mutateAsync().then`, pas `mutate(…, { onSuccess })` : quand le geste vide le groupe, la fiche se démonte,
      et TanStack n'appelle plus les rappels d'un composant parti — l'annonce se perdait. */
-  const fait = (p: Promise<unknown>, message: string) => { p.then(() => { setDit(message); surAnnonce(message) }, () => {}) }
+  const fait = <T,>(p: Promise<T>, message: string | ((r: T) => string)) => {
+    p.then(r => { const m = typeof message === 'function' ? message(r) : message; setDit(m); surAnnonce(m) }, () => {})
+  }
+  /** « 2 parts jetées. Le dîner de dimanche n'a plus de barquette. » : le geste, puis les repas qu'il a privés de leur part. */
+  const avecLesRepas = (geste: string, libere: Ecarte['libere']) =>
+    [geste, phraseDesRepasLibres(libere, moi, membres, now)].filter(Boolean).join(' ')
 
-  const erreur = mange.error ?? congele.error ?? sort.error ?? jette.error ?? dates.error ?? photo.error
+  const erreur = mange.error ?? congele.error ?? sort.error ?? ecarte.error ?? dates.error ?? photo.error ?? erreurPrevus
 
-  const efface = () => { mange.reset(); congele.reset(); sort.reset(); jette.reset(); dates.reset(); photo.reset() }
+  const efface = () => { mange.reset(); congele.reset(); sort.reset(); ecarte.reset(); dates.reset(); photo.reset() }
+
+  /* Les parts que « Congeler », « Sortir », « Jeter » et « Retirer » prennent : les libres d'abord (un repas d'avant
+     aujourd'hui ne réclame plus sa part). */
+  const choisies = (k: number) => partsAChoisir(groupe, lesPrevus, k, now).map(p => p.id)
 
   function congeler(k: number) {
     efface(); setQuestion(null)
-    fait(congele.mutateAsync(partsAChoisir(groupe, prevus, k).map(p => p.id)),
+    fait(congele.mutateAsync(choisies(k)),
       `${k} ${pluriel(k, 'part', 'parts')} au congélateur : ça se garde trois mois.`)
   }
   function sortir(parts: string[]) {
@@ -81,33 +95,47 @@ export function FichePlat({ groupe, prevus, membres, recette, foyerId, moi, va, 
   }
   function jeter(k: number) {
     efface(); setQuestion(null)
-    fait(jette.mutateAsync(partsAChoisir(groupe, prevus, k).map(p => p.id)),
-      `${k} ${pluriel(k, 'part jetée', 'parts jetées')}.`)
+    fait(ecarte.mutateAsync({ ids: choisies(k), geste: 'jeter' }),
+      r => avecLesRepas(`${r.n} ${pluriel(r.n, 'part jetée', 'parts jetées')}.`, r.libere))
+  }
+  /* Retirer : ni mangée ni jetée. La part disparaît (mangée en douce, donnée, perdue) sans compter comme gaspillée. */
+  function retirer(k: number) {
+    efface(); setQuestion(null)
+    fait(ecarte.mutateAsync({ ids: choisies(k), geste: 'retirer' }),
+      r => avecLesRepas(`${r.n} ${pluriel(r.n, 'part retirée', 'parts retirées')} du ${auFroid ? 'congélateur' : 'frigo'}.`, r.libere))
   }
   function mangerUne() {
     efface()
-    fait(mange.mutateAsync({ groupe, prevus, moi }), `C’est noté : une part de ${groupe.nom.toLowerCase()} mangée.`)
+    fait(mange.mutateAsync({ groupe }),
+      r => avecLesRepas(`C’est noté : une part de ${groupe.nom.toLowerCase()} mangée.`, r.libere))
   }
 
-  /* Les dates. Une saisie qu'on ne lit pas se dit ; une saisie lue s'applique à TOUTES les parts du groupe. */
+  /* Les dates. Une saisie qu'on ne lit pas se dit ; une saisie inchangée n'écrit RIEN (elle réécrasait des
+     péremptions différentes par celle de la première part) ; une saisie lue s'applique, part par part, là
+     où elle change quelque chose. */
   function enregistreLeDepart(saisie: string): string | null {
     const d = depuisLeChamp(saisie)
     if (!d) return 'Cette date ne se lit pas.'
     if (d.getTime() > now.getTime() + 60_000) return 'Pas dans le futur : c’est le moment où c’est rangé.'
+    if (saisie === pourLeChamp(premierDepart)) return null
     const fin = peremptionApres(groupe.location, groupe.state, d)
-    efface()
-    fait(dates.mutateAsync({
-      ids,
+    const ecritures = ecrituresDesDates(groupe.parts, {
       ...(auFroid ? { frozen_at: d.toISOString() } : { prepared_at: d.toISOString() }),
       ...(fin ? { expires_at: fin.toISOString() } : {}),
-    }), 'Date corrigée.')
+    })
+    if (ecritures.length === 0) return null
+    efface()
+    fait(dates.mutateAsync(ecritures), 'Date corrigée.')
     return null
   }
   function enregistreLaFin(saisie: string): string | null {
     const d = /^\d{4}-\d{2}-\d{2}$/.test(saisie) ? new Date(`${saisie}T23:59:00`) : null
     if (!d || Number.isNaN(d.getTime())) return 'Cette date ne se lit pas.'
+    if (saisie === jour(fin)) return null
+    const ecritures = ecrituresDesDates(groupe.parts, { expires_at: d.toISOString() }, { expiresParJour: true })
+    if (ecritures.length === 0) return null
     efface()
-    fait(dates.mutateAsync({ ids, expires_at: d.toISOString() }), 'Date corrigée.')
+    fait(dates.mutateAsync(ecritures), 'Date corrigée.')
     return null
   }
 
@@ -147,16 +175,26 @@ export function FichePlat({ groupe, prevus, membres, recette, foyerId, moi, va, 
         <span className="chiffre text-[44px] font-semibold leading-none" data-parts={n}>{n}</span>
         <span className="text-[15px] font-semibold">{pluriel(n, 'part', 'parts')}</span>
       </p>
-      <p className="mx-1 mt-1.5 text-[14px] text-doux">{macrosDuGroupe(groupe)}</p>
-
-      <h3 className="mx-1 mb-2 mt-4 text-[14px] font-bold">{quand.titre}</h3>
-      <div className="flex flex-wrap gap-1.5 px-1">
-        {quand.puces.length === 0
-          ? <span className="rounded-[10px] bg-sable px-[11px] py-[7px] text-[13px] font-semibold text-ocre">Pas encore</span>
-          : quand.puces.map((p, i) => (
-            <span key={`${p}-${i}`} className="rounded-[10px] bg-piste px-[11px] py-[7px] text-[13px] font-semibold">{p}</span>
-          ))}
+      <div className="mx-1 mt-1.5 text-[14px] text-doux" data-macros="">
+        {macrosDuGroupe(groupe, membres).map(l => <p key={l}>{l}</p>)}
       </div>
+
+      {lus ? (
+        <>
+          <h3 className="mx-1 mb-2 mt-4 text-[14px] font-bold">{quand.titre}</h3>
+          <div className="flex flex-wrap gap-1.5 px-1">
+            {quand.puces.length === 0
+              ? <span className="rounded-[10px] bg-sable px-[11px] py-[7px] text-[13px] font-semibold text-ocre">Pas encore</span>
+              : quand.puces.map((p, i) => (
+                <span key={`${p}-${i}`} className="rounded-[10px] bg-piste px-[11px] py-[7px] text-[13px] font-semibold">{p}</span>
+              ))}
+          </div>
+        </>
+      ) : (
+        <p className="mx-1 mt-4 text-[14px] text-doux">
+          {erreurPrevus ? 'Les repas prévus ne se lisent pas : rien ne se fait sur cette fiche pour l’instant.' : 'Les repas prévus se lisent…'}
+        </p>
+      )}
       {note && <p className="mx-1 mt-3 rounded-[14px] bg-sable px-3.5 py-3 text-[14px] leading-[1.4]">{note}</p>}
 
       <div className="mx-1 mt-3 border-t border-piste">
@@ -176,12 +214,16 @@ export function FichePlat({ groupe, prevus, membres, recette, foyerId, moi, va, 
       )}
       {question === 'sortir' && (
         <Combien titre="Combien tu en sors du congélateur ?" max={n} defaut={1} oui="Sortir"
-                 surOui={k => sortir(partsAChoisir(groupe, prevus, k).map(p => p.id))}
+                 surOui={k => sortir(choisies(k))}
                  surNon={() => setQuestion(null)} enCours={sort.isPending} />
       )}
       {question === 'jeter' && (
         <Combien titre="Combien tu en jettes ?" max={n} defaut={n} oui="Jeter"
-                 surOui={jeter} surNon={() => setQuestion(null)} enCours={jette.isPending} />
+                 surOui={jeter} surNon={() => setQuestion(null)} enCours={ecarte.isPending} />
+      )}
+      {question === 'retirer' && (
+        <Combien titre="Combien tu en retires ?" max={n} defaut={n} oui="Retirer"
+                 surOui={retirer} surNon={() => setQuestion(null)} enCours={ecarte.isPending} />
       )}
 
       <Erreur de={erreur} />
@@ -189,13 +231,13 @@ export function FichePlat({ groupe, prevus, membres, recette, foyerId, moi, va, 
 
       <div className="mx-1 mt-4 flex flex-col gap-2.5">
         {auFroid ? (
-          <button type="button" disabled={sort.isPending}
+          <button type="button" disabled={sort.isPending || !lus}
                   onClick={() => sorties ? sortir(sorties.map(p => p.id)) : n > 1 ? setQuestion('sortir') : sortir(ids)}
                   className="h-[52px] rounded-2xl bg-herbe text-[16px] font-semibold text-fond disabled:opacity-60">
             Je les sors du congélateur
           </button>
         ) : (
-          <button type="button" disabled={mange.isPending} onClick={mangerUne}
+          <button type="button" disabled={mange.isPending || !lus} onClick={mangerUne}
                   className="h-[52px] rounded-2xl bg-herbe text-[16px] font-semibold text-fond disabled:opacity-60">
             En manger une maintenant
           </button>
@@ -207,19 +249,27 @@ export function FichePlat({ groupe, prevus, membres, recette, foyerId, moi, va, 
               Changer le repas
             </button>
           ) : (
-            <button type="button" disabled={congele.isPending}
+            <button type="button" disabled={congele.isPending || !lus}
                     onClick={() => n > 1 ? setQuestion('congeler') : congeler(1)}
                     className="h-12 flex-1 rounded-2xl bg-piste text-[15px] font-semibold disabled:opacity-60">
               Congeler
             </button>
           )}
-          <button type="button" disabled={jette.isPending}
+          <button type="button" disabled={ecarte.isPending || !lus}
                   onClick={() => n > 1 ? setQuestion('jeter') : jeter(1)}
                   className="h-12 flex-1 rounded-2xl bg-transparent text-[15px] font-semibold shadow-[inset_0_0_0_1.5px_var(--color-brume)] disabled:opacity-60"
                   style={{ color: ROUGE }}>
             Jeter
           </button>
         </div>
+        <button type="button" disabled={ecarte.isPending || !lus}
+                onClick={() => n > 1 ? setQuestion('retirer') : retirer(1)}
+                className="min-h-11 self-start px-1 text-[14px] font-semibold text-doux underline underline-offset-[3px] disabled:opacity-60">
+          {auFroid ? 'Retirer du congélateur' : 'Retirer du frigo'}
+        </button>
+        <p className="-mt-1.5 px-1 text-[13px] text-doux">
+          Retirer : ni mangée ni jetée, la part disparaît simplement.
+        </p>
       </div>
       {!auFroid && (
         <p className="mx-1 mt-3 text-[13px] text-doux">

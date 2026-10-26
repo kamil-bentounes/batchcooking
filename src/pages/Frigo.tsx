@@ -15,7 +15,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Barre, Attente, Erreur } from '../ui/coque.tsx'
 import { Feuille } from '../ui/budget/Feuille.tsx'
-import { FrigoFerme } from '../ui/frigo/FrigoFerme.tsx'
+import { FrigoFerme, LARGEUR } from '../ui/frigo/FrigoFerme.tsx'
+import { useEchelle } from '../ui/frigo/useEchelle.ts'
 import type { Porte } from '../ui/frigo/FrigoFerme.tsx'
 import { InterieurCongelo, InterieurFrigo } from '../ui/frigo/Interieurs.tsx'
 import type { PlatAffiche } from '../ui/frigo/Interieurs.tsx'
@@ -39,7 +40,11 @@ const FERME_APRES_MS = 280
 
 export function Frigo({ userId, va }: { userId: string; va: (v: string) => void }) {
   const { data: barquettes = [], isPending: chargeParts, error: erreurParts } = useBarquettes()
-  const { data: prevus = [] } = usePrevus()
+  const { data: lesPrevus, isPending: chargePrevus, error: erreurPrevus } = usePrevus()
+  /* `null` tant que les repas ne sont pas lus (chargement, erreur) : ni « rien de prévu ce soir », ni une part
+     « libre » que des repas réclament peut-être, ni un geste qui s'en fierait. */
+  const prevus = lesPrevus ?? null
+  const [boite, echelle] = useEchelle(LARGEUR)
   const { data: ingredients = [] } = useIngredients()
   const { data: foyer } = useFoyer()
   const now = maintenant()
@@ -55,6 +60,8 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
   /* ── Les portes ──────────────────────────────────────────────────────────── */
   const [porte, setPorte] = useState<Porte | null>(null)
   const [vue, setVue] = useState<Porte | null>(null)
+  /* Les portes déjà ouvertes : les photos de l'intérieur ne se demandent qu'à la première ouverture. */
+  const [ouvertes, setOuvertes] = useState<Porte[]>([])
   const minuteur = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const refCongelo = useRef<HTMLButtonElement>(null)
   const refFrigo = useRef<HTMLButtonElement>(null)
@@ -63,6 +70,7 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
   function ouvre(p: Porte) {
     clearTimeout(minuteur.current)
     setPorte(p)
+    setOuvertes(o => (o.includes(p) ? o : [...o, p]))
     minuteur.current = setTimeout(() => setVue(p), sansAnimation() ? 0 : OUVRE_APRES_MS)
   }
   function ferme() {
@@ -75,6 +83,18 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
       if (derniere) (derniere === 'congelo' ? refCongelo : refFrigo).current?.focus()
     }, sansAnimation() ? 0 : FERME_APRES_MS)
   }
+
+  /* Échap ferme l'intérieur d'où que soit le focus — sauf quand une feuille est ouverte par-dessus : c'est elle
+     que Échap ferme (un `Combien` le prend aussi, et le dit en annulant l'événement). */
+  useEffect(() => {
+    if (vue === null) return
+    const touche = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || document.querySelector('dialog[open]')) return
+      ferme()
+    }
+    window.addEventListener('keydown', touche)
+    return () => window.removeEventListener('keydown', touche)
+  })
 
   /* ── Ce qui est ouvert par-dessus ────────────────────────────────────────── */
   const [ficheCle, setFicheCle] = useState<string | null>(null)
@@ -97,10 +117,11 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
   /* ── Ce que dit le frigo fermé ───────────────────────────────────────────── */
   const dit = afficheur(prevus, barquettes, userId, now)
   const aimant = magnet(barquettes, prevus, now)
+  const charge = chargeParts || chargePrevus
   const demainJ = (() => { const d = new Date(now); d.setDate(d.getDate() + 1); return jour(d) })()
   const demain = (() => {
     const ordre = ['petit_dejeuner', 'dejeuner', 'collation', 'diner']
-    const mien = prevus.filter(r => r.user_profile_id === userId && r.day === demainJ && r.portion_id)
+    const mien = (prevus ?? []).filter(r => r.user_profile_id === userId && r.day === demainJ && r.portion_id)
       .sort((a, b) => ordre.indexOf(a.meal) - ordre.indexOf(b.meal))
     for (const r of mien) {
       const part = barquettes.find(p => p.id === r.portion_id)
@@ -110,9 +131,13 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
     return null
   })()
 
+  /* Pas de photo avant que la porte n'ait été ouverte : l'intérieur est masqué, ses images n'ont pas à partir. */
   const affiche = (lieu: 'frigo' | 'congelateur'): PlatAffiche[] =>
     groupes.filter(g => g.location === lieu)
-      .map(g => ({ groupe: g, photo: photoDe(g.recipeId), quand: quand(g, prevus, now) }))
+      .map(g => ({
+        groupe: g, quand: quand(g, prevus, now),
+        photo: ouvertes.includes(lieu === 'frigo' ? 'frigo' : 'congelo') ? photoDe(g.recipeId) : null,
+      }))
   const platsFrigo = affiche('frigo')
   const platsCongelo = affiche('congelateur')
   const plusTard = platsCongelo.length === 0 ? null
@@ -122,25 +147,30 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
 
   return (
     <>
-      <main className="relative min-h-dvh overflow-x-hidden px-5 pb-28 pt-[54px]">
-        {/* Le sol : une bande plus sombre derrière le frigo, comme la maquette. */}
-        <div aria-hidden="true" className="absolute inset-x-0 bottom-0 top-[658px]"
-             style={{ background: 'linear-gradient(180deg, #E6EAE2, #E1E6DD)' }} />
-        <div className="relative mx-auto w-full max-w-lg">
+      {/* Le frigo fermé et la barre du bas : inertes tant qu'un intérieur est ouvert (il est modal). */}
+      <div inert={vue !== null} className="flex min-h-dvh flex-col">
+      <main className="flex flex-1 flex-col overflow-x-hidden pt-[54px]">
+        <div className="relative z-10 mx-auto w-full max-w-lg px-5">
           <h1 className="titre text-[34px] font-semibold leading-none">Le frigo</h1>
           <p className="mt-2 text-[14px] text-doux">Touche une porte pour l’ouvrir.</p>
 
-          <div className="mt-[10px]">
-            {chargeParts
+          <div ref={boite} className="mt-[10px]">
+            {charge
               ? <Attente />
               : (
-                <FrigoFerme ouverte={porte} surOuvre={ouvre} afficheur={dit} magnet={aimant}
+                <FrigoFerme ouverte={porte} surOuvre={ouvre} afficheur={dit} magnet={aimant} echelle={echelle}
                             demain={demain} refCongelo={refCongelo} refFrigo={refFrigo} />
               )}
           </div>
           <Erreur de={erreurParts} />
+          <Erreur de={erreurPrevus} />
+        </div>
 
-          <div className="mt-12 flex flex-col items-center gap-0.5">
+        {/* Le sol : une bande plus sombre derrière le bas du frigo, comme la maquette. Elle commence 68 px (à
+            l'échelle) au-dessus du pied du dessin, qui est devant, et suit le dessin s'il est réduit. */}
+        <div className="flex-1 pb-28" style={{ marginTop: -68 * echelle, background: 'linear-gradient(180deg, #E6EAE2, #E1E6DD)' }}>
+          <div className="mx-auto flex w-full max-w-lg flex-col items-center gap-0.5 px-5"
+               style={{ paddingTop: 68 * echelle + 48 }}>
             <button type="button" onClick={() => setPlacard(true)}
                     className="min-h-11 px-3 text-[15px] font-semibold text-herbe underline underline-offset-[3px]">
               Le placard
@@ -153,20 +183,21 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
         </div>
       </main>
       <Barre actif="frigo" va={va} />
+      </div>
 
       <InterieurFrigo visible={vue === 'frigo'} plats={platsFrigo} ingredients={duLieu('frigo')}
-                      annonce={vue === 'frigo' ? annonce : null} attente={chargeParts} surFerme={ferme}
+                      annonce={vue === 'frigo' ? annonce : null} erreur={erreurPrevus} attente={charge} surFerme={ferme}
                       surPlat={setFicheCle} surIngredient={setIngredientId}
                       surAjoute={() => setAjout('frigo')} surPhoto={() => va('/photo')} />
       <InterieurCongelo visible={vue === 'congelo'} plats={platsCongelo} ingredients={duLieu('congelateur')}
-                        plusTard={plusTard} annonce={vue === 'congelo' ? annonce : null} attente={chargeParts}
+                        plusTard={plusTard} annonce={vue === 'congelo' ? annonce : null} erreur={erreurPrevus} attente={charge}
                         surFerme={ferme} surPlat={setFicheCle} surIngredient={setIngredientId}
                         surAjoute={() => setAjout('congelateur')} />
 
       {/* La fiche d'un plat. */}
       <Feuille ouverte={!!groupeOuvert} fermer={() => setFicheCle(null)} titre={groupeOuvert?.label ?? 'Plat'}>
         {groupeOuvert && (
-          <FichePlat groupe={groupeOuvert} prevus={prevus} membres={membres}
+          <FichePlat groupe={groupeOuvert} prevus={prevus} erreurPrevus={erreurPrevus} membres={membres}
                      recette={groupeOuvert.recipeId ? recettes?.get(groupeOuvert.recipeId) : undefined}
                      photoLien={photoDe(groupeOuvert.recipeId)} foyerId={foyer?.id ?? null} moi={userId}
                      va={va} surAnnonce={annonceUnTemps} />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bilanDuJour, jour, repartitionAuto } from './semaine.ts'
+import { bilanDuJour, jour, portionVivante, repartitionAuto } from './semaine.ts'
 import type { BarquetteRangeable, CaseConsommee } from './semaine.ts'
 
 const KAMIL = { id: 'k' }
@@ -152,5 +152,25 @@ describe('le bilan du jour (D33)', () => {
     ], 'k', '2026-09-18')
     expect(b.kcal).toBe(520)
     expect(b.proteinG).toBe(28)
+  })
+})
+
+describe('portionVivante : la barquette qu’une case porte VRAIMENT (H2)', () => {
+  const portion = (state: string) => ({ state, id: 'p' })
+  it('une part jetée n’est plus portée, quelle que soit la case', () => {
+    expect(portionVivante({ state: 'prevu', portion: portion('jetee') })).toBeNull()
+    expect(portionVivante({ state: 'mange', portion: portion('jetee') })).toBeNull()
+  })
+  it('une part mangée par un AUTRE repas n’est plus portée par une case encore « prévue »', () => {
+    expect(portionVivante({ state: 'prevu', portion: portion('mangee') })).toBeNull()
+    expect(portionVivante({ state: 'saute', portion: portion('mangee') })).toBeNull()
+  })
+  it('la part qu’une case « mangée » a mangée reste là, comme celle d’une case prévue encore au frais', () => {
+    expect(portionVivante({ state: 'mange', portion: portion('mangee') })).toEqual(portion('mangee'))
+    expect(portionVivante({ state: 'prevu', portion: portion('au_frais') })).toEqual(portion('au_frais'))
+    expect(portionVivante({ state: 'prevu', portion: portion('decongelee') })).toEqual(portion('decongelee'))
+  })
+  it('sans part : rien', () => {
+    expect(portionVivante({ state: 'prevu', portion: null })).toBeNull()
   })
 })

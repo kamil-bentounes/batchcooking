@@ -11,7 +11,7 @@ import { ou, supabase } from '../supabase.ts'
 import type { Insertion, Ligne } from '../supabase.ts'
 // Le calendrier et la répartition sont du calcul pur : ils vivent dans
 // `lib/semaine.ts`, où ils s'éprouvent sans base.
-import { jour } from '../semaine.ts'
+import { jour, portionVivante } from '../semaine.ts'
 import type { Repas } from '../semaine.ts'
 import type { BarquetteRangee, LignePrise } from '../ranger.ts'
 
@@ -110,7 +110,7 @@ export function useSemaine(du: Date, jours = 7) {
         if (!parCase.has(e.meal_slot_id)) parCase.set(e.meal_slot_id, [])
         parCase.get(e.meal_slot_id)!.push(e)
       }
-      return cases.map(c => ({ ...c, extras: parCase.get(c.id) ?? [] }))
+      return cases.map(c => ({ ...c, portion: portionVivante(c), extras: parCase.get(c.id) ?? [] }))
     },
     staleTime: 10_000,
   })
