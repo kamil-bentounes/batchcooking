@@ -22,7 +22,7 @@ sources:
   - supabase/migrations/0013_cycle.sql
   - supabase/migrations/0117_cuisine_corrections.sql
   - supabase/migrations/0119_reprendre_une_session_recente.sql
-verifie_sur: 7a0673e
+verifie_sur: 2ceb9b3
 ---
 ## Ce que fait l’appli
 

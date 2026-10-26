@@ -21,7 +21,7 @@ sources:
   - src/lib/nutrition/portions.ts
   - src/pages/Accueil.tsx
   - supabase/migrations/0005_policies.sql
-verifie_sur: 7a0673e
+verifie_sur: 2ceb9b3
 ---
 ## Ce que fait l’écran
 
@@ -44,7 +44,7 @@ Tant que tu n’as rien enregistré, les curseurs partent de 2 000 kcal, 150 g d
 ## À quoi ils servent
 
 - **Dressage** : le poids de ta part. Un dîner vaut **35 %** de ta journée, en calories et en protéines : avec 2 000 kcal et 150 g de protéines, 700 kcal et 52,5 g (voir « cuisine-portions »).
-- **Accueil** : « kcal aujourd’hui, sur … », avec une barre. **Bilan** : la cible tracée sur les courbes.
+- **Accueil** : « kcal aujourd’hui, sur … », avec une barre. **Bilan** : la cible tracée sur les graphes de chacun (rien n’est tracé pour qui n’a pas d’objectifs).
 - **Inventer** : les bornes de départ (calories et protéines d’un dîner, soit 35 % de ta journée), modifiables là-bas. Le modèle de langage ne voit jamais tes objectifs, seulement ces bornes. Sans objectifs enregistrés, elles partent de 30 g et 620 kcal.
 
 ## Qui voit quoi

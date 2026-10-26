@@ -20,7 +20,7 @@ sources:
   - supabase/functions/ticket/lignes.ts
   - supabase/migrations/0024_prix.sql
   - supabase/migrations/0031_apprentissage.sql
-verifie_sur: 7a0673e
+verifie_sur: 2ceb9b3
 ---
 ## Ce que fait l’appli
 
@@ -43,7 +43,7 @@ Il n’existe pas aujourd’hui de source de prix automatique (j’ai cherché) 
 - Le **prix payé** des articles rattachés est reporté sur la liste.
 - Le prix appris est une **moyenne** de tous les relevés, par enseigne et par libellé de caisse : 2,00 € puis 3,00 € donnent 2,50 €. Pour estimer, l’appli préfère la même enseigne.
 - « Estimer les prix d’après mes tickets » (sur la liste, tant qu’une ligne n’a pas de prix) ne remplit que ces lignes.
-- Le total imprimé alimente « € payés » du bilan, à la date d’achat ; sans total lu, la somme des lignes.
+- Le total imprimé alimente « payés » du bilan (le gros montant en haut), à la date d’achat ; sans total lu, la somme des lignes.
 
 ## Quota
 
