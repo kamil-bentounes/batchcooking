@@ -19,6 +19,15 @@
   --color-piste:     #E4E9E1;  /* le fond des jauges, des filtres, des pastilles, des pictos (§ 6.1) */
   --color-sable:     #F6EAD2;  /* le fond de ce qui demande tes mains */
 
+  /* Le froid. Le congélateur a son bleu, le frigo son vert : « où est-ce ? » se lit à la couleur,
+     et le mot le dit aussi (jamais la couleur seule). */
+  --color-congel:        #3E6A84;  /* l'aplat : pastille, barre */
+  --color-congel-encre:  #2C4A58;  /* le texte posé sur fond clair */
+  --color-congel-fond:   #DCE8EE;  /* le fond de la puce, de l'encart */
+  --color-congel-clair:  #C9DCE5;  /* la piste de la barre frigo / congélateur */
+  --color-frais-fond:    #E1EDE5;  /* le même rôle, côté frigo */
+  --color-frais-encre:   #1F4A33;
+
   /* L'ombre des cartes de la direction A : un trait, puis un halo. */
   --shadow-carte: 0 1px 2px rgba(28, 43, 35, .06), 0 8px 24px rgba(28, 43, 35, .07);
 

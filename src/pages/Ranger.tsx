@@ -187,7 +187,7 @@ export function Ranger({ cycle, decoupes, membres, retour, va }: {
       {/* Rangé le ───────────────────────────────────────────────────────────── */}
       <div className="mt-5 rounded-[18px] bg-surface px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--color-brume)]">
         <div className="flex items-center gap-3">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2F5D45" strokeWidth="1.8"
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-herbe)" strokeWidth="1.8"
                strokeLinecap="round" aria-hidden="true">
             <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
           </svg>
@@ -231,14 +231,14 @@ export function Ranger({ cycle, decoupes, membres, retour, va }: {
                 </span>
               </div>
 
-              <div className="mt-3 flex h-2.5 overflow-hidden rounded-md bg-[#C9DCE5]" aria-hidden="true">
+              <div className="mt-3 flex h-2.5 overflow-hidden rounded-md bg-congel-clair" aria-hidden="true">
                 <div className="h-full bg-herbe transition-[width] duration-300 ease-out motion-reduce:transition-none"
                      style={{ width: `${Math.round((frigo / n) * 100)}%` }} />
               </div>
 
               <div className="mt-3 flex items-center gap-2.5">
                 <div className="flex-1">
-                  <div className="text-[14px] font-bold text-[#1F4A33]">Frigo · {frigo}</div>
+                  <div className="text-[14px] font-bold text-frais-encre">Frigo · {frigo}</div>
                   <div className="mt-0.5 text-[12px] text-doux">{phraseDuFrigo(frigo, rangeLe)}</div>
                 </div>
                 <div role="group" aria-label={`Barquettes de ${titre} au frigo`}
@@ -254,7 +254,7 @@ export function Ranger({ cycle, decoupes, membres, retour, va }: {
                 </div>
               </div>
               <div className="mt-2">
-                <div className="text-[14px] font-bold text-[#2C4A58]">Congélateur · {congelo}</div>
+                <div className="text-[14px] font-bold text-congel-encre">Congélateur · {congelo}</div>
                 <div className="mt-0.5 text-[12px] text-doux">{phraseDuCongelo(congelo, rangeLe)}</div>
               </div>
             </section>
@@ -264,7 +264,7 @@ export function Ranger({ cycle, decoupes, membres, retour, va }: {
 
       {/* Le bilan du frigo ───────────────────────────────────────────────────── */}
       <div role="status"
-           className={`mt-3.5 rounded-[18px] px-4 py-3.5 ${bilan.trop ? 'bg-sable text-ocre' : 'bg-[#E1EDE5] text-[#1F4A33]'}`}>
+           className={`mt-3.5 rounded-[18px] px-4 py-3.5 ${bilan.trop ? 'bg-sable text-ocre' : 'bg-frais-fond text-frais-encre'}`}>
         <div className="text-[15px] font-bold">{bilan.titre}</div>
         <div className="mt-1 text-[13px] leading-[1.45]">{bilan.texte}</div>
       </div>
@@ -341,7 +341,7 @@ export function Ranger({ cycle, decoupes, membres, retour, va }: {
       )}
 
       {restantAuFrigo.length > 0 && (
-        <div className="mt-4 rounded-2xl bg-[#E1EDE5] px-3.5 py-3 text-[13px] leading-[1.45]">
+        <div className="mt-4 rounded-2xl bg-frais-fond px-3.5 py-3 text-[13px] leading-[1.45]">
           <strong>Reste au frigo :</strong>{' '}
           {restantAuFrigo.slice(0, 6).join(', ')}{restantAuFrigo.length > 6 ? '…' : '.'}
         </div>
