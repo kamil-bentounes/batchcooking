@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  cartesDuRepas, choisirLesParts, contenuDe, couleurDuPoint, detailDuCongele, detailDuFrigo, joursDuBandeau,
-  libresPourLeChoix, ligneDeLaCarte, lisLAdresse, messageDeLiberation, nomDeLaCarte, ordonneLesChoix,
-  personnesDuChoix, phraseDuBandeau, pourDit, resteLibre, titreDeLaFeuille,
+  caseVide, cartesDuRepas, choisirLesParts, contenuDe, couleurDuPoint, dejaPosees, detailDeLaPart, detailDuCongele,
+  detailDuFrigo, joursDuBandeau, libresPourLeChoix, ligneDeLaCarte, lisLAdresse, messageDeLiberation, nomDeLaCarte,
+  ordonneLesChoix, peremptionDeLaCarte, personnesDuChoix, phraseDuBandeau, pourDit, resteLibre, titreDeLaFeuille,
 } from './choix.ts'
 import type { CaseLue, ChoixDuFrigo } from './choix.ts'
 import { groupeLesParts, noteDeLaFiche } from './frigo.ts'
@@ -151,13 +151,13 @@ describe('le bandeau bleu d’un plat congelé', () => {
   it('un jour futur, sans rappel : pense à sortir la veille au soir', () => {
     expect(phraseDuBandeau({ ...base, jour: '2026-10-28', n: 2 })).toBe('Pense à sortir les 2 wraps la veille au soir.')
     expect(phraseDuBandeau({ ...base, jour: '2026-10-28', n: 1, label: 'Burger de feuilles de riz' }))
-      .toBe('Pense à sortir 1 burger la veille au soir.')
+      .toBe('Pense à sortir la barquette de burger de feuilles de riz la veille au soir.')
   })
   it('un jour futur, avec un rappel actif : le mail, la veille à 19 h', () => {
     expect(phraseDuBandeau({ ...base, jour: '2026-10-28', n: 2, rappelActif: true }))
       .toBe('Mail mardi à 19 h : sortir 2 wraps du congélateur pour la nuit au frigo.')
     expect(phraseDuBandeau({ ...base, jour: '2026-10-28', n: 1, rappelActif: true, label: 'Burger de feuilles de riz' }))
-      .toBe('Mail mardi à 19 h : sortir 1 burger du congélateur pour la nuit au frigo.')
+      .toBe('Mail mardi à 19 h : sortir 1 barquette de burger de feuilles de riz du congélateur pour la nuit au frigo.')
     expect(phraseDuBandeau({ ...base, jour: '2026-10-27', n: 2, rappelActif: true }))
       .toBe('Mail ce soir à 19 h : sortir 2 wraps du congélateur pour la nuit au frigo.')
   })
@@ -171,6 +171,24 @@ describe('le bandeau bleu d’un plat congelé', () => {
     const g = groupeLesParts(wraps)[0]
     const prevus = wraps.map((p, i) => prevu(p, '2026-10-27', 'diner', i ? THAUBA : KAMIL))
     expect(phraseDuBandeau(q), 'le bandeau et la fiche du frigo divergent').toBe(noteDeLaFiche(g, prevus, LUNDI_SOIR))
+  })
+  it('demain, UNE barquette : « sors-la », jamais « sors-les » (revue du 26/10) — et la fiche du frigo dit pareil', () => {
+    const q = { ...base, jour: '2026-10-27', n: 1, maintenant: LUNDI_SOIR }
+    expect(phraseDuBandeau(q)).toBe('C’est pour demain soir : sors-la maintenant, une part décongelée se mange dans les 24 heures.')
+    expect(phraseDuBandeau({ ...q, maintenant: new Date(2026, 9, 26, 8, 0), n: 1 }))
+      .toBe('Pense à sortir 1 wrap la veille au soir.')
+    const wrap = part({ label: 'Wrap', location: 'congelateur' })
+    const g = groupeLesParts([wrap])[0]
+    expect(noteDeLaFiche(g, [prevu(wrap, '2026-10-27', 'diner')], LUNDI_SOIR)).toBe(phraseDuBandeau(q))
+    /* Deux barquettes sur ce repas : « sors-les », comme avant. */
+    expect(phraseDuBandeau({ ...q, n: 2 })).toContain('sors-les maintenant')
+  })
+  it('un plat qui a plusieurs mots : « la barquette de petit salé aux lentilles », pas « les petits »', () => {
+    const salé = 'Petit salé aux lentilles'
+    const q = { ...base, label: salé, jour: '2026-10-26' }
+    expect(phraseDuBandeau({ ...q, n: 2 })).toBe('C’est pour aujourd’hui : décongèle les 2 barquettes de petit salé aux lentilles au micro-ondes.')
+    expect(phraseDuBandeau({ ...q, n: 1 })).toBe('C’est pour aujourd’hui : décongèle la barquette de petit salé aux lentilles au micro-ondes.')
+    expect(phraseDuBandeau({ ...q, jour: '2026-10-28', n: 2 })).toBe('Pense à sortir les 2 barquettes de petit salé aux lentilles la veille au soir.')
   })
   it('un jour passé : rien', () => {
     expect(phraseDuBandeau({ ...base, jour: '2026-10-25', n: 2 })).toBe('')
@@ -261,18 +279,102 @@ describe('ce que disent les lignes de la feuille', () => {
 })
 
 describe('ce qu’on dit après un changement', () => {
+  const l = (label: string, location: string) => ({ label, location })
   it('le frigo : elles retournent, libres ; le congélateur : elles restent', () => {
-    const l = (label: string, location: string) => ({ label, location })
     expect(messageDeLiberation([l('Lasagnes au saumon-poireaux', 'frigo'), l('Lasagnes au saumon-poireaux', 'frigo')]))
-      .toBe('Les lasagnes retournent au frigo, libres pour un autre jour.')
-    expect(messageDeLiberation([l('Wrap', 'congelateur'), l('Wrap', 'congelateur')])).toBe('Les wraps restent au congélateur.')
-    expect(messageDeLiberation([l('Pizza vietnamienne protéinée', 'frigo')]))
+      .toBe('Les 2 barquettes de lasagnes au saumon-poireaux retournent au frigo, libres pour un autre jour.')
+    expect(messageDeLiberation([l('Wrap', 'congelateur'), l('Wrap', 'congelateur')])).toBe('Les 2 wraps restent au congélateur.')
+    expect(messageDeLiberation([l('Pizza', 'frigo')]))
       .toBe('Une part de pizza retourne au frigo, libre pour un autre jour.')
-    expect(messageDeLiberation([l('Burger de feuilles de riz', 'congelateur')])).toBe('Une part de burger reste au congélateur.')
+    expect(messageDeLiberation([l('Burger de feuilles de riz', 'congelateur')]))
+      .toBe('La barquette de burger de feuilles de riz reste au congélateur.')
     expect(messageDeLiberation([])).toBe('')
   })
+  it('des libellés à plusieurs mots : jamais de « s » collé au premier mot (petits, pot-au-feus, gâteaus)', () => {
+    expect(messageDeLiberation([l('Petit salé aux lentilles', 'frigo'), l('Petit salé aux lentilles', 'frigo')]))
+      .toBe('Les 2 barquettes de petit salé aux lentilles retournent au frigo, libres pour un autre jour.')
+    expect(messageDeLiberation([l('Pot-au-feu', 'frigo'), l('Pot-au-feu', 'frigo')]))
+      .toBe('Les 2 barquettes de pot-au-feu retournent au frigo, libres pour un autre jour.')
+    expect(messageDeLiberation([l('Gâteau de patates douces', 'congelateur')]))
+      .toBe('La barquette de gâteau de patates douces reste au congélateur.')
+    expect(messageDeLiberation([l('Gâteau', 'frigo'), l('Gâteau', 'frigo')]))
+      .toBe('Les 2 gâteaux retournent au frigo, libres pour un autre jour.')
+  })
   it('un message par plat quand les deux ne mangeaient pas la même chose', () => {
-    expect(messageDeLiberation([{ label: 'Wrap', location: 'congelateur' }, { label: 'Lasagnes', location: 'frigo' }]))
+    expect(messageDeLiberation([l('Wrap', 'congelateur'), l('Lasagnes', 'frigo')]))
       .toBe('Une part de wrap reste au congélateur. Une part de lasagnes retourne au frigo, libre pour un autre jour.')
+  })
+})
+
+describe('la péremption : la feuille annonce ce que la base posera, la carte le redit', () => {
+  const cible = { jour: '2026-10-28', repas: 'diner', personnes: [KAMIL] }
+  const MOMENT = new Date(2026, 9, 28, 19, 0)
+  const avant_ = new Date(2026, 9, 27, 21, 0).toISOString()   // périme la veille du repas
+  const apres = new Date(2026, 10, 3, 21, 0).toISOString()
+  it('une part encore bonne passe avant une plus pressée qui périme avant le repas (comme la base)', () => {
+    const perime = part({ label: 'P', location: 'frigo', expires_at: avant_ })
+    const bonne = part({ label: 'P', location: 'frigo', expires_at: apres })
+    expect(choisirLesParts([perime, bonne], [KAMIL], {}, MOMENT)!.get(KAMIL)!.id).toBe(bonne.id)
+    /* Sans l'heure du repas, c'est l'ancien ordre : la plus pressée. */
+    expect(choisirLesParts([perime, bonne], [KAMIL])!.get(KAMIL)!.id).toBe(perime.id)
+    /* Faute de mieux, celle qui périme est posée quand même. */
+    expect(choisirLesParts([perime], [KAMIL], {}, MOMENT)!.get(KAMIL)!.id).toBe(perime.id)
+  })
+  it('la garde passe avant « la sienne » ; entre deux bonnes, la sienne reste préférée', () => {
+    const sienneQuiPerime = part({ label: 'P', location: 'frigo', for_user_id: KAMIL, expires_at: avant_ })
+    const deTous = part({ label: 'P', location: 'frigo', for_user_id: null, expires_at: apres })
+    expect(choisirLesParts([sienneQuiPerime, deTous], [KAMIL], {}, MOMENT)!.get(KAMIL)!.id).toBe(deTous.id)
+    const sienneBonne = part({ label: 'P', location: 'frigo', for_user_id: KAMIL, expires_at: new Date(2026, 10, 9).toISOString() })
+    expect(choisirLesParts([sienneBonne, deTous], [KAMIL], {}, MOMENT)!.get(KAMIL)!.id).toBe(sienneBonne.id)
+  })
+  it('dejaPosees : les parts que les cases visées portent déjà (la base les reprend en premier)', () => {
+    const a = part({ label: 'P', location: 'frigo' })
+    const b = part({ label: 'P', location: 'frigo' })
+    const prevus = [prevu(a, '2026-10-28', 'diner', KAMIL), prevu(b, '2026-10-28', 'diner', THAUBA), prevu(b, '2026-10-29', 'diner', KAMIL)]
+    expect(dejaPosees(prevus, { ...cible, personnes: [KAMIL] })).toEqual({ [KAMIL]: a.id })
+  })
+  it('la ligne du frigo parle de la part qui sera posée, pas de la plus pressée', () => {
+    const perime = part({ label: 'P', location: 'frigo', expires_at: avant_ })
+    const bonne = part({ label: 'P', location: 'frigo', expires_at: new Date(2026, 10, 3, 21, 0).toISOString() })
+    const posee = [...choisirLesParts([perime, bonne], [KAMIL], {}, MOMENT)!.values()]
+    expect(detailDuFrigo(posee, cible, LUNDI).urgent).toBe(false)
+    expect(detailDuFrigo(posee, cible, LUNDI).texte).toMatch(/^à manger avant /)
+    expect(detailDuFrigo([perime], cible, LUNDI)).toEqual({ texte: 'périme avant ce repas', urgent: true })
+  })
+
+  const carteDe = (parts: Part[], jour: string, meal: string, etats: string[] = []) => {
+    const cases = parts.map((p, i) => case_({ qui: i ? THAUBA : KAMIL, day: jour, meal, state: etats[i] ?? 'prevu', portion: { ...p, recipe_id: null } }))
+    return cartesDuRepas(cases, MEMBRES, KAMIL).cartes[0]
+  }
+  it('la carte : « périme avant ce repas » en ocre, « périmée », ou rien', () => {
+    const perime = part({ label: 'P', location: 'frigo', expires_at: avant_ })
+    expect(peremptionDeLaCarte(carteDe([perime], '2026-10-28', 'diner'), '2026-10-28', 'diner', LUNDI))
+      .toEqual({ texte: 'périme avant ce repas', encre: 'var(--color-ocre)' })
+    const hier = part({ label: 'P', location: 'frigo', expires_at: new Date(2026, 9, 25, 21, 0).toISOString() })
+    expect(peremptionDeLaCarte(carteDe([hier], '2026-10-28', 'diner'), '2026-10-28', 'diner', LUNDI)?.texte).toBe('périmée')
+    const loin = part({ label: 'P', location: 'frigo', expires_at: new Date(2026, 10, 20).toISOString() })
+    expect(peremptionDeLaCarte(carteDe([loin], '2026-10-28', 'diner'), '2026-10-28', 'diner', LUNDI)).toBeNull()
+    /* Une part qui ne périme qu'après le repas, mais ce soir : le mot du frigo. */
+    const ceSoir = part({ label: 'P', location: 'frigo', expires_at: new Date(2026, 9, 26, 23, 0).toISOString() })
+    expect(peremptionDeLaCarte(carteDe([ceSoir], '2026-10-26', 'diner'), '2026-10-26', 'diner', LUNDI)?.texte).toBe('à manger aujourd\'hui')
+    /* Mangé : plus rien à dire. Autre chose : rien non plus. */
+    expect(peremptionDeLaCarte(carteDe([perime], '2026-10-28', 'diner', ['mange']), '2026-10-28', 'diner', LUNDI)).toBeNull()
+    const autre = cartesDuRepas([case_({ qui: KAMIL, extras: [{ label: 'Restaurant' }] })], MEMBRES, KAMIL).cartes[0]
+    expect(peremptionDeLaCarte(autre, '2026-10-26', 'diner', LUNDI)).toBeNull()
+  })
+  it('la carte dit la part de la personne : poids, kcal, protéines — la mienne, sinon celle de la première, nommée', () => {
+    const mienne = part({ label: 'P', location: 'frigo', grams: 784, kcal: 682, protein_g: 56 })
+    const sienne = part({ label: 'P', location: 'frigo', grams: 512, kcal: 595, protein_g: 54 })
+    const deux = carteDe([mienne, sienne], '2026-10-28', 'diner')
+    expect(detailDeLaPart(deux, MEMBRES, KAMIL)).toBe('784 g · 682 kcal · 56 g de protéines')
+    const seuleThauba = cartesDuRepas([case_({ qui: THAUBA, portion: { ...sienne, recipe_id: null } })], MEMBRES, KAMIL).cartes[0]
+    expect(detailDeLaPart(seuleThauba, MEMBRES, KAMIL)).toBe('Thauba : 512 g · 595 kcal · 54 g de protéines')
+    expect(detailDeLaPart(carteDe([mienne], '2026-10-28', 'diner', ['mange']), MEMBRES, KAMIL)).toBe('')
+  })
+  it('une case vide (prévue, sans barquette ni extra) n’est rien', () => {
+    expect(caseVide({ state: 'prevu', portion: null, extras: [] })).toBe(true)
+    expect(caseVide({ state: 'prevu', portion: null, extras: [{ label: 'Yaourt' }] })).toBe(false)
+    expect(caseVide({ state: 'saute', portion: null, extras: [] })).toBe(false)
+    expect(caseVide({ state: 'mange', portion: null, extras: [] })).toBe(false)
   })
 })

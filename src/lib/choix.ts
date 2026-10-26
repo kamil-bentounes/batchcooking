@@ -9,10 +9,10 @@
  */
 import { jour } from './semaine.ts'
 import {
-  JOUR_ENTIER, avant, ecartEnJours, lisLeJour, momentDuRepas, motDuPlat, noteDeSortie, nomCourt, partsLibres,
-  sortableDes,
+  JOUR_ENTIER, avant, ecartEnJours, lisLeJour, momentDuRepas, noteDeSortie, nomCourt, partsDuPlat, partsLibres,
+  sortableDes, unSeulMot,
 } from './frigo.ts'
-import type { Groupe, Part, Prevu } from './frigo.ts'
+import type { Groupe, Part, Prevu, Quand } from './frigo.ts'
 import { urgence } from './peremption.ts'
 import type { Lieu } from './peremption.ts'
 import { pourLeFoyer } from './ranger.ts'
@@ -199,12 +199,46 @@ export function nomDeLaCarte(carte: Carte): string {
   return c.genre === 'plat' ? nomCourt(c.label) : c.genre === 'autre' ? c.label : 'On saute ce repas'
 }
 
+/** Une case « prévue » sans barquette ni extra : ni un plat, ni une réponse. Elle ne dit rien, et ne se montre pas. */
+export const caseVide = (c: Pick<CaseLue, 'state' | 'portion' | 'extras'>): boolean =>
+  c.state === 'prevu' && !c.portion && c.extras.length === 0
+
+/**
+ * Ce que pèse la part de la personne sur la carte : « 784 g · 682 kcal · 56 g de protéines » (comme l'ancien écran, et la
+ * fiche du frigo). La mienne quand j'en suis ; sinon celle de la première personne, nommée. `''` : pas un plat, ou
+ * tout est mangé.
+ */
+export function detailDeLaPart(carte: Carte, membres: Membre[], moi: string): string {
+  if (carte.contenu.genre !== 'plat' || carte.mangePar.length === carte.cases.length) return ''
+  const c = carte.cases.find(x => x.user_profile_id === moi && x.portion) ?? carte.cases.find(x => x.portion)
+  const p = c?.portion
+  if (!c || !p) return ''
+  const dit = `${Math.round(Number(p.grams))} g · ${Math.round(Number(p.kcal))} kcal · ${Math.round(Number(p.protein_g))} g de protéines`
+  return c.user_profile_id === moi
+    ? dit : `${membres.find(m => m.id === c.user_profile_id)?.prenom ?? 'quelqu’un'} : ${dit}`
+}
+
+/**
+ * Ce que la carte dit de la péremption, dans les mots du frigo (`urgence`) : « périmée », « périme avant ce repas » (en
+ * ocre), ou, au frigo, le mot d'urgence (« à manger aujourd'hui », « demain dernier délai »). La plus pressée des parts
+ * qui n'ont pas été mangées ; `null` : rien à dire (un repas mangé, autre chose, une part encore bonne).
+ */
+export function peremptionDeLaCarte(carte: Carte, jour: string, repas: string, maintenant: Date): Quand | null {
+  if (carte.contenu.genre !== 'plat') return null
+  const restantes = carte.cases.filter(c => c.state !== 'mange' && c.portion)
+  if (restantes.length === 0) return null
+  const premiere = restantes.map(c => c.portion!).sort((a, b) => a.expires_at.localeCompare(b.expires_at))[0]
+  const lieu: Lieu = carte.contenu.lieu
+  const u = urgence(premiere.expires_at, lieu, maintenant)
+  if (u.niveau === 'perime') return { texte: u.mot, encre: u.encre }
+  if (new Date(premiere.expires_at).getTime() < momentDuRepas(jour, repas).getTime()) {
+    return { texte: 'périme avant ce repas', encre: 'var(--color-ocre)' }
+  }
+  return lieu === 'frigo' && u.niveau !== 'ok' ? { texte: u.mot, encre: u.encre } : null
+}
+
 // ── Le bandeau bleu d'un plat congelé ───────────────────────────────────────
 
-/** « 2 wraps », « 1 wrap » : combien, de quoi. */
-function quoi(label: string, n: number): string {
-  return `${n} ${motDuPlat(label, n)}`
-}
 
 /**
  * Le bandeau d'un plat congelé, sous sa carte ; `''` quand il n'y a rien à dire (le jour est passé).
@@ -214,7 +248,8 @@ function quoi(label: string, n: number): string {
  *  · un jour futur : avec un rappel par mail actif, « Mail mardi à 19 h : sortir 2 wraps du congélateur pour la
  *    nuit au frigo. » ; sans rappel (les rappels arrivent au chantier 5), « Pense à sortir les 2 wraps la veille
  *    au soir. ».
- * `n` : combien de barquettes ce repas porte (une par personne).
+ * `n` : combien de barquettes ce repas porte (une par personne). Les mots disent le nombre : « sors-la » pour une seule
+ * barquette, « la barquette de petit salé aux lentilles » quand le libellé a plusieurs mots (`partsDuPlat`).
  */
 export function phraseDuBandeau(o: {
   jour: string; repas: string; label: string; n: number; rappelActif: boolean; maintenant: Date
@@ -222,14 +257,14 @@ export function phraseDuBandeau(o: {
   const { jour: j, repas, label, n, rappelActif, maintenant } = o
   const ecart = ecartEnJours(j, maintenant)
   if (ecart < 0) return ''
-  const les = n > 1 ? `les ${quoi(label, n)}` : quoi(label, n)
+  const les = partsDuPlat(label, n, true)
   if (ecart === 0) return `C’est pour aujourd’hui : décongèle ${les} au micro-ondes.`
-  if (ecart === 1 && sortableDes(j, repas).getTime() <= maintenant.getTime()) return noteDeSortie(j, repas, maintenant)
+  if (ecart === 1 && sortableDes(j, repas).getTime() <= maintenant.getTime()) return noteDeSortie(j, repas, maintenant, n)
   if (rappelActif) {
     const veille = lisLeJour(j)
     veille.setDate(veille.getDate() - 1)
     const quand = ecart === 1 ? 'ce soir' : JOUR_ENTIER[veille.getDay()]
-    return `Mail ${quand} à 19 h : sortir ${quoi(label, n)} du congélateur pour la nuit au frigo.`
+    return `Mail ${quand} à 19 h : sortir ${partsDuPlat(label, n)} du congélateur pour la nuit au frigo.`
   }
   return `Pense à sortir ${les} la veille au soir.`
 }
@@ -250,14 +285,15 @@ export function libresPourLeChoix<P extends Part>(g: Groupe<P>, prevus: Prevu[],
 }
 
 /**
- * Qui reçoit quelle part, comme le fait la base (`choisir_un_repas`, 0123) : pour chaque personne, dans cet ordre,
- * la part que sa case porte déjà, puis une part POUR ELLE (`for_user_id`), puis une pour personne, puis celle d'un
- * autre en dernier recours ; à égalité la plus pressée d'abord. Les passes se font toutes personnes confondues :
- * la part de Thauba ne part pas chez Kamil tant qu'il en reste une pour Kamil. `null` quand il n'y en a pas assez
- * pour tout le monde (la base refuserait, sans rien écrire).
+ * Qui reçoit quelle part, comme le fait la base (`choisir_un_repas`, 0123 et 0125) : d'abord celles qui seront encore
+ * bonnes à l'heure du repas (`moment` ; sans lui, toutes), puis, faute de mieux, celles qui périment avant — et pour
+ * chacune de ces deux fournées, dans cet ordre : la part que la case de la personne porte déjà, puis une part POUR ELLE
+ * (`for_user_id`), puis une pour personne, puis celle d'un autre en dernier recours ; à égalité la plus pressée d'abord.
+ * Les passes se font toutes personnes confondues : la part de Thauba ne part pas chez Kamil tant qu'il en reste une
+ * pour Kamil. `null` quand il n'y en a pas assez pour tout le monde (la base refuserait, sans rien écrire).
  */
 export function choisirLesParts<P extends Part>(
-  libres: P[], personnes: string[], dejaPosees: Record<string, string> = {},
+  libres: P[], personnes: string[], dejaPosees: Record<string, string> = {}, moment?: Date,
 ): Map<string, P> | null {
   const ordre = [...libres].sort((a, b) => a.expires_at.localeCompare(b.expires_at) || a.id.localeCompare(b.id))
   const pris = new Map<string, P>()
@@ -268,14 +304,28 @@ export function choisirLesParts<P extends Part>(
     p => (p.for_user_id ?? null) === null,
     () => true,
   ]
-  for (const passe of passes) {
-    for (const u of [...personnes].sort()) {
-      if (pris.has(u)) continue
-      const p = ordre.find(x => dispo.has(x.id) && passe(x, u))
-      if (p) { pris.set(u, p); dispo.delete(p.id) }
+  const bonne = (p: P) => !moment || new Date(p.expires_at).getTime() >= moment.getTime()
+  for (const exigeBonne of moment ? [true, false] : [false]) {
+    for (const passe of passes) {
+      for (const u of [...personnes].sort()) {
+        if (pris.has(u)) continue
+        const p = ordre.find(x => dispo.has(x.id) && (!exigeBonne || bonne(x)) && passe(x, u))
+        if (p) { pris.set(u, p); dispo.delete(p.id) }
+      }
     }
   }
   return pris.size === personnes.length ? pris : null
+}
+
+/** Les parts que ces cases portent déjà (« personne » → « part »), tirées des repas posés : ce que la base reprend en premier. */
+export function dejaPosees(prevus: Prevu[], cible: Cible): Record<string, string> {
+  const r: Record<string, string> = {}
+  for (const p of prevus) {
+    if (p.day === cible.jour && p.meal === cible.repas && p.portion_id && cible.personnes.includes(p.user_profile_id)) {
+      r[p.user_profile_id] = p.portion_id
+    }
+  }
+  return r
 }
 
 export type ChoixDuFrigo<P extends Part = Part> = {
@@ -323,9 +373,10 @@ export function detailDuCongele(cible: Cible, maintenant: Date): string {
 export type PartLachee = { label: string; location: string }
 
 /**
- * « Les lasagnes retournent au frigo, libres pour un autre jour. » (frigo) ; « Les wraps restent au congélateur. »
- * (congélateur) ; une seule part : « Une part de pizza retourne au frigo, libre pour un autre jour. ». Un plat par
- * phrase ; `''` quand rien n'a été lâché.
+ * « Les 2 wraps restent au congélateur. » ; « Les 2 barquettes de lasagnes au saumon-poireaux retournent au frigo, libres
+ * pour un autre jour. » ; une seule part : « La barquette de petit salé aux lentilles retourne au frigo, libre pour un
+ * autre jour. », « Une part de pizza retourne au frigo, libre pour un autre jour. » (un libellé d'un seul mot). Un plat
+ * par phrase ; `''` quand rien n'a été lâché.
  */
 export function messageDeLiberation(liberees: PartLachee[]): string {
   const par = new Map<string, { label: string; froid: boolean; n: number }>()
@@ -336,12 +387,13 @@ export function messageDeLiberation(liberees: PartLachee[]): string {
     g.n += 1
     par.set(cle, g)
   }
+  const majuscule = (t: string) => `${t[0].toUpperCase()}${t.slice(1)}`
   return [...par.values()].map(({ label, froid, n }) => {
-    const mot = motDuPlat(label, n)
-    if (froid) return n > 1 ? `Les ${mot} restent au congélateur.` : `Une part de ${mot} reste au congélateur.`
-    return n > 1
-      ? `Les ${mot} retournent au frigo, libres pour un autre jour.`
-      : `Une part de ${mot} retourne au frigo, libre pour un autre jour.`
+    const sujet = n === 1 && unSeulMot(label)
+      ? `Une part de ${label.trim().toLowerCase()}` : majuscule(partsDuPlat(label, n, true))
+    const pluriel = n > 1
+    if (froid) return `${sujet} ${pluriel ? 'restent' : 'reste'} au congélateur.`
+    return `${sujet} ${pluriel ? 'retournent' : 'retourne'} au frigo, ${pluriel ? 'libres' : 'libre'} pour un autre jour.`
   }).join(' ')
 }
 

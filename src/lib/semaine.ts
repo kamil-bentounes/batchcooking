@@ -1,9 +1,11 @@
 /**
- * La distribution des barquettes sur la semaine, et ce qu'on en a consommé.
+ * Le calendrier des repas, la barquette qu'une case porte vraiment, et ce qu'on en a consommé.
  *
- * Pur : aucune requête. C'est ce qui suit immédiatement le dressage (D39) —
- * sans cette étape, personne ne sait ce qu'on mange ce soir.
+ * Pur : aucune requête. Le choix des repas se fait à l'écran « La semaine » (`choix.ts`, et `choisir_un_repas` côté
+ * base) : plus aucune distribution automatique ne vit ici.
  */
+import { maintenant } from './horloge.ts'
+
 
 export const REPAS = ['petit_dejeuner', 'dejeuner', 'diner', 'collation'] as const
 export type Repas = (typeof REPAS)[number]
@@ -42,70 +44,25 @@ export function portionVivante<P extends { state: string }>(c: { state: string; 
   return p
 }
 
-export type BarquetteRangeable = {
-  id: string
-  expires_at: string
-  for_user_id: string | null
-}
-
-export type CaseProposee = {
-  userId: string
-  jour: string
-  repas: Repas
-  portionId: string
-}
-
-/**
- * Une proposition de répartition : chacun ses barquettes, un repas par jour,
- * les plus pressées d'abord. L'écran Semaine la laisse déplacer — c'est une
- * proposition, jamais une décision.
- *
- * Le dressage ne l'appelle plus depuis « On range » (26/10/2026) : c'est l'hôte qui
- * choisit ce qu'on mange chaque jour. Elle reste pour ses bancs, et pour le chantier 3.
- */
-export function repartitionAuto(
-  barquettes: BarquetteRangeable[],
-  membres: { id: string }[],
-  depuis: Date,
-  repas: Repas = 'diner',
-): CaseProposee[] {
-  if (membres.length === 0) return []
-
-  const parPersonne = new Map<string, BarquetteRangeable[]>(membres.map(m => [m.id, []]))
-  const libres: BarquetteRangeable[] = []
-
-  // Les plus pressées d'abord : une barquette qui périme jeudi ne se mange pas
-  // dimanche, quelle que soit la personne à qui elle revient.
-  for (const b of [...barquettes].sort((x, y) => x.expires_at.localeCompare(y.expires_at))) {
-    const sienne = b.for_user_id && parPersonne.has(b.for_user_id)
-    if (sienne) parPersonne.get(b.for_user_id!)!.push(b)
-    else libres.push(b)
-  }
-
-  // Les parts sans destinataire vont au moins servi : on ne fait pas manger
-  // trois fois le même à l'un pendant que l'autre n'a rien.
-  for (const b of libres) {
-    const [moins] = [...parPersonne.entries()].sort((x, y) => x[1].length - y[1].length)
-    moins[1].push(b)
-  }
-
-  const cases: CaseProposee[] = []
-  for (const [userId, liste] of parPersonne) {
-    liste.forEach((b, i) => {
-      const d = new Date(depuis)
-      d.setDate(d.getDate() + i)
-      cases.push({ userId, jour: jour(d), repas, portionId: b.id })
-    })
-  }
-  return cases
-}
-
 export type CaseConsommee = {
   day: string
   user_profile_id: string
   state: string
   portion: { kcal: number | string; protein_g: number | string } | null
-  extras: { kcal: number | string; protein_g: number | string }[]
+  extras: { kcal: number | string; protein_g: number | string; planifie?: boolean }[]
+}
+
+/**
+ * Un extra compte-t-il au bilan ? Ce qu'on a noté APRÈS coup (« en plus » : `planifie` faux) compte toujours — on ne
+ * l'a pas écrit par erreur. Ce que la feuille de choix a PLANIFIÉ (« autre chose » : un restaurant, un sandwich) ne
+ * compte que quand le repas est mangé, ou que son jour est passé : un restaurant choisi mardi pour jeudi n'est pas
+ * encore dans l'assiette (revue du 26/10 : il comptait dès qu'il était choisi, et rien ne le confirmait jamais).
+ * `aujourdhui` : le jour local, « 2026-10-26 ».
+ */
+export function extraCompte(
+  e: { planifie?: boolean }, c: { state: string; day: string }, aujourdhui: string,
+): boolean {
+  return !e.planifie || c.state === 'mange' || c.day < aujourdhui
 }
 
 /**
@@ -115,7 +72,7 @@ export type CaseConsommee = {
  * n'est PAS un repas à zéro, et l'écran doit pouvoir faire la différence plutôt
  * que d'afficher « 900 kcal aujourd'hui » à quelqu'un qui n'a rien coché.
  */
-export function bilanDuJour(cases: CaseConsommee[], userId: string, j: string) {
+export function bilanDuJour(cases: CaseConsommee[], userId: string, j: string, aujourdhui: string = jour(maintenant())) {
   const duJour = cases.filter(c => c.day === j && c.user_profile_id === userId)
 
   /*
@@ -123,26 +80,27 @@ export function bilanDuJour(cases: CaseConsommee[], userId: string, j: string) {
    *
    *  · La BARQUETTE ne compte que si la case est « mangée » : on peut très bien
    *    ne pas l'avoir mangée.
-   *  · L'EXTRA compte TOUJOURS. On ne l'a pas écrit par erreur — un déjeuner au
+   *  · L'EXTRA compte, lui, même sur une case « prévue » : un déjeuner au
    *    restaurant n'a pas de barquette, donc sa case reste « prévue », et
    *    l'exiger « mangée » revenait à ne jamais compter les repas hors
    *    barquette. C'est précisément ce que D26 dit de ne pas faire : sans eux,
-   *    le tableau de bord ment de ~900 kcal par jour.
+   *    le tableau de bord ment de ~900 kcal par jour. MAIS un extra que la
+   *    feuille de choix a seulement PLANIFIÉ (« autre chose ») ne compte que
+   *    quand sa case est mangée ou que son jour est passé (`extraCompte`).
    */
-  const extras = (c: CaseConsommee, prendre: (e: CaseConsommee['extras'][number]) => number) =>
-    c.extras.reduce((s, e) => s + Number(prendre(e)), 0)
+  const comptes = (c: CaseConsommee) => c.extras.filter(e => extraCompte(e, c, aujourdhui))
   const somme = (barquette: (c: CaseConsommee) => number,
                  extra: (e: CaseConsommee['extras'][number]) => number) =>
     duJour.reduce((s, c) =>
-      s + (c.state === 'mange' ? barquette(c) : 0) + extras(c, extra), 0)
+      s + (c.state === 'mange' ? barquette(c) : 0) + comptes(c).reduce((t, e) => t + Number(extra(e)), 0), 0)
 
   return {
     kcal: Math.round(somme(c => Number(c.portion?.kcal ?? 0), e => Number(e.kcal))),
     proteinG: Math.round(somme(
       c => Number(c.portion?.protein_g ?? 0), e => Number(e.protein_g))),
     // Un jour où l'on a noté un resto EST renseigné, même si la case est restée
-    // « prévue » faute de barquette à cocher.
-    renseignes: duJour.filter(c => c.state !== 'prevu' || c.extras.length > 0).length,
+    // « prévue » faute de barquette à cocher — pas un resto seulement planifié.
+    renseignes: duJour.filter(c => c.state !== 'prevu' || comptes(c).length > 0).length,
     prevus: duJour.length,
   }
 }

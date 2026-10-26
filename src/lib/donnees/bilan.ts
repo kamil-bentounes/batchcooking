@@ -18,6 +18,8 @@ import { useQuery } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
 import type { Ligne } from '../supabase.ts'
 import { budget, iso, joursEntre, serie } from '../suivi.ts'
+import { extraCompte, jour } from '../semaine.ts'
+import { maintenant } from '../horloge.ts'
 import type { Budget, Repas, Serie } from '../suivi.ts'
 
 export type Personne = {
@@ -126,10 +128,15 @@ export function useBilan(depuis: Date, jusqu: Date) {
       // Les repas hors barquette (D34) : sans eux le tableau de bord ment de
       // ~900 kcal par jour, et il vaudrait mieux ne rien afficher.
       const extras = await parPaquets(c.map(x => x.id), async lot =>
-        ou(await supabase.from('meal_extra').select('meal_slot_id, kcal, protein_g')
+        ou(await supabase.from('meal_extra').select('meal_slot_id, kcal, protein_g, planifie')
           .in('meal_slot_id', lot)))
       const enPlus = new Map<string, { kcal: number; protein: number }>()
+      const caseDe = new Map(c.map(x => [x.id, x]))
+      const aujourdhui = jour(maintenant())
       for (const e of extras) {
+        /* Un repère que la feuille de choix a seulement PLANIFIÉ ne compte que le repas mangé, ou son jour passé. */
+        const laCase = caseDe.get(e.meal_slot_id)
+        if (laCase && !extraCompte(e, laCase, aujourdhui)) continue
         const v = enPlus.get(e.meal_slot_id) ?? { kcal: 0, protein: 0 }
         v.kcal += Number(e.kcal)
         v.protein += Number(e.protein_g)

@@ -13,7 +13,6 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { admin, makeActor, type Actor } from './helpers/db'
 import { actionsDeLaSession } from '../src/lib/plan/fusion.ts'
 import { planifie } from '../src/lib/plan/ordonnance.ts'
-import { repartitionAuto } from '../src/lib/semaine.ts'
 import { organise } from '../src/lib/liste.ts'
 
 let kamil: Actor
@@ -244,10 +243,11 @@ describe('le parcours complet', () => {
     const { data: barquettes } = await kamil.client.from('portion')
       .select('id, expires_at, for_user_id').eq('cycle_id', cycle)
 
-    const depuis = new Date(2029, 0, 8)
-    const cases = repartitionAuto(barquettes!, [
-      { id: kamil.userId }, { id: thauba.userId },
-    ], depuis)
+    /* Plus de distribution automatique (chantier 3) : chacun pose ses barquettes sur ses dîners, comme `choisir_un_repas`. */
+    const jourDe = (i: number) => `2029-01-${String(8 + i).padStart(2, '0')}`
+    const cases = [kamil.userId, thauba.userId].flatMap(u =>
+      barquettes!.filter(b => b.for_user_id === u).map((b, i) => (
+        { userId: u, jour: jourDe(i), repas: 'diner', portionId: b.id })))
     expect(cases).toHaveLength(8)
 
     const { error } = await kamil.client.from('meal_slot').upsert(cases.map(c => ({

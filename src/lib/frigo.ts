@@ -65,10 +65,39 @@ export function nomCourt(label: string): string {
   return court || label.trim()
 }
 
-/** « burger » → « burgers » ; « wraps » reste « wraps » ; un seul : pas de s. */
-export function motDuPlat(label: string, n: number): string {
-  const mot = nomCourt(label).split(/\s+/)[0].toLowerCase()
-  return n > 1 && !/[sxz]$/.test(mot) ? `${mot}s` : mot
+/**
+ * Le pluriel d'UN mot : « wrap » → « wraps », « gâteau » → « gâteaux » ; « pizzas », « burgers », « choux » restent
+ * (s, x, z ne changent pas).
+ */
+function plurielDuMot(mot: string): string {
+  if (/[sxz]$/.test(mot)) return mot
+  if (/(?:eau|au)$/.test(mot)) return `${mot}x`
+  return `${mot}s`
+}
+
+/* Le « protéinée » des recettes du foyer n'ajoute rien à l'oreille (c'est aussi ce que `nomCourt` retire). */
+const sansProteinee = (label: string) => label.trim().replace(/\s+prot[ée]in[ée]e?s?$/i, '')
+
+/** Un libellé d'un seul mot (« Wrap »), qu'on sait mettre au pluriel : ni espace ni trait d'union (« pot-au-feu »). */
+export const unSeulMot = (label: string): boolean => !/[\s-]/.test(sansProteinee(label))
+
+/**
+ * Combien de parts d'un plat, et de quoi : « 2 wraps », « 1 wrap » quand le libellé est UN mot (« Wrap », « Burger »),
+ * qu'on sait mettre au pluriel ; « 2 barquettes de petit salé aux lentilles », « 1 barquette de … » sinon. Mettre
+ * un « s » au premier mot d'un libellé qui en compte plusieurs disait « les petits retournent au frigo » (petit salé),
+ * « 2 pot-au-feus », « 2 gâteaus » (gâteau de patates douces). `defini` : « les 2 wraps », « les 2 barquettes de … »,
+ * « la barquette de … » (une seule part d'un plat qui n'a pas un seul mot) ; une part d'un mot seul reste « 1 wrap ».
+ */
+export function partsDuPlat(label: string, n: number, defini = false): string {
+  const nom = sansProteinee(label)
+  const les = defini && n > 1 ? 'les ' : ''
+  if (unSeulMot(label)) {
+    const mot = nom.toLowerCase()
+    return `${les}${n} ${n > 1 ? plurielDuMot(mot) : mot}`
+  }
+  const de = nom.replace(/^\p{Lu}/u, c => c.toLowerCase())
+  if (n > 1) return `${les}${n} barquettes de ${de}`
+  return defini ? `la barquette de ${de}` : `1 barquette de ${de}`
 }
 
 // ── Les groupes ─────────────────────────────────────────────────────────────
@@ -376,7 +405,7 @@ export function magnet(parts: Part[], prevus: Prevu[] | null, maintenant: Date):
     const { g, r, bientot } = congeles[0]
     const n = bientot.length
     return {
-      texte: `Sors ${n > 1 ? `les ${n}` : '1'} ${motDuPlat(g.label, n)} : c’est ${repasPourSortir(r.day, r.meal, maintenant)}`,
+      texte: `Sors ${partsDuPlat(g.label, n, true)} : c’est ${repasPourSortir(r.day, r.meal, maintenant)}`,
       sorsLesAujourdhui: ecartEnJours(r.day, maintenant) === 0,
     }
   }
@@ -394,10 +423,10 @@ export function magnet(parts: Part[], prevus: Prevu[] | null, maintenant: Date):
     const perimees = libres.filter(p => new Date(p.expires_at).getTime() <= maintenant.getTime())
     if (perimees.length > 0) {
       const k = perimees.length
-      return { texte: `${k} ${motDuPlat(g.label, k)} à jeter`, sorsLesAujourdhui: false }
+      return { texte: `${partsDuPlat(g.label, k)} à jeter`, sorsLesAujourdhui: false }
     }
     const n = libres.length
-    return { texte: `${n} ${motDuPlat(g.label, n)} à prévoir avant ${avant(new Date(libres[0].expires_at), maintenant)}`, sorsLesAujourdhui: false }
+    return { texte: `${partsDuPlat(g.label, n)} à prévoir avant ${avant(new Date(libres[0].expires_at), maintenant)}`, sorsLesAujourdhui: false }
   }
   return null
 }
@@ -412,10 +441,18 @@ export function avant(fin: Date, maintenant: Date): string {
 
 // ── La fiche ────────────────────────────────────────────────────────────────
 
-/** « C'est pour ce soir : … » quand des barquettes encore congelées sont posées sur un repas d'aujourd'hui. */
-export const NOTE_DU_SOIR =
-  'C’est pour ce soir : sors-les maintenant, ou passe-les au micro-ondes avant de manger.'
 const DANS_LES_24_H = 'une part décongelée se mange dans les 24 heures'
+
+/** `n` barquettes : « sors-les », « sors-la » quand il n'y en a qu'une. */
+const sorsLes = (n: number) => `sors-${n > 1 ? 'les' : 'la'}`
+
+/** « C'est pour ce soir : sors-les maintenant, ou passe-les au micro-ondes avant de manger. » */
+export function noteDuSoir(n: number): string {
+  return `C’est pour ce soir : ${sorsLes(n)} maintenant, ou passe-${n > 1 ? 'les' : 'la'} au micro-ondes avant de manger.`
+}
+
+/** « C'est pour ce soir : … » quand des barquettes encore congelées sont posées sur un repas d'aujourd'hui. */
+export const NOTE_DU_SOIR = noteDuSoir(2)
 
 /**
  * La note de la fiche d'un plat congelé : pour ce soir, sors-les ; pour demain, à partir de quand — une part
@@ -424,22 +461,25 @@ const DANS_LES_24_H = 'une part décongelée se mange dans les 24 heures'
 export function noteDeLaFiche(g: Groupe, prevus: Prevu[], maintenant: Date): string {
   if (g.location !== 'congelateur') return ''
   const mes = prevusDe(g, prevus, maintenant)
-  if (mes.some(r => ecartEnJours(r.day, maintenant) === 0)) return NOTE_DU_SOIR
+  const ceSoir = mes.filter(r => ecartEnJours(r.day, maintenant) === 0)
+  if (ceSoir.length > 0) return noteDuSoir(new Set(ceSoir.map(r => r.portion_id)).size)
   const demain = mes.find(r => ecartEnJours(r.day, maintenant) === 1)
   if (!demain) return ''
-  return noteDeSortie(demain.day, demain.meal, maintenant)
+  const n = new Set(mes.filter(r => r.day === demain.day && r.meal === demain.meal).map(r => r.portion_id)).size
+  return noteDeSortie(demain.day, demain.meal, maintenant, n)
 }
 
 /**
  * La phrase du repas de DEMAIN : sors-les maintenant si l'heure y est, sinon à partir de quand. Le frigo (la fiche
- * d'un plat) et la semaine (le bandeau bleu d'un repas) la disent de la même façon, avec les mêmes mots.
+ * d'un plat) et la semaine (le bandeau bleu d'un repas) la disent de la même façon, avec les mêmes mots ; `n`
+ * barquettes sont posées sur ce repas (« sors-la » pour une seule).
  */
-export function noteDeSortie(j: string, repas: string, maintenant: Date): string {
+export function noteDeSortie(j: string, repas: string, maintenant: Date, n = 2): string {
   const des = sortableDes(j, repas)
   const pour = repasPourSortir(j, repas, maintenant)
   return des.getTime() <= maintenant.getTime()
-    ? `C’est pour ${pour} : sors-les maintenant, ${DANS_LES_24_H}.`
-    : `C’est pour ${pour} : sors-les à partir de ${des.getHours()} h, ${DANS_LES_24_H}.`
+    ? `C’est pour ${pour} : ${sorsLes(n)} maintenant, ${DANS_LES_24_H}.`
+    : `C’est pour ${pour} : ${sorsLes(n)} à partir de ${des.getHours()} h, ${DANS_LES_24_H}.`
 }
 
 /**

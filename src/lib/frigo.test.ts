@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  afficheur, ariaDeCarte, auPlusTard, etagereDe, groupeLesParts, macrosDuGroupe, magnet, motDuPlat,
+  afficheur, ariaDeCarte, auPlusTard, etagereDe, groupeLesParts, macrosDuGroupe, magnet, partsDuPlat,
   nomCourt, noteDeLaFiche, partsAChoisir, partsASortir, partsLibres, peremptionApres, prevuesPour,
   pourQui, pressesGroupees, quand, repasDuJour, repasEnCours, repasEnMots, soustitreDuCongelo, soustitreDuFrigo, NOTE_DU_SOIR,
   borne, ecrituresDesDates, peremptionDeplacee, phraseDesRepasLibres, sortableDes,
@@ -38,11 +38,28 @@ describe('les noms', () => {
     expect(nomCourt('Wrap')).toBe('Wrap')
     expect(nomCourt('Tarte à la courge')).toBe('Tarte courge')
   })
-  it('le mot du plat, au pluriel quand il y en a plusieurs', () => {
-    expect(motDuPlat('Burger de feuilles de riz', 2)).toBe('burgers')
-    expect(motDuPlat('Burger de feuilles de riz', 1)).toBe('burger')
-    expect(motDuPlat('Lasagnes au saumon', 2)).toBe('lasagnes')
-    expect(motDuPlat('Pizza vietnamienne', 2)).toBe('pizzas')
+  it('un libellé d’un seul mot : le pluriel simple — -eau/-au en -x, s, x et z ne changent pas', () => {
+    expect(partsDuPlat('Wrap', 2)).toBe('2 wraps')
+    expect(partsDuPlat('Wrap', 1)).toBe('1 wrap')
+    expect(partsDuPlat('Burger', 3)).toBe('3 burgers')
+    expect(partsDuPlat('Pizzas', 2)).toBe('2 pizzas')
+    expect(partsDuPlat('Gâteau', 2)).toBe('2 gâteaux')
+    expect(partsDuPlat('Tuyau', 2)).toBe('2 tuyaux')
+    expect(partsDuPlat('Couscous', 2)).toBe('2 couscous')
+    expect(partsDuPlat('Wrap', 2, true)).toBe('les 2 wraps')
+    expect(partsDuPlat('Wrap', 1, true)).toBe('1 wrap')
+  })
+  it('plusieurs mots : « la barquette de … », jamais un « s » collé au premier mot (revue du 26/10)', () => {
+    const salé = 'Petit salé aux lentilles'
+    expect(partsDuPlat(salé, 1, true)).toBe('la barquette de petit salé aux lentilles')
+    expect(partsDuPlat(salé, 2, true)).toBe('les 2 barquettes de petit salé aux lentilles')
+    expect(partsDuPlat(salé, 1)).toBe('1 barquette de petit salé aux lentilles')
+    expect(partsDuPlat(salé, 3)).toBe('3 barquettes de petit salé aux lentilles')
+    /* Ce que le premier mot donnait : « petits », « pot-au-feus », « gâteaus ». */
+    for (const l of [salé, 'Pot-au-feu', 'Gâteau de patates douces', 'Burger de feuilles de riz', 'Tajine d’agneau']) {
+      expect(partsDuPlat(l, 2), l).toBe(`2 barquettes de ${l[0].toLowerCase()}${l.slice(1)}`)
+    }
+    expect(partsDuPlat('Pizza vietnamienne protéinée', 2)).toBe('2 barquettes de pizza vietnamienne')
   })
 })
 
@@ -162,11 +179,11 @@ describe('la porte droite : le magnet', () => {
 
   it('1 · des congelées posées sur ce soir passent avant tout', () => {
     const prevus = [prevu(burgers[0], '2026-10-26', 'diner', KAMIL), prevu(burgers[1], '2026-10-26', 'diner', THAUBA)]
-    expect(magnet(tout, prevus, LUNDI)).toEqual({ texte: 'Sors les 2 burgers : c’est ce soir', sorsLesAujourdhui: true })
+    expect(magnet(tout, prevus, LUNDI)).toEqual({ texte: 'Sors les 2 barquettes de burger de feuilles de riz : c’est ce soir', sorsLesAujourdhui: true })
   })
   it('1 · demain aussi, et au singulier', () => {
     const prevus = [prevu(burgers[0], '2026-10-27', 'diner')]
-    expect(magnet(tout, prevus, LUNDI)?.texte).toBe('Sors 1 burger : c’est demain soir')
+    expect(magnet(tout, prevus, LUNDI)?.texte).toBe('Sors la barquette de burger de feuilles de riz : c’est demain soir')
   })
   it('1 · avant le frigo qui presse', () => {
     const prevus = [prevu(burgers[0], '2026-10-27', 'diner')]
@@ -178,11 +195,11 @@ describe('la porte droite : le magnet', () => {
     expect(magnet(burgers, prevus, LUNDI)).toBeNull()
   })
   it('2 · sinon le frigo qui périt sous 72 h et que rien ne réclame', () => {
-    expect(magnet(tout, [], MARDI)?.texte).toBe('2 pizzas à prévoir avant jeudi')
+    expect(magnet(tout, [], MARDI)?.texte).toBe('2 barquettes de pizza vietnamienne à prévoir avant jeudi')
   })
   it('2 · seules les parts non prévues comptent', () => {
     const prevus = [prevu(pizzas[0], '2026-10-28', 'diner')]
-    expect(magnet(pizzas, prevus, MARDI)?.texte).toBe('1 pizza à prévoir avant jeudi')
+    expect(magnet(pizzas, prevus, MARDI)?.texte).toBe('1 barquette de pizza vietnamienne à prévoir avant jeudi')
   })
   it('2 · tout est prévu : pas de magnet', () => {
     const prevus = pizzas.map(p => prevu(p, '2026-10-28', 'diner'))
@@ -251,7 +268,11 @@ describe('la fiche', () => {
   it('la note du soir : seulement du congelé posé AUJOURD’HUI', () => {
     const b = fois(2, { label: 'Burger', location: 'congelateur' })
     const [g] = groupeLesParts(b)
-    expect(noteDeLaFiche(g, [prevu(b[0], '2026-10-26', 'diner')], LUNDI)).toBe(NOTE_DU_SOIR)
+    expect(noteDeLaFiche(g, [prevu(b[0], '2026-10-26', 'diner'), prevu(b[1], '2026-10-26', 'diner')], LUNDI)).toBe(NOTE_DU_SOIR)
+    expect(NOTE_DU_SOIR).toBe('C’est pour ce soir : sors-les maintenant, ou passe-les au micro-ondes avant de manger.')
+    /* Une seule part posée : « sors-la », « passe-la » (la revue du 26/10 : « sors-les » pour une barquette). */
+    expect(noteDeLaFiche(g, [prevu(b[0], '2026-10-26', 'diner')], LUNDI))
+      .toBe('C’est pour ce soir : sors-la maintenant, ou passe-la au micro-ondes avant de manger.')
     expect(noteDeLaFiche(g, [prevu(b[0], '2026-10-30', 'diner')], LUNDI)).toBe('')
     const f = fois(2, { label: 'Pizza', location: 'frigo' })
     expect(noteDeLaFiche(groupeLesParts(f)[0], [prevu(f[0], '2026-10-26', 'diner')], LUNDI)).toBe('')
@@ -450,7 +471,7 @@ describe('M2 · l’urgence se dit aussi quand tout est réclamé', () => {
 describe('M3 · le magnet', () => {
   it('une part DÉJÀ périmée : « à jeter », pas « à prévoir avant ce soir »', () => {
     const t = fois(2, { label: 'Pizza vietnamienne', location: 'frigo', expires_at: new Date(2026, 9, 26, 9).toISOString() })
-    expect(magnet(t, [], LUNDI)?.texte).toBe('2 pizzas à jeter')
+    expect(magnet(t, [], LUNDI)?.texte).toBe('2 barquettes de pizza vietnamienne à jeter')
   })
   it('périmées et pas périmées dans le même plat : on ne jette que les périmées', () => {
     const t = [
@@ -505,13 +526,13 @@ describe('M4 · sortir du congélateur : une part décongelée vit 24 h', () => 
     expect(partsASortir(g, prevus, matin)).toBeNull()
     expect(quand(g, prevus, matin).texte).toBe('Demain soir : à sortir dès 19 h')
     expect(noteDeLaFiche(g, prevus, matin)).toBe(
-      'C’est pour demain soir : sors-les à partir de 19 h, une part décongelée se mange dans les 24 heures.')
-    expect(magnet(b, prevus, matin), 'le magnet ne dit pas « sors-les » avant l’heure').toBeNull()
+      'C’est pour demain soir : sors-la à partir de 19 h, une part décongelée se mange dans les 24 heures.')
+    expect(magnet(b, prevus, matin), 'le magnet ne dit pas « sors-la » avant l’heure').toBeNull()
   })
   it('le soir venu : « Demain soir : à sortir maintenant », et le magnet le dit', () => {
     const prevus = [prevu(g.parts[0], '2026-10-27', 'diner')]
     expect(quand(g, prevus, LUNDI).texte).toBe('Demain soir : à sortir maintenant')
-    expect(noteDeLaFiche(g, prevus, LUNDI)).toContain('sors-les maintenant')
+    expect(noteDeLaFiche(g, prevus, LUNDI)).toContain('sors-la maintenant')
     expect(magnet(b, prevus, LUNDI)?.texte).toBe('Sors 1 burger : c’est demain soir')
   })
 })

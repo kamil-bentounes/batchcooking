@@ -1,20 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { bilanDuJour, jour, portionVivante, repartitionAuto } from './semaine.ts'
-import type { BarquetteRangeable, CaseConsommee } from './semaine.ts'
-
-const KAMIL = { id: 'k' }
-const THAUBA = { id: 't' }
-
-let n = 0
-function part(p: Partial<BarquetteRangeable> = {}): BarquetteRangeable {
-  n++
-  return {
-    id: `p${n}`,
-    expires_at: `2026-09-${String(20 + n).padStart(2, '0')}T12:00:00Z`,
-    for_user_id: null,
-    ...p,
-  }
-}
+import { bilanDuJour, extraCompte, jour, portionVivante } from './semaine.ts'
+import type { CaseConsommee } from './semaine.ts'
 
 function cas(p: Partial<CaseConsommee> = {}): CaseConsommee {
   return {
@@ -37,63 +23,6 @@ describe('la date locale', () => {
 
   it('remplit les zéros', () => {
     expect(jour(new Date(2026, 0, 5))).toBe('2026-01-05')
-  })
-})
-
-describe('la répartition proposée (D39)', () => {
-  it('place une barquette par jour, à partir de la date donnée', () => {
-    const cases = repartitionAuto(
-      [part(), part(), part()], [KAMIL], new Date(2026, 8, 21))
-    expect(cases.map(c => c.jour)).toEqual(['2026-09-21', '2026-09-22', '2026-09-23'])
-  })
-
-  it('rend à chacun les parts qui lui sont destinées', () => {
-    const cases = repartitionAuto([
-      part({ for_user_id: 'k' }), part({ for_user_id: 't' }), part({ for_user_id: 'k' }),
-    ], [KAMIL, THAUBA], new Date(2026, 8, 21))
-    const parQui = new Map<string, number>()
-    for (const c of cases) parQui.set(c.userId, (parQui.get(c.userId) ?? 0) + 1)
-    expect(parQui.get('k')).toBe(2)
-    expect(parQui.get('t')).toBe(1)
-  })
-
-  it('donne les parts sans destinataire au moins servi', () => {
-    const cases = repartitionAuto([
-      part({ for_user_id: 'k' }), part({ for_user_id: 'k' }), part(), part(),
-    ], [KAMIL, THAUBA], new Date(2026, 8, 21))
-    const parQui = new Map<string, number>()
-    for (const c of cases) parQui.set(c.userId, (parQui.get(c.userId) ?? 0) + 1)
-    expect(parQui.get('t'), 'une personne est restée sans rien').toBe(2)
-    expect(parQui.get('k')).toBe(2)
-  })
-
-  it('mange les plus pressées d’abord', () => {
-    const tard = part({ expires_at: '2026-12-01T12:00:00Z' })
-    const tot = part({ expires_at: '2026-09-22T12:00:00Z' })
-    const cases = repartitionAuto([tard, tot], [KAMIL], new Date(2026, 8, 21))
-    expect(cases[0].portionId, 'la part la plus pressée n’est pas la première')
-      .toBe(tot.id)
-  })
-
-  it('ne propose rien sans personne à qui proposer', () => {
-    expect(repartitionAuto([part()], [], new Date())).toEqual([])
-  })
-
-  it('ne propose rien sans barquette', () => {
-    expect(repartitionAuto([], [KAMIL], new Date())).toEqual([])
-  })
-
-  it('ignore un destinataire qui n’est plus du foyer', () => {
-    const cases = repartitionAuto(
-      [part({ for_user_id: 'parti' })], [KAMIL], new Date(2026, 8, 21))
-    expect(cases).toHaveLength(1)
-    expect(cases[0].userId).toBe('k')
-  })
-
-  it('ne modifie pas le tableau qu’on lui donne', () => {
-    const liste = [part({ id: 'b' }), part({ id: 'a' })]
-    repartitionAuto(liste, [KAMIL], new Date())
-    expect(liste.map(b => b.id)).toEqual(['b', 'a'])
   })
 })
 
@@ -152,6 +81,40 @@ describe('le bilan du jour (D33)', () => {
     ], 'k', '2026-09-18')
     expect(b.kcal).toBe(520)
     expect(b.proteinG).toBe(28)
+  })
+})
+
+describe('un repère planifié ne compte pas avant d’être mangé (revue du 26/10, M3)', () => {
+  const resto = { kcal: 900, protein_g: 35, planifie: true }
+  const yaourt = { kcal: 60, protein_g: 4, planifie: false }
+  const J = '2026-09-18'
+  it('choisi par la feuille, pas encore mangé : aujourd’hui ou plus tard, il ne compte pas et ne « renseigne » pas', () => {
+    for (const aujourdhui of [J, '2026-09-17']) {
+      const b = bilanDuJour([cas({ state: 'prevu', extras: [resto] })], 'k', J, aujourdhui)
+      expect(b, `aujourd’hui = ${aujourdhui}`).toEqual({ kcal: 0, proteinG: 0, renseignes: 0, prevus: 1 })
+    }
+  })
+  it('la case est mangée (« Je l’ai mangé ») : il compte', () => {
+    const b = bilanDuJour([cas({ state: 'mange', extras: [resto] })], 'k', J, J)
+    expect(b).toEqual({ kcal: 900, proteinG: 35, renseignes: 1, prevus: 1 })
+  })
+  it('le jour est passé et personne n’a rien noté : il compte, comme avant', () => {
+    const b = bilanDuJour([cas({ state: 'prevu', extras: [resto] })], 'k', J, '2026-09-19')
+    expect(b).toEqual({ kcal: 900, proteinG: 35, renseignes: 1, prevus: 1 })
+  })
+  it('un en-plus noté après coup compte toujours, même sur une case « prévue » d’un jour à venir', () => {
+    const b = bilanDuJour([cas({ state: 'prevu', extras: [yaourt] })], 'k', J, '2026-09-17')
+    expect(b).toEqual({ kcal: 60, proteinG: 4, renseignes: 1, prevus: 1 })
+  })
+  it('les deux ensemble : seul ce qui est noté compte avant le repas', () => {
+    const b = bilanDuJour([cas({ state: 'prevu', extras: [resto, yaourt] })], 'k', J, J)
+    expect(b.kcal).toBe(60)
+  })
+  it('extraCompte : l’ancien extra (sans la colonne) compte', () => {
+    expect(extraCompte({}, { state: 'prevu', day: J }, J)).toBe(true)
+    expect(extraCompte({ planifie: true }, { state: 'prevu', day: J }, J)).toBe(false)
+    expect(extraCompte({ planifie: true }, { state: 'mange', day: J }, J)).toBe(true)
+    expect(extraCompte({ planifie: true }, { state: 'prevu', day: '2026-09-17' }, J)).toBe(true)
   })
 })
 
