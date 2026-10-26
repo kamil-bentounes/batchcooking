@@ -17,7 +17,7 @@ import type { BarquetteRangee, LignePrise } from '../ranger.ts'
 import type { Json } from '../base.types.ts'
 import { maintenant } from '../horloge.ts'
 
-export { NOM_REPAS, REPAS, bilanDuJour, jour, repartitionAuto } from '../semaine.ts'
+export { NOM_REPAS, REPAS, bilanDuJour, jour } from '../semaine.ts'
 export type { Repas } from '../semaine.ts'
 
 export type Barquette = Ligne<'portion'>
@@ -52,23 +52,6 @@ export function useBarquettes(inclureMangees = false) {
       const q = supabase.from('portion').select('*').order('expires_at')
       return ou(await (inclureMangees ? q : q.in('state', ['au_frais', 'decongelee'])))
     },
-    staleTime: 10_000,
-  })
-}
-
-/**
- * Les barquettes qui ont DÉJÀ un jour, où qu'il tombe. `useSemaine` ne lit que sept jours : une barquette posée avant
- * aujourd'hui et pas encore mangée n'y est pas, et « N barquettes sans jour » la comptait comme sans jour.
- */
-export function usePortionsPlacees() {
-  return useQuery({
-    queryKey: [...CLE.barquettes, 'placees'],
-    /* Seules les barquettes encore là comptent : sans cette jointure la requête lirait tout l'historique des repas,
-       et PostgREST coupe à 1 000 lignes — dans un ordre quelconque. */
-    queryFn: async () => new Set(
-      ou(await supabase.from('meal_slot').select('portion_id, portion!inner(state)')
-        .in('portion.state', ['au_frais', 'decongelee']))
-        .map(r => r.portion_id as string)),
     staleTime: 10_000,
   })
 }
@@ -196,57 +179,6 @@ export function usePortionsDuCycle(cycleId: string | undefined) {
 }
 
 /**
- * Distribue les barquettes sur la semaine (D39).
- *
- * Sans cette étape, personne ne sait ce qu'on mange ce soir — c'est exactement
- * le trou qu'avait l'app avant qu'on remette le cycle au centre.
- */
-export function useDistribue() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async ({ cycleId, cases }: {
-      cycleId: string
-      cases: { userId: string; jour: string; repas: Repas; portionId: string | null }[]
-    }) => {
-      const foyer = ou(await supabase.rpc('current_household'))
-      if (!foyer) throw new Error('Aucun foyer.')
-
-      /*
-       * ⚠️ On n'écrase JAMAIS une case déjà renseignée.
-       *
-       * L'upsert posait `state: 'prevu'` sur tout : une seule case déjà mangée
-       * dans les jours visés levait un 23514 (`meal_slot_mange_date`) et
-       * faisait échouer TOUTE la distribution — une seule instruction. Et sur
-       * une case « sautée », il effaçait en silence un jour renseigné (D33).
-       *
-       * On écarte donc ce qui porte déjà une réponse, et on distribue le reste.
-       */
-      const jours = [...new Set(cases.map(c => c.jour))]
-      const prises = new Set(
-        ou(await supabase.from('meal_slot')
-          .select('user_profile_id, day, meal')
-          .in('day', jours).neq('state', 'prevu'))
-          .map(x => `${x.user_profile_id}|${x.day}|${x.meal}`))
-
-      const libres = cases.filter(
-        c => !prises.has(`${c.userId}|${c.jour}|${c.repas}`))
-      if (libres.length === 0) return []
-
-      return ou(await supabase.from('meal_slot').upsert(libres.map(c => ({
-        household_id: foyer,
-        cycle_id: cycleId,
-        user_profile_id: c.userId,
-        day: c.jour,
-        meal: c.repas,
-        portion_id: c.portionId,
-        state: 'prevu' as const,
-      })), { onConflict: 'household_id,user_profile_id,day,meal' }).select())
-    },
-    onSuccess: () => qc.invalidateQueries(),
-  })
-}
-
-/**
  * Ce qu'on choisit de manger à un repas (`choisir_un_repas`, 0123) :
  *  · un PLAT du frigo ou du congélateur, désigné comme le frigo le regroupe (recette, libellé, lieu, état) ;
  *  · autre chose, sans barquette (un repère, une habitude) : la case reste « prévue » et porte un extra ;
@@ -264,6 +196,10 @@ export type Choisi = {
   poses: Record<string, string>
   /** Les barquettes que le changement a lâchées : libres pour un autre jour, ou restées au congélateur. */
   liberees: { portion_id: string; recipe_id: string | null; label: string; location: string; state: string }[]
+  /** Les repas passés qui réclamaient une barquette posée ici, et qui l'ont lâchée (0125). */
+  lachees: { day: string; meal: string; user_profile_id: string }[]
+  /** Les barquettes posées qui périment AVANT le repas : choisies faute de mieux, et dites (0125). */
+  perime_avant: { user_profile_id: string; portion_id: string; expires_at: string }[]
 }
 
 /**
@@ -300,25 +236,40 @@ export function useCeQueLaSessionPrend(cycleId: string | undefined, enabled = tr
   })
 }
 
-/** Manger : un geste. La base met la barquette à jour toute seule (trigger). */
+/**
+ * Manger : un geste. Un PLAT passe par `mange_une_part` (0122) : la base verrouille d'abord les barquettes du plat, puis
+ * la case — dans le même ordre que `choisir_un_repas`, donc sans interblocage entre deux téléphones — et la barquette
+ * est consommée. Ma case qui porte déjà une part de ce plat reprend celle-là. « Autre chose » (un repère, sans
+ * barquette) n'a rien à verrouiller : la case passe à « mangé », et son extra compte alors au bilan (`extraCompte`).
+ */
 export function useMange() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (caseId: string) =>
-      ou(await supabase.from('meal_slot').update({
-        state: 'mange', eaten_at: new Date().toISOString(),
-      }).eq('id', caseId).select().single()),
+    mutationFn: async (c: { id: string; day: string; meal: string; portion: Barquette | null }) => {
+      const eatenAt = new Date().toISOString()
+      const p = c.portion
+      if (p && (p.location === 'frigo' || p.location === 'congelateur')) {
+        return ou(await supabase.rpc('mange_une_part', {
+          p_recipe: p.recipe_id as string, p_label: p.label, p_location: p.location, p_state: p.state,
+          p_day: c.day, p_meal: c.meal, p_eaten_at: eatenAt,
+        })) as unknown as Json
+      }
+      return ou(await supabase.from('meal_slot').update({ state: 'mange', eaten_at: eatenAt })
+        .eq('id', c.id).eq('state', 'prevu').select().single()) as unknown as Json
+    },
     onSuccess: () => qc.invalidateQueries(),
   })
 }
 
-/** Sauter un repas, explicitement. « Rien » n'est PAS « on ne sait pas » (D33). */
-export function useSaute() {
+/**
+ * Remettre un moment « sauté » : la case s'en va (elle redevient « on ne sait pas », pas « rien mangé » : D33). Ne touche
+ * qu'une case qui est encore « sautée » — jamais un repas qu'un autre téléphone vient de noter mangé.
+ */
+export function useRetireLaCase() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (caseId: string) =>
-      ou(await supabase.from('meal_slot').update({ state: 'saute', eaten_at: null })
-        .eq('id', caseId).select().single()),
+      ou(await supabase.from('meal_slot').delete().eq('id', caseId).eq('state', 'saute').select()),
     onSuccess: () => qc.invalidateQueries(),
   })
 }
@@ -414,11 +365,14 @@ export function useAjouteExtra({ onSuccess }: { onSuccess?: () => void } = {}) {
   })
 }
 
+/**
+ * Retirer un extra (`retire_un_extra`, 0125) : et la case qu'il laisse vide, en une transaction. Une case « prévue » sans
+ * barquette ni extra n'est rien : elle restait, masquée, et le petit déjeuner ni la collation ne se proposaient plus.
+ */
 export function useSupprimeExtra() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (id: string) =>
-      ou(await supabase.from('meal_extra').delete().eq('id', id).select()),
+    mutationFn: async (id: string) => ou(await supabase.rpc('retire_un_extra', { p_id: id })),
     onSuccess: () => qc.invalidateQueries(),
   })
 }

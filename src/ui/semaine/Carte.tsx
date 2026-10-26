@@ -8,7 +8,7 @@
 import type { ReactNode } from 'react'
 import { PlatImage } from '../frigo/PlatImage.tsx'
 import { fondDuPlat } from '../../lib/frigo.ts'
-import { ligneDeLaCarte, nomDeLaCarte, phraseDuBandeau } from '../../lib/choix.ts'
+import { detailDeLaPart, ligneDeLaCarte, nomDeLaCarte, peremptionDeLaCarte, phraseDuBandeau } from '../../lib/choix.ts'
 import type { Carte, Membre, RepasChoisi } from '../../lib/choix.ts'
 import { MOT_DU_REPAS } from '../../lib/choix.ts'
 
@@ -31,17 +31,19 @@ export function Pastille({ carte, photo }: { carte: Carte; photo: string | null 
 }
 
 export function CarteDuRepas({
-  carte, membres, photo, jour, repas, maintenant, rappelActif, surChange, surMange, enCours, enPlus,
+  carte, membres, moi, photo, jour, repas, maintenant, rappelActif, surChange, surMange, enCours, enPlus,
 }: {
   carte: Carte
   membres: Membre[]
+  /** Moi : la part dont la carte dit le poids est la mienne. */
+  moi: string
   photo: string | null
   jour: string
   repas: RepasChoisi
   maintenant: Date
   rappelActif: boolean
   surChange: () => void
-  /** « Je l'ai mangé » : `undefined` quand il n'y a rien à cocher (pas ma carte, déjà mangé, jour à venir, pas un plat). */
+  /** « Je l'ai mangé » : `undefined` quand il n'y a rien à cocher (pas ma carte, déjà mangé, jour à venir, « sauté »). */
   surMange: (() => void) | undefined
   enCours: boolean
   /** Ce que j'ai mangé en plus de ce plat. */
@@ -54,6 +56,8 @@ export function CarteDuRepas({
       jour, repas, label: c.label, n: carte.cases.filter(x => x.state !== 'mange').length, rappelActif, maintenant,
     })
     : ''
+  const detail = detailDeLaPart(carte, membres, moi)
+  const peremption = peremptionDeLaCarte(carte, jour, repas, maintenant)
   return (
     <div data-carte={carte.cle} aria-label={`${MOT_DU_REPAS[repas].titre} : ${nomDeLaCarte(carte)}`} role="group"
          className="flex flex-col gap-2.5 rounded-[20px] bg-surface p-3.5"
@@ -63,9 +67,15 @@ export function CarteDuRepas({
         <div className="min-w-0 flex-1">
           <div className="text-[15px] font-semibold leading-[1.25] [overflow-wrap:anywhere]">{nomDeLaCarte(carte)}</div>
           <div className="mt-[3px] text-[13px] text-doux">{ligneDeLaCarte(carte, membres)}</div>
+          {detail && <div data-detail="" className="mt-0.5 text-[12px] text-doux">{detail}</div>}
+          {peremption && (
+            <div data-peremption="" className="mt-0.5 text-[12px] font-semibold" style={{ color: peremption.encre }}>
+              {peremption.texte}
+            </div>
+          )}
         </div>
         {!tousMange && (
-          <button type="button" onClick={surChange} data-ouvre=""
+          <button type="button" onClick={surChange} data-ouvre={carte.cle}
                   aria-label={`Changer le ${MOT_DU_REPAS[repas].minuscule}`}
                   className="min-h-11 shrink-0 rounded-xl bg-piste px-3.5 text-[14px] font-semibold">
             Changer
@@ -96,7 +106,7 @@ export function CarteDuRepas({
 export function CarteVide({ repas, pour, surOuvre }: { repas: RepasChoisi; pour?: string; surOuvre: () => void }) {
   const mot = MOT_DU_REPAS[repas].minuscule
   return (
-    <button type="button" onClick={surOuvre} data-ouvre=""
+    <button type="button" onClick={surOuvre} data-ouvre="vide"
             className="flex min-h-[72px] w-full items-center justify-center gap-2 rounded-[20px] border-[1.5px] border-dashed
                        border-[#9FB0A4] bg-transparent px-3 text-center text-[15px] font-semibold text-herbe">
       + Choisir le {mot}{pour ? ` pour ${pour}` : ''}

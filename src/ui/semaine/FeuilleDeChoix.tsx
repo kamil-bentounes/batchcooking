@@ -13,10 +13,11 @@ import { useState } from 'react'
 import { Feuille } from '../budget/Feuille.tsx'
 import { Erreur } from '../coque.tsx'
 import { PlatImage } from '../frigo/PlatImage.tsx'
-import { fondDuPlat, nomCourt } from '../../lib/frigo.ts'
+import { fondDuPlat, momentDuRepas, nomCourt } from '../../lib/frigo.ts'
 import type { Groupe, Part, Prevu } from '../../lib/frigo.ts'
 import {
-  choisirLesParts, detailDuCongele, detailDuFrigo, libresPourLeChoix, ordonneLesChoix, personnesDuChoix, resteLibre,
+  choisirLesParts, dejaPosees, detailDuCongele, detailDuFrigo, libresPourLeChoix, ordonneLesChoix, personnesDuChoix,
+  resteLibre,
 } from '../../lib/choix.ts'
 import type { Cible, ChoixDuFrigo, Membre } from '../../lib/choix.ts'
 import { pourLeFoyer } from '../../lib/ranger.ts'
@@ -63,6 +64,13 @@ function Vignette({ fond, photo, filtre }: { fond: string; photo?: string | null
   )
 }
 
+/** Le contenu d'une section tant que sa lecture est finie ; sinon « Je lis… » ou l'erreur, jamais un « aucune » trompeur. */
+function SiLue({ lue, enCours, children }: { lue: Lecture; enCours: string; children: React.ReactNode }) {
+  if (lue.erreur) return <Erreur de={lue.erreur} />
+  if (lue.enCours) return <p role="status" className="text-[13px] text-doux">{enCours}</p>
+  return <>{children}</>
+}
+
 function Section({ titre, aide, children }: { titre: string; aide: string; children: React.ReactNode }) {
   return (
     <section className="mt-4" aria-label={titre}>
@@ -74,6 +82,9 @@ function Section({ titre, aide, children }: { titre: string; aide: string; child
     </section>
   )
 }
+
+/** Où en est une lecture : en cours, ou en erreur. La feuille ne dit « aucune barquette » que d'une lecture finie. */
+export type Lecture = { enCours: boolean; erreur: unknown }
 
 type Proprietes = {
   /** « Lundi midi ». */
@@ -92,6 +103,8 @@ type Proprietes = {
   maintenant: Date
   photoDe: (recipeId: string | null) => string | null
   frequents: Frequent[]
+  /** Les trois lectures dont la feuille a besoin : « Aucune barquette au frigo » ne se dit pas d'une lecture qui a échoué. */
+  lectures: { barquettes: Lecture; frequents: Lecture; prevus: Lecture }
   nosAliments?: NotreAliment[]
   enCours: boolean
   erreur: unknown
@@ -111,7 +124,7 @@ export function FeuilleDeChoix({ ouverte, fermer, ...p }: Proprietes & { ouverte
 }
 
 function Contenu({
-  titre, repas, jour, membres, pourInitial, dejaMange, groupes, prevus, maintenant, photoDe, frequents,
+  titre, repas, jour, membres, pourInitial, dejaMange, groupes, prevus, maintenant, photoDe, frequents, lectures,
   nosAliments = [], enCours, erreur, surChoix,
 }: Proprietes) {
   const [pour, setPour] = useState<'tous' | string>(pourInitial)
@@ -123,6 +136,8 @@ function Contenu({
   const cible: Cible = { jour, repas, personnes }
 
   const lu = prevus !== null
+  /* Un choix est en train de s'écrire : aucune ligne ne part une seconde fois (le deuxième toucher d'un double clic). */
+  const occupe = enCours
   const avecLibres = (lieu: 'frigo' | 'congelateur'): ChoixDuFrigo[] =>
     groupes.filter(g => g.location === lieu).map(g => ({
       groupe: g,
@@ -136,8 +151,17 @@ function Contenu({
     ({ type: 'plat', recipe_id: g.recipeId, label: g.label, location: g.location, state: g.state })
   const fait = (choix: Choix) => { if (personnes.length > 0) surChoix(choix, personnes) }
 
+  const moment = momentDuRepas(jour, repas)
+  const deja = prevus ? dejaPosees(prevus, cible) : {}
+  /* Ce que la base posera VRAIMENT : les parts qui seront encore bonnes à l'heure du repas d'abord (`choisirLesParts`,
+     miroir de `choisir_un_repas`). Dire « périme avant ce repas » d'une part que la base ne posera pas serait faux. */
+  const aPoser = (c: ChoixDuFrigo) => {
+    const parts = personnes.length > 0 ? choisirLesParts(c.libres, personnes, deja, moment) : null
+    return parts ? [...parts.values()] : c.libres
+  }
+
   const manque = (c: ChoixDuFrigo): string | null => {
-    if (!lu) return 'les repas prévus se lisent…'
+    if (!lu) return lectures.prevus.erreur ? 'les repas prévus ne se lisent pas' : 'les repas prévus se lisent…'
     if (personnes.length === 0) return 'personne à servir'
     if (c.libres.length === 0) return null
     if (choisirLesParts(c.libres, personnes) === null) return `il en faut ${personnes.length}, ${c.libres.length} libre${c.libres.length > 1 ? 's' : ''}`
@@ -169,45 +193,49 @@ function Contenu({
       )}
 
       <Section titre="Au frigo" aide="ce qui presse d’abord">
-        {frigo.length === 0 && <p className="text-[13px] text-doux">Aucune barquette au frigo pour l’instant.</p>}
-        {frigo.map(c => {
-          const d = detailDuFrigo(c.libres, cible, maintenant)
-          const pasAssez = manque(c)
-          const desactive = !lu || c.libres.length === 0 || pasAssez !== null
-          return (
-            <Rang key={c.groupe.cle} nom={nomCourt(c.groupe.label)} desactive={desactive}
-                  detail={pasAssez ?? d.texte} encre={pasAssez ? ENCRE_OCRE : d.urgent ? ENCRE_OCRE : ENCRE_DOUCE}
-                  reste={resteLibre(c.libres.length)} surChoix={() => fait(plat(c.groupe))}
-                  pastille={<Vignette fond={fondDuPlat(c.groupe.label)} photo={photoDe(c.groupe.recipeId)} />} />
-          )
-        })}
+        <SiLue lue={lectures.barquettes} enCours="Je lis le frigo…">
+          {frigo.length === 0 && <p className="text-[13px] text-doux">Aucune barquette au frigo pour l’instant.</p>}
+          {frigo.map(c => {
+            const d = detailDuFrigo(aPoser(c), cible, maintenant)
+            const pasAssez = manque(c)
+            const desactive = occupe || !lu || c.libres.length === 0 || pasAssez !== null
+            return (
+              <Rang key={c.groupe.cle} nom={nomCourt(c.groupe.label)} desactive={desactive}
+                    detail={pasAssez ?? d.texte} encre={pasAssez ? ENCRE_OCRE : d.urgent ? ENCRE_OCRE : ENCRE_DOUCE}
+                    reste={resteLibre(c.libres.length)} surChoix={() => fait(plat(c.groupe))}
+                    pastille={<Vignette fond={fondDuPlat(c.groupe.label)} photo={photoDe(c.groupe.recipeId)} />} />
+            )
+          })}
+        </SiLue>
       </Section>
 
       <Section titre="Au congélateur" aide="à sortir la veille">
-        {congelo.length === 0 && <p className="text-[13px] text-doux">Rien au congélateur pour l’instant.</p>}
-        {congelo.map(c => {
-          const pasAssez = manque(c)
-          const desactive = !lu || c.libres.length === 0 || pasAssez !== null
-          return (
-            <Rang key={c.groupe.cle} nom={nomCourt(c.groupe.label)} desactive={desactive}
-                  detail={pasAssez ?? (c.libres.length === 0 ? 'déjà choisi pour d’autres repas' : detailDuCongele(cible, maintenant))}
-                  encre={pasAssez ? ENCRE_OCRE : ENCRE_GLACE}
-                  reste={resteLibre(c.libres.length)} surChoix={() => fait(plat(c.groupe))}
-                  pastille={<Vignette fond="var(--color-congel-fond)" photo={photoDe(c.groupe.recipeId)} filtre="saturate(0.75)" />} />
-          )
-        })}
+        <SiLue lue={lectures.barquettes} enCours="Je lis le congélateur…">
+          {congelo.length === 0 && <p className="text-[13px] text-doux">Rien au congélateur pour l’instant.</p>}
+          {congelo.map(c => {
+            const pasAssez = manque(c)
+            const desactive = occupe || !lu || c.libres.length === 0 || pasAssez !== null
+            return (
+              <Rang key={c.groupe.cle} nom={nomCourt(c.groupe.label)} desactive={desactive}
+                    detail={pasAssez ?? (c.libres.length === 0 ? 'déjà choisi pour d’autres repas' : detailDuCongele(cible, maintenant))}
+                    encre={pasAssez ? ENCRE_OCRE : ENCRE_GLACE}
+                    reste={resteLibre(c.libres.length)} surChoix={() => fait(plat(c.groupe))}
+                    pastille={<Vignette fond="var(--color-congel-fond)" photo={photoDe(c.groupe.recipeId)} filtre="saturate(0.75)" />} />
+            )
+          })}
+        </SiLue>
       </Section>
 
       <Section titre="Autre chose" aide="sans barquette">
         {/* Nos aliments (chantier 4) : AVANT les repères, un geste = une unité. L'endroit est là. */}
         {nosAliments.map(a => (
           <Rang key={a.id} nom={a.label} detail={a.detail} encre={ENCRE_DOUCE} surChoix={() => fait(a.choix)}
-                desactive={personnes.length === 0}
+                desactive={occupe || personnes.length === 0}
                 pastille={<Vignette fond="var(--color-surface)" />} />
         ))}
         {frequents.slice(0, 6).map(f => (
           <Rang key={f.id} nom={f.label} detail="ce que tu reprends souvent" encre={ENCRE_DOUCE}
-                desactive={personnes.length === 0}
+                desactive={occupe || personnes.length === 0}
                 reste={`${Math.round(Number(f.kcal))} kcal`}
                 surChoix={() => fait({
                   type: 'repere', label: f.label, kcal: Number(f.kcal), protein_g: Number(f.protein_g), grams: Number(f.grams),
@@ -217,13 +245,15 @@ function Contenu({
         ))}
         {reperes.map(r => (
           <Rang key={r.label} nom={r.label} detail="un repère, pas une pesée" encre={ENCRE_DOUCE}
-                desactive={personnes.length === 0} reste={`${r.kcal} kcal`}
+                desactive={occupe || personnes.length === 0} reste={`${r.kcal} kcal`}
                 surChoix={() => fait({ type: 'repere', label: r.label, kcal: r.kcal, protein_g: r.proteinG })}
                 pastille={<Vignette fond="var(--color-sable)" />} />
         ))}
-        <Rang nom="On saute ce repas" detail="rien de mangé" encre={ENCRE_DOUCE} desactive={personnes.length === 0}
+        <Rang nom="On saute ce repas" detail="rien de mangé" encre={ENCRE_DOUCE} desactive={occupe || personnes.length === 0}
               surChoix={() => fait({ type: 'saute' })}
               pastille={<Vignette fond="var(--color-piste)" />} />
+        {/* Ce que le foyer reprend souvent ne se lit pas : on le dit, les repères restent. */}
+        {!lectures.frequents.enCours && <Erreur de={lectures.frequents.erreur} />}
       </Section>
 
       {enCours && <p role="status" className="mx-1 mt-3 text-[13px] text-doux">J’écris le repas…</p>}

@@ -168,7 +168,7 @@ test('le frigo fermé dit le dîner de ce soir et ce qui presse', async ({ page 
   await expect(afficheur).toContainText('Ce soir')
   await expect(afficheur).toContainText('Burger de feuilles de riz')
   /* Le magnet : des congelés posés sur ce soir passent avant le frigo qui presse. */
-  await expect(page.locator('[data-magnet]')).toHaveText('Sors les 2 burgers : c’est ce soir')
+  await expect(page.locator('[data-magnet]')).toHaveText('Sors les 2 barquettes de burger de feuilles de riz : c’est ce soir')
   /* La photo de demain : celle des lasagnes. */
   await expect(page.locator('[data-polaroid] img')).toHaveAttribute('src', /photos-des-plats/)
   await capture(page, '01-frigo-ferme', true)
@@ -179,7 +179,7 @@ test('le frigo fermé dit le dîner de ce soir et ce qui presse', async ({ page 
   await expect(page.locator('[data-afficheur]')).toContainText('Rien de prévu ce soir')
   await expect(page.locator('[data-afficheur]')).not.toContainText('Burger')
   /* … et le magnet reste : la part de Thauba est encore posée sur ce soir (1 burger). */
-  await expect(page.locator('[data-magnet]')).toHaveText('Sors 1 burger : c’est ce soir')
+  await expect(page.locator('[data-magnet]')).toHaveText('Sors la barquette de burger de feuilles de riz : c’est ce soir')
   /* On remet le repas. */
   const burgers = await parts('Burger de feuilles de riz')
   const dejaPose = (await db.from('meal_slot').select('portion_id').eq('household_id', foyer.householdId).eq('day', jourLocal(0))).data!
@@ -266,7 +266,7 @@ test('le congélateur : la porte pivote, l’intérieur s’ouvre, on sort les b
   await expect(porteGauche(page)).toHaveAttribute('aria-expanded', 'false')
   await expect(porteGauche(page)).toBeFocused({ timeout: 5_000 })
   /* Plus rien de congelé pour ce soir : le magnet passe au frigo qui presse. */
-  await expect(page.locator('[data-magnet]')).toContainText('pizzas à prévoir avant')
+  await expect(page.locator('[data-magnet]')).toContainText('barquettes de pizza vietnamienne à prévoir avant')
 })
 
 test('le frigo : les plats, les étagères, une photo, congeler, corriger une date, en manger une', async ({ page }) => {
@@ -712,10 +712,10 @@ test('M2, M3, M5, M6 · l’urgence quand tout est réclamé, le magnet qui dit 
     await expect(porteDroite(page)).toBeVisible({ timeout: 20_000 })
 
     /* M3 : une part DÉJÀ périmée, libre : « à jeter », pas « à prévoir avant ce soir ». */
-    await expect(page.locator('[data-magnet]')).toHaveText('2 soupes à jeter')
+    await expect(page.locator('[data-magnet]')).toHaveText('2 barquettes de soupe de la revue à jeter')
     /* M5 : ce que disent le distributeur et le magnet est dans la description des portes. */
     await expect(porteGauche(page)).toHaveAccessibleDescription(/Ce soir.*Tajine de la revue/)
-    await expect(porteDroite(page)).toHaveAccessibleDescription('2 soupes à jeter')
+    await expect(porteDroite(page)).toHaveAccessibleDescription('2 barquettes de soupe de la revue à jeter')
 
     const interieur = await ouvreLe(page, 'frigo')
     /* M2 : la ligne d'un plat dont TOUTES les parts sont posées, après sa péremption. */
@@ -767,7 +767,7 @@ test('M4 · on ne sort pas de demain soir le matin : la part décongelée vit 24
     await interieur.getByRole('button', { name: 'Fermer la porte' }).click()
     await heure(19, 30)
     await page.reload()
-    await expect(page.locator('[data-magnet]')).toHaveText('Sors les 2 quiches : c’est demain soir', { timeout: 15_000 })
+    await expect(page.locator('[data-magnet]')).toHaveText('Sors les 2 barquettes de quiche de la revue : c’est demain soir', { timeout: 15_000 })
     const interieur2 = await ouvreLe(page, 'congelo')
     await expect(interieur2.getByRole('button', { name: new RegExp(`^${t}, 2 parts, Demain soir : à sortir maintenant`) })).toBeVisible()
     await interieur2.getByRole('button', { name: new RegExp(`^${t}`) }).click()

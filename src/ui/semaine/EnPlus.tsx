@@ -10,7 +10,8 @@ import { NOM_REPAS, useAjouteExtra, useSupprimeExtra } from '../../lib/donnees/b
 import type { Case, Repas } from '../../lib/donnees/barquettes.ts'
 import type { Ligne as LigneBase } from '../../lib/supabase.ts'
 import { reperesDe } from '../../lib/reperes.ts'
-import { MOMENTS_EN_PLUS } from '../../lib/choix.ts'
+import { MOMENTS_EN_PLUS, caseVide } from '../../lib/choix.ts'
+import type { CaseLue } from '../../lib/choix.ts'
 
 type Frequent = LigneBase<'frequent_food'>
 
@@ -154,14 +155,18 @@ export function EnPlus({ cas, frequents, deployeParDefaut = false, surAjoute }:
  * case — et sans case, il n'y avait nulle part où l'écrire. La case se crée au
  * moment où l'on a quelque chose à y mettre.
  */
-export function HorsBarquette({ jour: j, userId, frequents, dejaLa }: {
+export function HorsBarquette({ jour: j, userId, frequents, dejaLa, surSaute, enCours = false }: {
   jour: string
   userId: string
   frequents: Frequent[]
   dejaLa: Case[]
+  /** « Sauté » : « on ne mange rien à ce moment » est une réponse (D33), pas un trou. Absent : pas de bouton. */
+  surSaute?: (moment: 'petit_dejeuner' | 'collation') => void
+  enCours?: boolean
 }) {
   const [moment, setMoment] = useState<Repas | null>(null)
-  const pris = new Set(dejaLa.map(c => c.meal))
+  /* Une case VIDE (ce que laissait « retirer » le dernier extra) ne prend pas la place du moment : on peut y noter. */
+  const pris = new Set(dejaLa.filter(c => !caseVide(c as unknown as CaseLue)).map(c => c.meal))
   const libres = MOMENTS_EN_PLUS.filter(r => !pris.has(r))
   if (libres.length === 0) return null
 
@@ -187,6 +192,12 @@ export function HorsBarquette({ jour: j, userId, frequents, dejaLa }: {
               annuler
             </button>
           </div>
+          {surSaute && (moment === 'petit_dejeuner' || moment === 'collation') && (
+            <button type="button" disabled={enCours} onClick={() => { surSaute(moment); setMoment(null) }}
+                    className="mb-2 inline-flex min-h-11 items-center rounded-full bg-brume/50 px-3.5 text-[14px] disabled:opacity-60">
+              {moment === 'collation' ? 'Je saute la collation' : 'Je saute le petit déjeuner'}
+            </button>
+          )}
           <EnPlus frequents={frequents} deployeParDefaut
                   surAjoute={() => setMoment(null)}
                   cas={{

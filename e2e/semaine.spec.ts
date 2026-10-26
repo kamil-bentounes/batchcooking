@@ -263,7 +263,7 @@ test('changer le repas le jour même : l’ancienne barquette est lâchée, on l
   await f.getByRole('region', { name: 'Au congélateur' }).getByRole('button', { name: /Wrap/ }).click()
   await expect(f).toBeHidden({ timeout: 10_000 })
   const statut = page.getByRole('status').filter({ hasText: 'lasagnes' })
-  await expect(statut).toHaveText('Les lasagnes retournent au frigo, libres pour un autre jour.')
+  await expect(statut).toHaveText('Les 2 barquettes de lasagnes au saumon-poireaux retournent au frigo, libres pour un autre jour.')
   const carte = midi.getByRole('group', { name: 'Midi : Wrap' })
   await expect(carte).toContainText('Du congélateur, pour vous deux')
   /* Le bandeau bleu : c'est pour aujourd'hui. */
@@ -306,7 +306,7 @@ test('un plat congelé dans quelques jours : « Pense à sortir… », puis il r
   await carte.getByRole('button', { name: /Changer/ }).click()
   await f.getByRole('region', { name: 'Au frigo' }).getByRole('button', { name: /Lasagnes saumon-poireaux/ }).click()
   await expect(f).toBeHidden({ timeout: 10_000 })
-  await expect(page.getByRole('status').filter({ hasText: 'wraps' })).toHaveText('Les wraps restent au congélateur.')
+  await expect(page.getByRole('status').filter({ hasText: 'wraps' })).toHaveText('Les 2 wraps restent au congélateur.')
   await expect(repas(page, 'diner').getByRole('group', { name: 'Soir : Lasagnes saumon-poireaux' })).toContainText('Du frigo, pour vous deux')
   expect(await caseDe(foyer.userId, 2, 'diner')).toBeTruthy()
 })
@@ -353,6 +353,14 @@ test('autre chose, et on saute : une carte par repas, le point safran', async ({
   await expect(points(page, 1).first()).toHaveAttribute('data-point', 'autre')
   await capture(page, '09-autre-chose-et-saute', true)
 
+  /* L9 : le focus revient au bouton EXACT qui a ouvert la feuille — le « Changer » de la SECONDE carte, pas du premier. */
+  const changerLaSeconde = midi.getByRole('group', { name: 'Midi : On saute ce repas' }).getByRole('button', { name: /Changer/ })
+  await changerLaSeconde.click()
+  await expect(f).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(f).toBeHidden()
+  await expect(changerLaSeconde).toBeFocused()
+
   /* La base : Kamil « prévu » sans barquette avec son extra ; elle « sautée ». */
   const mienne = (await caseDe(foyer.userId, 1, 'dejeuner'))!
   expect(mienne).toMatchObject({ state: 'prevu', portion_id: null })
@@ -385,6 +393,71 @@ test('le petit déjeuner et la collation se notent encore en plus', async ({ pag
   await capture(page, '10-en-plus', true)
 })
 
+test('M1 · retirer le dernier extra du petit déjeuner ne le rend pas inaccessible : la case s’en va, on en remet un', async ({ page }) => {
+  test.setTimeout(120_000)
+  await connecte(page)
+  await page.goto('/semaine')
+  const autres = page.getByRole('region', { name: 'Autres moments' })
+  await expect(autres.getByText('Mangé sans barquette ?')).toBeVisible({ timeout: 20_000 })
+  const duMatin = async () => (await slots()).find(x => x.user_profile_id === foyer.userId && x.day === jourLocal(0) && x.meal === 'petit_dejeuner')
+
+  /* Un petit déjeuner noté en plus. */
+  await autres.getByRole('button', { name: 'Petit déjeuner', exact: true }).click()
+  await autres.getByRole('button', { name: /^Café et rien/ }).click()
+  await expect(autres.getByText('Café et rien · 5 kcal', { exact: false })).toBeVisible({ timeout: 10_000 })
+  expect(await duMatin()).toMatchObject({ state: 'prevu', portion_id: null })
+
+  /* On retire son dernier extra : la case vide s'en va avec lui (en base, pas seulement à l'écran). */
+  await autres.getByRole('button', { name: 'Retirer Café et rien' }).click()
+  await expect.poll(duMatin, { timeout: 10_000, message: 'la case vide est restée en base' }).toBeUndefined()
+  await expect(autres.getByText('Café et rien', { exact: false })).toHaveCount(0)
+
+  /* Le petit déjeuner est de nouveau proposé : on en remet un. */
+  const reviens = autres.getByRole('button', { name: 'Petit déjeuner', exact: true })
+  await expect(reviens, 'le petit déjeuner n’est plus proposé : il est inaccessible').toBeVisible()
+  await reviens.click()
+  await autres.getByRole('button', { name: /^Petit-déjeuner léger/ }).click()
+  await expect(autres.getByText('Petit-déjeuner léger · 250 kcal', { exact: false })).toBeVisible({ timeout: 10_000 })
+  const c = (await duMatin())!
+  expect(c).toMatchObject({ state: 'prevu', portion_id: null })
+  expect((await db.from('meal_extra').select('label').eq('meal_slot_id', c.id)).data!.map(e => e.label)).toEqual(['Petit-déjeuner léger'])
+
+  /* Une case vide laissée par une autre voie (un autre téléphone, une ancienne version) ne bloque pas non plus. */
+  await db.from('meal_extra').delete().eq('meal_slot_id', c.id)
+  await page.reload()
+  await expect(autres.getByRole('button', { name: 'Petit déjeuner', exact: true })).toBeVisible({ timeout: 20_000 })
+  await autres.getByRole('button', { name: 'Petit déjeuner', exact: true }).click()
+  await autres.getByRole('button', { name: /^Café et rien/ }).click()
+  await expect(autres.getByText('Café et rien · 5 kcal', { exact: false })).toBeVisible({ timeout: 10_000 })
+  /* On le retire pour laisser la journée comme elle était. */
+  await autres.getByRole('button', { name: 'Retirer Café et rien' }).click()
+  await expect.poll(duMatin, { timeout: 10_000 }).toBeUndefined()
+})
+
+test('L7 · le petit déjeuner peut être sauté, puis remis', async ({ page }) => {
+  test.setTimeout(120_000)
+  await connecte(page)
+  await page.goto('/semaine')
+  await jourBouton(page, 3).click()
+  const autres = page.getByRole('region', { name: 'Autres moments' })
+  const dumatin = async () => (await slots()).find(x => x.user_profile_id === foyer.userId && x.day === jourLocal(3) && x.meal === 'petit_dejeuner')
+  await autres.getByRole('button', { name: 'Petit déjeuner', exact: true }).click()
+  await autres.getByRole('button', { name: 'Je saute le petit déjeuner' }).click()
+  await expect(autres.getByText('Petit déjeuner · sauté')).toBeVisible({ timeout: 10_000 })
+  expect(await dumatin()).toMatchObject({ state: 'saute', portion_id: null, eaten_at: null })
+  /* Sauté est une réponse : le moment n'est plus proposé ; « annuler » le remet. */
+  await expect(autres.getByRole('button', { name: 'Petit déjeuner', exact: true })).toHaveCount(0)
+  await autres.getByRole('button', { name: 'Petit déjeuner : ne plus le sauter' }).click()
+  await expect.poll(dumatin, { timeout: 10_000 }).toBeUndefined()
+  await expect(autres.getByRole('button', { name: 'Petit déjeuner', exact: true })).toBeVisible()
+  /* La collation aussi. */
+  await autres.getByRole('button', { name: 'Collation', exact: true }).click()
+  await autres.getByRole('button', { name: 'Je saute la collation' }).click()
+  await expect(autres.getByText('Collation · sauté')).toBeVisible({ timeout: 10_000 })
+  await autres.getByRole('button', { name: 'Collation : ne plus le sauter' }).click()
+  await expect(autres.getByRole('button', { name: 'Collation', exact: true })).toBeVisible({ timeout: 10_000 })
+})
+
 test('l’accueil : « Changer » ouvre la semaine sur aujourd’hui, la feuille du bon repas ouverte', async ({ page }) => {
   test.setTimeout(120_000)
   await connecte(page)
@@ -414,6 +487,55 @@ test('l’accueil : « Changer » ouvre la semaine sur aujourd’hui, la feuille
   await page.goto('/semaine?jour=1999-01-01&repas=diner')
   await expect(jourBouton(page, 0)).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('dialog')).toHaveCount(0)
+})
+
+test('M3 · un repère choisi (« Autre chose ») ne compte pas avant « Je l’ai mangé »', async ({ page }) => {
+  test.setTimeout(120_000)
+  await connecte(page)
+  const kcalAujourdhui = async () => {
+    await page.goto('/cuisine-accueil')
+    const bloc = page.getByRole('region', { name: 'Aujourd’hui' })
+    await expect(bloc).toBeVisible({ timeout: 20_000 })
+    return (await bloc.innerText()).replace(/[\s\u202f\u00a0]/g, '')
+  }
+  /* Avant : la pizza du soir (595, mangée) et le yaourt noté en plus (60). */
+  expect(await kcalAujourdhui()).toMatch(/^655kcal/)
+
+  await page.goto('/semaine')
+  const midi = repas(page, 'dejeuner')
+  await midi.getByRole('button', { name: /Changer/ }).click()
+  const f = feuille(page, `${semaineDe(0)} midi`)
+  await f.getByRole('group', { name: 'Pour qui' }).getByRole('button', { name: 'Kamil' }).click()
+  await f.getByRole('region', { name: 'Autre chose' }).getByRole('button', { name: /Sandwich/ }).click()
+  await expect(f).toBeHidden({ timeout: 10_000 })
+  const carte = midi.getByRole('group', { name: 'Midi : Sandwich' })
+  await expect(carte).toContainText('Pour Kamil')
+  const mienne = (await caseDe(foyer.userId, 0, 'dejeuner'))!
+  expect(mienne).toMatchObject({ state: 'prevu', portion_id: null })
+  expect((await db.from('meal_extra').select('planifie').eq('meal_slot_id', mienne.id)).data).toEqual([{ planifie: true }])
+  /* Choisi, pas mangé : le bilan du jour ne bouge pas. */
+  expect(await kcalAujourdhui(), 'un sandwich seulement choisi est compté au bilan').toMatch(/^655kcal/)
+
+  /* « Je l'ai mangé » : la case passe à mangé, et le sandwich compte (655 + 550). */
+  await page.goto('/semaine')
+  const carte2 = repas(page, 'dejeuner').getByRole('group', { name: 'Midi : Sandwich' })
+  await expect(carte2).toBeVisible({ timeout: 20_000 })
+  await carte2.getByRole('button', { name: 'Je l’ai mangé' }).click()
+  await expect.poll(async () => (await caseDe(foyer.userId, 0, 'dejeuner'))?.state, { timeout: 10_000 }).toBe('mange')
+  await expect(carte2).toContainText('mangé')
+  await expect(carte2.getByRole('button', { name: 'Je l’ai mangé' })).toHaveCount(0)
+  expect(await kcalAujourdhui()).toMatch(/^1205kcal/)
+  /* Un repère choisi pour un jour à venir n'a pas de « Je l'ai mangé » : il n'est pas encore à manger. */
+  await page.goto('/semaine')
+  await jourBouton(page, 2).click()
+  await repas(page, 'dejeuner').getByRole('button', { name: '+ Choisir le midi' }).click()
+  const g = feuille(page, `${semaineDe(2)} midi`)
+  await g.getByRole('group', { name: 'Pour qui' }).getByRole('button', { name: 'Kamil' }).click()
+  await g.getByRole('region', { name: 'Autre chose' }).getByRole('button', { name: /Restaurant/ }).click()
+  await expect(g).toBeHidden({ timeout: 10_000 })
+  const resto = repas(page, 'dejeuner').getByRole('group', { name: 'Midi : Restaurant' })
+  await expect(resto).toBeVisible()
+  await expect(resto.getByRole('button', { name: 'Je l’ai mangé' })).toHaveCount(0)
 })
 
 test('à 320 px : rien ne déborde, le bandeau défile de lui-même, la feuille tient, les cibles font 44 px', async ({ browser }) => {
@@ -449,4 +571,102 @@ test('à 320 px : rien ne déborde, le bandeau défile de lui-même, la feuille 
     await capture(page, '13-feuille-320')
     expect(await ciblesPetites(page), 'cibles de moins de 44 px dans la feuille').toEqual([])
   } finally { await ctx.close() }
+})
+
+test('L3 · un double clic dans la feuille n’écrit qu’une fois, et le message de libération reste', async ({ page }) => {
+  test.setTimeout(120_000)
+  await connecte(page)
+  await page.goto('/semaine')
+  await jourBouton(page, 4).click()
+  /* Des lasagnes pour vous deux, puis on change pour des wraps d'un double clic. */
+  await repas(page, 'dejeuner').getByRole('button', { name: '+ Choisir le midi' }).click()
+  const f = feuille(page, `${semaineDe(4)} midi`)
+  await f.getByRole('region', { name: 'Au frigo' }).getByRole('button', { name: /Lasagnes saumon-poireaux/ }).click()
+  await expect(f).toBeHidden({ timeout: 10_000 })
+  await repas(page, 'dejeuner').getByRole('button', { name: /Changer/ }).click()
+  await expect(f).toBeVisible()
+  const appels: string[] = []
+  page.on('request', r => { if (r.method() === 'POST' && r.url().includes('/rpc/choisir_un_repas')) appels.push(r.postData() ?? '') })
+  await f.getByRole('region', { name: 'Au congélateur' }).getByRole('button', { name: /Wrap/ }).dblclick()
+  await expect(f).toBeHidden({ timeout: 10_000 })
+  await page.waitForTimeout(500)
+  expect(appels, 'le double clic a écrit deux fois').toHaveLength(1)
+  const statut = page.getByRole('status').filter({ hasText: 'lasagnes' })
+  await expect(statut, 'le second clic a effacé le message de libération').toHaveText(
+    'Les 2 barquettes de lasagnes au saumon-poireaux retournent au frigo, libres pour un autre jour.')
+  const du = (await slots()).filter(x => x.day === jourLocal(4) && x.meal === 'dejeuner')
+  expect(du).toHaveLength(2)
+  const wraps = (await parts(WRAP)).map(p => p.id)
+  expect(du.every(x => wraps.includes(x.portion_id!))).toBe(true)
+  expect(new Set(du.map(x => x.portion_id)).size, 'la même barquette dans deux cases').toBe(2)
+})
+
+test('M2 · la péremption se voit : sur la carte, et la ligne de la feuille annonce la barquette que la base posera', async ({ page }) => {
+  test.setTimeout(120_000)
+  const SOUPE = 'Soupe de la revue'
+  const jours = (n: number) => new Date(Date.now() + n * JOUR_MS).toISOString()
+  const { data: soupes } = await db.from('portion').insert([2, 20, 21].map(n => ({
+    household_id: foyer.householdId, label: SOUPE, grams: 400, kcal: 300, protein_g: 20, fiber_g: 5, carb_g: 30, fat_g: 10,
+    expires_at: jours(n),
+  }))).select()
+  try {
+    await connecte(page)
+    await page.goto('/semaine')
+    await jourBouton(page, 5).click()
+    await repas(page, 'diner').getByRole('button', { name: '+ Choisir le soir' }).click()
+    const f = feuille(page, `${semaineDe(5)} soir`)
+    const frigo = f.getByRole('region', { name: 'Au frigo' })
+    const lasagnes = frigo.getByRole('button', { name: /Lasagnes saumon-poireaux/ })
+    const soupe = frigo.getByRole('button', { name: /Soupe de la revue/ })
+    /* Les lasagnes périment avant ce soir-là (4 jours au frigo) : la ligne le dit. */
+    await expect(lasagnes).toContainText('périme avant ce repas')
+    /* La soupe : trois barquettes, la plus pressée périme avant, mais la base posera une bonne — la ligne ne dit pas
+       « périme avant » (elle annoncerait une barquette que la base ne posera pas). Pour vous deux : deux bonnes. */
+    await expect(soupe).not.toContainText('périme avant ce repas')
+    await expect(soupe).toContainText('à manger avant')
+    await capture(page, '14-feuille-peremption')
+    await soupe.click()
+    await expect(f).toBeHidden({ timeout: 10_000 })
+    const carteSoupe = repas(page, 'diner').getByRole('group', { name: 'Soir : Soupe de la revue' })
+    await expect(carteSoupe).toBeVisible()
+    await expect(carteSoupe.locator('[data-peremption]')).toHaveCount(0)
+    /* Et la base : les deux bonnes (20 et 21 jours), pas celle de 2 jours. */
+    const posees = (await slots()).filter(x => x.day === jourLocal(5) && x.meal === 'diner').map(x => x.portion_id)
+    expect(posees.sort()).toEqual([soupes![1].id, soupes![2].id].sort())
+    /* La part de la personne, comme l'ancien écran : poids, kcal, protéines. */
+    await expect(carteSoupe.locator('[data-detail]')).toHaveText('400 g · 300 kcal · 20 g de protéines')
+
+    /* Des lasagnes pour Kamil seul, le même jour : elles périment avant ce soir-là (quatre jours au frigo). La base
+       n'en a pas de meilleures : elle les pose quand même — le choix reste le sien — et la carte le dit, en ocre. */
+    await repas(page, 'diner').getByRole('group', { name: 'Soir : Soupe de la revue' }).getByRole('button', { name: /Changer/ }).click()
+    await f.getByRole('group', { name: 'Pour qui' }).getByRole('button', { name: 'Kamil' }).click()
+    await frigo.getByRole('button', { name: /Lasagnes saumon-poireaux/ }).click()
+    await expect(f).toBeHidden({ timeout: 10_000 })
+    const carteLasagnes = repas(page, 'diner').getByRole('group', { name: 'Soir : Lasagnes saumon-poireaux' })
+    await expect(carteLasagnes.locator('[data-peremption]')).toHaveText('périme avant ce repas')
+    const couleur = await carteLasagnes.locator('[data-peremption]').evaluate(el => getComputedStyle(el).color)
+    expect(couleur, 'la péremption n’est pas dite en ocre').not.toBe(await carteLasagnes.locator('[data-detail]').evaluate(el => getComputedStyle(el).color))
+    await capture(page, '15-carte-peremption', true)
+  } finally {
+    await db.from('meal_slot').delete().in('portion_id', (soupes ?? []).map(x => x.id))
+    await db.from('portion').delete().eq('label', SOUPE).eq('household_id', foyer.householdId)
+  }
+})
+
+test('L5 · la page ouverte hier soir passe à aujourd’hui quand elle redevient visible', async ({ page }) => {
+  test.setTimeout(120_000)
+  await connecte(page)
+  await page.goto('/semaine')
+  await expect(jourBouton(page, 0)).toHaveAttribute('aria-pressed', 'true', { timeout: 20_000 })
+  await expect(jourBouton(page, 0)).toContainText('auj.')
+  /* Le lendemain à 8 h (l'horloge du banc), la page se rallume : le bandeau repart de demain. */
+  await page.evaluate(() => {
+    const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(8, 0, 0, 0)
+    localStorage.setItem('popote.maintenant', d.toISOString())
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await expect(page.locator(`[data-jour="${jourLocal(1)}"]`).first()).toContainText('auj.', { timeout: 10_000 })
+  await expect(page.locator(`[data-jour="${jourLocal(0)}"]`)).toHaveCount(0)
+  await expect(page.getByText('aujourd’hui', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2 }).first()).toContainText(semaineDe(1))
 })

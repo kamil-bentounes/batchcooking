@@ -22,17 +22,18 @@ import { FeuilleDeChoix } from '../ui/semaine/FeuilleDeChoix.tsx'
 import { EnPlus, HorsBarquette } from '../ui/semaine/EnPlus.tsx'
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
-  NOM_REPAS, jour, useBarquettes, useChoisirUnRepas, useFrequents, useMange, useSemaine,
+  NOM_REPAS, jour, useBarquettes, useChoisirUnRepas, useFrequents, useMange, useRetireLaCase, useSemaine,
 } from '../lib/donnees/barquettes.ts'
-import type { Choix } from '../lib/donnees/barquettes.ts'
+import type { Case, Choix } from '../lib/donnees/barquettes.ts'
 import { usePrevus, useRecettesDesPlats } from '../lib/donnees/frigo.ts'
-import { groupeLesParts, nomCourt } from '../lib/frigo.ts'
+import { groupeLesParts, lisLeJour, nomCourt } from '../lib/frigo.ts'
 import {
-  MOMENTS_EN_PLUS, REPAS_CHOISIS, MOT_DU_REPAS, cartesDuRepas, contenuDe, couleurDuPoint, joursDuBandeau, lisLAdresse,
-  messageDeLiberation, pourDit, titreDeLaFeuille,
+  MOMENTS_EN_PLUS, REPAS_CHOISIS, MOT_DU_REPAS, caseVide, cartesDuRepas, contenuDe, couleurDuPoint, joursDuBandeau,
+  lisLAdresse, messageDeLiberation, pourDit, titreDeLaFeuille,
 } from '../lib/choix.ts'
 import type { CaseLue, Carte, PointDuJour, RepasChoisi } from '../lib/choix.ts'
 import { maintenant } from '../lib/horloge.ts'
+import { useJourLocal } from '../lib/jour-local.ts'
 
 /** Les rappels par mail n'existent pas encore (chantier 5) : le bandeau bleu dit « Pense à sortir… ». */
 const RAPPEL_PAR_MAIL_ACTIF = false
@@ -43,25 +44,36 @@ export function Semaine({ userId, va, remplace }: {
   /** Change l'adresse sans nouvelle entrée d'historique (retire `?jour=…` une fois lu). */
   remplace?: (v: string) => void
 }) {
-  /* Le jour est posé au montage : une page ouverte à minuit ne change pas de « aujourd'hui » sous les doigts. */
-  const debut = useMemo(() => maintenant(), [])
+  /* « Aujourd'hui » se relit quand la page redevient visible et à minuit : une page ouverte hier soir ne reste pas
+     sur hier. Le jour CHOISI est une date, pas un rang : il reste le même quand le bandeau avance d'un jour. */
+  const jourReel = useJourLocal()
+  const debut = useMemo(() => lisLeJour(jourReel), [jourReel])
   const jours = useMemo(() => joursDuBandeau(debut), [debut])
   const demande = useMemo(() => lisLAdresse(window.location.search, jours), [jours])
 
-  const { data: foyer } = useFoyer()
-  const { data: cases = [], isPending, error: erreurCases } = useSemaine(debut, 7)
+  const { data: foyer, isPending: foyerEnCours, error: erreurFoyer } = useFoyer()
+  const { data: cases, isPending, error: erreurCases } = useSemaine(debut, 7)
   const { data: lesPrevus, error: erreurPrevus } = usePrevus()
-  const { data: barquettes = [] } = useBarquettes()
-  const { data: frequents = [] } = useFrequents()
+  const lectureBarquettes = useBarquettes()
+  const lectureFrequents = useFrequents()
+  const barquettes = useMemo(() => lectureBarquettes.data ?? [], [lectureBarquettes.data])
+  const frequents = useMemo(() => lectureFrequents.data ?? [], [lectureFrequents.data])
   const mange = useMange()
   const choisit = useChoisirUnRepas()
+  /* « Sauté » du petit déjeuner et de la collation, et sa remise : hors de la feuille, donc leur propre état. */
+  const saute = useChoisirUnRepas()
+  const remet = useRetireLaCase()
 
-  const [index, setIndex] = useState(demande.index)
+  const [choisiJour, setChoisiJour] = useState(() => jours[demande.index].jour)
+  const index = Math.max(0, jours.findIndex(j => j.jour === choisiJour))
   /** La feuille ouverte : le repas, et pour qui « Pour » commence. */
   const [feuille, setFeuille] = useState<{ repas: RepasChoisi; pour: 'tous' | string } | null>(null)
   const [message, setMessage] = useState('')
-  /* Le repas dont le bouton doit reprendre le focus une fois la feuille refermée (une ref : pas de rendu en plus). */
-  const rendreLeFocus = useRef<RepasChoisi | null>(null)
+  /* Le bouton exact qui a ouvert la feuille (le repas, et la clé de sa carte) : c'est lui qui reprend le focus une fois
+     la feuille refermée (une ref : pas de rendu en plus). */
+  const rendreLeFocus = useRef<{ repas: RepasChoisi; cle: string } | null>(null)
+  /* Un choix est en vol : un second toucher ne part pas, et ne remplace pas le message du premier. */
+  const enVol = useRef(false)
 
   const membres = useMemo(
     () => (foyer?.membres ?? []).map(m => ({ id: m.id, prenom: prenomDe(m.display_name) })), [foyer])
@@ -73,17 +85,21 @@ export function Semaine({ userId, va, remplace }: {
   useEffect(() => {
     if (lienLu.current || !demande.repas || membres.length === 0 || isPending) return
     lienLu.current = true
-    const les = cases.filter(c => c.day === jours[demande.index].jour && c.meal === demande.repas)
+    const les = (cases ?? []).filter(c => c.day === jours[demande.index].jour && c.meal === demande.repas)
     const { cartes, sansChoix } = cartesDuRepas(les as unknown as CaseLue[], membres, userId)
     const mienne = cartes.find(c => c.personnes.includes(userId))
+    rendreLeFocus.current = { repas: demande.repas, cle: mienne?.cle ?? 'vide' }
     setFeuille({ repas: demande.repas, pour: pourDeLaCarte(mienne, sansChoix, membres.length) })
   }, [demande, membres, isPending, cases, jours, userId])
 
-  /* Le focus revient au bouton du repas qu'on vient de choisir ou de laisser : celui qui a ouvert la feuille a
-     peut-être changé (« + Choisir » est devenu une carte). */
+  /* Le focus revient au bouton exact qui a ouvert la feuille. Après un choix il peut avoir changé (« + Choisir » est
+     devenu une carte, ou deux cartes n'en font plus qu'une) : on retombe alors sur le premier bouton du repas. */
   useEffect(() => {
-    if (!rendreLeFocus.current || feuille) return
-    document.querySelector<HTMLElement>(`[data-repas="${rendreLeFocus.current}"] [data-ouvre]`)?.focus()
+    const o = rendreLeFocus.current
+    if (!o || feuille) return
+    const boutons = [...document.querySelectorAll<HTMLElement>(`[data-repas="${o.repas}"] [data-ouvre]`)]
+    const bouton = boutons.find(b => b.dataset.ouvre === o.cle) ?? boutons[0]
+    bouton?.focus()
     rendreLeFocus.current = null
   }, [feuille, cases])
 
@@ -94,7 +110,8 @@ export function Semaine({ userId, va, remplace }: {
   }
 
   const groupes = useMemo(() => groupeLesParts(barquettes), [barquettes])
-  const lues = cases as unknown as CaseLue[]
+  const lesCases = cases ?? []
+  const lues = lesCases as unknown as CaseLue[]
   const duJour = (j: string, m: string) => lues.filter(c => c.day === j && c.meal === m)
   const idsRecettes = useMemo(() => [...new Set([
     ...groupes.map(g => g.recipeId),
@@ -103,31 +120,38 @@ export function Semaine({ userId, va, remplace }: {
   const { data: recettes } = useRecettesDesPlats(idsRecettes)
   const photoDe = (recipeId: string | null) => (recipeId ? recettes?.get(recipeId)?.image_url ?? null : null)
 
-  if (isPending) return <Ecran actif="semaine" va={va}><Attente /></Ecran>
+  /* Une lecture qui a échoué ne se montre pas comme une semaine vide : « + Choisir le midi » sur un jour qui a ses repas. */
+  if (isPending || foyerEnCours) return <Ecran actif="semaine" va={va}><Attente /></Ecran>
+  if (!cases || !foyer) return <Ecran actif="semaine" va={va}><Erreur de={erreurCases ?? erreurFoyer ?? 'Je n’ai pas pu lire la semaine.'} /></Ecran>
 
   /* Les points du bandeau : le mien d'abord, puis les autres, dans l'ordre du foyer. */
   const points: [PointDuJour, PointDuJour][] = jours.map(j => REPAS_CHOISIS.map(m =>
     couleurDuPoint(ordreDeLecture(duJour(j.jour, m), membres, userId).map(contenuDe))) as [PointDuJour, PointDuJour])
 
-  const ouvre = (repas: RepasChoisi, pour: 'tous' | string) => {
+  const ouvre = (repas: RepasChoisi, pour: 'tous' | string, cle: string) => {
     choisit.reset()
     setMessage('')
+    rendreLeFocus.current = { repas, cle }
     setFeuille({ repas, pour })
   }
   const ferme = () => {
-    const repas = feuille?.repas ?? null
     setFeuille(null)
-    rendreLeFocus.current = repas
     nettoieLAdresse()
   }
 
   async function choisi(choix: Choix, personnes: string[]) {
-    if (!feuille) return
+    if (!feuille || enVol.current) return
+    enVol.current = true
     try {
       const r = await choisit.mutateAsync({ jour: jourChoisi.jour, repas: feuille.repas, personnes, choix })
       setMessage(messageDeLiberation(r.liberees))
       ferme()
-    } catch { /* l'erreur est dite dans la feuille (`choisit.error`) */ }
+    } catch { /* l'erreur est dite dans la feuille (`choisit.error`) */ } finally { enVol.current = false }
+  }
+
+  /* « Sauté » pour le petit déjeuner et la collation : le même geste que la feuille (`choisir_un_repas`), pour moi. */
+  const sauteLe = (moment: 'petit_dejeuner' | 'collation') => {
+    saute.mutate({ jour: jourChoisi.jour, repas: moment, personnes: [userId], choix: { type: 'saute' } })
   }
 
   const dejaMange = feuille
@@ -141,7 +165,9 @@ export function Semaine({ userId, va, remplace }: {
       <p className="mt-2 text-[14px] text-doux">Tu choisis chaque repas. Le frigo propose d’abord ce qui presse.</p>
 
       <Bandeau jours={jours} points={points} index={index}
-               surChoix={i => { setIndex(i); setMessage(''); nettoieLAdresse() }} />
+               surChoix={i => {
+                 setChoisiJour(jours[i].jour); setMessage(''); mange.reset(); saute.reset(); remet.reset(); nettoieLAdresse()
+               }} />
 
       <section aria-label={jourChoisi.long} className="mt-5">
         <div className="flex items-baseline gap-2.5">
@@ -154,7 +180,7 @@ export function Semaine({ userId, va, remplace }: {
             <p className="mt-3 rounded-[14px] bg-frais-fond px-3.5 py-2.5 text-[14px] text-frais-encre">{message}</p>
           )}
         </div>
-        <Erreur de={erreurCases ?? erreurPrevus ?? mange.error} />
+        <Erreur de={erreurCases ?? erreurPrevus ?? mange.error ?? saute.error ?? remet.error} />
 
         <div className="mt-3.5 flex flex-col gap-3">
           {REPAS_CHOISIS.map(m => {
@@ -166,22 +192,25 @@ export function Semaine({ userId, va, remplace }: {
                   {cartes.map(carte => {
                     const mienne = carte.cases.find(c => c.user_profile_id === userId)
                     const c = carte.contenu
-                    const surMange = mienne && mienne.state !== 'mange' && c.genre === 'plat' && jourChoisi.jour <= jour(now)
-                      ? () => mange.mutate(mienne.id) : undefined
+                    /* Un plat, ou « autre chose » (qui ne compte au bilan qu'une fois mangé) : « Je l'ai mangé ». */
+                    const laMienne = mienne ? lesCases.find(x => x.id === mienne.id) : undefined
+                    const surMange = laMienne && mienne!.state === 'prevu' && (c.genre === 'plat' || c.genre === 'autre')
+                      && jourChoisi.jour <= jour(now)
+                      ? () => mange.mutate(laMienne) : undefined
                     return (
-                      <CarteDuRepas key={carte.cle} carte={carte} membres={membres} jour={jourChoisi.jour} repas={m}
+                      <CarteDuRepas key={carte.cle} carte={carte} membres={membres} moi={userId} jour={jourChoisi.jour} repas={m}
                                     photo={c.genre === 'plat' ? photoDe(c.recipeId) : null}
                                     maintenant={now} rappelActif={RAPPEL_PAR_MAIL_ACTIF}
-                                    surChange={() => ouvre(m, pourDeLaCarte(carte, sansChoix, membres.length))}
+                                    surChange={() => ouvre(m, pourDeLaCarte(carte, sansChoix, membres.length), carte.cle)}
                                     surMange={surMange} enCours={mange.isPending}
                                     enPlus={mienne && c.genre === 'plat'
-                                      ? <EnPlus cas={cases.find(x => x.id === mienne.id)!} frequents={frequents} /> : null} />
+                                      ? <EnPlus cas={laMienne!} frequents={frequents} /> : null} />
                     )
                   })}
                   {(cartes.length === 0 || sansChoix.length > 0) && (
                     <CarteVide repas={m}
                                pour={cartes.length > 0 ? pourDit(sansChoix, membres) : undefined}
-                               surOuvre={() => ouvre(m, pourDeLaCarte(undefined, sansChoix, membres.length))} />
+                               surOuvre={() => ouvre(m, pourDeLaCarte(undefined, sansChoix, membres.length), 'vide')} />
                   )}
                 </div>
               </div>
@@ -193,17 +222,28 @@ export function Semaine({ userId, va, remplace }: {
         <section aria-label="Autres moments" className="mt-7">
           <h3 className="mb-1 ml-0.5 text-[13px] font-normal text-doux">Autres moments</h3>
           {MOMENTS_EN_PLUS.map(moment => {
-            const c = cases.find(x => x.day === jourChoisi.jour && x.user_profile_id === userId && x.meal === moment)
-            if (!c || (c.extras.length === 0 && !c.portion && c.state === 'prevu')) return null
+            const c = lesCases.find(x => x.day === jourChoisi.jour && x.user_profile_id === userId && x.meal === moment)
+            /* Une case vide (ce que laissait « retirer » le dernier extra) ne se montre pas : elle n'est rien. */
+            if (!c || caseVide(c)) return null
             return (
               <div key={moment} className="mt-2 rounded-2xl bg-brume/25 p-3.5">
-                <div className="text-[14px]">{NOM_REPAS[moment]}{c.portion ? ` · ${nomCourt(c.portion.label)}` : ''}{c.state === 'saute' ? ' · sauté' : ''}</div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-[14px]">{NOM_REPAS[moment]}{c.portion ? ` · ${nomCourt(c.portion.label)}` : ''}{c.state === 'saute' ? ' · sauté' : ''}</span>
+                  {c.state === 'saute' && (
+                    <button type="button" disabled={remet.isPending} onClick={() => remet.mutate(c.id)}
+                            aria-label={`${NOM_REPAS[moment]} : ne plus le sauter`}
+                            className="inline-flex min-h-11 items-center text-[13px] text-doux underline underline-offset-2 disabled:opacity-60">
+                      annuler
+                    </button>
+                  )}
+                </div>
                 <EnPlus cas={c} frequents={frequents} />
               </div>
             )
           })}
           <HorsBarquette key={jourChoisi.jour} jour={jourChoisi.jour} userId={userId} frequents={frequents}
-                         dejaLa={mesCasesDuJour as unknown as typeof cases} />
+                         dejaLa={mesCasesDuJour as unknown as Case[]}
+                         surSaute={sauteLe} enCours={saute.isPending} />
         </section>
       </section>
 
@@ -214,6 +254,11 @@ export function Semaine({ userId, va, remplace }: {
         repas={feuille?.repas ?? 'diner'} jour={jourChoisi.jour} membres={membres}
         pourInitial={feuille?.pour ?? 'tous'} dejaMange={dejaMange}
         groupes={groupes} prevus={lesPrevus ?? null} maintenant={now} photoDe={photoDe} frequents={frequents}
+        lectures={{
+          barquettes: { enCours: lectureBarquettes.isPending, erreur: lectureBarquettes.error },
+          frequents: { enCours: lectureFrequents.isPending, erreur: lectureFrequents.error },
+          prevus: { enCours: lesPrevus === undefined && !erreurPrevus, erreur: erreurPrevus },
+        }}
         enCours={choisit.isPending} erreur={choisit.error} surChoix={choisi} />
     </Ecran>
   )
