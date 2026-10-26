@@ -56,6 +56,8 @@ describe('RGPD', () => {
       cloture_choix: 'cloture_choix',
       // L'aide intégrée (0118)
       aide_signalement: 'aide_signalements',
+      // Nos aliments (0124)
+      aliment: 'aliments',
     }
 
     const oubliees = (tables as { table_name: string }[])

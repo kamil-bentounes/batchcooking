@@ -121,6 +121,65 @@ export type Database = {
           },
         ]
       }
+      aliment: {
+        Row: {
+          carb_100g: number
+          code_barres: string | null
+          created_at: string
+          fat_100g: number
+          fiber_100g: number
+          household_id: string
+          id: string
+          kcal_100g: number
+          label: string
+          protein_100g: number
+          source: string
+          unite: string
+          unite_g: number
+          updated_at: string
+        }
+        Insert: {
+          carb_100g?: number
+          code_barres?: string | null
+          created_at?: string
+          fat_100g?: number
+          fiber_100g?: number
+          household_id: string
+          id?: string
+          kcal_100g: number
+          label: string
+          protein_100g?: number
+          source?: string
+          unite?: string
+          unite_g: number
+          updated_at?: string
+        }
+        Update: {
+          carb_100g?: number
+          code_barres?: string | null
+          created_at?: string
+          fat_100g?: number
+          fiber_100g?: number
+          household_id?: string
+          id?: string
+          kcal_100g?: number
+          label?: string
+          protein_100g?: number
+          source?: string
+          unite?: string
+          unite_g?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aliment_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "household"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appliance_catalog: {
         Row: {
           code: string
