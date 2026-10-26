@@ -36,8 +36,8 @@ Deux cycles ouverts, c'est deux accueils possibles pour le même jour.
 |---|---|---|
 | Mercredi | On choisit les recettes | Sans choix, pas de liste |
 | Samedi | On fait les courses | Cocher remplit l'inventaire |
-| Dimanche | On cuisine, puis on **dresse** | Le dressage produit les barquettes |
-| Dimanche soir | La semaine se distribue | Sans ça, personne ne sait ce qu'on mange ce soir |
+| Dimanche | On cuisine, puis on **dresse**, puis « On range » | Le dressage produit les barquettes ; « On range » choisit frigo ou congélateur, l'heure, et retire du stock ce que les recettes ont pris |
+| Dimanche soir | On choisit ce qu'on mange | Plus de distribution automatique : l'hôte pose les barquettes sur les jours |
 | La semaine | Manger = cocher une barquette | Un geste, pas un journal alimentaire |
 | Dimanche suivant | Clôture → bilan → cycle suivant | Ce qu'on a jeté change le choix du mercredi |
 
