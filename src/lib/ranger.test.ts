@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   bilanDuFrigo, corrections, depuisLeChamp, ecritLaPrise, jourAbrege, jourEtHeure, lisLeReste,
-  ordreDeRangement, phraseDuCongelo, phraseDuFrigo, plusDeJours, pourLeChamp, pourLeFoyer,
+  ordreDeRangement, phraseDuCongelo, phraseDuFrigo, pourLeChamp, pourLeFoyer,
   propositionAuFrigo, puces, resteApres, resteAuFrigo,
+  messageDuReste, platsRanges, rangeLeDe, verifieLeRangement,
 } from './ranger.ts'
 import type { LignePrise } from './ranger.ts'
+import { plusDeJours } from './peremption.ts'
 
 /** Dimanche 25 octobre 2026, 21 h 26 : la session de Kamil. */
 const RANGE = new Date(2026, 9, 25, 21, 26)
@@ -193,5 +195,61 @@ describe('resteAuFrigo', () => {
   })
   it('aucune ligne prise : tout le frigo reste', () => {
     expect(resteAuFrigo(stock, [])).toEqual(['Poireaux', 'Yaourts dessert protéinés', 'Ail'])
+  })
+})
+
+describe('« Rangé le » : au plus quatre jours dans le passé, pas dans le futur', () => {
+  const MAINTENANT = new Date(2026, 9, 26, 12, 0)
+  it('maintenant, hier, il y a trois jours : acceptés', () => {
+    for (const v of ['2026-10-26T12:00', '2026-10-25T18:30', '2026-10-23T12:00']) {
+      const r = verifieLeRangement(v, MAINTENANT)
+      expect('date' in r, v).toBe(true)
+    }
+  })
+  it('il y a quatre jours moins une heure : accepté ; cinq jours : refusé, avec le motif en français', () => {
+    expect('date' in verifieLeRangement('2026-10-22T14:00', MAINTENANT)).toBe(true)
+    const r = verifieLeRangement('2026-10-21T12:00', MAINTENANT)
+    expect(r).toEqual({ message: expect.stringMatching(/plus de 4 jours/) })
+  })
+  it('dans le futur : refusé ; une minute de marge pour l’horloge du champ', () => {
+    expect(verifieLeRangement('2026-10-26T14:00', MAINTENANT)).toEqual({ message: expect.stringMatching(/futur/) })
+    expect('date' in verifieLeRangement('2026-10-26T12:01', MAINTENANT)).toBe(true)
+  })
+  it('vide ou illisible : un message, pas un silence', () => {
+    expect(verifieLeRangement('', MAINTENANT)).toEqual({ message: expect.stringMatching(/n’existe pas/) })
+    expect(verifieLeRangement('2026-02-31T10:00', MAINTENANT)).toEqual({ message: expect.stringMatching(/n’existe pas/) })
+  })
+})
+
+describe('« il en reste » : le message d’une saisie invalide', () => {
+  it('se lit : rien à dire', () => {
+    expect(messageDuReste('250')).toBeNull()
+    expect(messageDuReste('0,5')).toBeNull()
+    expect(messageDuReste('0')).toBeNull()
+  })
+  it('un mot, un négatif : « écris un nombre » ; vide : « dis combien »', () => {
+    expect(messageDuReste('beaucoup')).toMatch(/Écris un nombre/)
+    expect(messageDuReste('-3')).toMatch(/Écris un nombre/)
+    expect(messageDuReste('  ')).toMatch(/Dis combien/)
+  })
+})
+
+describe('ce que la base a gardé du rangement', () => {
+  const b = (recipe: string | null, location: string, at: string, label = recipe ?? 'x') =>
+    ({ recipe_id: recipe, label, location, prepared_at: at })
+  it('compte les barquettes par plat et par lieu, dans l’ordre d’apparition', () => {
+    const plats = platsRanges([
+      b('dahl', 'frigo', '2026-10-25T18:30:00Z', 'Dahl'), b('poulet', 'frigo', '2026-10-25T18:30:00Z', 'Poulet'),
+      b('dahl', 'congelateur', '2026-10-25T18:30:00Z', 'Dahl'), b('dahl', 'congelateur', '2026-10-25T18:30:00Z', 'Dahl'),
+    ])
+    expect(plats.map(p => [p.titre, p.frigo, p.congelo])).toEqual([['Dahl', 1, 2], ['Poulet', 1, 0]])
+  })
+  it('rien d’écrit : rien, et pas de date', () => {
+    expect(platsRanges([])).toEqual([])
+    expect(rangeLeDe([])).toBeNull()
+  })
+  it('le « rangé le » est le premier prepared_at', () => {
+    const d = rangeLeDe([b('a', 'frigo', '2026-10-25T18:30:00Z'), b('a', 'frigo', '2026-10-24T09:00:00Z')])
+    expect(d?.toISOString()).toBe('2026-10-24T09:00:00.000Z')
   })
 })

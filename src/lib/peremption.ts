@@ -28,6 +28,20 @@ export type Urgence = {
 }
 
 const HEURE = 3_600_000
+const JOUR = 24 * HEURE
+
+/**
+ * `jours` jours PLEINS après `d` : `jours × 24 h`, à l'instant près.
+ *
+ * C'est ce que fait la base (`tg_portion_peremption` : `prepared_at + make_interval(days => 4)`, en UTC) :
+ * ni changement d'heure, ni calendrier local. L'ancien calcul de l'écran (`setDate`) ajoutait des jours
+ * de calendrier en heure locale et, de part et d'autre du passage à l'heure d'hiver, affichait une date
+ * d'un jour de différence avec celle que la base écrit. UN seul calcul : « On range » et la fiche du
+ * frigo s'en servent tous deux.
+ */
+export function plusDeJours(d: Date, jours: number): Date {
+  return new Date(d.getTime() + jours * JOUR)
+}
 
 /** Frigo : rouge le jour même, orange le lendemain. */
 const FRIGO_URGENT_H = 24

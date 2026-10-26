@@ -7,10 +7,10 @@
  */
 import { jour } from './semaine.ts'
 import type { Repas } from './semaine.ts'
-import { JOURS_AU_CONGELO, JOURS_AU_FRAIS, jourAbrege, plusDeJours, pourLeFoyer } from './ranger.ts'
+import { JOURS_AU_CONGELO, JOURS_AU_FRAIS, jourAbrege, pourLeFoyer } from './ranger.ts'
 import { rayonDe } from './rayons.ts'
 import type { Rayon } from './rayons.ts'
-import { urgence } from './peremption.ts'
+import { plusDeJours, urgence } from './peremption.ts'
 import type { Lieu } from './peremption.ts'
 
 /** Ce que la fiche et les cartes lisent d'une barquette (une ligne de `portion`). */

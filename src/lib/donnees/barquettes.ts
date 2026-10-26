@@ -13,7 +13,7 @@ import type { Insertion, Ligne } from '../supabase.ts'
 // `lib/semaine.ts`, où ils s'éprouvent sans base.
 import { jour } from '../semaine.ts'
 import type { Repas } from '../semaine.ts'
-import type { LignePrise } from '../ranger.ts'
+import type { BarquetteRangee, LignePrise } from '../ranger.ts'
 
 export { NOM_REPAS, REPAS, bilanDuJour, jour, repartitionAuto } from '../semaine.ts'
 export type { Repas } from '../semaine.ts'
@@ -134,31 +134,33 @@ export type ADresser = {
 }
 
 /**
- * Le dressage (D53) : la session devient des barquettes.
+ * « On range » (D53) : la session devient des barquettes, sort du stock, et passe à la semaine —
+ * UNE fonction de la base (`range_la_session`, 0120), une transaction.
  *
- * Le lieu est celui que l'hôte a choisi à « On range » : combien de chaque
- * recette restent au frigo, le reste au congélateur. `rangeLe` est l'instant du
- * rangement (maintenant, ou celui qu'il a donné) : il devient `prepared_at` de
- * chaque barquette, et `frozen_at` de celles du congélateur — la contrainte
- * `portion_congele_date` lie les deux. Les dates de péremption sont posées par
- * la base, pas ici — deux téléphones ne doivent pas calculer deux échéances.
+ * Le lieu est celui que l'hôte a choisi : combien de chaque recette restent au frigo, le reste au
+ * congélateur. `rangeLe` est l'instant du rangement : il devient `prepared_at` de chaque barquette, et
+ * `frozen_at` de celles du congélateur — la contrainte `portion_congele_date` lie les deux. Les dates de
+ * péremption sont posées par la base, pas ici — deux téléphones ne doivent pas calculer deux échéances.
+ *
+ * Deux téléphones qui rangent en même temps ne doublent rien : la base verrouille le cycle, le second
+ * appel attend et rend `deja: true`. `lots` peut être vide quand les barquettes existent déjà.
  */
-export function useDresse() {
+export type Rangement = { deja: boolean; cree: boolean; portions: number; retirees: number }
+
+export function useRangeLaSession() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ cycleId, lots, rangeLe }: {
+    mutationFn: async ({ cycleId, lots, rangeLe, restes, retirer }: {
       cycleId: string; lots: ADresser[]
-      /** ISO. Absent : la base pose `now()`, comme avant. */
-      rangeLe?: string
-    }) => {
-      const foyer = ou(await supabase.rpc('current_household'))
-      if (!foyer) throw new Error('Aucun foyer.')
-
+      /** ISO. */
+      rangeLe: string
+      /** « Il en reste … » : les corrections de l'écran. */
+      restes: Record<string, number>
+      /** Faux quand l'écran n'a pas pu lire ce que la session prend : on range sans toucher au stock. */
+      retirer: boolean
+    }): Promise<Rangement> => {
       const lignes = lots.flatMap(l => Array.from({ length: l.nombre }, () => ({
-        household_id: foyer,
-        cycle_id: cycleId,
         recipe_id: l.recipeId,
-        label: l.label,
         grams: l.grammes,
         kcal: l.kcal,
         protein_g: l.proteinG,
@@ -170,16 +172,24 @@ export function useDresse() {
         cost_eur: l.coutEur ?? null,
         for_user_id: l.forUserId,
         location: l.location,
-        ...(rangeLe ? {
-          prepared_at: rangeLe,
-          frozen_at: l.location === 'congelateur' ? rangeLe : null,
-        } : {}),
       })))
-      if (lignes.length === 0) throw new Error('Rien à dresser.')
-      return ou(await supabase.from('portion')
-        .insert(lignes as Insertion<'portion'>[]).select())
+      return ou(await supabase.rpc('range_la_session', {
+        p_cycle: cycleId, p_lots: lignes, p_range_le: rangeLe, p_restes: restes, p_retirer: retirer,
+      })) as unknown as Rangement
     },
     onSuccess: () => qc.invalidateQueries(),
+  })
+}
+
+/** Ce que le rangement de ce cycle a déjà écrit : les vraies barquettes, leur lieu, leur `prepared_at`. */
+export function usePortionsDuCycle(cycleId: string | undefined) {
+  return useQuery({
+    queryKey: [...CLE.barquettes, 'du-cycle', cycleId],
+    enabled: !!cycleId,
+    queryFn: async (): Promise<BarquetteRangee[]> =>
+      ou(await supabase.from('portion').select('recipe_id, label, location, prepared_at')
+        .eq('cycle_id', cycleId!).order('created_at').order('id')),
+    staleTime: 0,
   })
 }
 
@@ -245,19 +255,6 @@ export function useCeQueLaSessionPrend(cycleId: string | undefined, enabled = tr
     queryFn: async (): Promise<LignePrise[]> =>
       ou(await supabase.rpc('ce_que_la_session_prend', { p_cycle: cycleId! })) as LignePrise[],
     staleTime: 0,
-  })
-}
-
-/**
- * Retire du stock ce que la session a pris, avec les corrections de l'écran
- * (`{ ligne: reste }`). Idempotent côté base : le dressage se reprend, on ne retire pas deux fois.
- */
-export function useRetireDuStock() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async ({ cycleId, restes }: { cycleId: string; restes: Record<string, number> }) =>
-      ou(await supabase.rpc('retire_du_stock', { p_cycle: cycleId, p_restes: restes })),
-    onSuccess: () => qc.invalidateQueries(),
   })
 }
 

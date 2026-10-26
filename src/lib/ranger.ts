@@ -6,6 +6,8 @@
  * départ, écrivent ses conséquences en mots, et disent ce que la session a pris dans le stock.
  */
 
+import { plusDeJours } from './peremption.ts'
+
 /** Au-delà de quatre jours, une barquette ne tient pas au frigo (D29, D40). */
 export const JOURS_AU_FRAIS = 4
 /** Trois mois au congélateur (D29). */
@@ -49,11 +51,28 @@ export function jourEtHeure(d: Date): string {
   return `${jourAbrege(d)} à ${d.getHours()} h ${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-/** Le même instant, `jours` jours de calendrier plus tard : c'est ce que la base ajoute (`make_interval`). */
-export function plusDeJours(d: Date, jours: number): Date {
-  const r = new Date(d)
-  r.setDate(r.getDate() + jours)
-  return r
+/** Au plus quatre jours dans le passé : au-delà, la base refuse (0120) et le frigo n'aurait plus rien de frais. */
+export const JOURS_EN_ARRIERE_MAX = 4
+
+/** Le plus ancien « rangé le » qu'on accepte, vu d'`maintenant`. */
+export function plusAncienRangement(maintenant: Date): Date {
+  return plusDeJours(maintenant, -JOURS_EN_ARRIERE_MAX)
+}
+
+/**
+ * Ce que l'hôte a tapé dans « Rangé le » : la date, ou le message qui dit pourquoi elle ne va pas.
+ * Illisible ou vide → on le lui dit au lieu de garder l'ancienne sans un mot ; futur (au-delà d'une
+ * minute de marge) ; plus de quatre jours dans le passé.
+ */
+export function verifieLeRangement(valeur: string, maintenant: Date): { date: Date } | { message: string } {
+  const d = depuisLeChamp(valeur)
+  if (!d) return { message: 'Cette date n’existe pas : choisis un jour et une heure.' }
+  if (d.getTime() > maintenant.getTime() + 60_000) return { message: 'On ne range pas dans le futur : choisis maintenant, ou plus tôt.' }
+  // Tolérance d'une minute : le champ s'arrête à la minute, `maintenant` aux millisecondes.
+  if (d.getTime() < plusAncienRangement(maintenant).getTime() - 60_000) {
+    return { message: `Le rangement ne peut pas remonter à plus de ${JOURS_EN_ARRIERE_MAX} jours : choisis une date plus récente.` }
+  }
+  return { date: d }
 }
 
 /** Ce que dit un `<input type="datetime-local">` : l'heure LOCALE, à la minute. */
@@ -141,6 +160,14 @@ export function ecritLaPrise(n: number, unite: string | null): string {
   return unite && unite !== 'u' ? `${f(n)} ${unite}` : f(n)
 }
 
+/** Ce que l'écran répond à un « il en reste » qui n'en est pas un ; `null` quand il se lit. */
+export function messageDuReste(saisie: string): string | null {
+  if (lisLeReste(saisie) !== null) return null
+  return saisie.trim() === ''
+    ? 'Dis combien il en reste : 0 s’il n’y en a plus.'
+    : 'Écris un nombre, par exemple 250 ou 0,5.'
+}
+
 /** Ce qu'on tape dans « il en reste … » : zéro est une réponse valable (« plus rien »). */
 export function lisLeReste(saisie: string): number | null {
   const t = saisie.trim().replace(',', '.')
@@ -195,4 +222,32 @@ export function resteAuFrigo(
 ): string[] {
   const prises = new Set(puces(lignes).map(l => l.stock_item_id))
   return stock.filter(s => s.location === 'frigo' && !prises.has(s.id)).map(s => s.label)
+}
+
+export type BarquetteRangee = { recipe_id: string | null; label: string; location: string; prepared_at: string }
+export type PlatRange = { recipeId: string | null; titre: string; frigo: number; congelo: number; rangeLe: Date }
+
+/**
+ * Ce que la base a gardé du rangement, plat par plat (dans l'ordre où le premier est apparu) : les
+ * vraies barquettes, leur lieu, leur `prepared_at`. Quand le rangement a déjà eu lieu, l'écran montre
+ * cela — jamais de nouveaux réglages par défaut.
+ */
+export function platsRanges(portions: BarquetteRangee[]): PlatRange[] {
+  const plats = new Map<string, PlatRange>()
+  for (const p of portions) {
+    const cle = p.recipe_id ?? `sans:${p.label}`
+    const quand = new Date(p.prepared_at)
+    const plat = plats.get(cle) ?? { recipeId: p.recipe_id, titre: p.label, frigo: 0, congelo: 0, rangeLe: quand }
+    if (p.location === 'congelateur') plat.congelo += 1
+    else plat.frigo += 1
+    if (quand < plat.rangeLe) plat.rangeLe = quand
+    plats.set(cle, plat)
+  }
+  return [...plats.values()]
+}
+
+/** Quand tout a été rangé : le premier `prepared_at`. */
+export function rangeLeDe(portions: BarquetteRangee[]): Date | null {
+  const t = portions.map(p => new Date(p.prepared_at).getTime()).filter(n => !Number.isNaN(n))
+  return t.length === 0 ? null : new Date(Math.min(...t))
 }
