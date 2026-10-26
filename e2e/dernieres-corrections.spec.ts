@@ -5,7 +5,7 @@
  *   1. Réglages : « Dans le foyer : Kamil, Thauba » ;
  *   2. « Mes charges » : une charge qui démarre en 2031 est listée avec sa date, hors du total ;
  *   3. Hub de Thauba : « Fixe tes objectifs » ; dressage de Kamil : il dit qui est dressé à parts égales ;
- *   4. Choisir : au-delà de trois recettes retenues, « + N autres » se déplie ;
+ *   4. Choisir : six recettes retenues tiennent dans la bande, et le catalogue reste à l’écran ;
  *   5. un mois clôturé par l'autre : son reste calculé, « clôturé par Thauba », jamais un tiret.
  *
  * ⚠️ LOCAL, ET RIEN D'AUTRE.
@@ -82,7 +82,7 @@ test('un nouvel arrivant sans objectifs : le hub le dit, le dressage nomme celle
     .toBeVisible({ timeout: 15_000 })
 })
 
-test('Choisir : au-delà de trois recettes retenues, « + N autres » se déplie', async ({ page }) => {
+test('Choisir : six recettes retenues tiennent dans la bande, le catalogue reste à l’écran', async ({ page }) => {
   for (let i = 1; i <= 4; i++) {
     const { data: r, error } = await db.from('recipe').insert({
       title: `Plat de repli ${i}`, yield_servings: 4, total_time_min: 30, origin: 'importee',
@@ -96,13 +96,28 @@ test('Choisir : au-delà de trois recettes retenues, « + N autres » se déplie
   await page.goto('/choisir')
   const champs = page.getByLabel(/^Parts de /)
   await expect(champs.first()).toBeVisible({ timeout: 15_000 })
-  await expect(champs, 'six recettes retenues : trois seulement se montrent').toHaveCount(3)
-  const plus = page.getByRole('button', { name: '+ 3 autres' })
-  await expect(plus).toBeVisible()
-  expect((await plus.boundingBox())!.height).toBeGreaterThanOrEqual(44)
-  await plus.click()
-  await expect(champs).toHaveCount(6)
-  await expect(page.getByRole('button', { name: 'Replier' })).toHaveAttribute('aria-expanded', 'true')
+  /* Avant la refonte du 26/10, trois recettes seulement se montraient (« + 3 autres » dépliait le reste) :
+     la carte grossissait de 150 px par recette. La bande défile de côté, toutes y sont, et sa
+     hauteur ne bouge plus. */
+  await expect(champs, 'six recettes retenues : les six sont dans la bande').toHaveCount(6)
+  await expect(page.getByText(/\+ \d autres?/)).toHaveCount(0)
+  const carte = (await page.getByRole('region', { name: 'Ce qu’on cuisine' }).boundingBox())!
+  const recherche = (await page.getByPlaceholder(/chercher une recette/i).boundingBox())!
+  expect(carte.height, 'la carte des retenues repousse le catalogue').toBeLessThan(520)
+  expect(recherche.y, 'la recherche sort du premier écran').toBeLessThan(page.viewportSize()!.height)
+  // Les gestes de chaque recette de la bande : 44 px au moins.
+  for (const nom of [/^Une part de moins/, /^Une part de plus/, /^Retirer /]) {
+    const b = (await page.getByRole('button', { name: nom }).first().boundingBox())!
+    expect(b.height, `${nom} fait moins de 44 px`).toBeGreaterThanOrEqual(44)
+    expect(b.width, `${nom} fait moins de 44 px`).toBeGreaterThanOrEqual(44)
+  }
+  // « + » monte les parts d'une, « − » les redescend ; la base fait foi.
+  const premiere = page.getByLabel(/^Parts de /).first()
+  const avant = Number(await premiere.inputValue())
+  await page.getByRole('button', { name: /^Une part de plus/ }).first().click()
+  await expect(premiere).toHaveValue(String(avant + 1), { timeout: 10_000 })
+  await page.getByRole('button', { name: /^Une part de moins/ }).first().click()
+  await expect(premiere).toHaveValue(String(avant), { timeout: 10_000 })
 })
 
 test('un mois clôturé par Thauba : le reste de Kamil est calculé, avec « clôturé par Thauba »', async ({ page }) => {

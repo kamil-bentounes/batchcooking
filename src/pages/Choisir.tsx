@@ -43,6 +43,7 @@ import { Pagination } from '../ui/recettes/Pagination.tsx'
 import { FicheRecette } from '../ui/recettes/FicheRecette.tsx'
 import { PanneauFiltres, Puces, Recherche } from '../ui/recettes/Filtres.tsx'
 import { Retenues } from '../ui/recettes/Retenues.tsx'
+import { Icone } from '../ui/recettes/pictos.tsx'
 
 const AUCUNE = new Set<string>()
 const AUCUN_STOCK: never[] = []
@@ -178,7 +179,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
       <BarreAction>
         <div className="flex items-center gap-4">
           <span className="grow">
-            <Chiffre valeur={`${partsPrises} / ${cible}`} taille={22} unite="parts" />
+            <Chiffre valeur={`${partsPrises} / ${cible}`} taille={30} unite="parts" />
             <span className="block text-[13px] text-doux mt-0.5">
               {choisies.length === 0
                 ? 'Aucune recette choisie'
@@ -189,8 +190,8 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
           </span>
           <button onClick={versLesCourses}
                   disabled={choisies.length === 0 || genere.isPending || change.isPending}
-                  className="h-[52px] px-5 rounded-[16px] bg-herbe text-fond text-[16px]
-                             font-medium shrink-0 disabled:bg-brume disabled:text-encre
+                  className="h-[52px] min-w-[150px] px-6 rounded-[18px] bg-herbe text-fond text-[16px]
+                             font-semibold shrink-0 disabled:bg-brume disabled:text-encre
                              transition-colors">
             {genere.isPending ? 'Je prépare…' : 'Faire la liste'}
           </button>
@@ -198,10 +199,10 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
         <Erreur de={echecCarte ?? genere.error ?? change.error} />
       </BarreAction>
     }>
-      <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-doux">
-        {dateLongue(dimancheDe(cycle.week_of))}
+      <h1 className="titre-fort text-[40px] font-[560]">Choisir</h1>
+      <p className="mt-2 text-[15px] text-doux">
+        Pour la cuisine du {dateLongue(dimancheDe(cycle.week_of))}
       </p>
-      <h1 className="titre-fort text-[46px] mt-1">Choisir</h1>
 
       <Retenues cible={cible} choisies={choisies}
                 reprise={reprise} surRefus={setEchecCarte}
@@ -215,9 +216,9 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
         <Puces filtres={filtres} modifie={modifie} />
         {affine && <PanneauFiltres filtres={filtres} modifie={modifie} />}
 
-        <div className="mt-[22px] flex items-baseline justify-between gap-2.5">
+        <div className="mt-7 flex items-baseline justify-between gap-2.5">
           <h2 ref={hautDeListe} tabIndex={-1}
-              className="titre-fort text-[25px] scroll-mt-4 outline-none">Recettes</h2>
+              className="titre-fort text-[26px] font-[560] scroll-mt-4 outline-none">Recettes</h2>
           <span aria-live="polite" className="text-[14px] text-doux tabular-nums">
             {enAttente ? '…' : filtrees.length === 0 ? '0'
               : `${fr(filtrees.length)}, de ${fr(de)} à ${fr(a)}`}
@@ -245,7 +246,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
                     ? 'Desserre un filtre, ou invente une recette depuis l’accueil.'
                     : 'Le catalogue se remplit par l’ingestion.'} />
         )) : (
-          <div className="mt-3 flex flex-col gap-2.5">
+          <div className="mt-3 flex flex-col gap-[18px]">
             {affichees.map(r => (
               <Vignette key={r.id} recette={r} prise={prises.has(r.id)}
                         manques={manques?.get(r.id) ?? []}
@@ -257,19 +258,25 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
 
         {!enAttente && !error && <Pagination page={pageSure} total={filtrees.length} surPage={vaALaPage} />}
 
-        <button onClick={() => va('/inventer')}
-                className="mt-6 w-full h-[46px] rounded-[16px] bg-brume/50 text-[15px]
-                           hover:bg-brume transition-colors">
-          Rien ne va ? Invente-moi une recette
-        </button>
+        <div className="mt-7 grid gap-2.5">
+          <button onClick={() => va('/inventer')}
+                  className="min-h-[52px] w-full rounded-[18px] bg-surface px-5 text-left text-[16px]
+                             font-semibold inline-flex items-center gap-3
+                             shadow-[inset_0_0_0_1.5px_var(--color-brume)]">
+            <span className="text-ocre"><Icone nom="etincelle" taille={22} /></span>
+            Rien ne va ? Invente-moi une recette
+          </button>
 
-        {/* Coller la sienne : d'un carnet, d'un message, d'un site qu'on
-            n'ingère pas. Sa place est ici, au moment où l'on cherche. */}
-        <button onClick={() => va('/importer')}
-                className="mt-3 w-full py-3.5 rounded-[16px] bg-brume/40 text-[15px]
-                           hover:bg-brume transition-colors">
-          J’ai ma propre recette à coller
-        </button>
+          {/* Coller la sienne : d'un carnet, d'un message, d'un site qu'on
+              n'ingère pas. Sa place est ici, au moment où l'on cherche. */}
+          <button onClick={() => va('/importer')}
+                  className="min-h-[52px] w-full rounded-[18px] bg-surface px-5 text-left text-[16px]
+                             font-semibold inline-flex items-center gap-3
+                             shadow-[inset_0_0_0_1.5px_var(--color-brume)]">
+            <Icone nom="carnet" taille={22} />
+            J’ai ma propre recette à coller
+          </button>
+        </div>
       </section>
 
       {ficheDe && (

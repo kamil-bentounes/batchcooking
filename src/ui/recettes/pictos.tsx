@@ -54,6 +54,16 @@ const ICONES = {
   reglages: <><path d="M4 7h10" /><path d="M18 7h2" /><circle cx="16" cy="7" r="2" />
     <path d="M4 17h4" /><path d="M12 17h8" /><circle cx="10" cy="17" r="2" /></>,
   droite: <path d="M9 18l6-6-6-6" />,
+  moins: <path d="M5 12h14" />,
+  horloge: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></>,
+  feuille: <><path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14" /><path d="M5 19c3-4 6-6 9-8" /></>,
+  flocon: <><path d="M12 3v18" /><path d="M4.2 7.5l15.6 9" /><path d="M19.8 7.5l-15.6 9" />
+    <path d="M9.5 4.8 12 7l2.5-2.2" /><path d="M9.5 19.2 12 17l2.5 2.2" /></>,
+  pot: <><path d="M4 11h16l-1.6 7a2 2 0 0 1-2 1.5H7.6a2 2 0 0 1-2-1.5z" /><path d="M8 11V8.5M12 11V7M16 11V8.5" /></>,
+  placard: <><rect x="4" y="3.5" width="16" height="17" rx="2.5" /><path d="M12 3.5v17" /><path d="M9.5 11v2M14.5 11v2" /></>,
+  etincelle: <><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z" />
+    <path d="M18.5 16.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" /></>,
+  carnet: <><rect x="5" y="4.5" width="14" height="16" rx="2.5" /><path d="M9 4.5V3.5h6v1M8.5 10h7M8.5 14h7" /></>,
   sortie: <><path d="M14 4h6v6" /><path d="M20 4 11 13" />
     <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></>,
 }
