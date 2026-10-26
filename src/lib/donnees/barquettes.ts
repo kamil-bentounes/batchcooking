@@ -14,6 +14,8 @@ import type { Insertion, Ligne } from '../supabase.ts'
 import { jour, portionVivante } from '../semaine.ts'
 import type { Repas } from '../semaine.ts'
 import type { BarquetteRangee, LignePrise } from '../ranger.ts'
+import type { Json } from '../base.types.ts'
+import { maintenant } from '../horloge.ts'
 
 export { NOM_REPAS, REPAS, bilanDuJour, jour, repartitionAuto } from '../semaine.ts'
 export type { Repas } from '../semaine.ts'
@@ -240,6 +242,46 @@ export function useDistribue() {
         state: 'prevu' as const,
       })), { onConflict: 'household_id,user_profile_id,day,meal' }).select())
     },
+    onSuccess: () => qc.invalidateQueries(),
+  })
+}
+
+/**
+ * Ce qu'on choisit de manger à un repas (`choisir_un_repas`, 0123) :
+ *  · un PLAT du frigo ou du congélateur, désigné comme le frigo le regroupe (recette, libellé, lieu, état) ;
+ *  · autre chose, sans barquette (un repère, une habitude) : la case reste « prévue » et porte un extra ;
+ *  · rien : on saute ce repas.
+ */
+export type Choix =
+  | { type: 'plat'; recipe_id: string | null; label: string; location: 'frigo' | 'congelateur'; state: string }
+  | {
+    type: 'repere'; label: string; kcal: number; protein_g: number
+    grams?: number | null; fiber_g?: number; carb_g?: number; fat_g?: number; food_id?: string | null
+  }
+  | { type: 'saute' }
+
+export type Choisi = {
+  poses: Record<string, string>
+  /** Les barquettes que le changement a lâchées : libres pour un autre jour, ou restées au congélateur. */
+  liberees: { portion_id: string; recipe_id: string | null; label: string; location: string; state: string }[]
+}
+
+/**
+ * Choisir ou changer un repas, pour une ou plusieurs personnes : UNE fonction de la base, une transaction
+ * (`choisir_un_repas`, 0123). Elle verrouille les barquettes du plat, pose une part libre dans la case de CHAQUE
+ * personne (la sienne d'abord, puis celle de personne, puis celle d'un autre ; la plus pressée d'abord), lâche
+ * l'ancienne, et refuse sans rien écrire s'il n'y en a pas assez. Le jour est le jour LOCAL (la base ne connaît pas
+ * le fuseau) ; la promesse ne se résout qu'une fois l'écran relu.
+ */
+export function useChoisirUnRepas() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ jour: j, repas, personnes, choix }: {
+      jour: string; repas: Repas; personnes: string[]; choix: Choix
+    }): Promise<Choisi> =>
+      ou(await supabase.rpc('choisir_un_repas', {
+        p_day: j, p_meal: repas, p_users: personnes, p_today: jour(maintenant()), p_choix: choix as unknown as Json,
+      })) as unknown as Choisi,
     onSuccess: () => qc.invalidateQueries(),
   })
 }

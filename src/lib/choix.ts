@@ -8,7 +8,6 @@
  * avant d'écrire s'il y en aura assez.
  */
 import { jour } from './semaine.ts'
-import type { Repas } from './semaine.ts'
 import {
   JOUR_ENTIER, avant, ecartEnJours, lisLeJour, momentDuRepas, motDuPlat, noteDeSortie, nomCourt, partsLibres,
   sortableDes,

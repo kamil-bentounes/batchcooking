@@ -90,7 +90,7 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
             surMange={() => mange.mutate(prochain.id)}
             nbASortir={aSortir.length}
             surSort={() => sortDuCongelo.mutate(aSortir)}
-            surChange={() => va('/semaine')}
+            surChange={() => va(`/semaine?jour=${jourDit}&repas=${prochain.meal}`)}
             /* Le titre de la page : le plat de ce soir quand il EST la page, le geste du cycle sinon. */
             titreDePage={enSemaine} />
   )
@@ -230,7 +230,7 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
       {/* Demain : « La semaine » mène où tout se choisit. Pendant la semaine, on le dit même vide : c'est
           aussi la porte vers elle, que « Voir toute la semaine » tenait avant. */}
       {(demain.length > 0 || (etat === 'semaine' && prochain)) && (
-        <Demain cases={demain} photo={photoDe(demain[0])} surSemaine={() => va('/semaine')} />
+        <Demain cases={demain} photo={photoDe(demain[0])} surSemaine={() => va(`/semaine?jour=${demainDit}`)} />
       )}
 
       {/* Le second plan : discret, sans boîte, et parfaitement facultatif. */}

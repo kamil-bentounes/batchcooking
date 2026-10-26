@@ -301,7 +301,7 @@ export default function App() {
     case '/cuisine-accueil': return <Accueil userId={moi} va={va} />
 
     // Les quatre destinations permanentes.
-    case '/semaine': return <Semaine userId={moi} va={va} />
+    case '/semaine': return <Semaine userId={moi} va={va} remplace={remplace} />
     case '/frigo': return <Frigo userId={moi} va={va} />
     case '/bilan': return <Bilan va={va} userId={moi} />
 

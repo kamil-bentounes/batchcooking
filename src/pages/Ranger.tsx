@@ -13,7 +13,7 @@
  * lecture seule, et se contente de finir.
  */
 import { useMemo, useRef, useState } from 'react'
-import { Attente, Erreur, Passage, Principal } from '../ui/coque.tsx'
+import { Attente, Erreur, Passage, Principal, Secondaire } from '../ui/coque.tsx'
 import type { Cycle } from '../lib/donnees/cycle.ts'
 import type { Membre } from '../lib/donnees/foyer.ts'
 import type { RecetteMesuree } from '../lib/donnees/recettes.ts'
@@ -228,7 +228,7 @@ export function Ranger({ cycle, decoupes, membres, retour, va }: {
 
   async function ranger() {
     if (enCours) return
-    if (fini) { va('/frigo'); return }
+    if (fini) { va('/semaine'); return }
     setEnCours(true)
     setErreur(null)
     try {
@@ -250,7 +250,8 @@ export function Ranger({ cycle, decoupes, membres, retour, va }: {
         rangeLe: (lectureSeule ? maintenant() : rangeLe).toISOString(),
         restes: retirer ? corrections(prises, restes) : {},
       })
-      va('/frigo')
+      /* Le geste suivant : choisir ce qu'on mange chaque jour. Rien n'est distribué tout seul. */
+      va('/semaine')
     } catch (e) {
       setErreur(e)
     } finally {
@@ -445,15 +446,17 @@ export function Ranger({ cycle, decoupes, membres, retour, va }: {
         ) : (
           <Principal onClick={ranger} disabled={enCours || messageDate !== null || prisesEnLecture}>
             {enCours ? 'Je range…'
-              : fini ? 'Voir le frigo'
+              : fini ? 'Choisir les repas de la semaine'
               : lectureSeule ? 'Terminer le rangement'
               : `Ranger ${total === 1 ? 'la barquette' : `les ${total} barquettes`}`}
           </Principal>
         )}
         <Erreur de={erreur} />
+        {fini && <Secondaire onClick={() => va('/frigo')}>Voir le frigo</Secondaire>}
         {!fini && !rienARanger && (
           <p className="mt-3 text-center text-[13px] text-doux">
-            Le frigo garde {JOURS_AU_FRAIS} jours. Tout reste modifiable depuis le frigo.
+            Le frigo garde {JOURS_AU_FRAIS} jours. Ensuite, tu choisis ce que tu manges chaque jour : la semaine
+            t’attend. Tout reste modifiable depuis le frigo.
           </p>
         )}
       </div>

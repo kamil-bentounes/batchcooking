@@ -1,0 +1,234 @@
+/**
+ * La feuille de choix d'un repas (« Lundi midi ») : une vraie modale (`<dialog>`, focus piégé, Échap, le focus
+ * revient au bouton qui l'a ouverte) qui propose, dans l'ordre :
+ *  · « Pour » : vous deux, ou chaque personne du foyer ;
+ *  · « Au frigo » : ce qui presse d'abord, avec combien de barquettes sont libres ;
+ *  · « Au congélateur » : à sortir la veille (la même heure que le frigo) ;
+ *  · « Autre chose » : nos aliments (chantier 4 : l'endroit est prévu), ce qu'on reprend souvent, les repères du
+ *    repas, et « On saute ce repas ».
+ * Choisir un plat pose une barquette libre dans la case de CHAQUE personne visée : c'est la base qui l'écrit,
+ * d'un bloc (`choisir_un_repas`, 0123).
+ */
+import { useState } from 'react'
+import { Feuille } from '../budget/Feuille.tsx'
+import { Erreur } from '../coque.tsx'
+import { PlatImage } from '../frigo/PlatImage.tsx'
+import { fondDuPlat, nomCourt } from '../../lib/frigo.ts'
+import type { Groupe, Part, Prevu } from '../../lib/frigo.ts'
+import {
+  choisirLesParts, detailDuCongele, detailDuFrigo, libresPourLeChoix, ordonneLesChoix, personnesDuChoix, resteLibre,
+} from '../../lib/choix.ts'
+import type { Cible, ChoixDuFrigo, Membre } from '../../lib/choix.ts'
+import { pourLeFoyer } from '../../lib/ranger.ts'
+import { reperesDe } from '../../lib/reperes.ts'
+import type { Choix } from '../../lib/donnees/barquettes.ts'
+import type { Ligne } from '../../lib/supabase.ts'
+
+type Frequent = Ligne<'frequent_food'>
+
+/** Un aliment du foyer proposé en « Autre chose » (chantier 4 : « Nos aliments »). Vide tant qu'ils n'existent pas. */
+export type NotreAliment = {
+  id: string; label: string; detail: string
+  choix: Extract<Choix, { type: 'repere' }>
+}
+
+const ENCRE_DOUCE = 'var(--color-doux)'
+const ENCRE_OCRE = 'var(--color-ocre)'
+const ENCRE_GLACE = 'var(--color-congel-encre)'
+
+function Rang({ nom, detail, encre, reste, pastille, desactive, surChoix }: {
+  nom: string; detail: string; encre: string; reste?: string; pastille: React.ReactNode
+  desactive?: boolean; surChoix: () => void
+}) {
+  return (
+    <button type="button" onClick={surChoix} disabled={desactive}
+            className="flex min-h-14 w-full items-center gap-3 rounded-[14px] bg-surface px-3 py-2 text-left disabled:opacity-55"
+            style={{ boxShadow: 'inset 0 0 0 1px var(--color-brume)' }}>
+      {pastille}
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold leading-[1.25] [overflow-wrap:anywhere]">{nom}</span>
+        <span className="mt-0.5 block text-[12px] leading-[1.35]" style={{ color: encre }}>{detail}</span>
+      </span>
+      {reste && <span className="shrink-0 whitespace-nowrap text-[13px] text-doux">{reste}</span>}
+    </button>
+  )
+}
+
+function Vignette({ fond, photo, filtre }: { fond: string; photo?: string | null; filtre?: string }) {
+  return (
+    <span aria-hidden="true" className="relative block h-[30px] w-9 shrink-0 overflow-hidden rounded-lg"
+          style={{ background: fond, boxShadow: 'inset 0 0 0 1.5px rgba(28, 43, 35, 0.12)' }}>
+      {photo !== undefined && <PlatImage url={photo} texte={false} glyphe={14} filtre={filtre} />}
+    </span>
+  )
+}
+
+function Section({ titre, aide, children }: { titre: string; aide: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-4" aria-label={titre}>
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-[14px] font-bold">{titre}</h3>
+        <span className="text-right text-[12px] text-doux">{aide}</span>
+      </div>
+      <div className="mt-2 flex flex-col gap-1.5">{children}</div>
+    </section>
+  )
+}
+
+type Proprietes = {
+  /** « Lundi midi ». */
+  titre: string
+  repas: string
+  jour: string
+  membres: Membre[]
+  /** « tous », ou l'identifiant de la personne : ce que « Pour » propose en premier. */
+  pourInitial: 'tous' | string
+  /** Ceux qui ont déjà mangé ce repas : on ne le change plus pour eux. */
+  dejaMange: string[]
+  /** Les plats encore là, regroupés. */
+  groupes: Groupe<Part>[]
+  /** Les repas posés ; `null` tant qu'ils ne sont pas lus (on ne dit pas « libre » de ce qu'on ne sait pas). */
+  prevus: Prevu[] | null
+  maintenant: Date
+  photoDe: (recipeId: string | null) => string | null
+  frequents: Frequent[]
+  nosAliments?: NotreAliment[]
+  enCours: boolean
+  erreur: unknown
+  surChoix: (choix: Choix, personnes: string[]) => void
+}
+
+/**
+ * La feuille. Son contenu ne vit que tant qu'elle est ouverte : « Pour » repart de `pourInitial` à chaque
+ * ouverture, et le focus entre dans la modale puis revient au bouton qui l'a ouverte.
+ */
+export function FeuilleDeChoix({ ouverte, fermer, ...p }: Proprietes & { ouverte: boolean; fermer: () => void }) {
+  return (
+    <Feuille ouverte={ouverte} fermer={fermer} titre={p.titre}>
+      <Contenu {...p} />
+    </Feuille>
+  )
+}
+
+function Contenu({
+  titre, repas, jour, membres, pourInitial, dejaMange, groupes, prevus, maintenant, photoDe, frequents,
+  nosAliments = [], enCours, erreur, surChoix,
+}: Proprietes) {
+  const [pour, setPour] = useState<'tous' | string>(pourInitial)
+  const peutManger = membres.filter(m => !dejaMange.includes(m.id))
+  /* « Vous deux » n'a de sens que pour tout le foyer, et personne n'en a encore mangé ce repas. */
+  const tousPossible = membres.length > 1 && dejaMange.length === 0
+  const choisi = pour === 'tous' && !tousPossible ? (peutManger[0]?.id ?? 'tous') : pour
+  const personnes = personnesDuChoix(choisi, membres).filter(id => !dejaMange.includes(id))
+  const cible: Cible = { jour, repas, personnes }
+
+  const lu = prevus !== null
+  const avecLibres = (lieu: 'frigo' | 'congelateur'): ChoixDuFrigo[] =>
+    groupes.filter(g => g.location === lieu).map(g => ({
+      groupe: g,
+      libres: prevus ? libresPourLeChoix(g, prevus, cible, maintenant) : [],
+    }))
+  const frigo = ordonneLesChoix(avecLibres('frigo'))
+  const congelo = ordonneLesChoix(avecLibres('congelateur'))
+  const reperes = reperesDe(repas)
+
+  const plat = (g: Groupe<Part>): Choix =>
+    ({ type: 'plat', recipe_id: g.recipeId, label: g.label, location: g.location, state: g.state })
+  const fait = (choix: Choix) => { if (personnes.length > 0) surChoix(choix, personnes) }
+
+  const manque = (c: ChoixDuFrigo): string | null => {
+    if (!lu) return 'les repas prévus se lisent…'
+    if (personnes.length === 0) return 'personne à servir'
+    if (c.libres.length === 0) return null
+    if (choisirLesParts(c.libres, personnes) === null) return `il en faut ${personnes.length}, ${c.libres.length} libre${c.libres.length > 1 ? 's' : ''}`
+    return null
+  }
+
+  const pourDit = (id: string) => id === 'tous' ? pourLeFoyer(membres.length) : (membres.find(m => m.id === id)?.prenom ?? '')
+  const grandes = (t: string) => `${t[0].toUpperCase()}${t.slice(1)}`
+
+  return (
+    <>
+      <h2 className="titre mx-1 text-[24px] font-semibold">{titre}</h2>
+
+      {membres.length > 1 && (
+        <div role="group" aria-label="Pour qui" className="mx-1 mt-3 flex flex-wrap gap-1 rounded-[14px] bg-piste p-1">
+          {[...(tousPossible ? ['tous'] : []), ...membres.map(m => m.id)].map(id => {
+            const actif = choisi === id
+            const mange = id !== 'tous' && dejaMange.includes(id)
+            return (
+              <button key={id} type="button" onClick={() => setPour(id)} aria-pressed={actif} disabled={mange}
+                      className={`min-h-11 flex-1 rounded-[10px] px-2 text-[14px] font-semibold disabled:opacity-45
+                                  ${actif ? 'bg-encre text-fond' : 'bg-transparent text-encre'}`}>
+                {id === 'tous' ? grandes(pourDit('tous')) : pourDit(id)}
+                {mange && <span className="block text-[11px] font-normal">a mangé</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <Section titre="Au frigo" aide="ce qui presse d’abord">
+        {frigo.length === 0 && <p className="text-[13px] text-doux">Aucune barquette au frigo pour l’instant.</p>}
+        {frigo.map(c => {
+          const d = detailDuFrigo(c.libres, cible, maintenant)
+          const pasAssez = manque(c)
+          const desactive = !lu || c.libres.length === 0 || pasAssez !== null
+          return (
+            <Rang key={c.groupe.cle} nom={nomCourt(c.groupe.label)} desactive={desactive}
+                  detail={pasAssez ?? d.texte} encre={pasAssez ? ENCRE_OCRE : d.urgent ? ENCRE_OCRE : ENCRE_DOUCE}
+                  reste={resteLibre(c.libres.length)} surChoix={() => fait(plat(c.groupe))}
+                  pastille={<Vignette fond={fondDuPlat(c.groupe.label)} photo={photoDe(c.groupe.recipeId)} />} />
+          )
+        })}
+      </Section>
+
+      <Section titre="Au congélateur" aide="à sortir la veille">
+        {congelo.length === 0 && <p className="text-[13px] text-doux">Rien au congélateur pour l’instant.</p>}
+        {congelo.map(c => {
+          const pasAssez = manque(c)
+          const desactive = !lu || c.libres.length === 0 || pasAssez !== null
+          return (
+            <Rang key={c.groupe.cle} nom={nomCourt(c.groupe.label)} desactive={desactive}
+                  detail={pasAssez ?? (c.libres.length === 0 ? 'déjà choisi pour d’autres repas' : detailDuCongele(cible, maintenant))}
+                  encre={pasAssez ? ENCRE_OCRE : ENCRE_GLACE}
+                  reste={resteLibre(c.libres.length)} surChoix={() => fait(plat(c.groupe))}
+                  pastille={<Vignette fond="var(--color-congel-fond)" photo={photoDe(c.groupe.recipeId)} filtre="saturate(0.75)" />} />
+          )
+        })}
+      </Section>
+
+      <Section titre="Autre chose" aide="sans barquette">
+        {/* Nos aliments (chantier 4) : AVANT les repères, un geste = une unité. L'endroit est là. */}
+        {nosAliments.map(a => (
+          <Rang key={a.id} nom={a.label} detail={a.detail} encre={ENCRE_DOUCE} surChoix={() => fait(a.choix)}
+                desactive={personnes.length === 0}
+                pastille={<Vignette fond="var(--color-surface)" />} />
+        ))}
+        {frequents.slice(0, 6).map(f => (
+          <Rang key={f.id} nom={f.label} detail="ce que tu reprends souvent" encre={ENCRE_DOUCE}
+                desactive={personnes.length === 0}
+                reste={`${Math.round(Number(f.kcal))} kcal`}
+                surChoix={() => fait({
+                  type: 'repere', label: f.label, kcal: Number(f.kcal), protein_g: Number(f.protein_g), grams: Number(f.grams),
+                  fiber_g: Number(f.fiber_g), carb_g: Number(f.carb_g), fat_g: Number(f.fat_g), food_id: f.food_id,
+                })}
+                pastille={<Vignette fond="var(--color-surface)" />} />
+        ))}
+        {reperes.map(r => (
+          <Rang key={r.label} nom={r.label} detail="un repère, pas une pesée" encre={ENCRE_DOUCE}
+                desactive={personnes.length === 0} reste={`${r.kcal} kcal`}
+                surChoix={() => fait({ type: 'repere', label: r.label, kcal: r.kcal, protein_g: r.proteinG })}
+                pastille={<Vignette fond="var(--color-sable)" />} />
+        ))}
+        <Rang nom="On saute ce repas" detail="rien de mangé" encre={ENCRE_DOUCE} desactive={personnes.length === 0}
+              surChoix={() => fait({ type: 'saute' })}
+              pastille={<Vignette fond="var(--color-piste)" />} />
+      </Section>
+
+      {enCours && <p role="status" className="mx-1 mt-3 text-[13px] text-doux">J’écris le repas…</p>}
+      <div className="mx-1"><Erreur de={erreur} /></div>
+    </>
+  )
+}
+
