@@ -3566,6 +3566,16 @@ export type Database = {
         Args: { l_enveloppe: string; ranger: boolean }
         Returns: undefined
       }
+      range_la_session: {
+        Args: {
+          p_cycle: string
+          p_lots: Json
+          p_range_le: string
+          p_restes?: Json
+          p_retirer?: boolean
+        }
+        Returns: Json
+      }
       range_le_compte: {
         Args: { le_compte: string; ranger: boolean }
         Returns: undefined
@@ -3602,8 +3612,8 @@ export type Database = {
         Args: { avec_les_saisies?: boolean; p_charge: string }
         Returns: string
       }
-      retire_du_stock: {
-        Args: { p_cycle: string; p_restes?: Json }
+      retire_du_stock_interne: {
+        Args: { p_cycle: string; p_restes: Json }
         Returns: number
       }
       retire_une_facture: { Args: { la_facture: string }; Returns: undefined }
