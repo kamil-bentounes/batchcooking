@@ -5,8 +5,6 @@ ecrans: [/dressage]
 questions:
   - Comment choisir ce qui va au frigo et ce qui va au congélateur ?
   - Combien de temps se garde une barquette ?
-  - Que veut dire « La session a pris » ?
-  - Pourquoi mes ingrédients ont disparu du frigo ?
   - Comment changer l’heure de rangement ?
   - Que fait « Ranger les barquettes » ?
   - Pourquoi « Ranger » est grisé ?
@@ -37,9 +35,7 @@ Une carte par recette : le total, une barre frigo / congélateur, « Frigo · N 
 
 ## « La session a pris »
 
-Les ingrédients des recettes sortent du frigo, du congélateur et du placard : une puce par ingrédient (« Poireaux 1,5 kg »). Touche-la, écris « il en reste … » puis « Corriger » (ou « Comme prévu ») ; un texte qui n’est pas un nombre est refusé avec un message. Un stock tombé à zéro disparaît.
-
-Le calcul suit la liste de courses : la quantité de la recette, mise à l’échelle des parts cuisinées ; une recette dont on ne connaît pas le nombre de parts d’origine compte telle qu’elle est écrite. À la pièce, on arrondit vers le bas : trois quarts d’oignon, rien ne sort. L’appli ne touche **ni** à ce qui n’a pas de quantité, **ni** à ce qu’elle ne sait pas calculer : un pot, un ingrédient dont une ligne de recette n’a ni poids ni unité compatible, ou un ingrédient que tu as à la fois en grammes et à la pièce. « Reste au frigo : … » liste le reste. Le retrait n’a lieu qu’**une fois** par session.
+Les ingrédients des recettes sortent du stock : une puce par ingrédient (« Poireaux 1,5 kg »), à corriger si besoin. Le détail est dans « cuisine-on-range-stock ».
 
 ## Ranger
 
