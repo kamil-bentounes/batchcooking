@@ -87,7 +87,7 @@ test.describe('les captures de revue', () => {
       ['/profil', '06-profil'],
       ['/cuisine-accueil', '07-cuisine-accueil'],
       ['/semaine', '08-semaine'],
-      ['/stock', '09-stock'],
+      ['/frigo', '09-frigo'],
       ['/bilan', '10-bilan'],
       ['/choisir', '11-choisir'],
       ['/magasin', '12-magasin'],
@@ -123,14 +123,10 @@ test.describe('les captures de revue', () => {
     await page.getByRole('button', { name: /^Corriger / }).first().click()
     await prend(page, '27-corriger-charge')
 
-    await page.goto('/stock')
-    const auFroid = page.getByRole('tab', { name: /congélateur/i })
-    if (await auFroid.count()) {
-      await auFroid.click()
-      await page.waitForTimeout(400)
-      const ajout = page.getByRole('button', { name: /à la main|ajouter/i }).first()
-      if (await ajout.count()) { await ajout.click(); await prend(page, '26-ajout-manuel') }
-    }
+    await page.goto('/frigo')
+    await page.getByRole('button', { name: 'Ouvrir le congélateur' }).click()
+    await page.getByRole('button', { name: '+ Ajouter au congélateur' }).click()
+    await prend(page, '26-ajout-manuel')
   })
 })
 

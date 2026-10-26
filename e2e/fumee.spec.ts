@@ -59,7 +59,7 @@ test.describe('les écrans s’ouvrent', () => {
     ['/choisir', /Choisir|recette/i],
     ['/magasin', /liste/i],
     ['/semaine', /semaine/i],
-    ['/stock', /ce que j|frigo|placard/i],
+    ['/frigo', /frigo/i],
     ['/bilan', /bilan/i],
     ['/ticket', /ticket/i],
     ['/peser', /peser/i],
@@ -416,7 +416,7 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
     await connecte(page)
     /* Le hub ne porte PAS la barre du bas — c'est l'écran qu'on quitte — donc
        on va la chercher là où elle vit, dans l'univers cuisine. */
-    await page.goto('/stock')
+    await page.goto('/frigo')
     const barre = page.locator('nav[aria-label="Navigation principale"]')
     await expect(barre).toBeVisible({ timeout: 15_000 })
     const style = await barre.evaluate(n => {
@@ -452,7 +452,7 @@ test.describe('les captures de référence', () => {
     // après un changement, ce qu'aucune assertion ne remplace.
     await connecte(page)
     for (const c of ['/', '/choisir', '/magasin', '/bilan', '/ticket', '/peser',
-                     '/stock', '/importer', '/semaine']) {
+                     '/frigo', '/importer', '/semaine']) {
       await page.goto(c)
       await page.waitForTimeout(400)
       await page.screenshot({

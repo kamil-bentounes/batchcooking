@@ -30,7 +30,7 @@ test.afterAll(async () => { if (foyer) await efface(foyer) })
 /** Tous les écrans de l'application, tels que `App.tsx` les aiguille. */
 const ECRANS = [
   ['/', 'hub'], ['/cuisine-accueil', 'accueil'], ['/budget', 'budget'], ['/charges', 'charges'], ['/budget-reglages', 'budget-reglages'], ['/epargne', 'epargne'], ['/profil', 'profil'],
-  ['/semaine', 'semaine'], ['/stock', 'stock'], ['/bilan', 'bilan'],
+  ['/semaine', 'semaine'], ['/frigo', 'frigo'], ['/bilan', 'bilan'],
   ['/choisir', 'choisir'], ['/magasin', 'magasin'], ['/plan', 'plan'],
   ['/cuisine', 'cuisine'], ['/dressage', 'dressage'], ['/inventer', 'inventer'],
   ['/photo', 'photo'], ['/ticket', 'ticket'], ['/peser', 'peser'],
@@ -253,14 +253,15 @@ test.describe('on clique comme on clique vraiment', () => {
     const erreurs = surveille(page)
     await connecte(page)
 
-    await page.goto('/stock')
-    await expect(page.getByRole('heading', { name: /ce que j’ai/i })).toBeVisible({ timeout: 15_000 })
-    await capture(page, 'clic-01-stock-frigo')
+    await page.goto('/frigo')
+    await expect(page.getByRole('heading', { name: 'Le frigo' })).toBeVisible({ timeout: 15_000 })
+    await capture(page, 'clic-01-frigo-ferme')
 
-    await page.getByRole('tab', { name: /congélateur/i }).click()
-    await capture(page, 'clic-02-stock-congelateur')
+    await page.getByRole('button', { name: 'Ouvrir le congélateur' }).click()
+    await expect(page.getByRole('region', { name: 'Dans le congélateur' })).toBeVisible({ timeout: 5_000 })
+    await capture(page, 'clic-02-frigo-congelateur')
 
-    await page.getByRole('button', { name: /à la main|ajouter/i }).first().click()
+    await page.getByRole('button', { name: '+ Ajouter au congélateur' }).click()
     await capture(page, 'clic-03-ajout-formulaire')
 
     // Un plat, pas un produit : c'est la branche qui demande les deux dates.

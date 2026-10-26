@@ -199,12 +199,11 @@ test.describe('le cycle, d’un bout à l’autre', () => {
     await dresser.click()
 
     /* La seconde étape : « On range ». Ranger crée les barquettes (déjà là dans ce foyer :
-       le geste est reprenable), retire du stock, passe à la semaine, et mène au frigo — qui
-       n'existe pas encore et renvoie sur « Ce que j'ai ». */
+       le geste est reprenable), retire du stock, passe à la semaine, et mène au frigo. */
     await expect(page.getByRole('heading', { name: 'On range' })).toBeVisible({ timeout: 20_000 })
     await prend(page, '08a-on-range')
     await page.getByRole('button', { name: /^Ranger / }).click()
-    await expect(page).toHaveURL(/\/stock$/, { timeout: 20_000 })
+    await expect(page).toHaveURL(/\/frigo$/, { timeout: 20_000 })
     await prend(page, '08b-dressage-fait')
 
     /* ── 5 · La semaine ────────────────────────────────────────────────── */

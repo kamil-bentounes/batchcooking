@@ -185,8 +185,8 @@ test('on dresse pour tout le foyer, on range, et la base garde ce qu’on a choi
 
   /* ── On range ───────────────────────────────────────────────────────────── */
   await page.getByRole('button', { name: 'Ranger les 12 barquettes' }).click()
-  // `/frigo` n'existe pas encore : il renvoie sur « Ce que j'ai ».
-  await expect(page).toHaveURL(/\/stock$/, { timeout: 20_000 })
+  // « Ranger » mène au frigo.
+  await expect(page).toHaveURL(/\/frigo$/, { timeout: 20_000 })
 
   /* ── La base relue ──────────────────────────────────────────────────────── */
   const { data: parts } = await db.from('portion').select('*').eq('cycle_id', foyer.cycleId)
@@ -258,7 +258,7 @@ test.describe('reprise', () => {
     await page.getByRole('button', { name: 'C’est dressé' }).click()
     await expect(page.getByRole('heading', { name: 'On range' })).toBeVisible()
     await page.getByRole('button', { name: /^Ranger / }).click()
-    await expect(page).toHaveURL(/\/stock$/, { timeout: 20_000 })
+    await expect(page).toHaveURL(/\/frigo$/, { timeout: 20_000 })
 
     const { count } = await db.from('portion').select('id', { count: 'exact', head: true })
       .eq('cycle_id', second.cycleId)

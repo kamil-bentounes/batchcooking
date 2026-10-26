@@ -60,7 +60,7 @@ const ECRANS = [
   ['/', 'hub'], ['/budget', 'budget'], ['/charges', 'charges'],
   ['/budget-reglages', 'budget-reglages'], ['/epargne', 'epargne'],
   ['/profil', 'profil'], ['/cuisine-accueil', 'accueil'], ['/semaine', 'semaine'],
-  ['/stock', 'stock'], ['/bilan', 'bilan'], ['/choisir', 'choisir'],
+  ['/frigo', 'frigo'], ['/bilan', 'bilan'], ['/choisir', 'choisir'],
   ['/magasin', 'magasin'], ['/plan', 'plan'], ['/cuisine', 'cuisine'],
   ['/dressage', 'dressage'], ['/inventer', 'inventer'], ['/photo', 'photo'],
   ['/ticket', 'ticket'], ['/peser', 'peser'], ['/importer', 'importer'],

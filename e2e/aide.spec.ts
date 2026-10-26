@@ -163,7 +163,7 @@ test('partout ailleurs le « ? » flotte dans la marge du haut, sans recouvrir r
   await connecte(page, foyer.email)
 
   for (const route of [
-    '/charges', '/budget-reglages', '/epargne', '/reglages', '/profil', '/semaine', '/stock', '/bilan', '/choisir',
+    '/charges', '/budget-reglages', '/epargne', '/reglages', '/profil', '/semaine', '/frigo', '/bilan', '/choisir',
     '/magasin', '/plan', '/cuisine', '/dressage', '/inventer', '/photo', '/ticket', '/peser', '/importer', '/objectifs',
     '/motdepasse', '/cloture/2026-09',
   ]) {

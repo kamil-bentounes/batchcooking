@@ -109,9 +109,11 @@ test.describe('la cuisine, jouée au clic', () => {
   test('le stock accepte une demi-quantité, refuse zéro en français, et ne déborde pas', async ({ page }) => {
     await connecte(page)
     await page.goto('/stock')
-    await expect(page.getByRole('heading', { name: 'Ce que j’ai' })).toBeVisible({ timeout: 20_000 })
+    await expect(page, '/stock mène au frigo').toHaveURL(/\/frigo$/, { timeout: 20_000 })
+    await page.getByRole('button', { name: 'Ouvrir le frigo' }).click()
+    await expect(page.getByRole('region', { name: 'Dans le frigo' })).toBeVisible({ timeout: 5_000 })
     const ajoute = async (nom: string, q: string) => {
-      await page.getByRole('button', { name: '+ À la main' }).click()
+      await page.getByRole('button', { name: '+ Ajouter au frigo' }).click()
       await page.getByLabel('Aliment').fill(nom)
       await page.getByRole('spinbutton', { name: 'Quantité' }).fill(q)
       await page.getByLabel('Unité').selectOption('u')
@@ -126,7 +128,11 @@ test.describe('la cuisine, jouée au clic', () => {
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click()
     // La ligne doit être là avant de mesurer : sinon on mesure la page d'avant l'ajout.
     await expect(page.getByText('X'.repeat(80))).toBeVisible()
-    const debord = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+    const debord = await page.evaluate(() => {
+      const dedans = document.querySelector('[data-interieur=ouvert]')!
+      return Math.max(document.documentElement.scrollWidth - document.documentElement.clientWidth,
+                      dedans.scrollWidth - dedans.clientWidth)
+    })
     expect(debord, 'un libellé sans espace fait déborder la page').toBe(0)
   })
 
