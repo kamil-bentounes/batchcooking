@@ -22,7 +22,7 @@ sources:
   - src/lib/donnees/barquettes.ts
   - supabase/migrations/0123_choisir_un_repas.sql
   - src/lib/peremption.ts
-verifie_sur: f692955
+verifie_sur: 1b57e94
 ---
 ## Ce que fait l’appli
 

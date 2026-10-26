@@ -14,7 +14,7 @@ sources:
   - src/lib/reperes.ts
   - src/lib/donnees/barquettes.ts
   - src/lib/semaine.ts
-verifie_sur: f692955
+verifie_sur: 1b57e94
 ---
 ## Ce que fait l’appli
 

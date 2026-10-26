@@ -14,7 +14,7 @@ sources:
   - src/pages/Semaine.tsx
   - supabase/migrations/0126_rappels.sql
   - supabase/functions/_shared/rappels/mails.ts
-verifie_sur: 0000000
+verifie_sur: 1b57e94
 ---
 ## Les sept rappels (heure de Paris)
 
