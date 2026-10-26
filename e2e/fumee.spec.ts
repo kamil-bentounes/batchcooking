@@ -130,8 +130,8 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
     await page.goto('/bilan')
     // Deux dessins séparés, chacun avec son échelle. Superposés, ils
     // exigeraient une double échelle, et une double échelle se lit de travers.
-    await expect(page.getByText('CALORIES')).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByText('PROTÉINES')).toBeVisible()
+    await expect(page.getByText(/kcal en moyenne/).first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/de protéines en moyenne/).first()).toBeVisible()
     await expect(page.getByRole('img', { name: /calories par jour/i })).toBeVisible()
     await expect(page.getByRole('img', { name: /protéines par jour/i })).toBeVisible()
   })

@@ -39,7 +39,7 @@ export type Bilan = {
   budget: Budget
   personnes: Personne[]
   /** Ce qui a plu, ce qui est resté : le retour vers le choix du mercredi. */
-  recettes: { label: string; dressees: number; mangees: number; jetees: number }[]
+  recettes: { label: string; recipeId: string | null; dressees: number; mangees: number; jetees: number }[]
 }
 
 /**
@@ -180,9 +180,9 @@ export function useBilan(depuis: Date, jusqu: Date) {
         }
       })
 
-      const parRecette = new Map<string, { dressees: number; mangees: number; jetees: number }>()
+      const parRecette = new Map<string, { recipeId: string | null; dressees: number; mangees: number; jetees: number }>()
       for (const x of p) {
-        const v = parRecette.get(x.label) ?? { dressees: 0, mangees: 0, jetees: 0 }
+        const v = parRecette.get(x.label) ?? { recipeId: x.recipe_id, dressees: 0, mangees: 0, jetees: 0 }
         v.dressees++
         if (x.state === 'mangee') v.mangees++
         if (x.state === 'jetee') v.jetees++
