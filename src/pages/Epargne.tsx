@@ -44,7 +44,7 @@ function Projet({ poche, foyerId, deja }: {
 
   return (
     <div className="mt-4 pt-4 border-t border-brume">
-      <span className="text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+      <span className="text-[14px] font-semibold text-doux">
         Le projet
       </span>
 
@@ -264,7 +264,7 @@ export function Epargne({ userId, retour }: { userId: string; retour: () => void
           ))
         )}
 
-        <h2 className="mt-10 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+        <h2 className="mt-10 text-[14px] font-semibold text-doux">
           Ouvrir une poche
         </h2>
         <div className="mt-3 space-y-3">

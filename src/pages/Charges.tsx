@@ -853,7 +853,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
             mois ouverts : sans ce chemin, la feuille ne s'ouvrirait plus. */}
         {retirees.length > 0 && (
           <>
-            <h2 className="mt-10 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+            <h2 className="mt-10 text-[14px] font-semibold text-doux">
               Retirées, encore à régler
             </h2>
             <Surface className="mt-3">
@@ -872,7 +872,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
           Plus rapide que cocher cinquante lignes — et ça te dit ce que tu as oublié.
         </p>
 
-        <h2 className="mt-10 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+        <h2 className="mt-10 text-[14px] font-semibold text-doux">
           Ou une par une
         </h2>
         <label className="mt-3 block">

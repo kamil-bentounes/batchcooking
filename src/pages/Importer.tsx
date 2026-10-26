@@ -161,7 +161,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
 
       {(sansDuree > 0 || sansAliment > 0 || lue.aCompleter.length > 0) && (
         <Surface className="mt-6">
-          <p className="text-[13px] uppercase tracking-[0.04em]" style={{ color: 'var(--color-ocre)' }}>
+          <p className="text-[14px]" style={{ color: 'var(--color-ocre)' }}>
             À compléter
           </p>
           <ul className="mt-2 space-y-1 text-[14px] text-doux">
@@ -180,7 +180,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
       {/* Qui la voit. Posé ici, au moment où l'on décide de la garder — pas
           dans un réglage qu'on découvrirait trop tard. */}
       <section className="mt-7" aria-label="Qui peut la voir">
-        <h2 className="text-[13px] text-doux uppercase tracking-[0.04em]">
+        <h2 className="text-[14px] text-doux">
           Qui peut la voir
         </h2>
         <div className="mt-2.5 flex flex-col gap-2">
@@ -201,7 +201,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
       </section>
 
       <section className="mt-8" aria-label="Ingrédients">
-        <h2 className="text-[13px] text-doux uppercase tracking-[0.04em]">
+        <h2 className="text-[14px] text-doux">
           {ingredients.length} ingrédients
         </h2>
         <ul className="mt-3 divide-y divide-brume/70">
@@ -218,7 +218,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
               </div>
               <span className="block text-[13px] text-doux mt-0.5">
                 {i.food_nom
-                  ? <>→ {i.food_nom.split(',')[0]}
+                  ? <>reconnu : {i.food_nom.split(',')[0]}
                       {i.grams_reference !== null && ` · ${Math.round(i.grams_reference)} g`}</>
                   : <span style={{ color: 'var(--color-ocre)' }}>
                       pas reconnu — il ne comptera pas dans les macros
@@ -230,7 +230,7 @@ export function Importer({ retour, va }: { retour: () => void; va: (v: string) =
       </section>
 
       <section className="mt-8" aria-label="Étapes">
-        <h2 className="text-[13px] text-doux uppercase tracking-[0.04em]">
+        <h2 className="text-[14px] text-doux">
           {etapes.length} étapes
         </h2>
         <ul className="mt-3 space-y-3">

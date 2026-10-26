@@ -165,7 +165,7 @@ function Aliment({ a, cycleId, ouvert, surOuvre }: {
               {pesees.map(p => (
                 <li key={p.id} className="flex items-center justify-between py-1">
                   <span>
-                    {Number(p.qty_observed)} → {Number(p.grams)} g
+                    {Number(p.qty_observed)} pour {Number(p.grams)} g
                     <span className="opacity-70">
                       {' '}({Math.round(Number(p.grams) / Number(p.qty_observed))} g l’unité)
                     </span>

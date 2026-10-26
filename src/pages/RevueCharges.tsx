@@ -64,7 +64,7 @@ export function RevueCharges({ surOubli }: { surOubli: (libelle: string) => void
 
           {revue.doublons.length > 0 && (
             <div className="mt-5">
-              <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+              <p className="text-[14px] font-semibold text-doux">
                 Deux fois la même chose
               </p>
               {revue.doublons.map((d, i) => (
@@ -78,7 +78,7 @@ export function RevueCharges({ surOubli }: { surOubli: (libelle: string) => void
 
           {revue.incoherences.length > 0 && (
             <div className="mt-5">
-              <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+              <p className="text-[14px] font-semibold text-doux">
                 À vérifier
               </p>
               {revue.incoherences.map((x, i) => (
@@ -96,7 +96,7 @@ export function RevueCharges({ surOubli }: { surOubli: (libelle: string) => void
 
           {revue.oublis.length > 0 && (
             <div className="mt-5">
-              <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+              <p className="text-[14px] font-semibold text-doux">
                 Tu n’en as pas parlé
               </p>
               {/* Des BOUTONS, pas une liste : le libellé vient du catalogue, il

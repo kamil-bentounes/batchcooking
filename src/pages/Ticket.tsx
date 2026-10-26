@@ -117,7 +117,7 @@ export function Ticket({ retour, va }: { retour: () => void; va: (v: string) => 
         <>
           {magasins.length > 1 && (
             <div className="mt-7">
-              <h2 className="text-[13px] text-doux uppercase tracking-[0.04em]">Enseigne</h2>
+              <h2 className="text-[14px] text-doux">Enseigne</h2>
               <div className="mt-2 flex flex-wrap gap-2">
                 {magasins.map(m => (
                   <button key={m.id} onClick={() => setMagasin(m.id)}
@@ -273,7 +273,7 @@ function LigneTicketVue({ r, retenu, ouvert, candidats, surRetient, surOuvre, su
           <span className="block text-[13px] text-doux mt-0.5">
             {poids && `${poids.quantite} ${poids.unite} · `}
             {r.article
-              ? <>→ {r.article.label}</>
+              ? <>sur la liste : {r.article.label}</>
               : <span className="italic">pas sur la liste — le prix s’apprend quand même</span>}
             {devine && (
               <span style={{ color: 'var(--color-ocre)' }}>{' · '}deviné, à vérifier</span>
