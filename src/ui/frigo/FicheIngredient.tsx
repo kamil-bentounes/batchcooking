@@ -66,7 +66,7 @@ export function FicheIngredient({ item, surAnnonce }: { item: Ligne<'stock_item'
         <div role="radiogroup" aria-label="Où il est" className="mt-1.5 flex flex-wrap gap-2">
           {(['frigo', 'congelateur', 'placard'] as Lieu[]).map(l => (
             <button key={l} type="button" role="radio" aria-checked={lieu === l}
-                    onClick={() => lieu !== l && fait(modifie.mutateAsync({ id: item.id, location: l }),
+                    onClick={() => lieu !== l && fait(modifie.mutateAsync({ id: item.id, location: l, avant: lieu }),
                       `${item.label} : ${l === 'placard' ? 'au placard' : l === 'frigo' ? 'au frigo' : 'au congélateur'}.`)}
                     className={`inline-flex min-h-11 items-center rounded-full px-4 text-[14px] transition-colors
                       ${lieu === l ? 'bg-encre text-fond' : 'bg-piste'}`}>
