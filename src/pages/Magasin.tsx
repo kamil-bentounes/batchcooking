@@ -19,7 +19,7 @@ import { useEstimeListe } from '../lib/donnees/prix.ts'
 import type { Article } from '../lib/donnees/courses.ts'
 import { RAYONS, rayonDe } from '../lib/rayons.ts'
 import { messageEchec } from '../lib/recettes/echecs.ts'
-import { ecritQuantite } from '../lib/quantite.ts'
+import { ecritQuantiteEtUnite } from '../lib/quantite.ts'
 import type { Geste } from '../lib/recettes/echecs.ts'
 
 /** Le prix payé d'un article : au-delà, c'est une faute de frappe, pas un ticket. */
@@ -202,7 +202,7 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surRefus
 }) {
   const pris = !!article.checked_at
   const quantite = article.quantity !== null
-    ? `${ecritQuantite(Number(article.quantity))} ${article.unit ?? ''}`.trim()
+    ? ecritQuantiteEtUnite(Number(article.quantity), article.unit)
     : null
   // Ce que la génération n'a pas su convertir. Dans la note, pas dans le
   // libellé : celui-ci sert de clé au rapprochement des tickets.

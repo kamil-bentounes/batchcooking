@@ -31,7 +31,9 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   const { data: cycle, isPending: chargeCycle } = useCycle()
   const { data: foyer } = useFoyer()
   const { data: cases = [] } = useSemaine(aujourdhui, 2)
-  const { data: prevus = [] } = usePrevus()
+  const { data: lesPrevus, error: erreurPrevus } = usePrevus()
+  /* `null` tant que les repas posés ne sont pas lus : le magnet ne dit pas « libre » d'une part qu'un repas réclame. */
+  const prevus = lesPrevus ?? null
   const sortDuCongelo = useSortDuCongelo()
   const { data: barquettes = [] } = useBarquettes()
   const { data: plan = [] } = usePlanEnregistre(cycle?.id, cycle?.state === 'en_cuisine')
@@ -70,12 +72,28 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   const etat = cycle?.state ?? (interrompu ? 'interrompue' : 'vide')
   const geste = GESTE[etat]
   const presses = pressesGroupees(barquettes, new Date())
+  /* La carte du repas dit à elle seule le geste du moment pendant la semaine, quand il y a un repas posé. */
+  const enSemaine = etat === 'semaine' && !!prochain
   /* Les parts que « Je les sors » sort : celles du même plat posées sur ce repas, et au congélateur. */
   const aSortir = prochain
     ? cases.flatMap(c => c.day === jourDit && c.meal === prochain.meal && c.state === 'prevu'
       && c.portion?.label === prochain.portion?.label && c.portion?.location === 'congelateur'
       ? [c.portion.id] : [])
     : []
+
+  const carteDuSoir = prochain && (
+    <CeSoir cas={prochain} photo={photoDe(prochain)} enCours={mange.isPending || sortDuCongelo.isPending}
+            pour={pourQui(
+              cases.filter(c => c.day === jourDit && c.meal === prochain.meal && c.state === 'prevu'
+                && c.portion?.label === prochain.portion?.label).map(c => c.user_profile_id),
+              membres, userId)}
+            surMange={() => mange.mutate(prochain.id)}
+            nbASortir={aSortir.length}
+            surSort={() => sortDuCongelo.mutate(aSortir)}
+            surChange={() => va('/semaine')}
+            /* Le titre de la page : le plat de ce soir quand il EST la page, le geste du cycle sinon. */
+            titreDePage={enSemaine} />
+  )
 
   if (chargeCycle || chargeInterrompu) {
     return <Ecran actif="accueil" va={va}><Vide titre="Un instant…" /></Ecran>
@@ -162,25 +180,22 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
         </div>
       </section>
 
-      {/* Le repas d'aujourd'hui : ce qu'on mange, et ce qu'il faut faire avant. */}
-      {prochain && (
-        <CeSoir cas={prochain} photo={photoDe(prochain)} enCours={mange.isPending || sortDuCongelo.isPending}
-                pour={pourQui(
-                  cases.filter(c => c.day === jourDit && c.meal === prochain.meal && c.state === 'prevu'
-                    && c.portion?.label === prochain.portion?.label).map(c => c.user_profile_id),
-                  membres, userId)}
-                surMange={() => mange.mutate(prochain.id)}
-                nbASortir={aSortir.length}
-                surSort={() => sortDuCongelo.mutate(aSortir)}
-                surChange={() => va('/semaine')} />
-      )}
-      <Erreur de={mange.error ?? sortDuCongelo.error} />
+      <Erreur de={erreurPrevus} />
+
+      {/*
+        * L'ordre dit ce qui est LE geste du moment. Pendant la semaine, c'est le repas de ce soir (carte sombre,
+        * juste sous le frigo) ; dans tout autre état du cycle — session interrompue, choix des recettes,
+        * courses, cuisine —, c'est le geste du cycle, et la carte passe dessous : elle le repoussait sous le
+        * pli.
+        */}
+      {enSemaine && carteDuSoir}
+      {enSemaine && <Erreur de={mange.error ?? sortDuCongelo.error} />}
 
       {/* LA chose du moment, quand le repas ne la dit pas déjà. Rien ne lui dispute la place. */}
-      {!(etat === 'semaine' && prochain) && <LeGeste etat={etat} plan={plan} titre={geste.titre} />}
+      {!enSemaine && <LeGeste etat={etat} plan={plan} titre={geste.titre} />}
 
-      <div className={etat === 'semaine' && prochain ? '' : 'mt-[34px]'}>
-        {!(etat === 'semaine' && prochain) && (
+      <div className={enSemaine ? '' : 'mt-[34px]'}>
+        {!enSemaine && (
           <Principal onClick={() => {
             if (!cycle && interrompu) {
               reprend.mutate({ id: interrompu.id, vers: 'en_cuisine' }, { onSuccess: () => va('/cuisine') })
@@ -208,6 +223,9 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
           </Secondaire>
         )}
       </div>
+
+      {!enSemaine && carteDuSoir}
+      {!enSemaine && <Erreur de={mange.error ?? sortDuCongelo.error} />}
 
       {/* Demain : « La semaine » mène où tout se choisit. Pendant la semaine, on le dit même vide : c'est
           aussi la porte vers elle, que « Voir toute la semaine » tenait avant. */}
@@ -277,8 +295,10 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
 }
 
 /** Le repas du jour, en carte sombre : le plat, pour qui, et — s'il dort au congélateur — ce qu'il faut faire. */
-function CeSoir({ cas, photo, pour, enCours, nbASortir, surMange, surSort, surChange }: {
+function CeSoir({ cas, photo, pour, enCours, nbASortir, surMange, surSort, surChange, titreDePage }: {
   cas: Case; photo: string | null; pour: string; enCours: boolean
+  /** Vrai quand la carte est le geste de la page : son titre en est alors le `<h1>` (il n'y en a qu'un). */
+  titreDePage: boolean
   /** Combien de barquettes « Je les sors » sort : le texte et le bouton s'accordent avec ce nombre. */
   nbASortir: number
   surMange: () => void; surSort: () => void; surChange: () => void
@@ -286,17 +306,18 @@ function CeSoir({ cas, photo, pour, enCours, nbASortir, surMange, surSort, surCh
   const p = cas.portion!
   const auFroid = p.location === 'congelateur'
   const meal = cas.meal as keyof typeof NOM_REPAS
+  const Titre = titreDePage ? 'h1' : 'h2'
   const quand = meal === 'diner' ? 'Ce soir' : meal === 'dejeuner' ? 'Ce midi' : `Ce ${NOM_REPAS[meal].toLowerCase()}`
   return (
     <section aria-label="Le prochain repas" data-carte="repas"
-             className="sur-encre mt-[18px] rounded-3xl bg-encre p-4 text-fond">
+             className={`sur-encre rounded-3xl bg-encre p-4 text-fond ${titreDePage ? 'mt-[18px]' : 'mt-10'}`}>
       <div className="flex items-center gap-3.5">
         <div className="relative size-[72px] shrink-0 overflow-hidden rounded-2xl bg-[#3A4A41] text-[#B9C7BD]">
           {photo ? <PlatImage url={photo} texte={false} /> : <span className="absolute inset-0 grid place-items-center"><Appareil taille={26} /></span>}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[13px] text-[#B9C7BD]">{quand}, pour {pour}</p>
-          <h2 className="titre mt-[3px] text-[22px] font-semibold leading-[1.15] [overflow-wrap:anywhere]">{nomCourt(p.label)}</h2>
+          <Titre className="titre mt-[3px] text-[22px] font-semibold leading-[1.15] [overflow-wrap:anywhere]">{nomCourt(p.label)}</Titre>
         </div>
       </div>
       {auFroid && (
