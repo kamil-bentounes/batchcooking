@@ -21,14 +21,36 @@
 -- protéines + glucides + lipides réunis (l'arrondi des étiquettes laisse un peu de jeu), une unité qui pèse entre
 -- 1 g et 5 kg.
 --
+-- Les noms et les codes-barres se COMPARENT normalisés : « Yaourt », « yaourt  » et « YAOURT » sont le même nom ;
+-- « 3033490004743 » et « 03033490004743 » (le même GTIN écrit sur 13 et sur 14 chiffres) sont le même code. Un nom fait
+-- de blancs seulement n'est pas un nom. `remplace_repere` : le repère de `src/lib/reperes.ts` que cet aliment prend
+-- à sa place (« Yaourt »), choisi par la personne — plus aucune règle de préfixe (« Yaourt dessert protéiné » ne cache
+-- « Yaourt » que si on le lui dit).
+--
 -- RLS du foyer, quatre verbes écrits séparément (jamais `for all` : voir 0018). `household_id` figure dans l'export
 -- RGPD, ci-dessous.
 -- ═══════════════════════════════════════════════════════════════════════════
 
+/* Un nom comparable : sans accents, en minuscules, apostrophes unifiées, blancs (dont l'insécable) réduits à un espace,
+   ni espace au début ni à la fin. `immutable` : `unaccent()` ne l'est pas, et un index d'unicité l'exige. La même
+   règle que `nomComparable` (`src/lib/aliments/ordre.ts`) pour les accents et la casse. */
+create or replace function public.nom_comparable(t text)
+ returns text
+ language sql
+ immutable parallel safe
+ set search_path to 'pg_catalog'
+as $$
+  select btrim(regexp_replace(
+    lower(translate(t,
+      'àÀáÁâÂãÃäÄåÅçÇèÈéÉêÊëËìÌíÍîÎïÏñÑòÒóÓôÔõÕöÖøØùÙúÚûÛüÜýÝÿŸ’‘`' || chr(160),
+      'aaaaaaaaaaaacceeeeeeeeiiiiiiiinnoooooooooooouuuuuuuuyyyy''''''' || ' ')),
+    '\s+', ' ', 'g'))
+$$;
+
 create table if not exists public.aliment (
   id            uuid primary key default gen_random_uuid(),
   household_id  uuid not null references public.household(id) on delete cascade,
-  label         text not null check (char_length(btrim(label)) between 1 and 80),
+  label         text not null check (char_length(btrim(label)) between 1 and 80 and public.nom_comparable(label) <> ''),
   kcal_100g     numeric not null check (kcal_100g    >= 0 and kcal_100g    <= 900),
   protein_100g  numeric not null default 0 check (protein_100g >= 0 and protein_100g <= 100),
   carb_100g     numeric not null default 0 check (carb_100g    >= 0 and carb_100g    <= 100),
@@ -36,19 +58,20 @@ create table if not exists public.aliment (
   fiber_100g    numeric not null default 0 check (fiber_100g   >= 0 and fiber_100g   <= 100),
   unite         text not null default 'pot' check (char_length(btrim(unite)) between 1 and 20),
   unite_g       numeric not null check (unite_g >= 1 and unite_g <= 5000),
-  code_barres   text check (code_barres ~ '^[0-9]{8,14}$'),
+  code_barres   text check (code_barres ~ '^[0-9]+$' and char_length(code_barres) in (8, 12, 13, 14)),
+  remplace_repere text check (remplace_repere is null or char_length(btrim(remplace_repere)) between 1 and 80),
   source        text not null default 'main' check (source in ('main', 'etiquette', 'code_barres')),
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
   constraint aliment_macros_plausibles check (protein_100g + carb_100g + fat_100g <= 105)
 );
 
--- Un nom, une fois par foyer (sans tenir compte de la casse ni des espaces autour) : deux « Yaourt » ne se
--- départageraient pas dans la feuille de choix. Un code-barres, une fois par foyer.
+-- Un nom, une fois par foyer (sans tenir compte de la casse, des accents ni des espaces) : deux « Yaourt » ne se
+-- départageraient pas dans la feuille de choix. Un code-barres, une fois par foyer, comparé sur 14 chiffres (GTIN-14).
 create unique index if not exists aliment_label_unique
-  on public.aliment (household_id, lower(btrim(label)));
+  on public.aliment (household_id, public.nom_comparable(label));
 create unique index if not exists aliment_code_barres_unique
-  on public.aliment (household_id, code_barres) where code_barres is not null;
+  on public.aliment (household_id, lpad(code_barres, 14, '0')) where code_barres is not null;
 
 drop trigger if exists aliment_touch on public.aliment;
 create trigger aliment_touch before update on public.aliment

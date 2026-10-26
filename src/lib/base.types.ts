@@ -133,6 +133,7 @@ export type Database = {
           kcal_100g: number
           label: string
           protein_100g: number
+          remplace_repere: string | null
           source: string
           unite: string
           unite_g: number
@@ -149,6 +150,7 @@ export type Database = {
           kcal_100g: number
           label: string
           protein_100g?: number
+          remplace_repere?: string | null
           source?: string
           unite?: string
           unite_g: number
@@ -165,6 +167,7 @@ export type Database = {
           kcal_100g?: number
           label?: string
           protein_100g?: number
+          remplace_repere?: string | null
           source?: string
           unite?: string
           unite_g?: number

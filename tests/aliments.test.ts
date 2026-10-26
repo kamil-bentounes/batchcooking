@@ -9,6 +9,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest'
 import { admin, makeActor, type Actor } from './helpers/db'
+import { choixDeLUnite } from '../src/lib/aliments/calcul'
 
 let kamil: Actor
 let autre: Actor
@@ -75,10 +76,25 @@ describe('la RLS du foyer', () => {
     const maj = await kamil.client.from('aliment').update({ kcal_100g: 80, unite_g: 150 }).eq('id', a.id).select().single()
     expect(maj.error).toBeNull()
     expect(Number(maj.data!.kcal_100g)).toBe(80)
-    expect(new Date(maj.data!.updated_at).getTime()).toBeGreaterThanOrEqual(new Date(a.updated_at).getTime())
     const del = await kamil.client.from('aliment').delete().eq('id', a.id).select()
     expect(del.error).toBeNull()
     expect(del.data).toHaveLength(1)
+  })
+})
+
+describe('le déclencheur `updated_at`', () => {
+  it('une modification avance `updated_at` ; une ligne relue sans changement ne bouge pas', async () => {
+    const a = (await cree(kamil)).data!
+    /* Un vrai délai : sans lui, `now()` de l'insertion et de la mise à jour pourraient tomber dans la même milliseconde. */
+    await new Promise(r => setTimeout(r, 1100))
+    const maj = await kamil.client.from('aliment').update({ unite_g: 130 }).eq('id', a.id).select().single()
+    expect(maj.error).toBeNull()
+    const avant = new Date(a.updated_at).getTime()
+    const apres = new Date(maj.data!.updated_at).getTime()
+    expect(apres - avant, 'updated_at doit avancer d’au moins le délai attendu').toBeGreaterThanOrEqual(1000)
+    expect(maj.data!.created_at, 'created_at ne bouge jamais').toBe(a.created_at)
+    const relu = await kamil.client.from('aliment').select('updated_at').eq('id', a.id).single()
+    expect(relu.data!.updated_at).toBe(maj.data!.updated_at)
   })
 })
 
@@ -121,6 +137,12 @@ describe('les bornes', () => {
     await refus({ unite: 'x'.repeat(21) }, /aliment_unite_check/)
   })
 
+  it('un nom fait de blancs seulement (espaces, tabulation, espace insécable) est refusé', async () => {
+    await refus({ label: '\t' }, /aliment_label_check/)
+    await refus({ label: '\u00a0\u00a0' }, /aliment_label_check/)
+    await refus({ label: ' \t \u00a0 ' }, /aliment_label_check/)
+  })
+
   it('le nom : ni vide, ni de plus de 80 caractères', async () => {
     await refus({ label: '   ' }, /aliment_label_check/)
     await refus({ label: 'x'.repeat(81) }, /aliment_label_check/)
@@ -133,11 +155,24 @@ describe('les bornes', () => {
     await refus({ source: 'devine' }, /aliment_source_check/)
   })
 
-  it('le code-barres : 8 à 14 chiffres', async () => {
+  it('le code-barres : 8, 12, 13 ou 14 chiffres, et rien d’autre', async () => {
     await refus({ code_barres: '12345' }, /aliment_code_barres_check/)
+    for (const neuf of ['123456789', '1234567890', '12345678901']) await refus({ code_barres: neuf }, /aliment_code_barres_check/)
     await refus({ code_barres: '30334900047AB' }, /aliment_code_barres_check/)
     await refus({ code_barres: '123456789012345' }, /aliment_code_barres_check/)
-    expect((await cree(kamil, { label: nom('Code'), code_barres: '3033490004743' })).error).toBeNull()
+    await refus({ code_barres: '3033 4900 04743' }, /aliment_code_barres_check/)
+    /* Chaque longueur permise entre (quatre codes différents : le même GTIN écrit deux fois est un seul code, plus bas). */
+    for (const bon of ['12345670', '123456789012', '3033490004743', '30334900047430']) {
+      expect((await cree(kamil, { label: nom('Code'), code_barres: bon })).error, bon).toBeNull()
+    }
+  })
+
+  it('`remplace_repere` : le nom d’un repère, ou rien — jamais une chaîne vide', async () => {
+    const a = (await cree(kamil, { label: nom('Remplace'), remplace_repere: 'Yaourt' })).data!
+    expect(a.remplace_repere).toBe('Yaourt')
+    expect((await cree(kamil, { label: nom('Sans') })).data!.remplace_repere).toBeNull()
+    await refus({ remplace_repere: '   ' }, /aliment_remplace_repere_check/)
+    await refus({ remplace_repere: 'x'.repeat(81) }, /aliment_remplace_repere_check/)
   })
 
   it('un nom, une fois par foyer — sans tenir compte de la casse ni des espaces — mais libre chez un autre foyer', async () => {
@@ -148,13 +183,43 @@ describe('les bornes', () => {
     expect((await cree(autre, { label: base })).error, 'un autre foyer a le droit au même nom').toBeNull()
   })
 
+  it('le nom se compare sans accents, avec des espaces unifiés (insécable et tabulation compris)', async () => {
+    const stamp = `${Date.now()}-${++n}`
+    expect((await cree(kamil, { label: `Crème brûlée ${stamp}` })).error).toBeNull()
+    for (const variante of [
+      `creme brulee ${stamp}`, `CRÈME BRÛLÉE ${stamp}`, `  Creme   brulee\t${stamp}  `, `Crème\u00a0brûlée ${stamp}`,
+    ]) {
+      const double = await cree(kamil, { label: variante })
+      expect(double.error?.message, JSON.stringify(variante)).toMatch(/aliment_label_unique/)
+    }
+    expect((await cree(kamil, { label: `Crème brûlée vanille ${stamp}` })).error, 'un autre nom reste permis').toBeNull()
+    /* Modifier un nom vers celui d'un autre aliment est refusé de même. */
+    const b = (await cree(kamil, { label: nom('Autre nom') })).data!
+    const renomme = await kamil.client.from('aliment').update({ label: `CREME BRULEE ${stamp}` }).eq('id', b.id)
+    expect(renomme.error?.message).toMatch(/aliment_label_unique/)
+  })
+
   it('un code-barres, une fois par foyer ; plusieurs aliments sans code-barres', async () => {
-    const code = String(40_000_000_000 + Math.floor(Math.random() * 1_000_000_000))
+    const code = String(4_000_000_000_000 + Math.floor(Math.random() * 999_999_999_999))
     expect((await cree(kamil, { label: nom('A'), code_barres: code })).error).toBeNull()
     expect((await cree(kamil, { label: nom('B'), code_barres: code })).error?.message).toMatch(/aliment_code_barres_unique/)
     expect((await cree(autre, { label: nom('C'), code_barres: code })).error).toBeNull()
     expect((await cree(kamil, { label: nom('D') })).error).toBeNull()
     expect((await cree(kamil, { label: nom('E') })).error).toBeNull()
+  })
+
+  it('le même code-barres écrit sur 13 et sur 14 chiffres (zéros à gauche) est UN code : GTIN-14', async () => {
+    const treize = String(2_000_000_000_000 + Math.floor(Math.random() * 999_999_999_999))
+    expect(treize).toHaveLength(13)
+    expect((await cree(kamil, { label: nom('Treize'), code_barres: treize })).error).toBeNull()
+    const quatorze = await cree(kamil, { label: nom('Quatorze'), code_barres: `0${treize}` })
+    expect(quatorze.error?.message, '13 puis 14 chiffres').toMatch(/aliment_code_barres_unique/)
+    /* Et dans l'autre sens, sur un code de huit chiffres (EAN-8) écrit sur quatorze. */
+    const huit = String(10_000_000 + Math.floor(Math.random() * 89_999_999))
+    expect((await cree(kamil, { label: nom('Huit'), code_barres: `000000${huit}` })).error).toBeNull()
+    expect((await cree(kamil, { label: nom('Huit bis'), code_barres: huit })).error?.message).toMatch(/aliment_code_barres_unique/)
+    /* Un autre foyer garde le droit au même code. */
+    expect((await cree(autre, { label: nom('Autre foyer'), code_barres: treize })).error).toBeNull()
   })
 })
 
@@ -168,20 +233,14 @@ describe('un geste : une unité, avec les vraies valeurs', () => {
   it('« un pot » du yaourt dessert protéiné vaut 95 kcal et 12,5 g, écrits par `choisir_un_repas`', async () => {
     decalage += 3
     const a = (await cree(kamil, { label: nom('Yaourt dessert protéiné') })).data!
-    const g = Number(a.unite_g)
-    const unite = {
-      label: a.label, grams: g,
-      kcal: Math.round(Number(a.kcal_100g) * g / 100),
-      protein_g: Math.round(Number(a.protein_100g) * g / 10) / 10,
-      carb_g: Math.round(Number(a.carb_100g) * g / 10) / 10,
-      fat_g: Math.round(Number(a.fat_100g) * g / 10) / 10,
-      fiber_g: Math.round(Number(a.fiber_100g) * g / 10) / 10,
-    }
-    expect(unite).toMatchObject({ grams: 125, kcal: 95, protein_g: 12.5, carb_g: 7, fat_g: 1.8 })
+    /* Le VRAI code de l'appli (`choixDeLUnite`), appelé sur la ligne que la base vient de rendre : le calcul n'est pas
+       réécrit ici, il est lu là où l'écran le lit. */
+    const unite = choixDeLUnite(a)
+    expect(unite).toMatchObject({ type: 'repere', label: a.label, grams: 125, kcal: 95, protein_g: 12.5, carb_g: 7, fat_g: 1.8, fiber_g: 0 })
 
     const r = await kamil.client.rpc('choisir_un_repas', {
       p_day: jourDans(0), p_meal: 'collation', p_users: [kamil.userId], p_today: aujourdhui(),
-      p_choix: { type: 'repere', ...unite },
+      p_choix: unite,
     })
     expect(r.error).toBeNull()
 
@@ -202,15 +261,24 @@ describe('un geste : une unité, avec les vraies valeurs', () => {
   it('l’extra est une COPIE : corriger l’aliment ensuite ne réécrit pas le repas d’hier', async () => {
     decalage += 3
     const a = (await cree(kamil, { label: nom('Copie') })).data!
-    await kamil.client.rpc('choisir_un_repas', {
-      p_day: jourDans(0), p_meal: 'collation', p_users: [kamil.userId], p_today: aujourdhui(),
-      p_choix: { type: 'repere', label: a.label, grams: 125, kcal: 95, protein_g: 12.5 },
+    const hier = choixDeLUnite(a)
+    expect(hier.kcal).toBe(95)
+    const r = await kamil.client.rpc('choisir_un_repas', {
+      p_day: jourDans(0), p_meal: 'collation', p_users: [kamil.userId], p_today: aujourdhui(), p_choix: hier,
     })
-    await kamil.client.from('aliment').update({ kcal_100g: 200 }).eq('id', a.id)
+    expect(r.error).toBeNull()
+
+    const maj = await kamil.client.from('aliment').update({ kcal_100g: 200 }).eq('id', a.id).select().single()
+    expect(maj.error).toBeNull()
+    const demain = choixDeLUnite(maj.data!)
+    expect(demain.kcal, 'l’aliment corrigé, lui, vaut bien autre chose').toBe(250)
+
     const { data: slot } = await db.from('meal_slot').select('id')
       .eq('user_profile_id', kamil.userId).eq('day', jourDans(0)).eq('meal', 'collation').single()
-    const { data: extras } = await db.from('meal_extra').select('kcal').eq('meal_slot_id', slot!.id)
-    expect(Number(extras![0].kcal)).toBe(95)
+    const { data: extras } = await db.from('meal_extra').select('kcal, protein_g').eq('meal_slot_id', slot!.id)
+    expect(extras).toHaveLength(1)
+    expect(Number(extras![0].kcal), 'le repas noté garde ses 95 kcal').toBe(95)
+    expect(Number(extras![0].protein_g)).toBe(12.5)
   })
 })
 
