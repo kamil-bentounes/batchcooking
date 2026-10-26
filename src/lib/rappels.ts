@@ -123,8 +123,8 @@ const quoi = (g: Groupe, n: number) => `${n} ${motDuLot(g.label, n)}`
 /** « Sortir 4 wraps du congélateur ? » ; plusieurs plats : « Sortir 6 barquettes du congélateur ? ». */
 export function questionDeSortie(parts: Part[]): string {
   const groupes = groupeLesParts(parts)
-  if (groupes.length === 1) return `Sortir ${quoi(groupes[0], parts.length)} du congélateur ?`
-  return `Sortir ${parts.length} barquettes du congélateur ?`
+  if (groupes.length === 1) return `Sortir ${quoi(groupes[0], parts.length)} du congélateur\u00a0?`
+  return `Sortir ${parts.length} barquettes du congélateur\u00a0?`
 }
 
 /** Le détail quand il y a plusieurs plats : « 4 wraps, 2 lasagnes ». */

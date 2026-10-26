@@ -43,7 +43,7 @@ Choisir un plat pose une barquette libre dans la case de **chaque** personne vis
 - La carte pleine dit le plat, « Du frigo, pour vous deux » ou « Du congélateur, pour Kamil », et propose **« Changer »**, y compris le jour même.
 - Quand tu changes, l’ancienne barquette est lâchée, et l’appli le dit : « Les lasagnes retournent au frigo, libres pour un autre jour. » ou « Les wraps restent au congélateur. »
 - **« Je l’ai mangé »** apparaît aujourd’hui sur ta carte : la barquette est marquée mangée et quitte le frigo. Un repas que quelqu’un a mangé ne se change plus pour cette personne.
-- Un plat **congelé** a un bandeau bleu. Aujourd’hui : « C’est pour aujourd’hui : décongèle les 2 wraps au micro-ondes. » Un autre jour : « Pense à sortir les 2 wraps la veille au soir. » Demain, une fois l’heure venue (vingt-quatre heures avant le repas), la même phrase que la fiche du plat dans « Frigo ». Il n’existe pas aujourd’hui de rappel par mail.
+- Un plat **congelé** a un bandeau bleu. Aujourd’hui : « C’est pour aujourd’hui : décongèle les 2 wraps au micro-ondes. » Un autre jour : « Pense à sortir les 2 wraps la veille au soir. », ou, quand ton rappel « Sortir du congélateur » est activé, « Mail mardi à 19 h : sortir 2 wraps du congélateur pour la nuit au frigo. » (voir « rappels-par-mail »). Demain, une fois l’heure venue (vingt-quatre heures avant le repas), la même phrase que la fiche du plat dans « Frigo ».
 
 Sur l’accueil, « Changer » ouvre « La semaine » sur aujourd’hui avec la feuille du bon repas déjà ouverte.
 

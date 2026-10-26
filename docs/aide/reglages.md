@@ -10,6 +10,7 @@ questions:
   - Comment exporter mes données ?
   - Comment me déconnecter ?
   - Comment ajouter ou retirer un magasin ?
+  - Où régler mes rappels par mail ?
 sources:
   - src/pages/Settings.tsx
   - src/pages/Accueil.tsx
@@ -36,6 +37,7 @@ Accueil de Popote, carte « Cuisine », puis le rond avec ton initiale : « Rég
 - **« Inviter »** : voir « foyer-inviter ». « Dans le foyer : » liste les prénoms.
 - **« Vos amis »** : d’autres foyers, pour échanger des recettes. « Inviter un foyer » donne un lien valable **7 jours**, à usage unique (« Copier le lien », « Annuler »). « rompre » met fin à l’amitié des deux côtés, après confirmation. Seules les recettes marquées « partagée » circulent, avec le prénom de qui les a ajoutées ; courses, barquettes, prix et objectifs ne sortent jamais du foyer. Exception : une session de cuisine où tu convies un foyer ami (« donnees-et-vie-privee »).
 - **« Tes magasins »** : écris le nom puis « Ajouter ». Le premier magasin créé est « par défaut ». « retirer » demande confirmation : les articles qui portaient ce magasin deviennent « sans magasin », et les prix notés pour lui partent avec. Après une sortie de courses dans ce magasin, il ne peut plus être retiré : « <nom> a déjà servi pour une sortie de courses : il ne peut plus être retiré. » Autre erreur : « <nom> n’a pas pu être retiré. Réessaie dans un instant. »
+- **« Les rappels par mail »** : « Régler mes rappels » ouvre l’écran des rappels (voir « rappels-par-mail »). Chacun règle les siens, et tout est coupé au départ.
 - **« Ton mot de passe »** : « Changer mon mot de passe » (voir « compte-connexion »).
 - **« Te déconnecter »** : « Me déconnecter », sur cet appareil seulement.
 - **« Tes données »** : « Exporter mes données » et « Supprimer mon compte » (voir « donnees-et-vie-privee »).

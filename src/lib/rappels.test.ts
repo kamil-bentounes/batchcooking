@@ -101,15 +101,15 @@ describe('sortablesDuLien : ce qu’on peut vraiment sortir', () => {
 
 describe('les phrases de la confirmation', () => {
   it('« Sortir 4 wraps du congélateur ? »', () => {
-    expect(questionDeSortie([part(1), part(2), part(3), part(4)])).toBe('Sortir 4 wraps du congélateur ?')
-    expect(questionDeSortie([part(1)])).toBe('Sortir 1 wrap du congélateur ?')
+    expect(questionDeSortie([part(1), part(2), part(3), part(4)])).toBe('Sortir 4 wraps du congélateur\u00a0?')
+    expect(questionDeSortie([part(1)])).toBe('Sortir 1 wrap du congélateur\u00a0?')
     expect(questionDeSortie([part(1, { label: 'Burger de feuilles de riz' }), part(2, { label: 'Burger de feuilles de riz' })]))
-      .toBe('Sortir 2 burgers du congélateur ?')
+      .toBe('Sortir 2 burgers du congélateur\u00a0?')
   })
 
   it('plusieurs plats : on compte les barquettes, et le détail dit lesquelles', () => {
     const lot = [part(1), part(2), part(3, { label: 'Lasagnes au saumon' })]
-    expect(questionDeSortie(lot)).toBe('Sortir 3 barquettes du congélateur ?')
+    expect(questionDeSortie(lot)).toBe('Sortir 3 barquettes du congélateur\u00a0?')
     expect(detailDeSortie(lot)).toBe('1 lasagne, 2 wraps')
   })
 
