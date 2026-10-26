@@ -109,7 +109,7 @@ describe('Hub — la carte Budget', () => {
                    membres: [{ id: 'u1', display_name: 'Kamil', objectif: null }] } as unknown as Foyer
     const t = texte(hub(tout({ foyer: sans })))
     expect(t).toContain('Fixe tes objectifs.')
-    expect(t).toContain('aucune barquette ne t’est dressée')
+    expect(t).toContain('tes barquettes sont dressées à parts égales')
     expect(t).not.toContain('Complète ton profil')
   })
 

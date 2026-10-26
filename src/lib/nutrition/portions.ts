@@ -56,6 +56,8 @@ export type Part = {
   diagnostic: Diagnostic
   /** Ce que la part livre rapporté à ce qu'elle vise, en calories. */
   ratioKcal: number
+  /** Cette personne n'a pas d'objectifs : sa part pèse autant que celle des autres, en moyenne. */
+  sansObjectifs: boolean
 }
 
 export type Complement = {
@@ -99,6 +101,7 @@ function diagnostique(ratioKcal: number, proteinG: number, cible: Cible): Diagno
 }
 
 function partDe(plat: Plat, grammes: number, cible: Cible, nombre: number): Part {
+  const sansObjectifs = !(cible.kcal > 0)
   const r = plat.grammes > 0 ? grammes / plat.grammes : 0
   const kcal = plat.kcal * r
   const proteinG = plat.proteinG * r
@@ -114,10 +117,23 @@ function partDe(plat: Plat, grammes: number, cible: Cible, nombre: number): Part
     fatG: Math.round(plat.fatG * r * 10) / 10,
     diagnostic: diagnostique(ratioKcal, proteinG, cible),
     ratioKcal: Math.round(ratioKcal * 100) / 100,
+    sansObjectifs,
   }
 }
 
+/** Ce que la découpe dit de qui n'a pas d'objectifs : sa part n'est jamais omise, elle est égale. */
+function phraseSans(parts: Part[]): string {
+  const sans = parts.filter(p => p.sansObjectifs)
+  if (sans.length === 0) return ''
+  if (sans.length === parts.length) return ' Personne n\'a fixé d\'objectifs : les parts sont égales.'
+  return ' Qui n\'a pas d\'objectifs reçoit la part moyenne des autres.'
+}
+
 function phrase(parts: Part[], complements: Complement[]): string {
+  return phraseDeLaDecoupe(parts, complements) + phraseSans(parts)
+}
+
+function phraseDeLaDecoupe(parts: Part[], complements: Complement[]): string {
   const maigres = parts.filter(p => p.diagnostic === 'insuffisant')
   const grosses = parts.filter(p => p.diagnostic === 'excessif')
   const detail = parts.map(p => `${p.nombre} × ${p.grammes} g`).join(', ')
@@ -146,17 +162,31 @@ export function repartit(
   demandes: Demande[],
   complement: SourceProteinee = SKYR,
 ): Repartition {
-  const utiles = demandes.filter(d => d.nombre > 0 && d.cible.kcal > 0)
+  const utiles = demandes.filter(d => d.nombre > 0)
   if (utiles.length === 0 || plat.grammes <= 0) {
     return { parts: [], complements: [], explication: 'Rien à répartir.' }
   }
 
+  /*
+   * ⚠️ Qui n'a pas d'objectifs reçoit quand même ses parts.
+   *
+   * Elles étaient écartées (`cible.kcal > 0`) : en prod, la moitié des 30 barquettes de la
+   * session du 25/10 n'a jamais été créée, parce qu'un membre n'avait pas fixé les siens.
+   * Sa part pèse la MOYENNE de celles des autres ; si personne n'a d'objectifs, toutes pèsent
+   * pareil. Et sans cible, aucun diagnostic ni complément : on n'invente pas de manque.
+   */
+  const avecObjectifs = utiles.filter(d => d.cible.kcal > 0)
+  const poidsMoyen = avecObjectifs.length > 0
+    ? avecObjectifs.reduce((s, d) => s + d.cible.kcal, 0) / avecObjectifs.length
+    : 1
+  const poidsDe = (d: Demande) => (d.cible.kcal > 0 ? d.cible.kcal : poidsMoyen)
+
   // Découpe au prorata des calories visées, pondérée par le nombre de parts :
   // cinq barquettes pour l'un et deux pour l'autre ne partagent pas le plat
   // dans le même rapport que leurs objectifs journaliers.
-  const total = utiles.reduce((s, d) => s + d.nombre * d.cible.kcal, 0)
+  const total = utiles.reduce((s, d) => s + d.nombre * poidsDe(d), 0)
   const parts = utiles.map(d =>
-    partDe(plat, (plat.grammes * d.cible.kcal) / total, d.cible, d.nombre))
+    partDe(plat, (plat.grammes * poidsDe(d)) / total, d.cible, d.nombre))
 
   // On ne complète que ce qui est vraiment un problème de protéines.
   const complements = parts

@@ -166,3 +166,68 @@ describe('le conseil de l écran de choix', () => {
     expect(partsConseillees(EQUILIBRE, [{ userId: 'k', kcal: 0, proteinG: 0 }])).toBe(0)
   })
 })
+
+describe('qui n’a pas d’objectifs reçoit quand même ses parts', () => {
+  const SANS = { userId: 's', kcal: 0, proteinG: 0 }
+
+  it('le cas de la prod : 6 parts dressées, 3 pour Kamil et 3 pour qui n’a rien fixé', () => {
+    const r = repartit(EQUILIBRE, [
+      { cible: KAMIL, nombre: 3 }, { cible: SANS, nombre: 3 },
+    ])
+    expect(r.parts.map(p => p.userId)).toEqual(['k', 's'])
+    expect(r.parts.reduce((n, p) => n + p.nombre, 0), 'une part a disparu').toBe(6)
+  })
+
+  it('sa part pèse autant que celle de l’autre (ici, la même)', () => {
+    const r = repartit(EQUILIBRE, [
+      { cible: KAMIL, nombre: 3 }, { cible: SANS, nombre: 3 },
+    ])
+    const [k, s] = r.parts
+    expect(s.grammes).toBe(k.grammes)
+    expect(s.grammes).toBe(650)
+    expect(s.sansObjectifs).toBe(true)
+    expect(k.sansObjectifs).toBe(false)
+  })
+
+  it('le plat est partagé en entier, sans perte', () => {
+    const r = repartit(EQUILIBRE, [
+      { cible: KAMIL, nombre: 4 }, { cible: SANS, nombre: 2 },
+    ])
+    const total = r.parts.reduce((s, p) => s + p.grammes * p.nombre, 0)
+    expect(total).toBeCloseTo(EQUILIBRE.grammes, -1)
+  })
+
+  it('avec deux autres objectifs, sa part vaut leur moyenne', () => {
+    const r = repartit(EQUILIBRE, [
+      { cible: KAMIL, nombre: 2 }, { cible: THAUBA, nombre: 2 }, { cible: SANS, nombre: 2 },
+    ])
+    const [k, t, s] = r.parts
+    expect(s.grammes).toBeGreaterThan(t.grammes)
+    expect(s.grammes).toBeLessThan(k.grammes)
+    expect(s.grammes).toBe(Math.round((k.grammes + t.grammes) / 2))
+  })
+
+  it('aucun diagnostic ni complément sur ce qu’on ne vise pas', () => {
+    const r = repartit(PAUVRE, [{ cible: SANS, nombre: 6 }])
+    expect(r.parts[0].diagnostic).toBe('ok')
+    expect(r.complements).toEqual([])
+  })
+
+  it('personne n’a d’objectifs : parts égales, et la phrase le dit', () => {
+    const r = repartit(EQUILIBRE, [
+      { cible: SANS, nombre: 3 }, { cible: { ...SANS, userId: 's2' }, nombre: 3 },
+    ])
+    expect(r.parts.map(p => p.grammes)).toEqual([650, 650])
+    expect(r.explication).toMatch(/Personne n'a fixé d'objectifs/)
+  })
+
+  it('la phrase explique la part moyenne quand seule une personne manque', () => {
+    const r = repartit(EQUILIBRE, [{ cible: KAMIL, nombre: 3 }, { cible: SANS, nombre: 3 }])
+    expect(r.explication).toMatch(/part moyenne des autres/)
+  })
+
+  it('une part à zéro n’en fait pas apparaître', () => {
+    const r = repartit(EQUILIBRE, [{ cible: KAMIL, nombre: 6 }, { cible: SANS, nombre: 0 }])
+    expect(r.parts.map(p => p.userId)).toEqual(['k'])
+  })
+})
