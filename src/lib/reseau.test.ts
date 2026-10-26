@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  PAS_DE_RESEAU, classeLaPanne, enFrancais, estUnePanneDeReseau, estUneSessionExpiree,
+  PAS_DE_RESEAU, classeLaPanne, enFrancais, estUnePanneDeReseau, estUneSessionExpiree, photoEnFrancais,
 } from './reseau.ts'
 
 describe('estUnePanneDeReseau', () => {
@@ -56,5 +56,28 @@ describe('classeLaPanne : toute erreur de lecture est une panne, jamais « aucun
     expect(classeLaPanne({ message: 'Gateway Timeout', code: '' }, 504)).toBe('base')
     expect(classeLaPanne({ code: '57014', message: 'canceling statement due to statement timeout' }, 500)).toBe('base')
     expect(classeLaPanne({ message: '', code: '' }, 540)).toBe('base')
+  })
+})
+
+describe('les photos : des refus en français (L8)', () => {
+  it('le stockage : taille, type, droits', () => {
+    expect(enFrancais('The object exceeded the maximum allowed size')).toMatch(/trop lourde/)
+    expect(enFrancais('mime type image/heic is not supported')).toMatch(/JPEG, PNG ou WebP/)
+    expect(enFrancais('new row violates row-level security policy for table "objects"')).toMatch(/ne peut pas être envoyée/)
+  })
+  it('le refus d’une autre table n’est pas pris pour une photo', () => {
+    expect(enFrancais('new row violates row-level security policy for table "portion"'))
+      .toBe('new row violates row-level security policy for table "portion"')
+  })
+  it('une photo que le navigateur ne décode pas (HEIC) : une phrase française', () => {
+    expect(photoEnFrancais(new DOMException('The source image could not be decoded.', 'InvalidStateError'))).toMatch(/ne se lit pas/)
+    expect(photoEnFrancais(new Error('Failed to execute createImageBitmap'))).toMatch(/ne se lit pas/)
+  })
+  it('nos refus de `prepare` sont déjà en français : ils passent', () => {
+    expect(photoEnFrancais(new Error('Photo trop lourde même après réduction. Réessaie de plus loin.')))
+      .toBe('Photo trop lourde même après réduction. Réessaie de plus loin.')
+  })
+  it('une panne de réseau reste une panne de réseau', () => {
+    expect(photoEnFrancais(new TypeError('Failed to fetch'))).toBe(PAS_DE_RESEAU)
   })
 })

@@ -19,9 +19,36 @@ export function estUnePanneDeReseau(e: unknown): boolean {
   return name === 'AuthRetryableFetchError' || PANNE.test(String(message))
 }
 
-/** Ce qu'on affiche : la phrase française pour une panne, le message tel quel sinon. */
+/**
+ * Les refus du stockage de photos (seau `photos-des-plats`, 0121) arrivent en anglais : taille, type, droits.
+ * Chacun a sa phrase ; le reste passe tel quel.
+ */
+const PHOTO_TROP_LOURDE = 'Cette photo est trop lourde (2 Mo au plus) : reprends-la de plus loin.'
+const PHOTO_FORMAT = 'Ce format de photo n’est pas accepté : JPEG, PNG ou WebP.'
+const PHOTO_REFUSEE = 'Cette photo ne peut pas être envoyée dans ce foyer.'
+const PHOTO_ILLISIBLE = 'Cette photo ne se lit pas (une photo HEIC, par exemple) : prends-la en JPEG ou en PNG.'
+const STOCKAGE: [RegExp, string][] = [
+  [/exceeded the maximum allowed size|payload too large|entity too large|file too large/i, PHOTO_TROP_LOURDE],
+  [/mime type .* is not supported|invalid_mime_type|unsupported media type/i, PHOTO_FORMAT],
+  [/row-level security policy for table "objects"|violates row-level security.*objects/i, PHOTO_REFUSEE],
+]
+
+/** Ce qu'on affiche : la phrase française pour une panne ou un refus du stockage, le message tel quel sinon. */
 export function enFrancais(message: string): string {
-  return PANNE.test(message) ? PAS_DE_RESEAU : message
+  if (PANNE.test(message)) return PAS_DE_RESEAU
+  for (const [motif, phrase] of STOCKAGE) if (motif.test(message)) return phrase
+  return message
+}
+
+/**
+ * Ce qu'on dit d'une photo que le navigateur n'a pas pu préparer (`prepare`, `createImageBitmap`) : une HEIC
+ * d'iPhone, un fichier abîmé — « The source image could not be decoded », « InvalidStateError ». Nos propres
+ * refus de `prepare` sont déjà en français et passent.
+ */
+export function photoEnFrancais(e: unknown): string {
+  const message = e instanceof Error ? e.message : String(e)
+  if (/^(Photo trop lourde|Impossible de préparer)/.test(message)) return message
+  return enFrancais(message) !== message ? enFrancais(message) : PHOTO_ILLISIBLE
 }
 
 export const LA_BASE_NE_REPOND_PAS = 'La base ne répond pas : réessaie dans un instant.'
