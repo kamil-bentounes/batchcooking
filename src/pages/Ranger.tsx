@@ -42,10 +42,13 @@ function partDeLaMarge(r: RecetteMesuree, grammes: number, cle: 'kcal' | 'protei
  */
 function lotsARanger(decoupes: Decoupe[], auFrigo: (recipeId: string) => number): ADresser[] {
   const lots: ADresser[] = []
+  /* Le frigo déjà donné : la recette suivante commence par la personne suivante, de sorte qu'une seule
+     barquette au frais par recette n'aille pas toujours à la même. */
+  let auFraisDeja = 0
   for (const { recette, repartition } of decoupes) {
     const frigo = auFrigo(recette.recipeId)
     const partDe = new Map(repartition.parts.map(p => [p.userId, p]))
-    ordreDeRangement(repartition.parts).forEach((userId, rang) => {
+    ordreDeRangement(repartition.parts, auFraisDeja).forEach((userId, rang) => {
       const p = partDe.get(userId)!
       lots.push({
         recipeId: recette.recipeId,
@@ -63,6 +66,7 @@ function lotsARanger(decoupes: Decoupe[], auFrigo: (recipeId: string) => number)
         location: rang < frigo ? 'frigo' : 'congelateur',
       })
     })
+    auFraisDeja += frigo
   }
   return lots
 }

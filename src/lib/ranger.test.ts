@@ -108,6 +108,11 @@ describe('ordreDeRangement — chacun son tour', () => {
       .toEqual(['k', 't', 'k', 'k'])
   })
   it('personne : rien', () => expect(ordreDeRangement([])).toEqual([]))
+  it('la main passe : on peut commencer par la seconde personne', () => {
+    const parts = [{ userId: 'k', nombre: 2 }, { userId: 't', nombre: 2 }]
+    expect(ordreDeRangement(parts, 1)).toEqual(['t', 'k', 't', 'k'])
+    expect(ordreDeRangement(parts, 2), 'un tour complet revient au début').toEqual(['k', 't', 'k', 't'])
+  })
 })
 
 describe('ecritLaPrise', () => {

@@ -138,11 +138,13 @@ function Lot({ recette, repartition, nomDe }: {
       <div className="mt-3.5 space-y-2.5">
         {repartition.parts.map(p => (
           <div key={p.userId} className="flex items-baseline gap-3">
-            <Chiffre valeur={`${p.nombre} × ${p.grammes} g`} taille={22} />
+            <span className="shrink-0 whitespace-nowrap">
+              <Chiffre valeur={`${p.nombre} × ${p.grammes} g`} taille={22} />
+            </span>
             <span className="text-[14px] opacity-65 grow">
               pour {nomDe(p.userId)}{p.sansObjectifs ? ' · parts égales' : ''}
             </span>
-            <span className="text-[14px] opacity-80 tabular-nums">
+            <span className="shrink-0 whitespace-nowrap text-[14px] opacity-80 tabular-nums">
               {p.kcal} kcal · {p.proteinG} g
             </span>
           </div>

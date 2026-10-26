@@ -110,12 +110,17 @@ export function bilanDuFrigo(auFrais: number, membres: number, rangeLe: Date): B
 }
 
 /**
- * Les barquettes d'une recette dans l'ordre où on les range : chacun à son tour. Les premières
- * restent au frigo, les dernières partent au froid — de sorte que chaque membre garde du frais
- * plutôt que le premier tout et le second rien.
+ * Les barquettes d'une recette dans l'ordre où on les range : chacun à son tour, en commençant par
+ * la personne `depart` (modulo le nombre de parts). Les premières restent au frigo, les dernières
+ * partent au froid — de sorte que chaque membre garde du frais plutôt que le premier tout et le
+ * second rien. `depart` passe la main d'une recette à l'autre : une seule barquette au frigo ne va
+ * pas toujours à la même personne.
  */
-export function ordreDeRangement<T extends { userId: string; nombre: number }>(parts: T[]): string[] {
-  const restantes = parts.map(p => ({ userId: p.userId, reste: p.nombre }))
+export function ordreDeRangement<T extends { userId: string; nombre: number }>(
+  parts: T[], depart = 0,
+): string[] {
+  const decale = parts.length === 0 ? parts : parts.map((_, i) => parts[(i + depart) % parts.length])
+  const restantes = decale.map(p => ({ userId: p.userId, reste: p.nombre }))
   const ordre: string[] = []
   while (restantes.some(r => r.reste > 0)) {
     for (const r of restantes) {

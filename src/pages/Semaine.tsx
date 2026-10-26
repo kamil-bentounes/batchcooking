@@ -82,7 +82,7 @@ export function Semaine({ userId, va }: { userId: string; va: (v: string) => voi
       {visibles.length === 0 && qui === 'tous' && (
         <Vide titre="Rien de planifié"
               texte={cycle
-                ? 'La distribution se fait à la fin de la session de cuisine.'
+                ? 'Aucune barquette n’est encore posée sur un repas.'
                 : 'Ouvre une semaine depuis l’accueil.'} />
       )}
 
