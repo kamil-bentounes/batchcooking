@@ -44,7 +44,7 @@ test.describe('la cuisine, jouée au clic', () => {
     await page.goto('/choisir')
     await expect(page.getByRole('article').first()).toBeVisible({ timeout: 20_000 })
     const retenues = page.getByRole('region', { name: /ce qu’on cuisine/i })
-    const titres = () => retenues.locator('li span.grow').allInnerTexts()
+    const titres = () => retenues.getByRole('listitem').locator('p').allInnerTexts()
     const avant = await titres()
     expect(avant.length).toBeGreaterThanOrEqual(2)
     const champ = retenues.getByRole('textbox').first()
