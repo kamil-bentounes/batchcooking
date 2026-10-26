@@ -1422,6 +1422,7 @@ export type Database = {
           kcal: number
           label: string
           meal_slot_id: string
+          planifie: boolean
           protein_g: number
         }
         Insert: {
@@ -1436,6 +1437,7 @@ export type Database = {
           kcal?: number
           label: string
           meal_slot_id: string
+          planifie?: boolean
           protein_g?: number
         }
         Update: {
@@ -1450,6 +1452,7 @@ export type Database = {
           kcal?: number
           label?: string
           meal_slot_id?: string
+          planifie?: boolean
           protein_g?: number
         }
         Relationships: [
@@ -3643,6 +3646,7 @@ export type Database = {
         Args: { p_cycle: string; p_restes: Json }
         Returns: number
       }
+      retire_un_extra: { Args: { p_id: string }; Returns: Json }
       retire_une_facture: { Args: { la_facture: string }; Returns: undefined }
       rouvre_le_mois: { Args: { le_mois: string }; Returns: undefined }
       sessions_partagees: { Args: never; Returns: string[] }
