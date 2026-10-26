@@ -222,6 +222,8 @@ test('dans la semaine : nos aliments avant les repères, un geste = un pot, les 
     expect(e.label).toBe(YAOURT)
     expect([e.kcal, e.protein_g, e.carb_g, e.fat_g, e.fiber_g, e.grams].map(Number)).toEqual([95, 12.5, 7, 1.8, 0, 125])
   }
+  /* Posé par la feuille (`choisir_un_repas`) : planifié, il ne compte au bilan qu'une fois mangé ou passé. */
+  expect(extras.map(e => e.planifie), 'un aliment choisi dans la feuille est planifié').toEqual([true, true])
   expect(new Set(extras.map(e => e.meal_slot.user_profile_id)).size, 'un pot par personne').toBe(2)
 })
 
@@ -252,6 +254,8 @@ test('dans « en plus » : le repère « Yaourt » ne se glisse plus à côté ;
   expect(e.meal_slot.user_profile_id).toBe(foyer.userId)
   expect(e.label).toBe(YAOURT)
   expect([e.kcal, e.protein_g, e.carb_g, e.fat_g, e.grams].map(Number)).toEqual([95, 12.5, 7, 1.8, 125])
+  /* Noté après coup dans « en plus » : pas planifié, il compte tout de suite. */
+  expect(e.planifie).toBe(false)
   /* Et l'écran le dit, avec les mêmes chiffres. */
   await expect(page.getByText(`${YAOURT} · 95 kcal · 12,5 g de protéines`)).toBeVisible()
 })
