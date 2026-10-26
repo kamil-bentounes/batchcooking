@@ -234,7 +234,8 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
       )}
 
       {/* Le second plan : discret, sans boîte, et parfaitement facultatif. */}
-      {objectif && (
+      {/* Aucun repas aujourd'hui : « 0 kcal aujourd'hui » et une barre vide ne disent rien. */}
+      {objectif && consomme.prevus > 0 && (
         <section className="mt-11" aria-label="Aujourd’hui">
           <Chiffre valeur={consomme.kcal.toLocaleString('fr-FR')} taille={26}
                    unite={`kcal aujourd’hui, sur ${Number(objectif.kcal).toLocaleString('fr-FR')}`} />

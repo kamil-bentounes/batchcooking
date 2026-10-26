@@ -146,6 +146,14 @@ body {
  * `.champ-recherche`.
  */
 .champ-montant:focus-visible { outline: none; }
+
+/*
+ * Le champ de l'aide : un seul trait au focus. L'anneau `:focus-visible` ci-dessus venait se poser
+ * AUTOUR de la bordure grise du champ, et l'on voyait deux traits (vert épais dehors, gris fin
+ * dedans). La bordure passe au vert, doublée d'un trait de 1 px : un seul cadre, de 2 px, plein.
+ */
+.champ-aide:focus-visible { outline: none; }
+.champ-aide:focus { box-shadow: 0 0 0 1px var(--color-herbe); }
 .champ-recherche::-webkit-search-cancel-button {
   appearance: none;
   width: 28px;

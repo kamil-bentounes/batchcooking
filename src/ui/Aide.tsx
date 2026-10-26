@@ -249,8 +249,8 @@ function Feuille({ userId, ici, va, messages, setMessages, enCours, setEnCours, 
             <input id="question-aide" ref={champ} type="text" value={saisie} maxLength={QUESTION_MAX}
                    onChange={e => setSaisie(e.target.value)} enterKeyHint="send" autoComplete="off"
                    placeholder="Pose ta question sur l’appli…"
-                   className="h-14 min-w-0 grow rounded-full border border-brume bg-fond px-5 text-[16px]
-                              placeholder:text-doux" />
+                   className="champ-aide h-14 min-w-0 grow rounded-full border border-brume bg-fond px-5 text-[16px]
+                              placeholder:text-doux focus:border-herbe" />
             <button type="submit" aria-label="Envoyer" disabled={enCours || saisie.trim().length < 3}
                     className="h-14 w-14 shrink-0 grid place-items-center rounded-full bg-herbe text-fond
                                disabled:opacity-50">
@@ -272,7 +272,7 @@ function Suggestions({ titre, questions, pose }: {
 }) {
   return (
     <>
-      <p className="mt-6 mb-2.5 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">{titre}</p>
+      <p className="mt-6 mb-2.5 text-[14px] font-semibold text-doux">{titre}</p>
       <div className="flex flex-col gap-2.5">
         {questions.map(q => (
           <button key={q} type="button" onClick={() => void pose(q)}
