@@ -23,7 +23,12 @@ export function Feuille({ ouverte = true, fermer, titre, children }: {
     if (!ouverte && d.open) d.close()
   }, [ouverte])
   return (
-    <dialog ref={ref} aria-label={titre} onClose={fermer}
+    <dialog ref={ref} aria-label={titre}
+            /* `close` part aussi quand c'est NOUS qui la fermons (`ouverte` passe à faux → `d.close()`) : on ne le
+               rend alors pas au parent, qui le sait déjà. Sans cela, ouvrir une fiche par-dessus le placard
+               (qui se ferme pour lui laisser la place) lui faisait oublier qu'il était ouvert, et fermer la
+               fiche ne ramenait pas à la liste. */
+            onClose={() => { if (ouverte) fermer() }}
             onPointerDown={e => { debutSurLeFond.current = e.target === ref.current }}
             onClick={e => {
               const ferme = debutSurLeFond.current && e.target === ref.current

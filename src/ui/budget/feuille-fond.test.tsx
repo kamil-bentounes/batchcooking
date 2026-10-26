@@ -24,13 +24,14 @@ type Gestionnaires = {
   ref: { current: unknown }
   onPointerDown: (e: { target: unknown }) => void
   onClick: (e: { target: unknown }) => void
+  onClose: () => void
 }
 
-function monte() {
+function monte(ouverte = true) {
   const fermer = vi.fn()
   const dialog = { nom: 'dialog' }
   const dedans = { nom: 'champ du montant' }
-  const el = Feuille({ fermer, titre: 'Courses', children: null }) as ReactElement<Gestionnaires>
+  const el = Feuille({ ouverte, fermer, titre: 'Courses', children: null }) as ReactElement<Gestionnaires>
   el.props.ref.current = dialog
   return { fermer, dialog, dedans, ...el.props }
 }
@@ -77,5 +78,25 @@ describe('Feuille — toucher le fond', () => {
     f.onClick({ target: f.dedans })
     f.onClick({ target: f.dialog })
     expect(f.fermer).not.toHaveBeenCalled()
+  })
+})
+
+/*
+ * Le placard du frigo se ferme pour laisser la place à la fiche d'un ingrédient (`ouverte` passe à faux, la
+ * feuille fait `d.close()`), puis se rouvre à la fermeture de la fiche. L'événement `close` du <dialog> part
+ * AUSSI à cette fermeture-là : le rendre au parent lui faisait oublier que le placard était ouvert, et fermer
+ * la fiche ramenait au frigo au lieu de la liste.
+ */
+describe('Feuille — la fermeture que le parent a demandée', () => {
+  it('fermée par le parent (`ouverte` faux) : l’événement `close` ne lui est pas rendu', () => {
+    const f = monte(false)
+    f.onClose()
+    expect(f.fermer).not.toHaveBeenCalled()
+  })
+
+  it('fermée par la personne (Échap, ouverte) : le parent l’apprend', () => {
+    const f = monte(true)
+    f.onClose()
+    expect(f.fermer).toHaveBeenCalledTimes(1)
   })
 })
