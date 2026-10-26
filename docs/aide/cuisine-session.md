@@ -13,7 +13,7 @@ sources:
   - src/lib/donnees/cycle.ts
   - supabase/migrations/0013_cycle.sql
   - supabase/migrations/0117_cuisine_corrections.sql
-verifie_sur: d61ae46
+verifie_sur: 18b0c7f
 ---
 ## Ce que fait l’appli
 

@@ -27,7 +27,7 @@ sources:
   - supabase/migrations/0092_la_photo_et_les_gestes.sql
   - supabase/migrations/0117_cuisine_corrections.sql
   - supabase/migrations/0121_photo_des_plats.sql
-verifie_sur: d61ae46
+verifie_sur: 18b0c7f
 ---
 ## Ce que fait l’appli
 
@@ -43,7 +43,7 @@ Touche une porte : elle pivote, puis l’intérieur prend l’écran. « Fermer 
 
 ## Dedans
 
-- **Frigo** : une carte par plat (recette, lieu et état), avec la photo, « ×N » parts, et quand c’est prévu (« mar. midi → mer. midi ») ou le mot d’urgence. Dessous, les ingrédients par étagère (« Laitages et frais », « Viandes et poissons », « Autres »), le « Bac à légumes », « + Ajouter au frigo » et « Photo du frigo ».
+- **Frigo** : une carte par plat (recette, lieu et état), avec la photo, « ×N » parts, et quand c’est prévu (« mar. midi → mer. midi ») ou le mot d’urgence. Dessous, les ingrédients par étagère (« Laitages et frais », « Viandes et poissons », « Autres »), le « Bac à légumes », « + Ajouter au frigo » et « Photo du frigo ». La quantité d’un ingrédient s’écrit avec son unité accordée (« 3 pots », « 1 pot »).
 - **Congélateur** : les plats congelés, le « Tiroir du bas » pour les ingrédients, « + Ajouter au congélateur ».
 - **Le placard** : lien sous le frigo, une liste, « + Ajouter au placard ». « Peser ce qu’on compte à l’unité » est juste dessous.
 

@@ -16,7 +16,7 @@ sources:
   - supabase/migrations/0037_cuisiner_ensemble.sql
   - supabase/migrations/0038_convive_frontiere.sql
   - supabase/migrations/0043_amitie_pas_transitive.sql
-verifie_sur: d61ae46
+verifie_sur: 18b0c7f
 ---
 ## Ce que fait l’appli
 

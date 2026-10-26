@@ -11,7 +11,7 @@ sources:
   - src/pages/Dressage.tsx
   - src/lib/nutrition/portions.ts
   - src/lib/donnees/barquettes.ts
-verifie_sur: d61ae46
+verifie_sur: 18b0c7f
 ---
 ## Ce que fait l’appli
 
@@ -27,4 +27,4 @@ Frigo ou congélateur, l’heure du rangement, « La session a pris » et « Ran
 
 ## Si ça échoue
 
-Le bouton reste actif : appuie de nouveau. Les barquettes déjà créées ne sont pas refaites et les ingrédients ne sont pas retirés deux fois. Sans recette retenue : « Rien à dresser ».
+Appuie de nouveau sur « Ranger » : les barquettes déjà créées ne sont pas refaites et les ingrédients ne sont pas retirés deux fois (« cuisine-on-range »). Sans recette retenue : « Rien à dresser ».
