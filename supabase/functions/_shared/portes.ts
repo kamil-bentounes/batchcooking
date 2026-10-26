@@ -19,6 +19,7 @@ export const PORTES = {
   profil:          { chemin: '/profil',            bouton: 'Ouvrir mon profil' },
   motdepasse:      { chemin: '/motdepasse',        bouton: 'Ouvrir le mot de passe' },
   reglages:        { chemin: '/reglages',          bouton: 'Ouvrir les réglages' },
+  rappels:         { chemin: '/rappels',           bouton: 'Ouvrir les rappels par mail' },
   objectifs:       { chemin: '/objectifs',         bouton: 'Ouvrir mes objectifs' },
   cuisine:         { chemin: '/cuisine-accueil',   bouton: 'Ouvrir la cuisine' },
   semaine:         { chemin: '/semaine',           bouton: 'Ouvrir la semaine' },

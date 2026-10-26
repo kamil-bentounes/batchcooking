@@ -1859,6 +1859,64 @@ export type Database = {
           },
         ]
       }
+      rappel_envoye: {
+        Row: {
+          cle: string
+          envoye_le: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          cle: string
+          envoye_le?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          cle?: string
+          envoye_le?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rappel_envoye_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rappel_reglage: {
+        Row: {
+          actif: boolean
+          modifie_le: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          actif?: boolean
+          modifie_le?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          actif?: boolean
+          modifie_le?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rappel_reglage_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       receipt: {
         Row: {
           bought_at: string

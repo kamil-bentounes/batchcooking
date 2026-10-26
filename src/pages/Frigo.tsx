@@ -22,6 +22,7 @@ import { InterieurCongelo, InterieurFrigo } from '../ui/frigo/Interieurs.tsx'
 import type { PlatAffiche } from '../ui/frigo/Interieurs.tsx'
 import { FichePlat } from '../ui/frigo/FichePlat.tsx'
 import { FicheIngredient } from '../ui/frigo/FicheIngredient.tsx'
+import { SortirParLien } from '../ui/frigo/SortirParLien.tsx'
 import { TuileIngredient } from '../ui/frigo/Cartes.tsx'
 import { FormulaireAjout } from './AjoutManuel.tsx'
 import { useBarquettes } from '../lib/donnees/barquettes.ts'
@@ -30,6 +31,7 @@ import { useIngredients, usePrevus, useRecettesDesPlats } from '../lib/donnees/f
 import { afficheur, groupeLesParts, magnet, quand } from '../lib/frigo.ts'
 import { maintenant } from '../lib/horloge.ts'
 import { jour } from '../lib/semaine.ts'
+import { lisLesSorties } from '../lib/rappels.ts'
 
 const sansAnimation = () =>
   typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -109,6 +111,14 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
     setAnnonce(m)
     clearTimeout(effaceAnnonce.current)
     effaceAnnonce.current = setTimeout(() => setAnnonce(null), 6000)
+  }
+
+  /* « C'est fait » d'un mail de rappel : `/frigo?sortir=<ids>`. Lu une fois, au montage ; la feuille de confirmation
+     reste jusqu'à la réponse, puis l'adresse est nettoyée (un rechargement ne repose pas la question). */
+  const [sorties, setSorties] = useState<string[] | null>(() => lisLesSorties(window.location.search))
+  const finiLesSorties = () => {
+    setSorties(null)
+    window.history.replaceState(null, '', window.location.pathname)
   }
 
   const groupeOuvert = groupes.find(g => g.cle === ficheCle) ?? null
@@ -193,6 +203,9 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
                         plusTard={plusTard} annonce={vue === 'congelo' ? annonce : null} erreur={erreurPrevus} attente={charge}
                         surFerme={ferme} surPlat={setFicheCle} surIngredient={setIngredientId}
                         surAjoute={() => setAjout('congelateur')} />
+
+      {/* Le lien « C'est fait » d'un mail : sortir ces barquettes du congélateur, après confirmation. */}
+      <SortirParLien ids={sorties} barquettes={barquettes} chargement={chargeParts} surFerme={finiLesSorties} />
 
       {/* La fiche d'un plat. */}
       <Feuille ouverte={!!groupeOuvert} fermer={() => setFicheCle(null)} titre={groupeOuvert?.label ?? 'Plat'}>

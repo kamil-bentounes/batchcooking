@@ -11,6 +11,7 @@ import { Password } from './pages/Password'
 import { Onboarding } from './pages/Onboarding'
 import { Targets } from './pages/Targets'
 import { Settings } from './pages/Settings'
+import { Rappels } from './pages/Rappels.tsx'
 import { AcceptInvite } from './pages/AcceptInvite'
 import { Rejoindre } from './pages/Rejoindre'
 import { Hub } from './pages/Hub.tsx'
@@ -320,6 +321,7 @@ export default function App() {
     // Les réglages, hors cycle.
     case '/objectifs': return <Targets userId={moi} />
     case '/reglages': return <Settings va={va} />
+    case '/rappels': return <Rappels userId={moi} retour={() => (window.history.length > 1 ? retour() : va('/reglages'))} />
     // Changer son mot de passe : l'écran existait, sans aucun chemin pour y
     // aller une fois le premier posé.
     case '/motdepasse':
