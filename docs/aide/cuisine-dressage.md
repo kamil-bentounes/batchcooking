@@ -11,7 +11,7 @@ sources:
   - src/pages/Dressage.tsx
   - src/lib/nutrition/portions.ts
   - src/lib/donnees/barquettes.ts
-verifie_sur: 18b0c7f
+verifie_sur: 73f1b27
 ---
 ## Ce que fait l’appli
 

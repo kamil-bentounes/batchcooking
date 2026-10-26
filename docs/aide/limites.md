@@ -33,7 +33,7 @@ sources:
   - supabase/functions/importer/index.ts
   - supabase/migrations/0070_un_seul_foyer.sql
   - vite.config.ts
-verifie_sur: 18b0c7f
+verifie_sur: 73f1b27
 ---
 Chaque « je n’ai pas trouvé » vient d’une recherche dans les écrans, les fonctions et la base. Cette page ne couvre que le compte, le foyer et l’installation ; la cuisine et le budget ont leurs pages.
 

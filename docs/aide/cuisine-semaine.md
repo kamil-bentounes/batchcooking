@@ -18,7 +18,7 @@ sources:
   - src/lib/suivi.ts
   - supabase/migrations/0017_triggers_lot1.sql
   - src/lib/peremption.ts
-verifie_sur: 18b0c7f
+verifie_sur: 73f1b27
 ---
 ## Ce que fait l’appli
 
@@ -29,6 +29,7 @@ verifie_sur: 18b0c7f
 - Choisis qui regarder (« Tout le monde » ou un prénom ; par défaut, toi) et quel repas (« Tous les repas », « Petit déjeuner », « Déjeuner », « Dîner », « Collation »).
 - Touche un repas : **« Je l’ai mangé »** marque la barquette mangée (elle quitte le frigo), **« Sauté »** dit que tu n’as rien mangé.
 - Sur l’accueil, « Je l’ai mangé » est aussi proposé pour le repas prévu aujourd’hui (« Je les sors », ou « Je le sors » s’il n’y en a qu’une, d’abord si la barquette est au congélateur).
+- Un repas dont la barquette a été jetée ou mangée par un autre repas ne montre plus de barquette.
 - « Poser une barquette » apparaît sur un repas sans barquette et propose celles qui n’ont pas de jour (six au plus).
 
 ## Noter ce qui n’était pas prévu

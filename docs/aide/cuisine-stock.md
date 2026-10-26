@@ -27,7 +27,7 @@ sources:
   - supabase/migrations/0092_la_photo_et_les_gestes.sql
   - supabase/migrations/0117_cuisine_corrections.sql
   - supabase/migrations/0121_photo_des_plats.sql
-verifie_sur: 18b0c7f
+verifie_sur: 73f1b27
 ---
 ## Ce que fait l’appli
 
@@ -35,11 +35,11 @@ verifie_sur: 18b0c7f
 
 Fermé, il parle sans qu’on y touche :
 
-- **L’afficheur** du congélateur : « Ce soir » et ton dîner prévu, ou « Rien de prévu ce soir ».
-- **L’aimant** du frigo, un seul : des barquettes congelées posées sur ce soir ou demain (« Sors les 2 burgers : c’est ce soir ») ; sinon des barquettes du frigo qui périment sous 72 heures et qu’aucun repas ne réclame (« 2 pizzas à prévoir avant jeudi ») ; sinon rien.
+- **L’afficheur** du congélateur : « Ce soir » et ton dîner prévu, ou « Rien de prévu ce soir ». S’ils ne se lisent pas, l’afficheur dit « Indisponible ».
+- **L’aimant** du frigo, un seul : des barquettes congelées à sortir, posées sur ce soir ou sur demain quand l’heure de les sortir est venue (« Sors les 2 burgers : c’est ce soir », « … : c’est demain soir ») ; sinon des barquettes du frigo périmées (« 2 pizzas à jeter ») ou qui périment sous 72 heures sans qu’aucun repas les réclame (« 2 pizzas à prévoir avant jeudi ») ; sinon rien. À urgence égale, le nom du plat décide.
 - **La photo** du plat de demain, s’il en a une.
 
-Touche une porte : elle pivote, puis l’intérieur prend l’écran. « Fermer la porte » la referme.
+Touche une porte : elle pivote, puis l’intérieur prend l’écran. Il est alors seul actif : Échap ou « Fermer la porte » le ferme.
 
 ## Dedans
 
@@ -49,11 +49,11 @@ Touche une porte : elle pivote, puis l’intérieur prend l’écran. « Fermer 
 
 Le stock se remplit en cochant la liste de courses (le rayon décide du lieu : « Surgelés » au congélateur ; « Frais », « Fruits et légumes », « Boucherie, poissonnerie » au frigo ; le reste au placard ; pas Entretien ni Hygiène), à la main, par photo, et au dressage (« cuisine-on-range »).
 
-Touche une carte pour ouvrir sa **fiche** (« cuisine-fiche-plat » : dates, congeler, sortir, jeter, photo).
+Touche une carte pour ouvrir sa **fiche** (« cuisine-fiche-plat » : parts, dates, photo ; « cuisine-fiche-plat-gestes » : manger, congeler, sortir, jeter, retirer).
 
 ## Un ingrédient
 
-Quantité (« Enregistrer »), lieu (Frigo, Congélateur, Placard : le congélateur date la mise au froid), « À manger avant » (« Retirer la date »), « Fini » (supprime, sans confirmation).
+Quantité (« Enregistrer »), lieu (Frigo, Congélateur, Placard : le congélateur date la mise au froid), « À manger avant » (« Retirer la date »), « Fini » (supprime, sans confirmation). Changer de lieu recalcule la date comme pour une barquette : 90 jours au congélateur, 24 heures à la sortie vers le frigo, aucune vers le placard ; entre frigo et placard, elle reste.
 
 ## Ce que l’appli ne fait pas
 
