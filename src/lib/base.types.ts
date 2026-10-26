@@ -3448,6 +3448,10 @@ export type Database = {
       cycle_a_reprendre: { Args: never; Returns: string }
       de_mois: { Args: { d: string }; Returns: string }
       delete_my_account: { Args: never; Returns: undefined }
+      ecarte_des_parts: {
+        Args: { p_day: string; p_geste: string; p_ids: string[] }
+        Returns: Json
+      }
       en_euros: { Args: { cents: number }; Returns: string }
       etat_de_l_annee: {
         Args: { annee: number; la_charge: string }
@@ -3490,6 +3494,18 @@ export type Database = {
       }
       llm_global_budget_remaining: { Args: never; Returns: number }
       maintenant: { Args: never; Returns: string }
+      mange_une_part: {
+        Args: {
+          p_day: string
+          p_eaten_at: string
+          p_label: string
+          p_location: string
+          p_meal: string
+          p_recipe: string
+          p_state: string
+        }
+        Returns: Json
+      }
       mois_courant: { Args: never; Returns: string }
       mois_suivi: { Args: { foyer: string; le_mois: string }; Returns: boolean }
       nom_du_mois: { Args: { d: string }; Returns: string }
@@ -3528,6 +3544,7 @@ export type Database = {
           user_profile_id: string
         }[]
       }
+      photo_de_plat_du_foyer: { Args: { nom: string }; Returns: boolean }
       poids_unitaire: {
         Args: { p_food_id: string; p_unit?: string }
         Returns: number
