@@ -53,6 +53,18 @@ describe('le seau des photos de plats', () => {
     expect(lourde.error, 'plus de 2 Mo passe').not.toBeNull()
   })
 
+  it('refuse un sous-dossier, un nom caché et tout nom qui contient « .. » (un seul niveau sous le foyer)', async () => {
+    for (const nom of ['sous/dossier.jpg', '.cache.jpg', '..jpg', 'a..b.jpg']) {
+      const { error } = await alice.client.storage.from(SEAU)
+        .upload(chemin(alice, nom), JPEG, { contentType: 'image/jpeg' })
+      expect(error, `« ${nom} » est accepté`).not.toBeNull()
+    }
+    // Et le nom simple passe toujours.
+    const { error } = await alice.client.storage.from(SEAU)
+      .upload(chemin(alice, 'recette-1730000000000.jpg'), JPEG, { contentType: 'image/jpeg' })
+    expect(error).toBeNull()
+  })
+
   it('refuse l’écriture sans compte', async () => {
     const { createClient } = await import('@supabase/supabase-js')
     const anonyme = createClient(process.env.VITE_SUPABASE_URL!, process.env.VITE_SUPABASE_ANON_KEY!,
@@ -102,6 +114,10 @@ describe('le seau des photos de plats', () => {
       adresse(bob),                              // le dossier d'un autre foyer
       adresse(alice, 'a/../b.jpg'),              // un chemin, pas un fichier
       adresse(alice) + '?x=1',
+      adresse(alice, '.'),                       // « . » et « .. » ne sont pas des noms de fichier
+      adresse(alice, '..'),
+      adresse(alice, 'a..b.jpg'),
+      adresse(alice, '.cache.jpg'),
     ]) {
       const r = await pose(alice, sienne!.id, url)
       expect(r.error, `${url} est accepté`).not.toBeNull()
