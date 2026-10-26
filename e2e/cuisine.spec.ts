@@ -142,11 +142,12 @@ test.describe('la cuisine, jouée au clic', () => {
     await page.goto('/plan')
     const frise = page.getByRole('region', { name: 'Déroulé de la session' })
     await expect(frise).toBeVisible({ timeout: 20_000 })
-    const gestes = await frise.locator('.right-0 > div').evaluateAll(l => l.map(e => {
+    // Une ligne par geste (depuis la refonte du 26/10 : titre, durée et barre dans une même ligne).
+    const gestes = await frise.getByRole('listitem').evaluateAll(l => l.map(e => {
       const r = e.getBoundingClientRect(); return [r.top, r.bottom] }))
     expect(gestes.length).toBeGreaterThan(1)
     for (let i = 1; i < gestes.length; i++) {
-      expect(gestes[i][0], 'deux gestes se recouvrent').toBeGreaterThanOrEqual(gestes[i - 1][0] + 40)
+      expect(gestes[i][0], 'deux gestes se recouvrent').toBeGreaterThanOrEqual(gestes[i - 1][1] - 1)
     }
   })
 
