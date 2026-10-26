@@ -11,9 +11,13 @@
  */
 import { useMemo } from 'react'
 import { Chiffre, Ecran, Erreur, Principal, Secondaire, Vide, dateLongue, duree, Marque } from '../ui/coque.tsx'
+import { PetitFrigo } from '../ui/frigo/PetitFrigo.tsx'
+import { Appareil, PlatImage } from '../ui/frigo/PlatImage.tsx'
 import { GESTE, useChangeEtat, useCycle, useCycleInterrompu, useOuvreCycle } from '../lib/donnees/cycle.ts'
 import { enFrancais } from '../lib/reseau.ts'
-import { useFoyer, initialeDe } from '../lib/donnees/foyer.ts'
+import { useFoyer, initialeDe, prenomDe } from '../lib/donnees/foyer.ts'
+import { usePrevus, useRecettesDesPlats, useSortDuCongelo } from '../lib/donnees/frigo.ts'
+import { magnet, nomCourt, pourQui, repasDuJour } from '../lib/frigo.ts'
 import {
   NOM_REPAS, bilanDuJour, jour, useBarquettes, useMange, useSemaine,
 } from '../lib/donnees/barquettes.ts'
@@ -27,7 +31,9 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   const aujourdhui = useMemo(() => new Date(), [])
   const { data: cycle, isPending: chargeCycle } = useCycle()
   const { data: foyer } = useFoyer()
-  const { data: cases = [] } = useSemaine(aujourdhui, 1)
+  const { data: cases = [] } = useSemaine(aujourdhui, 2)
+  const { data: prevus = [] } = usePrevus()
+  const sortDuCongelo = useSortDuCongelo()
   const { data: barquettes = [] } = useBarquettes()
   const { data: plan = [] } = usePlanEnregistre(cycle?.id, cycle?.state === 'en_cuisine')
   const mange = useMange()
@@ -42,6 +48,22 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   const jourDit = jour(aujourdhui)
   const duJour = cases.filter(c => c.user_profile_id === userId && c.day === jourDit)
   const prochain = duJour.find(c => c.state === 'prevu' && c.portion)
+  /* Demain, pour moi : les repas posés, dits « midi et soir ». */
+  const demainDit = useMemo(() => {
+    const d = new Date(aujourdhui); d.setDate(d.getDate() + 1)
+    return jour(d)
+  }, [aujourdhui])
+  const demain = cases.filter(c => c.user_profile_id === userId && c.day === demainDit
+    && c.state === 'prevu' && c.portion)
+  const idsRecettes = [...new Set([prochain, ...demain].map(c => c?.portion?.recipe_id)
+    .filter((x): x is string => !!x))]
+  const { data: recettes } = useRecettesDesPlats(idsRecettes)
+  const photoDe = (c: Case | undefined) =>
+    (c?.portion?.recipe_id ? recettes?.get(c.portion.recipe_id)?.image_url ?? null : null)
+  const auFrais = barquettes.filter(b => b.location === 'frigo').length
+  const auFroid = barquettes.filter(b => b.location === 'congelateur').length
+  const aimant = magnet(barquettes, prevus, aujourdhui)
+  const membres = (foyer?.membres ?? []).map(m => ({ id: m.id, prenom: prenomDe(m.display_name) }))
   const consomme = bilanDuJour(cases, userId, jourDit)
 
   /* Une session interrompue est LA chose du moment : le hub le dit (« Session interrompue »), l'accueil disait
@@ -112,28 +134,63 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
         </div>
       ))}
 
-      {/* LA chose du moment. Rien ne lui dispute la place. */}
-      {etat === 'semaine' && prochain
-        ? <CeSoir cas={prochain} />
-        : <LeGeste etat={etat} plan={plan} titre={geste.titre} />}
+      {/* Le frigo, en petit : on le touche pour l'ouvrir. */}
+      <section aria-label="Le frigo"
+               className="mt-6 flex h-[286px] items-end gap-[18px] rounded-[26px] pl-[22px] pr-[18px]"
+               style={{
+                 background: 'linear-gradient(180deg, #FBFCFA 0%, #FBFCFA 82%, #EEF1EA 82%)',
+                 boxShadow: 'inset 0 0 0 1px var(--color-brume)',
+               }}>
+        {/* Le dessin double le lien « Ouvrir le frigo » : il ne se lit pas deux fois. */}
+        <button type="button" tabIndex={-1} aria-hidden="true" onClick={() => va('/frigo')}>
+          <PetitFrigo photo={photoDe(demain[0])} magnet={aimant !== null} />
+        </button>
+        <div className="flex flex-1 flex-col gap-3.5 pb-[66px]">
+          <div>
+            <div className="chiffre text-[30px] font-semibold leading-none" data-compte="frigo">{auFrais}</div>
+            <div className="mt-0.5 text-[13px] text-doux">{auFrais > 1 ? 'parts' : 'part'} au frigo</div>
+          </div>
+          <div>
+            <div className="chiffre text-[30px] font-semibold leading-none text-congel-encre" data-compte="congelateur">{auFroid}</div>
+            <div className="mt-0.5 text-[13px] text-doux">au congélateur</div>
+          </div>
+          <button type="button" onClick={() => va('/frigo')}
+                  className="inline-flex min-h-11 items-center self-start text-[14px] font-bold text-herbe">
+            Ouvrir le frigo
+          </button>
+        </div>
+      </section>
 
-      <div className="mt-[34px]">
-        {etat === 'semaine' && prochain
-          ? (
-            <Principal onClick={() => mange.mutate(prochain.id)} disabled={mange.isPending}>
-              Je l’ai mangé
-            </Principal>
-          )
-          : (
-            <Principal onClick={() => {
-              if (!cycle && interrompu) {
-                reprend.mutate({ id: interrompu.id, vers: 'en_cuisine' }, { onSuccess: () => va('/cuisine') })
-              } else if (!cycle) ouvre.mutate({}, { onSuccess: () => va('/choisir') })
-              else va(geste.vers)
-            }} disabled={ouvre.isPending || reprend.isPending}>
-              {geste.action}
-            </Principal>
-          )}
+      {/* Le repas d'aujourd'hui : ce qu'on mange, et ce qu'il faut faire avant. */}
+      {prochain && (
+        <CeSoir cas={prochain} photo={photoDe(prochain)} enCours={mange.isPending || sortDuCongelo.isPending}
+                pour={pourQui(
+                  cases.filter(c => c.day === jourDit && c.meal === prochain.meal && c.state === 'prevu'
+                    && c.portion?.label === prochain.portion?.label).map(c => c.user_profile_id),
+                  membres, userId)}
+                surMange={() => mange.mutate(prochain.id)}
+                surSort={() => sortDuCongelo.mutate(
+                  cases.flatMap(c => c.day === jourDit && c.meal === prochain.meal && c.state === 'prevu'
+                    && c.portion?.label === prochain.portion?.label && c.portion?.location === 'congelateur'
+                    ? [c.portion.id] : []))}
+                surChange={() => va('/semaine')} />
+      )}
+      <Erreur de={mange.error ?? sortDuCongelo.error} />
+
+      {/* LA chose du moment, quand le repas ne la dit pas déjà. Rien ne lui dispute la place. */}
+      {!(etat === 'semaine' && prochain) && <LeGeste etat={etat} plan={plan} titre={geste.titre} />}
+
+      <div className={etat === 'semaine' && prochain ? '' : 'mt-[34px]'}>
+        {!(etat === 'semaine' && prochain) && (
+          <Principal onClick={() => {
+            if (!cycle && interrompu) {
+              reprend.mutate({ id: interrompu.id, vers: 'en_cuisine' }, { onSuccess: () => va('/cuisine') })
+            } else if (!cycle) ouvre.mutate({}, { onSuccess: () => va('/choisir') })
+            else va(geste.vers)
+          }} disabled={ouvre.isPending || reprend.isPending}>
+            {geste.action}
+          </Principal>
+        )}
 
         {/* Le refus de la base (« la semaine … a déjà son cycle ») se lisait nulle part : le bouton
             semblait mort. */}
@@ -151,15 +208,13 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
             Choisir de nouvelles recettes
           </Secondaire>
         )}
-
-        {/* `prochain` et pas seulement l'état : sans repas prévu, le bouton
-            principal EST déjà « Voir la semaine » et mène au même endroit. On
-            affichait donc deux boutons de poids différents, aux libellés
-            presque identiques, pour une seule destination. */}
-        {etat === 'semaine' && prochain && (
-          <Secondaire onClick={() => va('/semaine')}>Voir toute la semaine</Secondaire>
-        )}
       </div>
+
+      {/* Demain : « La semaine » mène où tout se choisit. Pendant la semaine, on le dit même vide : c'est
+          aussi la porte vers elle, que « Voir toute la semaine » tenait avant. */}
+      {(demain.length > 0 || (etat === 'semaine' && prochain)) && (
+        <Demain cases={demain} photo={photoDe(demain[0])} surSemaine={() => va('/semaine')} />
+      )}
 
       {/* Le second plan : discret, sans boîte, et parfaitement facultatif. */}
       {objectif && (
@@ -219,18 +274,77 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   )
 }
 
-function CeSoir({ cas }: { cas: Case }) {
+/** Le repas du jour, en carte sombre : le plat, pour qui, et — s'il dort au congélateur — ce qu'il faut faire. */
+function CeSoir({ cas, photo, pour, enCours, surMange, surSort, surChange }: {
+  cas: Case; photo: string | null; pour: string; enCours: boolean
+  surMange: () => void; surSort: () => void; surChange: () => void
+}) {
   const p = cas.portion!
+  const auFroid = p.location === 'congelateur'
+  const meal = cas.meal as keyof typeof NOM_REPAS
+  const quand = meal === 'diner' ? 'Ce soir' : meal === 'dejeuner' ? 'Ce midi' : `Ce ${NOM_REPAS[meal].toLowerCase()}`
   return (
-    <section className="mt-[52px]" aria-label="Le prochain repas">
-      <p className="text-[15px] text-doux">{NOM_REPAS[cas.meal as keyof typeof NOM_REPAS]}</p>
-      <h1 className="titre text-[46px] mt-2.5">{p.label}</h1>
-      <p className="mt-4">
-        <Chiffre valeur={Math.round(Number(p.protein_g))} taille={30} couleur="var(--color-ocre)" />
-        <span className="text-[14px] text-doux ml-1.5">
-          g de protéines · {Math.round(Number(p.grams))} g pour toi
-        </span>
-      </p>
+    <section aria-label="Le prochain repas" data-carte="repas"
+             className="sur-encre mt-[18px] rounded-3xl bg-encre p-4 text-fond">
+      <div className="flex items-center gap-3.5">
+        <div className="relative size-[72px] shrink-0 overflow-hidden rounded-2xl bg-[#3A4A41] text-[#B9C7BD]">
+          {photo ? <PlatImage url={photo} texte={false} /> : <span className="absolute inset-0 grid place-items-center"><Appareil taille={26} /></span>}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] text-[#B9C7BD]">{quand}, pour {pour}</p>
+          <h2 className="titre mt-[3px] text-[22px] font-semibold leading-[1.15] [overflow-wrap:anywhere]">{nomCourt(p.label)}</h2>
+        </div>
+      </div>
+      {auFroid && (
+        <p className="mt-3.5 rounded-[14px] px-3 py-2.5 text-[14px] leading-[1.4] text-[#E3EEF3]"
+           style={{ background: 'rgba(220, 232, 238, 0.14)' }}>
+          Il est au congélateur : sors-le maintenant, ou micro-ondes avant de manger.
+        </p>
+      )}
+      <div className="mt-3.5 flex gap-2.5">
+        {auFroid ? (
+          <button type="button" onClick={surSort} disabled={enCours}
+                  className="h-[50px] flex-1 rounded-[15px] bg-safran text-[15px] font-bold text-encre disabled:opacity-60">
+            Je les sors
+          </button>
+        ) : (
+          <button type="button" onClick={surMange} disabled={enCours}
+                  className="h-[50px] flex-1 rounded-[15px] bg-safran text-[15px] font-bold text-encre disabled:opacity-60">
+            Je l’ai mangé
+          </button>
+        )}
+        <button type="button" onClick={surChange}
+                className="h-[50px] flex-1 rounded-[15px] text-[15px] font-semibold text-fond"
+                style={{ background: 'rgba(242, 244, 239, 0.12)' }}>
+          Changer
+        </button>
+      </div>
+    </section>
+  )
+}
+
+/** « Demain, midi et soir — Lasagnes » : ce qui est posé, et la porte vers la semaine. */
+function Demain({ cases, photo, surSemaine }: { cases: Case[]; photo: string | null; surSemaine: () => void }) {
+  const plats = [...new Set(cases.map(c => nomCourt(c.portion!.label)))]
+  return (
+    <section aria-label="Demain" className="mt-[22px] flex items-center gap-3">
+      <div className="relative size-[54px] shrink-0 overflow-hidden rounded-[14px] bg-piste text-doux">
+        {cases.length > 0
+          ? <PlatImage url={photo} texte={false} glyphe={20} />
+          : <span className="absolute inset-0 grid place-items-center"><Appareil taille={20} /></span>}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] text-doux">
+          {cases.length > 0 ? `Demain, ${repasDuJour(cases.map(c => c.meal))}` : 'Demain'}
+        </div>
+        <div className="mt-0.5 text-[15px] font-bold [overflow-wrap:anywhere]">
+          {plats.length > 0 ? plats.join(', ') : 'Rien de posé pour l’instant'}
+        </div>
+      </div>
+      <button type="button" onClick={surSemaine}
+              className="inline-flex min-h-11 items-center text-[14px] font-bold text-herbe">
+        La semaine
+      </button>
     </section>
   )
 }
