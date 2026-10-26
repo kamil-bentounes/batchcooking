@@ -4,7 +4,7 @@
  *
  *   1. Réglages : « Dans le foyer : Kamil, Thauba » ;
  *   2. « Mes charges » : une charge qui démarre en 2031 est listée avec sa date, hors du total ;
- *   3. Hub de Thauba : « Fixe tes objectifs » ; dressage de Kamil : il dit qui est omis ;
+ *   3. Hub de Thauba : « Fixe tes objectifs » ; dressage de Kamil : il dit qui est dressé à parts égales ;
  *   4. Choisir : au-delà de trois recettes retenues, « + N autres » se déplie ;
  *   5. un mois clôturé par l'autre : son reste calculé, « clôturé par Thauba », jamais un tiret.
  *
@@ -64,21 +64,21 @@ test('« Mes charges » : une charge de 2031 est listée avec sa date, hors du t
     'la charge de 2031 est entrée dans le total').toBe(avant)
 })
 
-test('un nouvel arrivant sans objectifs : le hub le dit, le dressage nomme celle qui est omise', async ({ page, browser }) => {
+test('un nouvel arrivant sans objectifs : le hub le dit, le dressage nomme celle qui a des parts égales', async ({ page, browser }) => {
   // Thauba (aucun objectif) voit « Fixe tes objectifs » sur le hub.
   const ctxElle = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR',
     timezoneId: 'Europe/Paris' })
   const elle = await ctxElle.newPage()
   await connecte(elle, foyer.elleEmail)
   await expect(elle.getByText('Fixe tes objectifs.')).toBeVisible({ timeout: 15_000 })
-  await expect(elle.getByText(/aucune barquette ne t’est dressée/)).toBeVisible()
+  await expect(elle.getByText(/tes barquettes sont dressées à parts égales/)).toBeVisible()
   await ctxElle.close()
 
-  // Kamil, lui, n'a aucun bandeau d'objectifs, et son dressage dit qui est omis.
+  // Kamil, lui, n'a aucun bandeau d'objectifs, et son dressage dit qui est dressé à parts égales.
   await connecte(page)
   await expect(page.getByText('Fixe tes objectifs.')).toHaveCount(0)
   await page.goto('/dressage')
-  await expect(page.getByText('Thauba n’a pas encore fixé ses objectifs : aucune barquette ne lui est dressée.'))
+  await expect(page.getByText('Thauba n’a pas encore fixé ses objectifs : ses barquettes sont dressées à parts égales.'))
     .toBeVisible({ timeout: 15_000 })
 })
 

@@ -191,14 +191,21 @@ test.describe('le cycle, d’un bout à l’autre', () => {
     await expect(page.getByRole('heading').first()).toBeVisible({ timeout: 20_000 })
     await prend(page, '08-dressage')
 
-    /* ⚠️ « C'est dressé, ranger » — pas « dresser ». Un accent de différence,
+    /* ⚠️ « C'est dressé » — pas « dresser ». Un accent de différence,
        et la garde optionnelle sautait en silence. */
     const dresser = page.getByRole('button', { name: /c’est dressé/i })
     await expect(dresser, 'le dressage ne propose pas de ranger')
       .toBeVisible({ timeout: 20_000 })
     await dresser.click()
-    await page.waitForTimeout(1_500)
-    await prend(page, '08a-dressage-fait')
+
+    /* La seconde étape : « On range ». Ranger crée les barquettes (déjà là dans ce foyer :
+       le geste est reprenable), retire du stock, passe à la semaine, et mène au frigo — qui
+       n'existe pas encore et renvoie sur « Ce que j'ai ». */
+    await expect(page.getByRole('heading', { name: 'On range' })).toBeVisible({ timeout: 20_000 })
+    await prend(page, '08a-on-range')
+    await page.getByRole('button', { name: /^Ranger / }).click()
+    await expect(page).toHaveURL(/\/stock$/, { timeout: 20_000 })
+    await prend(page, '08b-dressage-fait')
 
     /* ── 5 · La semaine ────────────────────────────────────────────────── */
     await etat('semaine')
