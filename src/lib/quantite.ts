@@ -37,3 +37,30 @@ export function ecritQuantite(n: number): string {
   const v = n >= 10 ? Math.round(n) : Math.round(n * 100) / 100
   return v.toLocaleString('fr-FR', { maximumFractionDigits: 2 })
 }
+
+/** Les unités qu'on n'accorde pas : des symboles (g, ml, l…) et « u », qui ne s'écrit jamais « us ». */
+const INVARIABLES = new Set([
+  'g', 'kg', 'mg', 'ml', 'cl', 'dl', 'l', 'u', 'cs', 'cc', 'càs', 'càc', 'cm', 'mm', 'm', 'kcal',
+])
+
+/**
+ * L'unité d'une quantité, accordée comme on la lit : « 3 pots », « 1 pot », « 1,5 pot » (en français,
+ * le pluriel commence à deux). Les symboles (« g », « ml », « u ») ne bougent pas ; un mot qui finit
+ * par s, x ou z non plus ; « -al » fait « -aux » (« bocal » → « bocaux ») ; seul le premier mot d'une
+ * unité composée s'accorde (« cuillère à soupe » → « cuillères à soupe »).
+ */
+export function uniteAccordee(unite: string | null | undefined, n: number): string {
+  const u = (unite ?? '').trim()
+  if (u === '' || n < 2 || INVARIABLES.has(u.toLowerCase())) return u
+  const [mot, ...suite] = u.split(/\s+/)
+  let pluriel = mot
+  if (/[sxz]$/i.test(mot)) pluriel = mot
+  else if (/al$/i.test(mot)) pluriel = `${mot.slice(0, -2)}aux`
+  else pluriel = `${mot}s`
+  return [pluriel, ...suite].join(' ')
+}
+
+/** « 3 pots », « 183 g », « 0,5 u » : la quantité et son unité accordée, ou rien sans quantité. */
+export function ecritQuantiteEtUnite(n: number, unite: string | null | undefined): string {
+  return `${ecritQuantite(n)} ${uniteAccordee(unite, n)}`.trim()
+}

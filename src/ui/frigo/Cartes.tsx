@@ -5,7 +5,7 @@
 import { PlatImage } from './PlatImage.tsx'
 import type { Groupe, Quand } from '../../lib/frigo.ts'
 import { ariaDeCarte } from '../../lib/frigo.ts'
-import { ecritQuantite } from '../../lib/quantite.ts'
+import { ecritQuantiteEtUnite } from '../../lib/quantite.ts'
 import { urgence } from '../../lib/peremption.ts'
 import type { Ligne } from '../../lib/supabase.ts'
 
@@ -80,7 +80,7 @@ function Pot() {
 export function TuileIngredient({ item, surOuvre, froid = false }: {
   item: Ligne<'stock_item'>; surOuvre: () => void; froid?: boolean
 }) {
-  const reste = item.quantity !== null ? `${ecritQuantite(Number(item.quantity))} ${item.unit ?? ''}`.trim() : null
+  const reste = item.quantity !== null ? ecritQuantiteEtUnite(Number(item.quantity), item.unit) : null
   const u = item.expires_at
     ? urgence(item.expires_at, item.location === 'congelateur' ? 'congelateur' : 'frigo')
     : null

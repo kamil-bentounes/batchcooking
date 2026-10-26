@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { Erreur } from '../coque.tsx'
 import { LigneDate } from './ChampDate.tsx'
 import { urgence } from '../../lib/peremption.ts'
-import { lireQuantite } from '../../lib/quantite.ts'
+import { lireQuantite, uniteAccordee } from '../../lib/quantite.ts'
 import { jour } from '../../lib/semaine.ts'
 import { jourAbrege } from '../../lib/ranger.ts'
 import { maintenant } from '../../lib/horloge.ts'
@@ -50,7 +50,9 @@ export function FicheIngredient({ item, surAnnonce }: { item: Ligne<'stock_item'
           <input id="quantite-ingredient" inputMode="decimal" value={quantite}
                  onChange={e => setQuantite(e.target.value)} placeholder="pas de quantité"
                  className="min-h-11 w-32 rounded-xl bg-surface px-3 text-[16px] shadow-[inset_0_0_0_1px_var(--color-brume)]" />
-          <span className="text-[15px] text-doux">{item.unit ?? ''}</span>
+          <span className="text-[15px] text-doux">
+            {uniteAccordee(item.unit, (() => { const q = lireQuantite(quantite); return q.etat === 'ok' ? q.valeur : 0 })())}
+          </span>
           <button type="submit" disabled={modifie.isPending}
                   className="ml-auto min-h-11 rounded-[14px] bg-herbe px-4 text-[15px] font-medium text-fond disabled:opacity-60">
             Enregistrer

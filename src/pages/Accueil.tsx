@@ -17,14 +17,13 @@ import { GESTE, useChangeEtat, useCycle, useCycleInterrompu, useOuvreCycle } fro
 import { enFrancais } from '../lib/reseau.ts'
 import { useFoyer, initialeDe, prenomDe } from '../lib/donnees/foyer.ts'
 import { usePrevus, useRecettesDesPlats, useSortDuCongelo } from '../lib/donnees/frigo.ts'
-import { magnet, nomCourt, pourQui, repasDuJour } from '../lib/frigo.ts'
+import { magnet, nomCourt, pourQui, pressesGroupees, repasDuJour } from '../lib/frigo.ts'
 import {
   NOM_REPAS, bilanDuJour, jour, useBarquettes, useMange, useSemaine,
 } from '../lib/donnees/barquettes.ts'
 import type { Case } from '../lib/donnees/barquettes.ts'
 import { usePlanEnregistre } from '../lib/donnees/session.ts'
 import { useInvitations, useRejoint } from '../lib/donnees/convives.ts'
-import { urgence } from '../lib/peremption.ts'
 import { BoutonAide } from '../ui/Aide.tsx'
 
 export function Accueil({ userId, va }: { userId: string; va: (v: string) => void }) {
@@ -70,11 +69,13 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
      « Rien de prévu » et ne la proposait qu'en second, sous « Choisir les recettes » (revue du 25/10). */
   const etat = cycle?.state ?? (interrompu ? 'interrompue' : 'vide')
   const geste = GESTE[etat]
-  const presses = barquettes
-    .map(b => ({ b, u: urgence(b.expires_at, b.location as 'frigo' | 'congelateur') }))
-    .filter(x => x.u.niveau !== 'ok')
-    .sort((a, b) => a.u.heuresRestantes - b.u.heuresRestantes)
-    .slice(0, 2)
+  const presses = pressesGroupees(barquettes, new Date())
+  /* Les parts que « Je les sors » sort : celles du même plat posées sur ce repas, et au congélateur. */
+  const aSortir = prochain
+    ? cases.flatMap(c => c.day === jourDit && c.meal === prochain.meal && c.state === 'prevu'
+      && c.portion?.label === prochain.portion?.label && c.portion?.location === 'congelateur'
+      ? [c.portion.id] : [])
+    : []
 
   if (chargeCycle || chargeInterrompu) {
     return <Ecran actif="accueil" va={va}><Vide titre="Un instant…" /></Ecran>
@@ -169,10 +170,8 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
                     && c.portion?.label === prochain.portion?.label).map(c => c.user_profile_id),
                   membres, userId)}
                 surMange={() => mange.mutate(prochain.id)}
-                surSort={() => sortDuCongelo.mutate(
-                  cases.flatMap(c => c.day === jourDit && c.meal === prochain.meal && c.state === 'prevu'
-                    && c.portion?.label === prochain.portion?.label && c.portion?.location === 'congelateur'
-                    ? [c.portion.id] : []))}
+                nbASortir={aSortir.length}
+                surSort={() => sortDuCongelo.mutate(aSortir)}
                 surChange={() => va('/semaine')} />
       )}
       <Erreur de={mange.error ?? sortDuCongelo.error} />
@@ -237,11 +236,14 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
 
       {presses.length > 0 && (
         <section className="mt-8 space-y-4" aria-label="À manger bientôt">
-          {presses.map(({ b, u }) => (
-            <div key={b.id} className="flex items-center gap-3">
+          {presses.map(({ label, n, u }) => (
+            <div key={`${label}|${u.mot}`} className="flex items-center gap-3">
               <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full shrink-0"
                     style={{ background: u.pastille }} />
-              <span className="grow text-[15px]">{b.label}</span>
+              {/* Deux barquettes du même plat : une ligne, avec leur nombre — pas deux lignes identiques. */}
+              <span className="grow text-[15px]">
+                {label}{n > 1 && <span className="text-doux"> · {n} barquettes</span>}
+              </span>
               <span className="text-[14px]" style={{ color: u.encre }}>{u.mot}</span>
             </div>
           ))}
@@ -275,8 +277,10 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
 }
 
 /** Le repas du jour, en carte sombre : le plat, pour qui, et — s'il dort au congélateur — ce qu'il faut faire. */
-function CeSoir({ cas, photo, pour, enCours, surMange, surSort, surChange }: {
+function CeSoir({ cas, photo, pour, enCours, nbASortir, surMange, surSort, surChange }: {
   cas: Case; photo: string | null; pour: string; enCours: boolean
+  /** Combien de barquettes « Je les sors » sort : le texte et le bouton s'accordent avec ce nombre. */
+  nbASortir: number
   surMange: () => void; surSort: () => void; surChange: () => void
 }) {
   const p = cas.portion!
@@ -298,14 +302,14 @@ function CeSoir({ cas, photo, pour, enCours, surMange, surSort, surChange }: {
       {auFroid && (
         <p className="mt-3.5 rounded-[14px] px-3 py-2.5 text-[14px] leading-[1.4] text-[#E3EEF3]"
            style={{ background: 'rgba(220, 232, 238, 0.14)' }}>
-          Il est au congélateur : sors-le maintenant, ou micro-ondes avant de manger.
+          Il est au congélateur : sors-{nbASortir > 1 ? 'les' : 'le'} maintenant, ou micro-ondes avant de manger.
         </p>
       )}
       <div className="mt-3.5 flex gap-2.5">
         {auFroid ? (
           <button type="button" onClick={surSort} disabled={enCours}
                   className="h-[50px] flex-1 rounded-[15px] bg-safran text-[15px] font-bold text-encre disabled:opacity-60">
-            Je les sors
+            {nbASortir > 1 ? 'Je les sors' : 'Je le sors'}
           </button>
         ) : (
           <button type="button" onClick={surMange} disabled={enCours}

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   afficheur, ariaDeCarte, auPlusTard, etagereDe, groupeLesParts, macrosDuGroupe, magnet, motDuPlat,
   nomCourt, noteDeLaFiche, partsAChoisir, partsASortir, partsLibres, peremptionApres, prevuesPour,
-  pourQui, quand, repasDuJour, repasEnCours, repasEnMots, soustitreDuCongelo, soustitreDuFrigo, NOTE_DU_SOIR,
+  pourQui, pressesGroupees, quand, repasDuJour, repasEnCours, repasEnMots, soustitreDuCongelo, soustitreDuFrigo, NOTE_DU_SOIR,
 } from './frigo.ts'
 import type { Part, Prevu } from './frigo.ts'
 
@@ -346,5 +346,33 @@ describe('pour qui, et à quels repas', () => {
     expect(repasDuJour(['dejeuner'])).toBe('midi')
     expect(repasDuJour(['petit_dejeuner', 'dejeuner', 'diner'])).toBe('matin, midi et soir')
     expect(repasDuJour([])).toBe('')
+  })
+})
+
+describe('« À manger bientôt » : un plat, une ligne', () => {
+  const b = (label: string, expires: Date, location: 'frigo' | 'congelateur' = 'frigo') =>
+    ({ label, expires_at: expires.toISOString(), location })
+  const aujourdhui = new Date(2026, 9, 26, 20, 30)
+
+  it('deux burgers qui pressent pareil : UNE ligne, avec leur nombre', () => {
+    const lignes = pressesGroupees([
+      b('Burger de feuilles de riz', new Date(2026, 9, 27, 8)), b('Burger de feuilles de riz', new Date(2026, 9, 27, 8)),
+    ], aujourdhui)
+    expect(lignes).toHaveLength(1)
+    expect(lignes[0]).toMatchObject({ label: 'Burger de feuilles de riz', n: 2 })
+    expect(lignes[0].u.mot).toBe('à manger aujourd\'hui')
+  })
+  it('le plus pressé d’abord, deux plats au plus, et ce qui ne presse pas n’y est pas', () => {
+    const lignes = pressesGroupees([
+      b('Lasagnes', new Date(2026, 9, 28, 20)), b('Dahl', new Date(2026, 9, 27, 8)),
+      b('Poulet', new Date(2026, 9, 27, 20)), b('Riz', new Date(2026, 10, 20)),
+    ], aujourdhui)
+    expect(lignes.map(l => l.label)).toEqual(['Dahl', 'Poulet'])
+  })
+  it('un même plat à deux degrés d’urgence fait deux lignes', () => {
+    const lignes = pressesGroupees([
+      b('Dahl', new Date(2026, 9, 27, 8)), b('Dahl', new Date(2026, 9, 28, 8)),
+    ], aujourdhui)
+    expect(lignes.map(l => [l.label, l.n])).toEqual([['Dahl', 1], ['Dahl', 1]])
   })
 })

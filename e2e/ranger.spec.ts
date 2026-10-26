@@ -151,8 +151,15 @@ test('on dresse pour tout le foyer, on range, et la base garde ce qu’on a choi
   hier.setHours(18, 30, 0, 0)
   const p = (n: number) => String(n).padStart(2, '0')
   await page.getByRole('button', { name: 'Modifier' }).click()
-  await page.getByLabel('Date et heure du rangement')
-    .fill(`${hier.getFullYear()}-${p(hier.getMonth() + 1)}-${p(hier.getDate())}T18:30`)
+  /* Au plus quatre jours en arrière : au-delà, un message en français, et « Ranger » ne part pas. */
+  const loin = new Date()
+  loin.setDate(loin.getDate() - 6)
+  const champ = page.getByLabel('Date et heure du rangement')
+  await champ.fill(`${loin.getFullYear()}-${p(loin.getMonth() + 1)}-${p(loin.getDate())}T18:30`)
+  await expect(page.getByRole('alert').filter({ hasText: /plus de 4 jours/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Ranger / })).toBeDisabled()
+  await champ.fill(`${hier.getFullYear()}-${p(hier.getMonth() + 1)}-${p(hier.getDate())}T18:30`)
+  await expect(page.getByRole('alert').filter({ hasText: /plus de 4 jours/ })).toHaveCount(0)
   await expect(page.getByText(/ à 18 h 30$/)).toBeVisible()
   await page.getByRole('button', { name: 'Terminé' }).click()
 
@@ -168,12 +175,20 @@ test('on dresse pour tout le foyer, on range, et la base garde ce qu’on a choi
   await expect(resteAuFrigo).toContainText('yaourt nature')
   await expect(resteAuFrigo).toContainText('Ail')
 
+  // Le texte dit où l'on retire : le congélateur aussi (la base le fait).
+  await expect(page.getByText('Retiré du frigo, du congélateur et du placard d’après les recettes.')).toBeVisible()
   await page.getByRole('button', { name: /^Lait écrémé/ }).click()
   await expect(page.getByLabel(/Lait écrémé : il en reste/)).toHaveValue('250')
   await capture(page, '04-on-range-correction')
+  /* Une saisie qui n'est pas un nombre : un message, et « Corriger » ne part pas. */
+  await page.getByLabel(/Lait écrémé : il en reste/).fill('beaucoup')
+  await expect(page.getByRole('alert').filter({ hasText: 'Écris un nombre' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Corriger', exact: true })).toBeDisabled()
   await page.getByLabel(/Lait écrémé : il en reste/).fill('100')
   await page.getByRole('button', { name: 'Corriger', exact: true }).click()
   await expect(page.getByRole('button', { name: /^Lait écrémé 900 ml$/ })).toBeVisible()
+  /* Le panneau fermé, le focus revient à la puce corrigée (il était dans le champ qui vient de disparaître). */
+  await expect(page.getByRole('button', { name: /^Lait écrémé 900 ml$/ })).toBeFocused()
   await capture(page, '05-on-range-pret')
 
   /* ── Les cibles tactiles de l'étape : 44 px au moins ────────────────────── */
@@ -244,27 +259,108 @@ test('on dresse pour tout le foyer, on range, et la base garde ce qu’on a choi
   expect(repas, 'le dressage ne distribue plus la semaine').toBe(0)
 })
 
-test.describe('reprise', () => {
+test.describe('reprise : ce que la base a déjà écrit', () => {
   let second: Foyer
   test.beforeAll(async () => { second = await amorce({ cycleEtat: 'dressage' }) })
   test.afterAll(async () => { if (second) await efface(second) })
 
-  test('un dressage déjà fait ne recrée pas les barquettes, et ne retire pas deux fois', async ({ page }) => {
+  test('des barquettes déjà rangées s’affichent telles qu’elles sont écrites, en lecture seule, et on finit', async ({ page }) => {
     test.setTimeout(120_000)
-    // L'amorce a déjà quatre barquettes sur ce cycle : le premier appui « a déjà eu lieu ».
+    // L'amorce a déjà quatre barquettes (deux par recette, au frigo) : le rangement « a déjà eu lieu ».
     await db.from('meal_slot').delete().eq('cycle_id', second.cycleId)
+    // Une barquette du congélateur, rangée il y a deux jours : ce que l'écran doit montrer, pas ses défauts.
+    const il = new Date(Date.now() - 2 * 86_400_000)
+    il.setSeconds(0, 0)
+    const { data: une } = await db.from('portion').select('id').eq('cycle_id', second.cycleId).limit(1)
+    await db.from('portion').update({ location: 'congelateur', frozen_at: il.toISOString(), prepared_at: il.toISOString() })
+      .eq('id', une![0].id)
+
     await connecte(page, second)
     await page.goto('/dressage')
     await page.getByRole('button', { name: 'C’est dressé' }).click()
     await expect(page.getByRole('heading', { name: 'On range' })).toBeVisible()
-    await page.getByRole('button', { name: /^Ranger / }).click()
+    await expect(page.getByText(/4 barquettes déjà rangées pour vous deux/)).toBeVisible()
+    // Les vrais nombres, par lieu : une des quatre est au congélateur.
+    await expect(page.getByText(/^Frigo · \d+$/)).toHaveCount(2)
+    await expect(page.getByText('Congélateur · 1', { exact: true })).toBeVisible()
+    await expect(page.getByText('Congélateur · 0', { exact: true })).toBeVisible()
+    // Lecture seule : ni « − » ni « + », ni « Modifier » la date.
+    await expect(page.getByRole('button', { name: /de (moins|plus) au frigo/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Modifier' })).toHaveCount(0)
+    await capture(page, '06-on-range-deja-fait')
+
+    await page.getByRole('button', { name: 'Terminer le rangement' }).click()
     await expect(page).toHaveURL(/\/frigo$/, { timeout: 20_000 })
 
-    const { count } = await db.from('portion').select('id', { count: 'exact', head: true })
-      .eq('cycle_id', second.cycleId)
-    expect(count, 'les barquettes ont été recréées').toBe(4)
+    const { data: parts } = await db.from('portion').select('location, prepared_at').eq('cycle_id', second.cycleId)
+    expect(parts, 'les barquettes ont été recréées').toHaveLength(4)
+    expect(parts!.filter(x => x.location === 'congelateur'), 'le lieu écrit a été écrasé').toHaveLength(1)
     const { data: cycle } = await db.from('cycle').select('state, stock_retire_le').eq('id', second.cycleId).single()
     expect(cycle!.state).toBe('semaine')
     expect(cycle!.stock_retire_le).not.toBeNull()
+  })
+})
+
+test.describe('la lecture de ce que la session prend', () => {
+  let tiers: Foyer
+  let farine: string
+
+  test.beforeAll(async () => {
+    tiers = await amorce({ cycleEtat: 'dressage' })
+    await db.from('meal_slot').delete().eq('cycle_id', tiers.cycleId)
+    await db.from('portion').delete().eq('cycle_id', tiers.cycleId)
+    farine = await aliment('farine')
+    const { data: cr } = await db.from('cycle_recipe').select('recipe_id').eq('cycle_id', tiers.cycleId).limit(1)
+    await db.from('recipe_ingredient').insert({
+      recipe_id: cr![0].recipe_id, ordinal: 9, raw_text: '500 g de farine', food_id: farine,
+      qty: 500, unit: 'g', grams_reference: 500,
+    })
+    await db.from('stock_item').insert({
+      household_id: tiers.householdId, label: 'Farine de blé', food_id: farine, quantity: 2000, unit: 'g', location: 'placard',
+    })
+  })
+  test.afterAll(async () => { if (tiers) await efface(tiers) })
+
+  test('« Ranger » attend la lecture, « Reste au frigo » ne montre pas tout le frigo, puis la liste arrive', async ({ page }) => {
+    test.setTimeout(120_000)
+    // La lecture traîne : trois secondes avant que la base réponde.
+    await page.route(/ce_que_la_session_prend/, async route => {
+      await new Promise(r => setTimeout(r, 3_000))
+      await route.continue()
+    })
+    await connecte(page, tiers)
+    await page.goto('/dressage')
+    await page.getByRole('button', { name: 'C’est dressé' }).click()
+    await expect(page.getByRole('heading', { name: 'On range' })).toBeVisible()
+
+    const ranger = page.getByRole('button', { name: /^Ranger / })
+    await expect(page.getByText('Je regarde ce que la session prend dans le stock…')).toBeVisible()
+    await expect(ranger, 'on range avant d’avoir vu ce que la session retire').toBeDisabled()
+    await expect(page.getByText('Reste au frigo :', { exact: true }), 'tout le frigo pendant le chargement').toHaveCount(0)
+
+    await expect(page.getByRole('button', { name: /^Farine de blé 500 g$/ })).toBeVisible({ timeout: 15_000 })
+    await expect(ranger).toBeEnabled()
+    await page.unroute(/ce_que_la_session_prend/)
+  })
+
+  test('la lecture en panne : on range sans toucher au stock, et l’écran dit vrai', async ({ page }) => {
+    test.setTimeout(120_000)
+    await page.route(/ce_que_la_session_prend/, route => route.abort())
+    await connecte(page, tiers)
+    await page.goto('/dressage')
+    await page.getByRole('button', { name: 'C’est dressé' }).click()
+    await expect(page.getByText('Je n’ai pas pu lire ce que la session prend dans le stock : il ne sera pas retiré.'))
+      .toBeVisible({ timeout: 40_000 })
+    await expect(page.getByText('Reste au frigo :', { exact: true })).toHaveCount(0)
+    await page.getByRole('button', { name: /^Ranger / }).click()
+    await expect(page).toHaveURL(/\/frigo$/, { timeout: 20_000 })
+
+    const { data: stock } = await db.from('stock_item').select('quantity').eq('household_id', tiers.householdId).eq('label', 'Farine de blé')
+    expect(Number(stock![0].quantity), 'le stock a été retiré sans que l’hôte l’ait vu').toBe(2000)
+    const { data: cycle } = await db.from('cycle').select('state, stock_retire_le').eq('id', tiers.cycleId).single()
+    expect(cycle!.state).toBe('semaine')
+    expect(cycle!.stock_retire_le, 'la date de retrait dirait que c’est fait').toBeNull()
+    const { count } = await db.from('portion').select('id', { count: 'exact', head: true }).eq('cycle_id', tiers.cycleId)
+    expect(count).toBeGreaterThan(0)
   })
 })

@@ -233,7 +233,7 @@ test('le congélateur : la porte pivote, l’intérieur s’ouvre, on sort les b
     .toBe(nouvelle.toISOString().slice(0, 16))
   for (const p of await parts('Burger de feuilles de riz')) {
     expect(new Date(p.frozen_at).getTime()).toBe(nouvelle.getTime())
-    const attendu = new Date(nouvelle); attendu.setDate(attendu.getDate() + 90)
+    const attendu = new Date(nouvelle.getTime() + 90 * 86_400_000) // la base : 90 × 24 h, comme le front (plusDeJours)
     expect(new Date(p.expires_at).getTime(), 'la péremption ne suit pas la date de congélation').toBe(attendu.getTime())
     expect(p.location).toBe('congelateur')
   }
@@ -280,6 +280,8 @@ test('le frigo : les plats, les étagères, une photo, congeler, corriger une da
   await expect(interieur.getByRole('button', { name: /^Lasagnes saumon-poireaux, 6 parts, \w+\. midi → \w+\. midi/ })).toBeVisible()
   await expect(interieur.getByRole('button', { name: /^Pizza vietnamienne, 2 parts/ })).toBeVisible()
   await expect(interieur.getByRole('region', { name: 'Laitages et frais' })).toContainText('Yaourts dessert protéinés')
+  /* « 3 pot » : l'unité s'accorde avec la quantité. */
+  await expect(interieur.getByRole('button', { name: /Yaourts dessert protéinés/ })).toContainText('3 pots')
   await expect(interieur.getByRole('region', { name: 'Laitages et frais' })).toContainText('Lait écrémé')
   await expect(interieur.getByRole('region', { name: 'Bac à légumes' })).toContainText('Poireaux')
   await capture(page, '05-frigo-interieur')
@@ -334,7 +336,7 @@ test('le frigo : les plats, les étagères, une photo, congeler, corriger une da
   await expect.poll(async () => new Date((await parts('Lasagnes au saumon-poireaux'))[0].prepared_at).getTime(), { timeout: 10_000 })
     .toBe(depart.getTime())
   for (const p of await parts('Lasagnes au saumon-poireaux')) {
-    const attendu = new Date(depart); attendu.setDate(attendu.getDate() + 4)
+    const attendu = new Date(depart.getTime() + 4 * 86_400_000) // la base : 4 × 24 h
     expect(new Date(p.prepared_at).getTime()).toBe(depart.getTime())
     expect(new Date(p.expires_at).getTime(), 'la péremption ne suit pas « Au frigo depuis »').toBe(attendu.getTime())
   }
@@ -389,6 +391,7 @@ test('les ingrédients : quantité, lieu, date, « Fini » — et le placard', a
   await interieur.getByRole('button', { name: /Yaourts dessert protéinés/ }).click()
   const f = fiche(page, 'Yaourts dessert protéinés')
   await expect(f.getByText('Au frigo', { exact: true })).toBeVisible()
+  await expect(f.getByText('pots', { exact: true }), 'l’unité de la fiche s’accorde avec « 3 »').toBeVisible()
   await capture(page, '08-fiche-ingredient')
   expect(await ciblesPetites(page), 'des cibles de moins de 44 px dans la fiche').toEqual([])
 
@@ -396,6 +399,10 @@ test('les ingrédients : quantité, lieu, date, « Fini » — et le placard', a
   await f.getByLabel('Ce qu’il en reste').fill('2')
   await f.getByRole('button', { name: 'Enregistrer', exact: true }).first().click()
   await expect.poll(async () => Number((await db.from('stock_item').select('quantity').eq('household_id', foyer.householdId).eq('label', 'Yaourts dessert protéinés').single()).data!.quantity), { timeout: 10_000 }).toBe(2)
+  await expect(f.getByText('pots', { exact: true })).toBeVisible()
+  await f.getByLabel('Ce qu’il en reste').fill('1')
+  await expect(f.getByText('pot', { exact: true }), 'un seul : au singulier').toBeVisible()
+  await f.getByLabel('Ce qu’il en reste').fill('2')
   /* Le lieu : au placard. */
   await f.getByRole('radio', { name: 'Placard' }).click()
   await expect.poll(async () => (await db.from('stock_item').select('location, frozen_at').eq('household_id', foyer.householdId).eq('label', 'Yaourts dessert protéinés').single()).data!.location, { timeout: 10_000 }).toBe('placard')
@@ -457,7 +464,7 @@ test('l’accueil montre le petit frigo, les parts, le repas de ce soir et demai
   const carte = page.getByRole('region', { name: 'Le prochain repas' })
   await expect(carte).toContainText('Ce soir, pour vous deux')
   await expect(carte).toContainText('Burger de feuilles de riz')
-  await expect(carte).toContainText('Il est au congélateur : sors-le maintenant')
+  await expect(carte).toContainText('Il est au congélateur : sors-les maintenant')
   await expect(page.getByRole('region', { name: 'Demain' })).toContainText('Demain, midi et soir')
   await expect(page.getByRole('region', { name: 'Demain' })).toContainText('Lasagnes saumon-poireaux')
   await capture(page, '10-accueil', true)
@@ -468,6 +475,10 @@ test('l’accueil montre le petit frigo, les parts, le repas de ce soir et demai
     .toBe('frigo/decongelee,frigo/decongelee')
   await expect(carte.getByRole('button', { name: 'Je l’ai mangé' })).toBeVisible()
   await expect(carte).not.toContainText('Il est au congélateur')
+  /* Les deux burgers, décongelés, se mangent aujourd'hui : « À manger bientôt » les compte sur UNE ligne. */
+  const presses = page.getByRole('region', { name: 'À manger bientôt' })
+  await expect(presses.getByText('Burger de feuilles de riz', { exact: false })).toHaveCount(1)
+  await expect(presses).toContainText(/Burger de feuilles de riz · \d+ barquettes/)
 
   /* « Je l'ai mangé » : MA case, et la part est consommée. */
   await carte.getByRole('button', { name: 'Je l’ai mangé' }).click()

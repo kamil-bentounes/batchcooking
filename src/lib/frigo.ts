@@ -11,7 +11,7 @@ import { JOURS_AU_CONGELO, JOURS_AU_FRAIS, jourAbrege, pourLeFoyer } from './ran
 import { rayonDe } from './rayons.ts'
 import type { Rayon } from './rayons.ts'
 import { plusDeJours, urgence } from './peremption.ts'
-import type { Lieu } from './peremption.ts'
+import type { Lieu, Urgence } from './peremption.ts'
 
 /** Ce que la fiche et les cartes lisent d'une barquette (une ligne de `portion`). */
 export type Part = {
@@ -349,6 +349,27 @@ export function peremptionApres(lieu: Lieu, etat: string, debut: Date): Date | n
   if (lieu === 'congelateur') return plusDeJours(debut, JOURS_AU_CONGELO)
   if (etat === 'decongelee') return null
   return plusDeJours(debut, JOURS_AU_FRAIS)
+}
+
+export type Presse = { label: string; n: number; u: Urgence }
+
+/**
+ * « À manger bientôt » : ce qui presse, plat par plat. Deux barquettes du même plat qui pressent pareil
+ * (« Burger de feuilles de riz — à manger aujourd'hui » deux fois) font UNE ligne et un nombre. Le plus
+ * pressé d'abord, `max` plats au plus.
+ */
+export function pressesGroupees(
+  barquettes: { label: string; expires_at: string; location: string }[], maintenant: Date, max = 2,
+): Presse[] {
+  const groupes = new Map<string, Presse>()
+  for (const b of barquettes) {
+    const u = urgence(b.expires_at, b.location === 'congelateur' ? 'congelateur' : 'frigo', maintenant)
+    if (u.niveau === 'ok') continue
+    const cle = `${b.label}|${u.mot}`
+    const g = groupes.get(cle)
+    if (g) { g.n += 1; if (u.heuresRestantes < g.u.heuresRestantes) g.u = u } else groupes.set(cle, { label: b.label, n: 1, u })
+  }
+  return [...groupes.values()].sort((a, b) => a.u.heuresRestantes - b.u.heuresRestantes).slice(0, max)
 }
 
 /** La ligne « À manger avant » : la date, et au frigo ce qu'en dit l'urgence (« jeu. 29 oct., encore 3 jours »). */
