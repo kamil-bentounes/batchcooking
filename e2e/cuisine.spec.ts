@@ -91,7 +91,7 @@ test.describe('la cuisine, jouée au clic', () => {
     await expect(page.getByRole('alert')).toContainText('Un prix payé va de 0 à 10')
 
     // Un article à la main prend son rayon du libellé, pas « Fruits et légumes ».
-    await page.getByRole('button', { name: '+ Ajouter' }).click()
+    await page.getByRole('button', { name: 'Ajouter un article' }).click()
     await page.getByPlaceholder('Ce qu’il faut prendre').fill('Sel fin')
     await expect(page.getByRole('combobox', { name: 'Rayon' })).toHaveValue('Autre')
   })

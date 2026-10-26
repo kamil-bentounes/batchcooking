@@ -7,7 +7,7 @@
  */
 import { useMemo, useState } from 'react'
 import {
-  Attente, BarreAction, Erreur, Passage, Principal, Secondaire, Surface, Vide,
+  Attente, BarreAction, Erreur, Passage, Principal, Surface, Vide,
 } from '../ui/coque.tsx'
 import { useChangeEtat, useCycle } from '../lib/donnees/cycle.ts'
 import { useCreeMagasin, useMagasins } from '../lib/donnees/foyer.ts'
@@ -21,6 +21,7 @@ import { RAYONS, rayonDe } from '../lib/rayons.ts'
 import { messageEchec } from '../lib/recettes/echecs.ts'
 import { ecritQuantiteEtUnite } from '../lib/quantite.ts'
 import type { Geste } from '../lib/recettes/echecs.ts'
+import { DESSINS, PictoRayon, TuileIcone } from '../ui/rayons.tsx'
 
 /** Le prix payé d'un article : au-delà, c'est une faute de frappe, pas un ticket. */
 const PRIX_MAX = 10_000
@@ -67,28 +68,78 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
     return <Passage retour={retour}><Vide titre="Aucun cycle ouvert" /></Passage>
   }
 
+  const enBoutique = articles.length
+  const dansLePanier = enBoutique - restants
+  /* Un segment par article, jusqu'à 24 : au-delà, des segments de 3 px ne se liraient plus, la
+     piste garde 24 segments et se remplit au prorata. */
+  const segments = Math.min(enBoutique, 24)
+  const remplis = enBoutique === 0 ? 0 : Math.round(dansLePanier / enBoutique * segments)
+  const prix = (n: number) => n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
   return (
-    <Passage retour={retour} barre={echec && (
-      /* ⚠️ Dans la barre du bas, pas sous le titre : cocher un article en bas d'une longue liste qui
-         échoue faisait tomber l'alerte hors de l'écran, tout en haut (le même défaut que `Retenues`
-         dans `Choisir`). La barre reste sous les yeux. */
+    /* ⚠️ La barre du bas porte « Rentrer » ET l'alerte d'un geste raté, pas un message sous le
+       titre : cocher un article en bas d'une longue liste qui échoue faisait tomber l'alerte hors
+       de l'écran, tout en haut (le même défaut que `Retenues` dans `Choisir`). La barre reste
+       sous les yeux. */
+    <Passage retour={retour} barre={
       <BarreAction>
-        <div className="flex items-start gap-2">
-          <div className="grow -mt-3"><Erreur de={echec} /></div>
-          <button onClick={() => setEchec(null)}
-                  className="min-h-11 px-2 text-[14px] text-doux shrink-0">Fermer</button>
-        </div>
+        {echec && (
+          <div className="flex items-start gap-2 -mt-1 mb-2">
+            <div className="grow -mt-3"><Erreur de={echec} /></div>
+            <button onClick={() => setEchec(null)}
+                    className="min-h-11 px-2 text-[14px] text-doux shrink-0">Fermer</button>
+          </div>
+        )}
+        <Principal onClick={termine} disabled={change.isPending || articles.length === 0}>
+          {restants === 0 ? 'J’ai tout, rentrons'
+            : restants === 1 ? 'Rentrer sans cet article'
+              : `Rentrer sans les ${restants} articles`}
+        </Principal>
+        <Erreur de={change.error ?? sortie.error} />
       </BarreAction>
-    )}>
-      <h1 className="titre text-[40px]">La liste</h1>
-      <p className="mt-3 text-[15px] text-doux">
-        {restants === 0
-          ? 'Tout est coché.'
-          : `${restants} article${restants > 1 ? 's' : ''} à prendre`}
-        {sous.paye !== null
-          ? ` · ${sous.paye.toFixed(2).replace('.', ',')} € payés`
-          : sous.estime > 0 && ` · ${sous.estime.toFixed(2).replace('.', ',')} € estimés`}
-      </p>
+    }>
+      <h1 className="titre-fort text-[40px] font-[560]">La liste</h1>
+
+      {/* Le total d'abord : c'est ce qu'on regarde en entrant dans le magasin. */}
+      {articles.length > 0 && (
+        <section aria-label="Le total estimé"
+                 className="mt-4 rounded-[28px] bg-encre text-fond p-5 shadow-carte">
+          <div className="flex items-end justify-between gap-3">
+            <div className="min-w-0">
+              <p className="chiffre text-[56px] font-semibold leading-[.95] text-safran">
+                {sous.paye !== null ? prix(sous.paye)
+                  : sous.estime > 0 ? prix(sous.estime) : restants}
+                {(sous.paye !== null || sous.estime > 0) && (
+                  <span className="ml-2 text-[34px]">€</span>
+                )}
+              </p>
+              <p className="mt-2 text-[14px] text-fond/70">
+                {sous.paye !== null
+                  ? `payés${restants === 0 ? ' · tout est coché' : ` · ${restants} article${restants > 1 ? 's' : ''} à prendre`}`
+                  : sous.estime > 0
+                    ? (restants === 0
+                      ? 'estimés · tout est coché'
+                      : `estimés pour ${restants} article${restants > 1 ? 's' : ''} à prendre`)
+                    : (restants === 0 ? 'Tout est coché.'
+                      : `article${restants > 1 ? 's' : ''} à prendre`)}
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="chiffre text-[30px] font-semibold leading-none">
+                {dansLePanier}
+                <span className="ml-1.5 text-[20px] font-normal text-fond/70">sur {enBoutique}</span>
+              </p>
+              <p className="mt-1 text-[13px] text-fond/70">dans le panier</p>
+            </div>
+          </div>
+          <div role="img" aria-label={`${dansLePanier} article${dansLePanier > 1 ? 's' : ''} sur ${enBoutique} dans le panier`}
+               className="mt-[18px] flex gap-1">
+            {Array.from({ length: segments }, (_, i) => (
+              <span key={i} className={`h-2 flex-1 rounded-full ${i < remplis ? 'bg-safran' : 'bg-fond/15'}`} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {magasins.length === 0 && <PremierMagasin />}
 
@@ -97,19 +148,27 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
               texte="Elle se remplit depuis les recettes choisies, ou à la main ci-dessous." />
       ) : (
         sorties.map(s => (
-          <section key={s.storeId ?? 'sans'} className="mt-9"
+          <section key={s.storeId ?? 'sans'} className="mt-7"
                    aria-label={`Courses chez ${nomDe(s.storeId)}`}>
-            <div className="flex items-baseline justify-between">
-              <h2 className="titre text-[24px]">{nomDe(s.storeId)}</h2>
-              <span className="text-[14px] text-doux">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h2 className="titre-fort text-[26px] font-[560] flex items-center gap-2.5 min-w-0">
+                <TuileIcone className="size-9 rounded-xl bg-congel-fond text-congel-encre">
+                  {DESSINS.magasin}
+                </TuileIcone>
+                <span className="[overflow-wrap:anywhere]">{nomDe(s.storeId)}</span>
+              </h2>
+              <span className="text-[14px] text-doux shrink-0">
                 {s.total - s.restants} sur {s.total}
               </span>
             </div>
 
             {s.groupes.map(g => (
-              <div key={g.rayon} className="mt-6">
-                <h3 className="text-[13px] text-doux uppercase tracking-[0.04em]">{g.rayon}</h3>
-                <ul className="mt-2">
+              <div key={g.rayon} className="mb-4 rounded-[26px] bg-surface shadow-carte overflow-hidden">
+                <div className="flex items-center gap-3 px-[18px] pt-3.5 pb-1.5">
+                  <PictoRayon rayon={g.rayon} />
+                  <h3 className="text-[15px] font-semibold text-doux">{g.rayon}</h3>
+                </div>
+                <ul>
                   {g.articles.map(a => (
                     <Ligne key={a.id} article={a}
                            ouvert={detaille === a.id}
@@ -127,18 +186,36 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
         ))
       )}
 
-      <div className="mt-9 flex gap-3">
-        <button onClick={() => setOuvert(ouvert === 'ajout' ? null : 'ajout')}
-                className="flex-1 h-[46px] rounded-[16px] bg-brume/50 text-[15px]
-                           hover:bg-brume transition-colors">
-          + Ajouter
-        </button>
-        <button onClick={() => setOuvert(ouvert === 'completer' ? null : 'completer')}
-                className="flex-1 h-[46px] rounded-[16px] bg-brume/50 text-[15px]
-                           hover:bg-brume transition-colors">
+      {/* Quatre gestes, pas un de plus en avant : « Rentrer » est le seul bouton plein. */}
+      <div className="mt-6 grid grid-cols-2 gap-2.5">
+        <Outil icone={DESSINS.plus} ouvert={ouvert === 'ajout'}
+               onClick={() => setOuvert(ouvert === 'ajout' ? null : 'ajout')}>
+          Ajouter un article
+        </Outil>
+        <Outil icone={DESSINS.liste} ouvert={ouvert === 'completer'}
+               onClick={() => setOuvert(ouvert === 'completer' ? null : 'completer')}>
           Compléter ma liste
-        </button>
+        </Outil>
+        {/* Une liste faite AVANT qu'on connaisse les prix n'a pas d'estimation,
+            et la régénérer effacerait ce qui a été ajouté à la main. D'où ce
+            bouton, qui ne remplit que les lignes encore vides. */}
+        {articles.some(a => a.est_price_eur === null && a.paid_price_eur === null) && (
+          <Outil icone={DESSINS.etiquette} onClick={() => estime.mutate(cycle.id)}
+                 disabled={estime.isPending}>
+            {estime.isPending
+              ? 'J’estime…'
+              : estime.data
+                ? `${estime.data.remplis} prix estimés sur ${estime.data.sur}`
+                : 'Estimer les prix d’après mes tickets'}
+          </Outil>
+        )}
+        {/* Le ticket (lot 5). Sa place est ici : on le photographie en sortant
+            de caisse, pas depuis un écran de réglages où personne n'irait. */}
+        <Outil icone={DESSINS.appareil} onClick={() => va('/ticket')}>
+          J’ai payé — photographier le ticket
+        </Outil>
       </div>
+      <Erreur de={estime.error} />
 
       {ouvert === 'ajout' && (
         <FormulaireAjout magasins={magasins} surAjoute={a => {
@@ -154,38 +231,29 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
                    }, issue('article'))} />
       )}
 
-      {/* Une liste faite AVANT qu'on connaisse les prix n'a pas d'estimation,
-          et la régénérer effacerait ce qui a été ajouté à la main. D'où ce
-          bouton, qui ne remplit que les lignes encore vides. */}
-      {articles.some(a => a.est_price_eur === null && a.paid_price_eur === null) && (
-        <button onClick={() => estime.mutate(cycle.id)} disabled={estime.isPending}
-                className="mt-4 w-full h-[46px] rounded-[16px] bg-brume/50 text-[15px]
-                           hover:bg-brume transition-colors">
-          {estime.isPending
-            ? 'J’estime…'
-            : estime.data
-              ? `${estime.data.remplis} prix estimés sur ${estime.data.sur}`
-              : 'Estimer les prix d’après mes tickets'}
+      <p className="mt-5 text-center">
+        <button onClick={retour}
+                className="inline-flex items-center min-h-11 px-3 text-[15.5px] font-semibold
+                           text-herbe underline underline-offset-4">
+          Continuer plus tard
         </button>
-      )}
-      <Erreur de={estime.error} />
-
-      {/* Le ticket (lot 5). Sa place est ici : on le photographie en sortant
-          de caisse, pas depuis un écran de réglages où personne n'irait. */}
-      <button onClick={() => va('/ticket')}
-              className="mt-4 w-full h-[46px] rounded-[16px] bg-brume/50 text-[15px]
-                         hover:bg-brume transition-colors">
-        J’ai payé — photographier le ticket
-      </button>
-
-      <div className="mt-11">
-        <Principal onClick={termine} disabled={change.isPending || articles.length === 0}>
-          {restants === 0 ? 'J’ai tout, rentrons' : `Rentrer sans ${restants} article${restants > 1 ? 's' : ''}`}
-        </Principal>
-        <Erreur de={change.error ?? sortie.error} />
-        <Secondaire onClick={retour}>Continuer plus tard</Secondaire>
-      </div>
+      </p>
     </Passage>
+  )
+}
+
+/** Une action secondaire, en carte : le picto, puis ce qu'elle fait. */
+function Outil({ icone, ouvert, children, ...rest }:
+  { icone: React.ReactNode; ouvert?: boolean } & React.ComponentProps<'button'>) {
+  return (
+    <button type="button" {...rest} aria-expanded={ouvert}
+            className={`flex flex-col items-start gap-2.5 min-h-[92px] p-3.5 rounded-[22px] bg-surface
+                        text-left text-[14.5px] font-semibold leading-[1.25] disabled:opacity-60
+                        ${ouvert ? 'shadow-[inset_0_0_0_2px_var(--color-herbe)]'
+                                 : 'shadow-[inset_0_0_0_1.5px_var(--color-brume)]'}`}>
+      <TuileIcone>{icone}</TuileIcone>
+      {children}
+    </button>
   )
 }
 
@@ -209,44 +277,45 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surRefus
   const note = article.note
 
   return (
-    <li className="border-b border-brume/70 last:border-0">
-      <div className="flex items-center gap-3 py-1">
-        {/* Cible de 44 px : on coche avec le pouce, debout, sans regarder. */}
+    <li className="border-t border-brume first:border-0">
+      <div className="flex items-center gap-3.5 min-h-[72px] py-1.5 pl-3.5 pr-[18px]">
+        {/* Cible de 44 px, dessin de 44 : on coche avec le pouce, debout, sans regarder. */}
         <button onClick={() => surCoche(!pris)} role="checkbox" aria-checked={pris}
                 aria-label={`${article.label}${pris ? ', pris' : ''}`}
-                className="w-11 h-11 grid place-items-center shrink-0">
-          <span className={`w-[22px] h-[22px] rounded-[7px] border-2 grid place-items-center
-                            ${pris ? 'bg-herbe border-herbe' : 'border-brume'}`}>
-            {pris && (
-              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#F2F4EF"
-                   strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M2.5 7.5 5.5 10.5 11.5 3.5" />
-              </svg>
-            )}
-          </span>
+                className={`size-11 rounded-[14px] grid place-items-center shrink-0 border-2
+                            ${pris ? 'bg-herbe border-herbe text-fond' : 'bg-surface border-doux/40'}`}>
+          {pris && (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12.5l4.5 4.5L19 7.5" />
+            </svg>
+          )}
         </button>
 
-        <button onClick={surOuvre} className="grow min-w-0 text-left py-2.5 [overflow-wrap:anywhere]">
-          <span className={`text-[15px] ${pris ? 'text-doux line-through' : ''}`}>
+        <button onClick={surOuvre} aria-expanded={ouvert}
+                className="grow min-w-0 text-left py-2 [overflow-wrap:anywhere]">
+          <span className={`block text-[18px] font-semibold leading-tight
+                            ${pris ? 'text-doux line-through' : ''}`}>
             {article.label}
           </span>
-          {quantite && <span className="text-[13px] text-doux ml-2">{quantite}</span>}
+          {quantite && <span className="block text-[14px] text-doux mt-0.5">{quantite}</span>}
           {note && (
-            <span className="block text-[13px] mt-0.5" style={{ color: 'var(--color-ocre)' }}>
+            <span className="block text-[13px] mt-0.5 text-ocre">
               {note}
             </span>
           )}
         </button>
 
         {article.est_price_eur !== null && (
-          <span className="text-[14px] text-doux tabular-nums">
-            {Number(article.est_price_eur).toFixed(2).replace('.', ',')} €
+          <span className="chiffre text-[20px] font-semibold tabular-nums shrink-0">
+            {Number(article.est_price_eur).toLocaleString('fr-FR',
+              { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
         )}
       </div>
 
       {ouvert && (
-        <div className="pb-4 pl-11 pr-1 space-y-3">
+        <div className="pb-4 pl-[72px] pr-[18px] space-y-3">
           <div className="flex gap-2 flex-wrap">
             {magasins.map(m => (
               <button key={m.id} onClick={() => surMaj({ store_id: m.id })}
@@ -422,7 +491,7 @@ function Completer({ dejaLa, surAjoute }: {
           part. Les habitudes passent devant : ce sont elles qu'on reprend. */}
       {habitudes.length > 0 && (
         <>
-          <p className="mt-4 text-[13px] text-doux uppercase tracking-[0.04em]">
+          <p className="mt-4 text-[14px] text-doux">
             Ce que vous reprenez souvent
           </p>
           <div className="mt-2 flex gap-2 flex-wrap">
