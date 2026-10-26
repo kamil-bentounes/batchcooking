@@ -1,40 +1,30 @@
 ---
 id: cuisine-dressage
-titre: Le dressage et les barquettes
+titre: Le dressage, « On range » et les barquettes
 ecrans: [/dressage]
 questions:
   - Comment dresser les barquettes après la cuisine ?
-  - Que fait le bouton « C’est dressé, ranger » ?
-  - Pourquoi mes barquettes vont au frigo ou au congélateur ?
-  - Combien de temps se garde une barquette ?
-  - Comment sont réparties les barquettes sur la semaine ?
+  - Que fait le bouton « C’est dressé » ?
+  - Pourquoi celle qui n’a pas d’objectifs a-t-elle des parts égales ?
+  - Que se passe-t-il quand j’appuie sur « C’est dressé » ?
 sources:
   - src/pages/Dressage.tsx
   - src/lib/nutrition/portions.ts
   - src/lib/donnees/barquettes.ts
-  - src/lib/semaine.ts
-  - supabase/migrations/0047_peremption_donnee.sql
-  - src/pages/Stock.tsx
-verifie_sur: 78ffdc2
+verifie_sur: 7409ab5
 ---
 ## Ce que fait l’appli
 
-Une session produit des **barquettes**, pas des recettes : nommées, datées, avec leurs calories et leurs protéines. « Dresse N barquettes » dit combien en faire, de quel poids, pour qui. Tu y arrives par « Passer au dressage » ou « Dresser les barquettes ». Le calcul des poids est expliqué dans « cuisine-portions ».
+Une session produit des **barquettes**, pas des recettes : nommées, datées, avec leurs calories et leurs protéines. Le dressage a **deux étapes sur le même écran** : on dresse, puis « On range » (« cuisine-on-range »). Tu y arrives par « Passer au dressage » ou « Dresser les barquettes ». Le calcul des poids est expliqué dans « cuisine-portions ».
 
-## Comment faire
+## Étape 1 : dresser
 
-1. Pour chaque recette : « N × G g pour <prénom> », les kcal et les g de protéines d’une part, et une phrase d’explication. S’il faut un complément : « + N g de skyr pour <prénom> ».
-2. Remplis tes barquettes en suivant ces poids : l’écran dit « Remplis chacune au poids indiqué : c’est ce qui rend les parts justes. » Il n’y a rien à saisir ici : aucun poids n’est enregistré.
-3. **« C’est dressé, ranger »** (« Je range… ») crée les barquettes, propose une répartition sur la semaine, puis ouvre « La semaine ».
+Pour chaque recette : « N × G g pour <prénom> », les kcal et les g de protéines d’une part, et une phrase d’explication. S’il faut un complément : « + N g de skyr pour <prénom> ». Remplis tes barquettes à ces poids ; il n’y a rien à saisir. Celui ou celle qui n’a pas fixé ses objectifs a quand même ses parts, au poids moyen des autres (« … parts égales »). **« C’est dressé »** ouvre la seconde étape ; rien n’est encore créé.
 
-## Frigo ou congélateur
+## Étape 2 : « On range »
 
-Pour chaque personne, les **4 premières barquettes** (toutes recettes confondues, dans l’ordre des recettes retenues) vont au frigo, les suivantes au congélateur. Une barquette se garde **4 jours** au frigo à partir de sa préparation, **90 jours** au congélateur, **24 heures** une fois décongelée.
-
-## La répartition proposée
-
-Chacun reçoit **un dîner par jour, à partir de demain**, les barquettes les plus pressées d’abord : celles du frigo, puis celles du congélateur. Avec plus de quatre barquettes, la cinquième tombe donc sur le cinquième jour, et ainsi de suite, même au-delà de sept jours. L’appli ne dit pas de sortir du congélateur à l’avance : « Décongeler » se fait à la main dans « Ce que j’ai ». Une case déjà mangée ou sautée n’est jamais écrasée (sa barquette reste « sans jour »). Tout se déplace ensuite dans « La semaine ». Sous le bouton, le texte écrit la date de demain en chiffres (« 2026-10-24 »).
+Frigo ou congélateur, l’heure du rangement, « La session a pris » et « Ranger les N barquettes » : tout est dans « cuisine-on-range ». Rien n’est posé tout seul sur les jours de la semaine : tu choisis ce que tu manges quand.
 
 ## Si ça échoue
 
-Le bouton reste actif : appuie de nouveau, les barquettes déjà créées ne sont pas refaites. Le dressage n’a lieu qu’une fois par semaine. Sans recette retenue : « Rien à dresser ». Si personne n’a fixé ses objectifs, le bouton répond aussi « Rien à dresser. ».
+Le bouton reste actif : appuie de nouveau. Les barquettes déjà créées ne sont pas refaites et les ingrédients ne sont pas retirés deux fois. Sans recette retenue : « Rien à dresser ».

@@ -18,7 +18,7 @@ sources:
   - src/lib/suivi.ts
   - supabase/migrations/0017_triggers_lot1.sql
   - src/lib/peremption.ts
-verifie_sur: 02dd873
+verifie_sur: 7409ab5
 ---
 ## Ce que fait l’appli
 
@@ -43,7 +43,7 @@ verifie_sur: 02dd873
 
 ## Les règles
 
-- La répartition ne pose que des **dîners**, un par jour et par personne, à partir de demain : aujourd’hui et les autres repas sont vides.
+- Après « On range » (« cuisine-dressage »), **rien n’est posé tout seul** sur les jours : la semaine dit « Aucune barquette n’est encore posée sur un repas. » tant que personne n’a posé une barquette sur un repas.
 - Une barquette ne compte dans les calories du jour que si le repas est **mangé**. Un **extra compte toujours**.
 - « Sauté » est une réponse : le jour est renseigné, avec zéro pour ce repas.
 - **Un jour sans rien coché ni noté n’est pas un jour à zéro** : c’est un trou, hors des moyennes du bilan. Sur l’accueil : « N repas pas encore renseignés ».

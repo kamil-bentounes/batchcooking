@@ -18,7 +18,7 @@ sources:
   - src/ui/budget/MoisType.tsx
   - src/lib/budget/mois-type.ts
   - src/lib/donnees/cycle.ts
-verifie_sur: 5ed8c88
+verifie_sur: 7409ab5
 ---
 La carte « Budget » de l'accueil donne l'état du mois en cours. Un toucher dessus ouvre l'écran du mois. Ouvrir l'accueil ouvre aussi le mois en cours : Popote crée ses lignes.
 

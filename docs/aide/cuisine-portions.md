@@ -5,7 +5,7 @@ ecrans: [/dressage]
 questions:
   - Comment sont calculées les portions de chacun ?
   - Pourquoi l’appli propose du skyr en complément ?
-  - Pourquoi je n’ai aucune barquette dressée pour moi ?
+  - Pourquoi mes parts sont-elles égales à celles de l’autre ?
   - Que veut dire « la part est en dessous de l’objectif » ?
   - Pourquoi ma part est plus grosse que celle de l’autre ?
   - Que veut dire « Recette mal quantifiée » ?
@@ -15,7 +15,7 @@ sources:
   - src/lib/nutrition/macros.ts
   - src/lib/donnees/recettes.ts
   - src/lib/donnees/foyer.ts
-verifie_sur: e058ce7
+verifie_sur: 7409ab5
 ---
 ## Ce que fait l’appli
 
@@ -35,7 +35,7 @@ Tout le monde mange la même chose ; seule la **portion** diffère. Une part plu
 
 ## Sans objectifs
 
-Quelqu’un qui n’a pas fixé ses objectifs n’a aucune barquette : « … n’a pas encore fixé ses objectifs : aucune barquette ne lui est dressée. » Ses parts ne sont pas redistribuées. « Fixe tes objectifs » mène à l’écran des objectifs.
+Quelqu’un qui n’a pas fixé ses objectifs a quand même ses barquettes : « … n’a pas encore fixé ses objectifs : ses barquettes sont dressées à parts égales. » Chacune pèse la **moyenne** des parts des autres, et aucun complément de skyr ne lui est proposé. Si personne n’a d’objectifs, toutes les parts sont égales. « Fixe tes objectifs » mène à l’écran des objectifs.
 
 ## Recette mal quantifiée
 

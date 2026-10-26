@@ -21,7 +21,7 @@ sources:
   - supabase/migrations/0047_peremption_donnee.sql
   - supabase/migrations/0092_la_photo_et_les_gestes.sql
   - supabase/migrations/0117_cuisine_corrections.sql
-verifie_sur: 78ffdc2
+verifie_sur: 7409ab5
 ---
 ## Ce que fait l’appli
 
@@ -31,7 +31,7 @@ verifie_sur: 78ffdc2
 
 - **En cochant la liste de courses** : l’article entre tout seul, sauf Entretien et Hygiène. Son rayon décide du lieu : « Surgelés » au congélateur ; « Frais », « Fruits et légumes » et « Boucherie, poissonnerie » au frigo ; le reste au placard. Décocher le retire.
 - **Les boutons du bas** : « + À la main » (« cuisine-ajout-stock »), « Photo du frigo » ou du congélateur, du placard selon l’onglet (« cuisine-photo-frigo »), « Peser ce qu’on compte à l’unité » (« cuisine-peser »).
-- Les barquettes arrivent au dressage.
+- Les barquettes arrivent à « On range », à la fin du dressage, avec leur lieu (frigo ou congélateur) et l’heure de rangement. À ce moment, les ingrédients que les recettes ont pris sortent de la liste (« cuisine-dressage »).
 
 ## Les barquettes
 

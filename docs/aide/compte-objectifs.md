@@ -4,7 +4,7 @@ titre: Tes objectifs nutritionnels
 ecrans: [/objectifs]
 questions:
   - Comment régler mes objectifs de calories et de protéines ?
-  - Pourquoi aucune barquette ne m’est dressée ?
+  - Pourquoi mes barquettes sont-elles dressées à parts égales ?
   - Qu’est-ce que « Fixe tes objectifs » ?
   - Est-ce que Thauba voit mes objectifs ?
   - Comment changer mes objectifs ?
@@ -21,7 +21,7 @@ sources:
   - src/lib/nutrition/portions.ts
   - src/pages/Accueil.tsx
   - supabase/migrations/0005_policies.sql
-verifie_sur: 02dd873
+verifie_sur: 7409ab5
 ---
 ## Ce que fait l’écran
 
@@ -39,7 +39,7 @@ Tant que tu n’as rien enregistré, les curseurs partent de 2 000 kcal, 150 g d
 ## Les règles
 
 - Chaque « Enregistrer » ajoute une ligne : les anciens restent sous « Ce que tu visais avant » (date, calories, protéines, le dernier compris).
-- **Sans objectifs, aucune barquette ne t’est dressée.** L’étape de dressage le dit : « … n’a pas encore fixé ses objectifs : aucune barquette ne lui est dressée. »
+- **Sans objectifs, tes barquettes sont dressées à parts égales** : chacune pèse la moyenne des parts des autres. L’étape de dressage le dit : « … n’a pas encore fixé ses objectifs : ses barquettes sont dressées à parts égales. » Le bandeau de l’accueil dit : « Sans tes objectifs, tes barquettes sont dressées à parts égales. »
 
 ## À quoi ils servent
 
