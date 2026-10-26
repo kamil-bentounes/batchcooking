@@ -66,6 +66,14 @@ async function unePhoto(page: Page, teinte: number): Promise<Buffer> {
   return Buffer.from(url.split(',')[1], 'base64')
 }
 
+/** Les cibles de moins de 44 px visibles sur l'écran : un pouce doit les trouver. */
+const ciblesPetites = (page: Page) => page.evaluate(() =>
+  [...document.querySelectorAll<HTMLElement>('button, a[href], [role=radio], input[type=checkbox]')]
+    .filter(c => getComputedStyle(c).visibility !== 'hidden' && !c.closest('[inert]'))
+    .map(c => ({ c, r: c.getBoundingClientRect() }))
+    .filter(({ r }) => r.width > 0 && r.height > 0 && (r.width < 44 || r.height < 44))
+    .map(({ c, r }) => `${(c.getAttribute('aria-label') || c.textContent || '?').trim().slice(0, 30)} ${Math.round(r.width)}×${Math.round(r.height)}`))
+
 const portions = async () =>
   (await db.from('portion').select('*').eq('household_id', foyer.householdId).order('created_at')).data!
 const parts = async (titre: string) => (await portions()).filter(p => p.label === titre)
@@ -201,6 +209,7 @@ test('le congélateur : la porte pivote, l’intérieur s’ouvre, on sort les b
   await expect(interieur.getByRole('button', { name: /^Wrap, 20 parts/ })).toBeVisible()
   await expect(interieur.getByRole('region', { name: 'Tiroir du bas' })).toContainText('Petits pois')
   await capture(page, '03-congelateur')
+  expect(await ciblesPetites(page), 'des cibles de moins de 44 px dans le congélateur').toEqual([])
 
   /* La fiche des burgers : ce soir, « sors-les maintenant ». */
   await interieur.getByRole('button', { name: /^Burger de feuilles de riz/ }).click()
@@ -212,6 +221,7 @@ test('le congélateur : la porte pivote, l’intérieur s’ouvre, on sort les b
   await expect(f.getByText('C’est pour ce soir : sors-les maintenant, ou passe-les au micro-ondes avant de manger.')).toBeVisible()
   await expect(f.getByText('259 g, 501 kcal et 36 g de protéines la part')).toBeVisible()
   await capture(page, '04-fiche-congelee')
+  expect(await ciblesPetites(page), 'des cibles de moins de 44 px dans la fiche').toEqual([])
 
   /* « Congelés le » : on corrige la date, la péremption suit (+90 jours, comme le trigger). */
   const avant = await parts('Burger de feuilles de riz')
@@ -273,6 +283,7 @@ test('le frigo : les plats, les étagères, une photo, congeler, corriger une da
   await expect(interieur.getByRole('region', { name: 'Laitages et frais' })).toContainText('Lait écrémé')
   await expect(interieur.getByRole('region', { name: 'Bac à légumes' })).toContainText('Poireaux')
   await capture(page, '05-frigo-interieur')
+  expect(await ciblesPetites(page), 'des cibles de moins de 44 px dans le frigo').toEqual([])
 
   /* ── Une photo pour la pizza (sa recette est la nôtre, sans photo) ──────── */
   await interieur.getByRole('button', { name: /^Pizza vietnamienne, 2 parts/ }).click()
@@ -315,6 +326,7 @@ test('le frigo : les plats, les étagères, une photo, congeler, corriger une da
   await expect(lasagnes.getByRole('heading', { name: 'Prévues pour vous deux' })).toBeVisible()
   await expect(lasagnes.getByText(/^(lun|mar|mer|jeu|ven|sam|dim)\. midi$/).first()).toBeVisible()
   await capture(page, '07-fiche-lasagnes')
+  expect(await ciblesPetites(page), 'des cibles de moins de 44 px dans la fiche').toEqual([])
   const depart = new Date(Date.now() - 2 * JOUR_MS); depart.setSeconds(0, 0)
   await lasagnes.getByRole('button', { name: 'Modifier : Au frigo depuis' }).click()
   await lasagnes.getByLabel('Au frigo depuis').fill(pourLeChamp(depart))
@@ -378,6 +390,7 @@ test('les ingrédients : quantité, lieu, date, « Fini » — et le placard', a
   const f = fiche(page, 'Yaourts dessert protéinés')
   await expect(f.getByText('Au frigo', { exact: true })).toBeVisible()
   await capture(page, '08-fiche-ingredient')
+  expect(await ciblesPetites(page), 'des cibles de moins de 44 px dans la fiche').toEqual([])
 
   /* La quantité. */
   await f.getByLabel('Ce qu’il en reste').fill('2')

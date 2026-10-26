@@ -126,6 +126,9 @@ test.describe('les audits que l’œil rate', () => {
         for (const c of cibles) {
           const r = c.getBoundingClientRect()
           if (r.width === 0 || r.height === 0) continue       // masqué
+          /* L'intérieur d'une porte fermée (`/frigo`) reste dans la page, en `visibility: hidden` et réduit à 55 % :
+             il ne se touche pas, il n'a pas de cible à mesurer. */
+          if (getComputedStyle(c).visibility === 'hidden') continue
           if (r.width < 44 || r.height < 44) {
             sortie.push({
               texte: (c.getAttribute('aria-label') || c.textContent || '?').trim().slice(0, 34),
