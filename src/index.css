@@ -146,6 +146,9 @@ body {
  * `.champ-recherche`.
  */
 .champ-montant:focus-visible { outline: none; }
+
+/* Les cases de « Nos aliments » : leur cadre porte l'anneau (`focus-within`), pas la saisie nue qu'il contient. */
+.champ-mesure:focus-visible { outline: none; }
 .champ-recherche::-webkit-search-cancel-button {
   appearance: none;
   width: 28px;

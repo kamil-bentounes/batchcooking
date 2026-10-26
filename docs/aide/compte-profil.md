@@ -19,7 +19,7 @@ sources:
   - supabase/migrations/0051_budget_socle_corrige.sql
   - supabase/migrations/0103_budget_arrivees.sql
   - supabase/migrations/0112_budget_depart.sql
-verifie_sur: fd13da7
+verifie_sur: e4c18ef
 ---
 ## Ce que fait l’écran
 

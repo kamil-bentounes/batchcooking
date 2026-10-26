@@ -15,6 +15,9 @@ sources:
   - src/pages/AccepteAmi.tsx
   - src/pages/Dictee.tsx
   - src/lib/photo.ts
+  - src/lib/aliments/openfoodfacts.ts
+  - src/ui/aliments/LecteurDeCodes.tsx
+  - src/ui/aliments/Formulaire.tsx
   - supabase/functions/frigo/index.ts
   - supabase/functions/ticket/index.ts
   - supabase/functions/etiquette/index.ts
@@ -34,7 +37,7 @@ sources:
   - supabase/migrations/0051_budget_socle_corrige.sql
   - supabase/migrations/0097_budget_tables.sql
   - supabase/migrations/0112_budget_depart.sql
-verifie_sur: 78ffdc2
+verifie_sur: 715cb8e
 ---
 ## Ce que le foyer voit de l’autre
 
@@ -47,12 +50,14 @@ Un **foyer ami** voit les prénoms et les recettes marquées « partagée ». S�
 Ces appels partent vers un service d’IA extérieur. Voici ce qui part :
 
 - **photo du frigo** : la photo (réduite avant l’envoi, comme le ticket et l’étiquette) et le lieu ;
-- **ticket** : la photo et l’enseigne si tu l’as choisie ; **étiquette** : jusqu’à trois photos ;
+- **ticket** : la photo et l’enseigne si tu l’as choisie ; **étiquette** (« Nos aliments ») : jusqu’à trois photos, envoyées au même service de lecture que le ticket ;
 - **dictée de charges** : le texte, avec la liste type des charges (la voix est transcrite par ton clavier : aucun son n’est envoyé) ;
 - **relecture des charges** : libellés, montants, rythmes, commun ou perso, comptes (nom écrit par toi), enveloppes, date de début ; ni revenus, ni parts, ni prénoms ;
 - **recette inventée** : ton envie (300 caractères), les aliments du stock, des limites chiffrées ; jamais de prénom, de poids ni d’objectif ;
 - **import de recette** : le texte collé et tes précisions ;
 - **aide « Demande à Popote »** : ta question, la précédente avec sa réponse, et quelques pages du manuel de l’appli ; jamais tes chiffres.
+
+**Code-barres** (« Nos aliments ») : ce n’est pas un modèle de langage. Les chiffres du code partent de ton téléphone, directement vers Open Food Facts, une base publique, sans passer par Popote. Lu avec l’appareil photo, le code se lit sur le téléphone : l’image ne part pas.
 
 Aucun appel à un modèle ne lit les revenus ou les prénoms. Rien n’est enregistré sans que tu valides à l’écran. Aucun code ne garde les photos ; ce que le service extérieur en fait, le code ne le dit pas.
 

@@ -208,6 +208,17 @@ export function Settings({ va }: { va: (v: string) => void }) {
       </section>
 
       <section className="mt-12">
+        <h2 className="titre text-xl text-herbe">Nos aliments</h2>
+        <p className="mt-1 text-doux text-[15px]">
+          Votre yaourt, votre skyr, votre pain, avec les vraies valeurs de l’étiquette. La semaine les propose avant
+          les repères, en un geste.
+        </p>
+        <div className="mt-4">
+          <Bouton variante="discret" onClick={() => va('/aliments')}>Ouvrir nos aliments</Bouton>
+        </div>
+      </section>
+
+      <section className="mt-12">
         <h2 className="titre text-xl text-herbe">Tes magasins</h2>
         <p className="mt-1 text-doux text-[15px]">
           Chaque article porte son enseigne, et la liste se scinde par magasin.

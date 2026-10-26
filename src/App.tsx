@@ -31,6 +31,7 @@ import { Cuisine } from './pages/Cuisine.tsx'
 import { Dressage } from './pages/Dressage.tsx'
 import { Semaine } from './pages/Semaine.tsx'
 import { Frigo } from './pages/Frigo.tsx'
+import { Aliments } from './pages/Aliments.tsx'
 import { Bilan } from './pages/Bilan.tsx'
 import { Inventer } from './pages/Inventer.tsx'
 import { Photo } from './pages/Photo.tsx'
@@ -316,6 +317,9 @@ export default function App() {
     case '/ticket': return <Ticket retour={sortie} va={va} />
     case '/peser': return <Peser retour={sortie} />
     case '/importer': return <Importer retour={sortie} va={va} />
+
+    // Nos aliments : depuis les réglages et la feuille de choix de la semaine.
+    case '/aliments': return <Aliments va={va} />
 
     // Les réglages, hors cycle.
     case '/objectifs': return <Targets userId={moi} />

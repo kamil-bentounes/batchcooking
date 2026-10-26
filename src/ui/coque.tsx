@@ -128,7 +128,10 @@ export function Passage({ retour, retourTexte = 'Accueil', barre, children }:
         {/* `min-h-11` et la marge négative : la sortie de chaque passage du
             cycle faisait 23 px de haut, sur huit écrans à la fois. Le texte ne
             bouge pas, la cible passe à 44. */}
-        <button onClick={retour}
+        {/* `type="button"` : un `Passage` entoure parfois un `<form>` (« Nos aliments »). Sans type, ce bouton était le
+            PREMIER du formulaire, donc son bouton par défaut : Entrée dans un champ renvoyait à la liste sans rien
+            enregistrer. */}
+        <button type="button" onClick={retour}
                 className="inline-flex items-center gap-2 min-h-11 -mt-3 text-[15px]
                            text-doux hover:text-encre">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor"

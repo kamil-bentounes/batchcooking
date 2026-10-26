@@ -19,6 +19,7 @@ import { Attente, Ecran, Erreur } from '../ui/coque.tsx'
 import { Bandeau } from '../ui/semaine/Bandeau.tsx'
 import { CarteDuRepas, CarteVide } from '../ui/semaine/Carte.tsx'
 import { FeuilleDeChoix } from '../ui/semaine/FeuilleDeChoix.tsx'
+import type { NotreAliment } from '../ui/semaine/FeuilleDeChoix.tsx'
 import { EnPlus, HorsBarquette } from '../ui/semaine/EnPlus.tsx'
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
@@ -26,6 +27,8 @@ import {
 } from '../lib/donnees/barquettes.ts'
 import type { Case, Choix } from '../lib/donnees/barquettes.ts'
 import { usePrevus, useRecettesDesPlats } from '../lib/donnees/frigo.ts'
+import { useAliments } from '../lib/donnees/aliments.ts'
+import { choixDeLUnite, detailDeLUnite, ecrit, valeursDeLUnite } from '../lib/aliments/calcul.ts'
 import { groupeLesParts, lisLeJour, nomCourt } from '../lib/frigo.ts'
 import {
   MOMENTS_EN_PLUS, REPAS_CHOISIS, MOT_DU_REPAS, caseVide, cartesDuRepas, contenuDe, couleurDuPoint, joursDuBandeau,
@@ -58,6 +61,11 @@ export function Semaine({ userId, va, remplace }: {
   const lectureFrequents = useFrequents()
   const barquettes = useMemo(() => lectureBarquettes.data ?? [], [lectureBarquettes.data])
   const frequents = useMemo(() => lectureFrequents.data ?? [], [lectureFrequents.data])
+  /* Nos aliments (0124) : proposés AVANT les repères, dans la feuille et dans « en plus ». */
+  const lectureAliments = useAliments()
+  const aliments = useMemo(() => lectureAliments.data ?? [], [lectureAliments.data])
+  /* Une liste qu'on n'a pas pu lire n'est pas une liste vide : on le dit, on ne propose pas « ajouter » comme si rien n'existait. */
+  const alimentsEnPanne = !!lectureAliments.error && aliments.length === 0
   const mange = useMange()
   const choisit = useChoisirUnRepas()
   /* « Sauté » du petit déjeuner et de la collation, et sa remise : hors de la feuille, donc leur propre état. */
@@ -154,6 +162,11 @@ export function Semaine({ userId, va, remplace }: {
     saute.mutate({ jour: jourChoisi.jour, repas: moment, personnes: [userId], choix: { type: 'saute' } })
   }
 
+  /* Une unité de chacun de nos aliments : un geste, avec ses vraies valeurs. */
+  const nosAliments: NotreAliment[] = aliments.map(a => ({
+    id: a.id, label: a.label, remplace_repere: a.remplace_repere, detail: detailDeLUnite(a), reste: `${ecrit(valeursDeLUnite(a).kcal)} kcal`, choix: choixDeLUnite(a),
+  }))
+
   const dejaMange = feuille
     ? duJour(jourChoisi.jour, feuille.repas).filter(c => c.state === 'mange').map(c => c.user_profile_id)
     : []
@@ -181,6 +194,11 @@ export function Semaine({ userId, va, remplace }: {
           )}
         </div>
         <Erreur de={erreurCases ?? erreurPrevus ?? mange.error ?? saute.error ?? remet.error} />
+        {alimentsEnPanne && (
+          <p role="alert" className="mt-4 text-[15px] text-groseille">
+            Je n’ai pas pu lire nos aliments : les repères sont proposés à leur place.
+          </p>
+        )}
 
         <div className="mt-3.5 flex flex-col gap-3">
           {REPAS_CHOISIS.map(m => {
@@ -204,7 +222,7 @@ export function Semaine({ userId, va, remplace }: {
                                     surChange={() => ouvre(m, pourDeLaCarte(carte, sansChoix, membres.length), carte.cle)}
                                     surMange={surMange} enCours={mange.isPending}
                                     enPlus={mienne && c.genre === 'plat'
-                                      ? <EnPlus cas={laMienne!} frequents={frequents} /> : null} />
+                                      ? <EnPlus cas={laMienne!} frequents={frequents} nosAliments={aliments} /> : null} />
                     )
                   })}
                   {(cartes.length === 0 || sansChoix.length > 0) && (
@@ -237,11 +255,11 @@ export function Semaine({ userId, va, remplace }: {
                     </button>
                   )}
                 </div>
-                <EnPlus cas={c} frequents={frequents} />
+                <EnPlus cas={c} frequents={frequents} nosAliments={aliments} />
               </div>
             )
           })}
-          <HorsBarquette key={jourChoisi.jour} jour={jourChoisi.jour} userId={userId} frequents={frequents}
+          <HorsBarquette key={jourChoisi.jour} jour={jourChoisi.jour} userId={userId} frequents={frequents} nosAliments={aliments}
                          dejaLa={mesCasesDuJour as unknown as Case[]}
                          surSaute={sauteLe} enCours={saute.isPending} />
         </section>
@@ -259,6 +277,8 @@ export function Semaine({ userId, va, remplace }: {
           frequents: { enCours: lectureFrequents.isPending, erreur: lectureFrequents.error },
           prevus: { enCours: lesPrevus === undefined && !erreurPrevus, erreur: erreurPrevus },
         }}
+        nosAliments={nosAliments} alimentsEnPanne={alimentsEnPanne}
+        versNosAliments={() => feuille && va(`/aliments?depuis=semaine&jour=${jourChoisi.jour}&repas=${feuille.repas}`)}
         enCours={choisit.isPending} erreur={choisit.error} surChoix={choisi} />
     </Ecran>
   )

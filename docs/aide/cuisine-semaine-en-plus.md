@@ -6,12 +6,14 @@ questions:
   - Comment noter mon petit déjeuner ?
   - Comment noter une collation ?
   - Comment ajouter un yaourt en plus de mon plat ?
+  - Pourquoi mon yaourt n’a pas les mêmes calories que le repère « Yaourt » ?
   - Comment effacer ce que j’ai noté en plus ?
   - Les calories d’un jour sans rien coché comptent-elles pour zéro ?
 sources:
   - src/pages/Semaine.tsx
   - src/ui/semaine/EnPlus.tsx
   - src/lib/reperes.ts
+  - src/lib/aliments/ordre.ts
   - src/lib/donnees/barquettes.ts
   - src/lib/semaine.ts
   - supabase/migrations/0125_semaine_corrections.sql
@@ -25,8 +27,9 @@ verifie_sur: 7a0673e
 
 - Sous **« Autres moments »**, « Mangé sans barquette ? » propose **« Petit déjeuner »** et **« Collation »** (ceux que tu n’as pas déjà notés ce jour-là). Touche-en un, puis choisis un repère ou écris la tienne.
 - Sur la carte d’un plat, **« + ce que j’ai mangé en plus »** ouvre trois façons d’écrire :
-  - « Ce que tu reprends souvent » : tes habitudes ;
-  - « Un repère, pas une pesée » : des repères en un geste, selon le repas — « Restaurant » 900 kcal, « Sandwich » 550, « Pizza » 850, « Yaourt » 60. Rien ne les distingue ensuite d’une saisie ;
+  - « Nos aliments » : ceux du foyer, avec leurs vraies valeurs — un geste = une unité, un pot (voir « cuisine-nos-aliments ») ;
+  - « Ce que vous reprenez souvent » : les habitudes du foyer ;
+  - « Un repère, pas une pesée » : des repères en un geste, selon le repas — « Restaurant » 900 kcal, « Sandwich » 550, « Pizza » 850, « Yaourt » 60. Un repère n’apparaît plus quand un de nos aliments le remplace : il le nomme (champ « Remplace le repère » : « Yaourt dessert protéiné » peut remplacer « Yaourt ») ou porte exactement son nom. Rien ne les distingue ensuite d’une saisie ;
   - « Autre chose », ses kcal et ses g de protéines, puis « Ajouter ».
 - **« retirer »** efface un en-plus. Retirer le dernier d’un petit déjeuner ou d’une collation efface aussi ce moment : tu peux le noter de nouveau.
 - **« Je saute le petit déjeuner »** (ou **« Je saute la collation »**) dit que tu ne manges rien à ce moment ; **« annuler »** le remet.
