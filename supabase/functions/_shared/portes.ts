@@ -24,6 +24,7 @@ export const PORTES = {
   semaine:         { chemin: '/semaine',           bouton: 'Ouvrir la semaine' },
   frigo:           { chemin: '/frigo',             bouton: 'Ouvrir le frigo' },
   bilan:           { chemin: '/bilan',             bouton: 'Ouvrir le bilan' },
+  aliments:        { chemin: '/aliments',          bouton: 'Ouvrir nos aliments' },
   choisir:         { chemin: '/choisir',           bouton: 'Ouvrir le choix des recettes' },
   magasin:         { chemin: '/magasin',           bouton: 'Ouvrir le magasin' },
   plan:            { chemin: '/plan',              bouton: 'Ouvrir le plan' },
