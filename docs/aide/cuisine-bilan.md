@@ -18,7 +18,7 @@ sources:
   - supabase/migrations/0013_cycle.sql
   - src/pages/Choisir.tsx
   - src/lib/donnees/catalogue.ts
-verifie_sur: 02dd873
+verifie_sur: 7a0673e
 ---
 ## Ce que fait l’appli
 
@@ -43,7 +43,7 @@ Deux graphiques par personne, « Calories » et « Protéines », jamais sur la 
 - Calories = **plafond** : « N jours sous la cible sur les M renseignés ».
 - Protéines = **plancher** : « N jours au-dessus de la cible sur les M renseignés ».
 - Un **jour non renseigné est un trait gris, pas un zéro**, hors de la moyenne.
-- Un jour est renseigné dès qu’un repas est « mangé » ou « sauté », ou qu’un extra est noté.
+- Un jour est renseigné dès qu’un repas est « mangé » ou « sauté », ou qu’un extra est noté. Un repère choisi dans « La semaine » (« Autre chose ») ne compte que quand son repas est mangé, ou que son jour est passé.
 - Les cibles viennent de tes objectifs. Sans jour renseigné : « Aucun repas renseigné sur la période. »
 
 ## Clore la semaine

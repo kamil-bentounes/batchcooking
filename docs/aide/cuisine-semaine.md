@@ -21,8 +21,9 @@ sources:
   - src/lib/reperes.ts
   - src/lib/donnees/barquettes.ts
   - supabase/migrations/0123_choisir_un_repas.sql
+  - supabase/migrations/0125_semaine_corrections.sql
   - src/lib/peremption.ts
-verifie_sur: f692955
+verifie_sur: 7a0673e
 ---
 ## Ce que fait l’appli
 
@@ -41,9 +42,9 @@ Choisir un plat pose une barquette libre dans la case de **chaque** personne vis
 ## Changer, manger
 
 - La carte pleine dit le plat, « Du frigo, pour vous deux » ou « Du congélateur, pour Kamil », et propose **« Changer »**, y compris le jour même.
-- Quand tu changes, l’ancienne barquette est lâchée, et l’appli le dit : « Les lasagnes retournent au frigo, libres pour un autre jour. » ou « Les wraps restent au congélateur. »
-- **« Je l’ai mangé »** apparaît aujourd’hui sur ta carte : la barquette est marquée mangée et quitte le frigo. Un repas que quelqu’un a mangé ne se change plus pour cette personne.
-- Un plat **congelé** a un bandeau bleu. Aujourd’hui : « C’est pour aujourd’hui : décongèle les 2 wraps au micro-ondes. » Un autre jour : « Pense à sortir les 2 wraps la veille au soir. » Demain, une fois l’heure venue (vingt-quatre heures avant le repas), la même phrase que la fiche du plat dans « Frigo ». Il n’existe pas aujourd’hui de rappel par mail.
+- Quand tu changes, l’ancienne barquette est lâchée, et l’appli le dit : « Les 2 wraps restent au congélateur. » ; pour un plat à plusieurs mots, « Les 2 barquettes de lasagnes au saumon-poireaux retournent au frigo, libres pour un autre jour. » (« La barquette de … retourne au frigo » s’il n’y en a qu’une).
+- **« Je l’ai mangé »** apparaît aujourd’hui sur ta carte, pour un plat comme pour « Autre chose » : la barquette est marquée mangée et quitte le frigo. Un repas que quelqu’un a mangé ne se change plus pour cette personne.
+- Un plat **congelé** a un bandeau bleu. Aujourd’hui : « C’est pour aujourd’hui : décongèle les 2 wraps au micro-ondes. » Un autre jour : « Pense à sortir les 2 wraps la veille au soir. » (« la barquette de … » pour un plat à plusieurs mots). Demain, une fois l’heure venue (vingt-quatre heures avant le repas), la même phrase que la fiche du plat dans « Frigo ». Il n’existe pas aujourd’hui de rappel par mail.
 
 Sur l’accueil, « Changer » ouvre « La semaine » sur aujourd’hui avec la feuille du bon repas déjà ouverte.
 
@@ -53,3 +54,5 @@ Le petit déjeuner, la collation et ce qu’on mange en plus d’un plat se note
 
 - « On saute ce repas » est une réponse : le jour est renseigné, sans rien compter. **Un repas jamais choisi n’est pas un repas à zéro** : c’est un trou, hors des moyennes du bilan.
 - Choisir autre chose pour un repas remplace le plat : ses en-plus s’en vont avec lui.
+- Un repas « Autre chose » (restaurant, sandwich) ne compte dans tes calories qu’une fois « Je l’ai mangé » touché, ou son jour passé.
+- La péremption et la part de chacun sont dites sur la carte : voir « cuisine-semaine-peremption ».

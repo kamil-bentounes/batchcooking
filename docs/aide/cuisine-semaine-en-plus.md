@@ -14,7 +14,8 @@ sources:
   - src/lib/reperes.ts
   - src/lib/donnees/barquettes.ts
   - src/lib/semaine.ts
-verifie_sur: f692955
+  - supabase/migrations/0125_semaine_corrections.sql
+verifie_sur: 7a0673e
 ---
 ## Ce que fait l’appli
 
@@ -27,11 +28,12 @@ verifie_sur: f692955
   - « Ce que tu reprends souvent » : tes habitudes ;
   - « Un repère, pas une pesée » : des repères en un geste, selon le repas — « Restaurant » 900 kcal, « Sandwich » 550, « Pizza » 850, « Yaourt » 60. Rien ne les distingue ensuite d’une saisie ;
   - « Autre chose », ses kcal et ses g de protéines, puis « Ajouter ».
-- **« retirer »** efface un en-plus.
+- **« retirer »** efface un en-plus. Retirer le dernier d’un petit déjeuner ou d’une collation efface aussi ce moment : tu peux le noter de nouveau.
+- **« Je saute le petit déjeuner »** (ou **« Je saute la collation »**) dit que tu ne manges rien à ce moment ; **« annuler »** le remet.
 
 ## Les règles
 
-- Une barquette ne compte dans les calories du jour que si le repas est **mangé**. Un en-plus compte **toujours**.
+- Une barquette ne compte dans les calories du jour que si le repas est **mangé**. Un en-plus noté après coup compte **toujours** ; un repère choisi dans la feuille d’un repas (« Autre chose ») ne compte qu’une fois « Je l’ai mangé » touché, ou son jour passé.
 - **Un jour sans rien coché ni noté n’est pas un jour à zéro** : c’est un trou, hors des moyennes du bilan. Sur l’accueil : « N repas pas encore renseignés ».
 - « On saute ce repas » (dans la feuille d’un repas) est une réponse : le jour est renseigné, avec zéro pour ce repas.
 

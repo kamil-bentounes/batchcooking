@@ -27,7 +27,7 @@ sources:
   - supabase/migrations/0092_la_photo_et_les_gestes.sql
   - supabase/migrations/0117_cuisine_corrections.sql
   - supabase/migrations/0121_photo_des_plats.sql
-verifie_sur: fd13da7
+verifie_sur: 7a0673e
 ---
 ## Ce que fait l’appli
 
@@ -36,7 +36,7 @@ verifie_sur: fd13da7
 Fermé, il parle sans qu’on y touche :
 
 - **L’afficheur** du congélateur : « Ce soir » et ton dîner prévu, ou « Rien de prévu ce soir ». S’ils ne se lisent pas, l’afficheur dit « Indisponible ».
-- **L’aimant** du frigo, un seul : des barquettes congelées à sortir, posées sur ce soir ou sur demain quand l’heure de les sortir est venue (« Sors les 2 burgers : c’est ce soir », « … : c’est demain soir ») ; sinon des barquettes du frigo périmées (« 2 pizzas à jeter ») ou qui périment sous 72 heures sans qu’aucun repas les réclame (« 2 pizzas à prévoir avant jeudi ») ; sinon rien. À urgence égale, le nom du plat décide.
+- **L’aimant** du frigo, un seul : des barquettes congelées à sortir, posées sur ce soir ou sur demain quand l’heure de les sortir est venue (« Sors les 2 wraps : c’est ce soir », « Sors la barquette de burger de feuilles de riz : c’est demain soir » — un libellé d’un seul mot se met au pluriel, sinon l’aimant dit « barquettes de … ») ; sinon des barquettes du frigo périmées (« 2 barquettes de pizza vietnamienne à jeter ») ou qui périment sous 72 heures sans qu’aucun repas les réclame (« 2 barquettes de pizza vietnamienne à prévoir avant jeudi ») ; sinon rien. À urgence égale, le nom du plat décide.
 - **La photo** du plat de demain, s’il en a une.
 
 Touche une porte : elle pivote, puis l’intérieur prend l’écran. Il est alors seul actif : Échap ou « Fermer la porte » le ferme.

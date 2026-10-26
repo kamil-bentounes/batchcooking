@@ -17,7 +17,7 @@ sources:
   - src/lib/peremption.ts
   - supabase/migrations/0047_peremption_donnee.sql
   - supabase/migrations/0122_frigo_corrections.sql
-verifie_sur: fd13da7
+verifie_sur: 7a0673e
 ---
 ## Ce que fait l’appli
 
@@ -32,5 +32,5 @@ Les gestes de la fiche d’un plat (« cuisine-fiche-plat » dit ce qu’elle af
 ## Au congélateur
 
 - **« Je les sors du congélateur »** sort les parts posées aujourd’hui ; celles de demain seulement à partir de l’heure du repas moins 24 heures (petit déjeuner 8 h, déjeuner 12 h, collation 16 h, dîner 19 h), car une part décongelée ne tient que 24 heures. Sinon, la fiche demande combien.
-- Une note le dit : « C’est pour ce soir : sors-les maintenant… » ou « C’est pour demain soir : sors-les à partir de 19 h… ».
+- Une note le dit : « C’est pour ce soir : sors-les maintenant… » ou « C’est pour demain soir : sors-les à partir de 19 h… » (« sors-la », « passe-la » quand une seule barquette est posée sur ce repas).
 - « Changer le repas » mène à « La semaine ». « Jeter » et « Retirer du congélateur » font comme au frigo.
