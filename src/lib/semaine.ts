@@ -43,6 +43,9 @@ export type CaseProposee = {
  * Une proposition de répartition : chacun ses barquettes, un repas par jour,
  * les plus pressées d'abord. L'écran Semaine la laisse déplacer — c'est une
  * proposition, jamais une décision.
+ *
+ * Le dressage ne l'appelle plus depuis « On range » (26/10/2026) : c'est l'hôte qui
+ * choisit ce qu'on mange chaque jour. Elle reste pour ses bancs, et pour le chantier 3.
  */
 export function repartitionAuto(
   barquettes: BarquetteRangeable[],

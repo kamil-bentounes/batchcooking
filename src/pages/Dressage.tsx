@@ -7,32 +7,27 @@
  *
  * Deux objectifs, un seul plat : ce qui diffère, c'est la portion. Et si le plat
  * n'est pas assez protéiné pour l'un des deux, on ne grossit pas sa part — on
- * ajoute du skyr, parce qu'une part plus grosse donne plus de TOUT.
+ * ajoute du skyr, parce qu'une part plus grosse donne plus de TOUT. Qui n'a pas
+ * encore fixé d'objectifs reçoit quand même ses parts, au poids moyen des autres.
+ *
+ * Deux étapes sur le même écran : on dresse (ici), puis « On range » (`Ranger`) —
+ * où l'hôte choisit ce qui reste au frigo et ce qui part au congélateur.
  */
 import { useMemo, useState } from 'react'
-import { Attente, Chiffre, Erreur, Passage, Vide } from '../ui/coque.tsx'
-import { useChangeEtat, useCycle } from '../lib/donnees/cycle.ts'
+import { Attente, Chiffre, Passage, Vide } from '../ui/coque.tsx'
+import { useCycle } from '../lib/donnees/cycle.ts'
 import { useFoyer, aDesObjectifs, objectifDe, phraseSansObjectifs, prenomDe } from '../lib/donnees/foyer.ts'
 import { useRecettesMesurees } from '../lib/donnees/recettes.ts'
 import type { RecetteMesuree } from '../lib/donnees/recettes.ts'
-import { useDresse, useDistribue, repartitionAuto, jour } from '../lib/donnees/barquettes.ts'
-import type { ADresser } from '../lib/donnees/barquettes.ts'
 import { PART_DU_JOUR, repartit } from '../lib/nutrition/portions.ts'
 import type { Repartition } from '../lib/nutrition/portions.ts'
-import { supabase, ou } from '../lib/supabase.ts'
-
-/** Au-delà de quatre jours, une barquette ne tient pas au frigo (D40). */
-const JOURS_AU_FRAIS = 4
+import { Ranger } from './Ranger.tsx'
 
 export function Dressage({ va, retour, userId }: { va: (v: string) => void; retour: () => void; userId?: string }) {
   const { data: cycle } = useCycle()
   const { data: foyer } = useFoyer()
   const { data: recettes = [], isPending } = useRecettesMesurees(cycle?.id)
-  const dresse = useDresse()
-  const distribue = useDistribue()
-  const change = useChangeEtat()
-  const [enCours, setEnCours] = useState(false)
-  const [erreur, setErreur] = useState<unknown>(null)
+  const [etape, setEtape] = useState<'dresser' | 'ranger'>('dresser')
 
   // `foyer?.membres` garde son identité entre deux rendus tant que la requête
   // ne change pas ; un `?? []` en créerait un nouveau à chaque fois et le memo
@@ -42,6 +37,7 @@ export function Dressage({ va, retour, userId }: { va: (v: string) => void; reto
   /**
    * La découpe, recette par recette. Les parts d'une personne se répartissent au
    * prorata de ses objectifs ; le nombre de parts vient du choix du mercredi.
+   * Sans objectifs (0 kcal), `repartit` lui donne la part moyenne des autres.
    */
   const decoupes = useMemo(() => recettes.map(r => {
     const gens = membres ?? []
@@ -57,77 +53,6 @@ export function Dressage({ va, retour, userId }: { va: (v: string) => void; reto
     return { recette: r, repartition: repartit(r.plat, demandes) }
   }), [recettes, membres])
 
-  async function valide() {
-    if (!cycle) return
-    setEnCours(true)
-    setErreur(null)
-    try {
-      // Le lieu suit la planification (D40), et il se décide sur TOUTE la
-      // session, pas recette par recette : ce que chacun mangera dans les quatre
-      // jours reste au frigo, le reste part au congélateur. Compter par recette
-      // mettrait tout au frais et ferait périmer la moitié des barquettes.
-      const posees = new Map<string, number>()
-      const lots: ADresser[] = []
-      for (const { recette, repartition } of decoupes) {
-        for (const p of repartition.parts) {
-          for (let k = 0; k < p.nombre; k++) {
-            const rang = posees.get(p.userId) ?? 0
-            posees.set(p.userId, rang + 1)
-            lots.push({
-              recipeId: recette.recipeId,
-              label: recette.titre,
-              nombre: 1,
-              grammes: p.grammes,
-              kcal: p.kcal,
-              proteinG: p.proteinG,
-              fiberG: p.fiberG,
-              carbG: p.carbG,
-              fatG: p.fatG,
-              margeKcal: partDeLaMarge(recette, p.grammes, 'kcal'),
-              margeProteinG: partDeLaMarge(recette, p.grammes, 'proteinG'),
-              forUserId: p.userId,
-              location: rang < JOURS_AU_FRAIS ? 'frigo' : 'congelateur',
-            })
-          }
-        }
-      }
-      if (lots.length === 0) throw new Error('Rien à dresser.')
-      /*
-       * ⚠️ REPRENABLE.
-       *
-       * Quatre écritures en série, sans transaction. Si la distribution échoue
-       * — il suffit d'une case déjà mangée dans les jours visés — le bouton
-       * reste actif, l'erreur s'affiche, et la personne réappuie. Sans ce test,
-       * `dresse` réinsérait la TOTALITÉ des lots : dix barquettes en devenaient
-       * vingt, et la distribution s'étalait sur le double de jours.
-       *
-       * Le dressage n'a lieu qu'une fois par cycle. S'il a déjà eu lieu, on
-       * reprend à l'étape suivante.
-       */
-      const { count: deja } = await supabase.from('portion')
-        .select('id', { count: 'exact', head: true }).eq('cycle_id', cycle.id)
-      if (!deja) await dresse.mutateAsync({ cycleId: cycle.id, lots })
-
-      // La distribution suit immédiatement : sans elle, personne ne sait ce
-      // qu'on mange ce soir (D39). Elle reste déplaçable sur l'écran Semaine.
-      const fraiches = ou(await supabase.from('portion').select('*')
-        .eq('cycle_id', cycle.id).in('state', ['au_frais', 'decongelee']))
-      const demain = new Date()
-      demain.setDate(demain.getDate() + 1)
-      await distribue.mutateAsync({
-        cycleId: cycle.id,
-        cases: repartitionAuto(fraiches, membres ?? [], demain),
-      })
-
-      await change.mutateAsync({ id: cycle.id, vers: 'semaine' })
-      va('/semaine')
-    } catch (e) {
-      setErreur(e)
-    } finally {
-      setEnCours(false)
-    }
-  }
-
   if (!cycle) return <Sombre><Vide titre="Aucune session" /></Sombre>
   if (isPending) return <Sombre><Attente /></Sombre>
   if (recettes.length === 0) {
@@ -138,13 +63,16 @@ export function Dressage({ va, retour, userId }: { va: (v: string) => void; reto
     )
   }
 
+  if (etape === 'ranger' && foyer) {
+    return <Ranger cycle={cycle} decoupes={decoupes} membres={foyer.membres}
+                   retour={() => setEtape('dresser')} va={va} />
+  }
+
   const total = decoupes.reduce(
     (s, d) => s + d.repartition.parts.reduce((n, p) => n + p.nombre, 0), 0)
-  /* Quelqu'un sans objectifs n'a aucune part à dresser : il était omis de la liste, sans un mot. */
+  /* Quelqu'un sans objectifs a ses parts, au poids moyen des autres : on le dit, on ne le tait pas. */
   const sansObjectifs = (membres ?? []).filter(m => !aDesObjectifs(m))
   const phraseSans = phraseSansObjectifs(sansObjectifs.map(m => prenomDe(m.display_name)))
-  const jourDemain = new Date()
-  jourDemain.setDate(jourDemain.getDate() + 1)
 
   return (
     <Sombre>
@@ -179,15 +107,13 @@ export function Dressage({ va, retour, userId }: { va: (v: string) => void; reto
       </div>
 
       <div className="mt-11">
-        <button onClick={valide} disabled={enCours}
+        <button onClick={() => setEtape('ranger')} disabled={total === 0}
                 className="w-full h-[58px] rounded-[18px] bg-safran text-encre
                            text-[17px] font-semibold disabled:opacity-60">
-          {enCours ? 'Je range…' : 'C’est dressé, ranger'}
+          C’est dressé
         </button>
-        <Erreur de={erreur} />
         <p className="mt-3.5 text-[13px] opacity-55 text-center leading-relaxed">
-          Les barquettes partent au frigo puis au congélateur, et se distribuent
-          sur la semaine à partir de {jour(jourDemain)}. Tout reste déplaçable.
+          Ensuite, tu choisis ce qui reste au frigo et ce qui part au congélateur.
         </p>
       </div>
     </Sombre>
@@ -214,7 +140,7 @@ function Lot({ recette, repartition, nomDe }: {
           <div key={p.userId} className="flex items-baseline gap-3">
             <Chiffre valeur={`${p.nombre} × ${p.grammes} g`} taille={22} />
             <span className="text-[14px] opacity-65 grow">
-              pour {nomDe(p.userId)}
+              pour {nomDe(p.userId)}{p.sansObjectifs ? ' · parts égales' : ''}
             </span>
             <span className="text-[14px] opacity-80 tabular-nums">
               {p.kcal} kcal · {p.proteinG} g
@@ -242,13 +168,6 @@ function repartitionParPersonne(parts: number, personnes: number): number[] {
   const base = Math.floor(parts / personnes)
   const reste = parts % personnes
   return Array.from({ length: personnes }, (_, i) => base + (i < reste ? 1 : 0))
-}
-
-/** La marge du plat entier ramenée à une part. Nulle quand tout était pesé. */
-function partDeLaMarge(r: RecetteMesuree, grammes: number, cle: 'kcal' | 'proteinG'): number | null {
-  if (r.plat.grammes <= 0) return null
-  const m = r.agregat.marge[cle] * (grammes / r.plat.grammes)
-  return m < 1 ? null : Math.round(m * 10) / 10
 }
 
 function Sombre({ children }: { children: React.ReactNode }) {
