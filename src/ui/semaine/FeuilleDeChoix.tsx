@@ -4,8 +4,9 @@
  *  · « Pour » : vous deux, ou chaque personne du foyer ;
  *  · « Au frigo » : ce qui presse d'abord, avec combien de barquettes sont libres ;
  *  · « Au congélateur » : à sortir la veille (la même heure que le frigo) ;
- *  · « Autre chose » : nos aliments (chantier 4 : l'endroit est prévu), ce qu'on reprend souvent, les repères du
- *    repas, et « On saute ce repas ».
+ *  · « Autre chose » : nos aliments (avec leurs vraies valeurs : un geste = une unité), ce qu'on reprend souvent, les
+ *    repères du repas — nos aliments d'abord, et un repère qu'un de nos aliments remplace (« Yaourt ») ne s'y glisse
+ *    plus —, et « On saute ce repas ».
  * Choisir un plat pose une barquette libre dans la case de CHAQUE personne visée : c'est la base qui l'écrit,
  * d'un bloc (`choisir_un_repas`, 0123).
  */
@@ -21,14 +22,18 @@ import {
 import type { Cible, ChoixDuFrigo, Membre } from '../../lib/choix.ts'
 import { pourLeFoyer } from '../../lib/ranger.ts'
 import { reperesDe } from '../../lib/reperes.ts'
+import { sansLesRemplaces } from '../../lib/aliments/ordre.ts'
+import { Pot } from '../aliments/Pictos.tsx'
 import type { Choix } from '../../lib/donnees/barquettes.ts'
 import type { Ligne } from '../../lib/supabase.ts'
 
 type Frequent = Ligne<'frequent_food'>
 
-/** Un aliment du foyer proposé en « Autre chose » (chantier 4 : « Nos aliments »). Vide tant qu'ils n'existent pas. */
+/** Un aliment du foyer proposé en « Autre chose » (« Nos aliments ») : une unité, avec ses vraies valeurs. */
 export type NotreAliment = {
   id: string; label: string; detail: string
+  /** « 95 kcal », à droite de la ligne. */
+  reste?: string
   choix: Extract<Choix, { type: 'repere' }>
 }
 
@@ -93,6 +98,8 @@ type Proprietes = {
   photoDe: (recipeId: string | null) => string | null
   frequents: Frequent[]
   nosAliments?: NotreAliment[]
+  /** Ouvre l'écran « Nos aliments » (ajouter ou modifier) ; la feuille se referme avec la semaine. */
+  versNosAliments?: () => void
   enCours: boolean
   erreur: unknown
   surChoix: (choix: Choix, personnes: string[]) => void
@@ -112,7 +119,7 @@ export function FeuilleDeChoix({ ouverte, fermer, ...p }: Proprietes & { ouverte
 
 function Contenu({
   titre, repas, jour, membres, pourInitial, dejaMange, groupes, prevus, maintenant, photoDe, frequents,
-  nosAliments = [], enCours, erreur, surChoix,
+  nosAliments = [], versNosAliments, enCours, erreur, surChoix,
 }: Proprietes) {
   const [pour, setPour] = useState<'tous' | string>(pourInitial)
   const peutManger = membres.filter(m => !dejaMange.includes(m.id))
@@ -130,7 +137,9 @@ function Contenu({
     }))
   const frigo = ordonneLesChoix(avecLibres('frigo'))
   const congelo = ordonneLesChoix(avecLibres('congelateur'))
-  const reperes = reperesDe(repas)
+  /* Nos aliments d'abord ; un repère (ou une habitude) qu'un de nos aliments remplace n'est plus proposé. */
+  const reperes = sansLesRemplaces(reperesDe(repas), nosAliments)
+  const habitudes = sansLesRemplaces(frequents, nosAliments)
 
   const plat = (g: Groupe<Part>): Choix =>
     ({ type: 'plat', recipe_id: g.recipeId, label: g.label, location: g.location, state: g.state })
@@ -199,13 +208,20 @@ function Contenu({
       </Section>
 
       <Section titre="Autre chose" aide="sans barquette">
-        {/* Nos aliments (chantier 4) : AVANT les repères, un geste = une unité. L'endroit est là. */}
+        {/* Nos aliments : AVANT les repères, un geste = une unité, avec les vraies valeurs. */}
         {nosAliments.map(a => (
           <Rang key={a.id} nom={a.label} detail={a.detail} encre={ENCRE_DOUCE} surChoix={() => fait(a.choix)}
-                desactive={personnes.length === 0}
-                pastille={<Vignette fond="var(--color-surface)" />} />
+                desactive={personnes.length === 0} reste={a.reste}
+                pastille={<span aria-hidden="true" className="grid h-[30px] w-9 shrink-0 place-items-center rounded-lg bg-sable"><Pot largeur={16} /></span>} />
         ))}
-        {frequents.slice(0, 6).map(f => (
+        {versNosAliments && (
+          <button type="button" onClick={versNosAliments}
+                  className="flex min-h-11 w-full items-center gap-2 rounded-[14px] px-3 text-left text-[14px] font-semibold text-herbe">
+            <span aria-hidden="true" className="text-[18px] leading-none">+</span>
+            {nosAliments.length === 0 ? 'Ajouter un aliment à nous, avec ses vraies valeurs' : 'Ajouter ou modifier nos aliments'}
+          </button>
+        )}
+        {habitudes.slice(0, 6).map(f => (
           <Rang key={f.id} nom={f.label} detail="ce que tu reprends souvent" encre={ENCRE_DOUCE}
                 desactive={personnes.length === 0}
                 reste={`${Math.round(Number(f.kcal))} kcal`}

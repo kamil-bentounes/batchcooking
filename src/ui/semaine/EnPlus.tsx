@@ -11,6 +11,10 @@ import type { Case, Repas } from '../../lib/donnees/barquettes.ts'
 import type { Ligne as LigneBase } from '../../lib/supabase.ts'
 import { reperesDe } from '../../lib/reperes.ts'
 import { MOMENTS_EN_PLUS } from '../../lib/choix.ts'
+import type { Aliment } from '../../lib/donnees/aliments.ts'
+import { ecrit, extraDeLUnite, valeursDeLUnite } from '../../lib/aliments/calcul.ts'
+import { sansLesRemplaces } from '../../lib/aliments/ordre.ts'
+import { Pot } from '../aliments/Pictos.tsx'
 
 type Frequent = LigneBase<'frequent_food'>
 
@@ -23,8 +27,11 @@ type Frequent = LigneBase<'frequent_food'>
  * des repères en UN GESTE, et ce que le foyer remange sans cesse à portée de
  * pouce. Approximatif et tenu vaut mieux que précis et abandonné.
  */
-export function EnPlus({ cas, frequents, deployeParDefaut = false, surAjoute }:
-  { cas: Case; frequents: Frequent[]; deployeParDefaut?: boolean
+export function EnPlus({ cas, frequents, nosAliments = [], deployeParDefaut = false, surAjoute }:
+  { cas: Case; frequents: Frequent[]
+    /** Nos aliments (migration 0124) : AVANT les repères, un geste = une unité, avec leurs vraies valeurs. */
+    nosAliments?: Aliment[]
+    deployeParDefaut?: boolean
     surAjoute?: () => void }) {
   const ajoute = useAjouteExtra({ onSuccess: surAjoute })
   const supprime = useSupprimeExtra()
@@ -34,7 +41,10 @@ export function EnPlus({ cas, frequents, deployeParDefaut = false, surAjoute }:
   }
   const [libre, setLibre] = useState({ label: '', kcal: '', prot: '' })
 
-  const reperes = reperesDe(cas.meal)
+  /* Un repère (ou une habitude) qu'un de nos aliments remplace — « Yaourt » pour « Yaourt dessert protéiné » — ne
+     se glisse plus à côté : c'est le nôtre, avec ses vrais chiffres. */
+  const reperes = sansLesRemplaces(reperesDe(cas.meal), nosAliments)
+  const habitudes = sansLesRemplaces(frequents, nosAliments)
   const k = Number(libre.kcal.replace(',', '.'))
   const pr = Number(libre.prot.replace(',', '.'))
   const saisi = libre.label.trim() !== '' && Number.isFinite(k) && k >= 0
@@ -47,7 +57,7 @@ export function EnPlus({ cas, frequents, deployeParDefaut = false, surAjoute }:
             <li key={e.id} className="flex items-center gap-2 text-[13px] text-doux">
               <span className="grow">
                 {e.label} · {Math.round(Number(e.kcal))} kcal ·
-                {' '}{Math.round(Number(e.protein_g))} g de protéines
+                {' '}{ecrit(Number(e.protein_g))} g de protéines
               </span>
               <button onClick={() => supprime.mutate(e.id)}
                       aria-label={`Retirer ${e.label}`}
@@ -64,11 +74,27 @@ export function EnPlus({ cas, frequents, deployeParDefaut = false, surAjoute }:
         </button>
       ) : (
         <div className="space-y-3">
-          {frequents.length > 0 && (
+          {nosAliments.length > 0 && (
+            <div>
+              <p className="text-[13px] text-doux mb-1.5">Nos aliments</p>
+              <div className="flex gap-2 flex-wrap">
+                {nosAliments.map(a => (
+                  <button key={a.id} onClick={() => ajoute.mutate({ cas: laCase, ...extraDeLUnite(a) })}
+                          className="min-h-11 px-3.5 rounded-full bg-sable text-[14px] inline-flex items-center gap-2">
+                    <Pot largeur={13} />
+                    <span>{a.label}</span>
+                    <span className="text-doux">{ecrit(valeursDeLUnite(a).kcal)} kcal</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {habitudes.length > 0 && (
             <div>
               <p className="text-[13px] text-doux mb-1.5">Ce que tu reprends souvent</p>
               <div className="flex gap-2 flex-wrap">
-                {frequents.slice(0, 6).map(f => (
+                {habitudes.slice(0, 6).map(f => (
                   <button key={f.id} onClick={() => ajoute.mutate({
                     cas: laCase, label: f.label, grammes: Number(f.grams),
                     kcal: Number(f.kcal), proteinG: Number(f.protein_g),
@@ -154,10 +180,11 @@ export function EnPlus({ cas, frequents, deployeParDefaut = false, surAjoute }:
  * case — et sans case, il n'y avait nulle part où l'écrire. La case se crée au
  * moment où l'on a quelque chose à y mettre.
  */
-export function HorsBarquette({ jour: j, userId, frequents, dejaLa }: {
+export function HorsBarquette({ jour: j, userId, frequents, nosAliments, dejaLa }: {
   jour: string
   userId: string
   frequents: Frequent[]
+  nosAliments?: Aliment[]
   dejaLa: Case[]
 }) {
   const [moment, setMoment] = useState<Repas | null>(null)
@@ -187,7 +214,7 @@ export function HorsBarquette({ jour: j, userId, frequents, dejaLa }: {
               annuler
             </button>
           </div>
-          <EnPlus frequents={frequents} deployeParDefaut
+          <EnPlus frequents={frequents} nosAliments={nosAliments} deployeParDefaut
                   surAjoute={() => setMoment(null)}
                   cas={{
                     // Une case seulement AFFICHÉE : elle n'existe en base que
