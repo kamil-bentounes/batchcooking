@@ -103,16 +103,16 @@ const MOT_REPAS: Record<string, string> = {
   petit_dejeuner: 'matin', dejeuner: 'midi', diner: 'soir', collation: 'goûter',
 }
 const JOUR_SEMAINE = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.']
-const JOUR_ENTIER = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi']
+export const JOUR_ENTIER = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi']
 
 /** « 2026-10-27 » lu en heure locale (jamais `new Date('2026-10-27')`, qui est minuit UTC). */
-function lisLeJour(j: string): Date {
+export function lisLeJour(j: string): Date {
   const [a, m, d] = j.split('-').map(Number)
   return new Date(a, m - 1, d)
 }
 
 /** Nombre de jours de calendrier entre aujourd'hui et `j` (négatif : passé). */
-function ecartEnJours(j: string, maintenant: Date): number {
+export function ecartEnJours(j: string, maintenant: Date): number {
   const a = lisLeJour(j)
   const b = lisLeJour(jour(maintenant))
   return Math.round((a.getTime() - b.getTime()) / 86_400_000)
@@ -151,7 +151,7 @@ export function prevusDe(g: Groupe, prevus: Prevu[], maintenant?: Date): Prevu[]
     .sort((a, b) => a.day.localeCompare(b.day) || ordreDuRepas(a.meal) - ordreDuRepas(b.meal) || a.id.localeCompare(b.id))
 }
 
-const ordreDuRepas = (m: string) => ['petit_dejeuner', 'dejeuner', 'collation', 'diner'].indexOf(m)
+export const ordreDuRepas = (m: string) => ['petit_dejeuner', 'dejeuner', 'collation', 'diner'].indexOf(m)
 
 /**
  * Les barquettes du groupe qu'aucun repas ne réclame. Avec `maintenant`, les réclamations d'avant aujourd'hui
@@ -167,7 +167,7 @@ export function partsLibres<P extends Part>(g: Groupe<P>, prevus: Prevu[], maint
 /** L'heure où l'on se met à table : de quoi dire si une part sera encore bonne, et quand la sortir. */
 const HEURE_DU_REPAS: Record<string, number> = { petit_dejeuner: 8, dejeuner: 12, collation: 16, diner: 19 }
 
-function momentDuRepas(j: string, repas: string): Date {
+export function momentDuRepas(j: string, repas: string): Date {
   const d = lisLeJour(j)
   d.setHours(HEURE_DU_REPAS[repas] ?? 12, 0, 0, 0)
   return d
@@ -183,7 +183,7 @@ export function sortableDes(j: string, repas: string): Date {
 }
 
 /** « ce soir », « demain soir », sinon « mar. soir » : le repas comme on le dit pour sortir une part. */
-function repasPourSortir(j: string, repas: string, maintenant: Date): string {
+export function repasPourSortir(j: string, repas: string, maintenant: Date): string {
   return ecartEnJours(j, maintenant) === 1 ? `demain ${MOT_REPAS[repas] ?? repas}` : repasEnMots(j, repas, maintenant)
 }
 
@@ -403,7 +403,7 @@ export function magnet(parts: Part[], prevus: Prevu[] | null, maintenant: Date):
 }
 
 /** « ce soir », « demain », ou le jour de la semaine : « avant jeudi ». */
-function avant(fin: Date, maintenant: Date): string {
+export function avant(fin: Date, maintenant: Date): string {
   const e = ecartEnJours(jour(fin), maintenant)
   if (e <= 0) return 'ce soir'
   if (e === 1) return 'demain'
@@ -427,8 +427,16 @@ export function noteDeLaFiche(g: Groupe, prevus: Prevu[], maintenant: Date): str
   if (mes.some(r => ecartEnJours(r.day, maintenant) === 0)) return NOTE_DU_SOIR
   const demain = mes.find(r => ecartEnJours(r.day, maintenant) === 1)
   if (!demain) return ''
-  const des = sortableDes(demain.day, demain.meal)
-  const pour = repasPourSortir(demain.day, demain.meal, maintenant)
+  return noteDeSortie(demain.day, demain.meal, maintenant)
+}
+
+/**
+ * La phrase du repas de DEMAIN : sors-les maintenant si l'heure y est, sinon à partir de quand. Le frigo (la fiche
+ * d'un plat) et la semaine (le bandeau bleu d'un repas) la disent de la même façon, avec les mêmes mots.
+ */
+export function noteDeSortie(j: string, repas: string, maintenant: Date): string {
+  const des = sortableDes(j, repas)
+  const pour = repasPourSortir(j, repas, maintenant)
   return des.getTime() <= maintenant.getTime()
     ? `C’est pour ${pour} : sors-les maintenant, ${DANS_LES_24_H}.`
     : `C’est pour ${pour} : sors-les à partir de ${des.getHours()} h, ${DANS_LES_24_H}.`
