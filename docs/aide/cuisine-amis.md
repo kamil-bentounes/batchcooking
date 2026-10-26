@@ -18,7 +18,7 @@ sources:
   - supabase/migrations/0035_amis.sql
   - supabase/migrations/0037_cuisiner_ensemble.sql
   - supabase/migrations/0038_convive_frontiere.sql
-verifie_sur: e4c18ef
+verifie_sur: 715cb8e
 ---
 ## Ce que fait l’appli
 
