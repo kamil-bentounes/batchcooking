@@ -200,11 +200,11 @@ test.describe('le cycle, d’un bout à l’autre', () => {
 
     /* La seconde étape : « On range ». Les barquettes sont déjà là dans ce foyer : l'écran les montre
        telles qu'elles sont écrites (lecture seule), et « Terminer le rangement » retire du stock, passe
-       à la semaine, et mène au frigo. */
+       à la semaine, et mène à la semaine (on y choisit ses repas). */
     await expect(page.getByRole('heading', { name: 'On range' })).toBeVisible({ timeout: 20_000 })
     await prend(page, '08a-on-range')
     await page.getByRole('button', { name: 'Terminer le rangement' }).click()
-    await expect(page).toHaveURL(/\/frigo$/, { timeout: 20_000 })
+    await expect(page).toHaveURL(/\/semaine$/, { timeout: 20_000 })
     await prend(page, '08b-dressage-fait')
 
     /* ── 5 · La semaine ────────────────────────────────────────────────── */
@@ -221,7 +221,8 @@ test.describe('le cycle, d’un bout à l’autre', () => {
     const { data: libre } = await db.from('portion').select('id')
       .eq('cycle_id', foyer.cycleId).neq('state', 'mange').limit(1).maybeSingle()
     if (libre) {
-      const aujourdhui = new Date().toISOString().slice(0, 10)
+      const d = new Date()
+      const aujourdhui = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       const { error } = await db.from('meal_slot').insert({
         household_id: foyer.householdId, cycle_id: foyer.cycleId,
         user_profile_id: foyer.userId, day: aujourdhui, meal: 'dejeuner',
@@ -233,29 +234,14 @@ test.describe('le cycle, d’un bout à l’autre', () => {
       await prend(page, '09c-semaine-repas-place')
     }
 
-    /* ⚠️ « Je l'ai mangé » est DANS un panneau replié : il faut toucher le repas
-       pour l'ouvrir. Une première version cherchait un bouton « mangée » qui
-       n'existe pas, sautait en silence, et la couverture de cet écran ne
-       bougeait pas d'un point. */
-    const filtres = page.getByRole('group', { name: 'Filtrer' })
-    if (await filtres.count()) {
-      const parPersonne = filtres.getByRole('button')
-      const combien = await parPersonne.count()
-      if (combien > 1) {
-        await parPersonne.nth(1).click()
-        await page.waitForTimeout(500)
-        await prend(page, '09a-semaine-filtree')
-        await parPersonne.first().click()
-      }
-    }
-
-    /* Le premier repas de la liste, ouvert. */
-    const repas = page.locator('button', { hasText: /Dahl|Poulet/i }).first()
-    if (await repas.count()) {
-      await repas.click()
-      await page.waitForTimeout(600)
-      await prend(page, '09b-semaine-repas-ouvert')
-    }
+    /* Le repas posé a sa carte : « Changer » ouvre la feuille de choix (le jour d'aujourd'hui). */
+    const changer = page.getByRole('button', { name: /^Changer/ }).first()
+    await expect(changer).toBeVisible({ timeout: 10_000 })
+    await changer.click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.waitForTimeout(600)
+    await prend(page, '09b-semaine-feuille-de-choix')
+    await page.keyboard.press('Escape')
 
     const mange = page.getByRole('button', { name: 'Je l’ai mangé' }).first()
     if (await mange.count()) {

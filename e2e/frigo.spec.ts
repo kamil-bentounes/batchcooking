@@ -501,7 +501,7 @@ test('l’accueil montre le petit frigo, les parts, le repas de ce soir et demai
   /* « La semaine » mène à la semaine. */
   await page.goto('/cuisine-accueil')
   await page.getByRole('region', { name: 'Demain' }).getByRole('button', { name: 'La semaine' }).click()
-  await expect(page).toHaveURL(/\/semaine$/)
+  await expect(page).toHaveURL(/\/semaine\?jour=/)
 })
 
 test('rien ne dépasse la largeur de l’écran, et « prefers-reduced-motion » ne bouge rien', async ({ browser }) => {

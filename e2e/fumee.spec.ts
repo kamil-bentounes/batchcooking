@@ -153,15 +153,13 @@ test.describe('ce que les écrans doivent VRAIMENT montrer', () => {
     // s'inscrire même sur un jour où rien n'est prévu.
     await expect(page.getByText(/mangé sans barquette/i).first())
       .toBeVisible({ timeout: 10_000 })
-    // ⚠️ Dans une `section` : les puces de filtre du haut portent les mêmes
-    //    noms, et `.first()` tomberait dessus.
-    await page.locator('section')
-      .getByRole('button', { name: 'Déjeuner', exact: true }).first().click()
-    await expect(page.getByText(/un repère, pas une pesée/i)).toBeVisible()
-    await page.getByRole('button', { name: /^Restaurant/ }).first().click()
+    // La semaine se choisit : « + Choisir le midi » ouvre la feuille, « Autre chose » y propose les repères.
+    await page.getByRole('button', { name: '+ Choisir le midi' }).click()
+    await expect(page.getByText(/un repère, pas une pesée/i).first()).toBeVisible()
+    await page.getByRole('dialog').getByRole('button', { name: /^Restaurant/ }).first().click()
     // La case n'existait pas : elle se crée au moment où l'on y met quelque
     // chose, et le repas apparaît dans la journée.
-    await expect(page.getByText('+ Restaurant').first())
+    await expect(page.getByRole('group', { name: 'Midi : Restaurant' }))
       .toBeVisible({ timeout: 10_000 })
   })
 

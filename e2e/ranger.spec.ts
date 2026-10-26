@@ -200,8 +200,8 @@ test('on dresse pour tout le foyer, on range, et la base garde ce qu’on a choi
 
   /* ── On range ───────────────────────────────────────────────────────────── */
   await page.getByRole('button', { name: 'Ranger les 12 barquettes' }).click()
-  // « Ranger » mène au frigo.
-  await expect(page).toHaveURL(/\/frigo$/, { timeout: 20_000 })
+  // « Ranger » mène à la semaine : c'est là qu'on choisit ce qu'on mange chaque jour.
+  await expect(page).toHaveURL(/\/semaine$/, { timeout: 20_000 })
 
   /* ── La base relue ──────────────────────────────────────────────────────── */
   const { data: parts } = await db.from('portion').select('*').eq('cycle_id', foyer.cycleId)
@@ -290,7 +290,7 @@ test.describe('reprise : ce que la base a déjà écrit', () => {
     await capture(page, '06-on-range-deja-fait')
 
     await page.getByRole('button', { name: 'Terminer le rangement' }).click()
-    await expect(page).toHaveURL(/\/frigo$/, { timeout: 20_000 })
+    await expect(page).toHaveURL(/\/semaine$/, { timeout: 20_000 })
 
     const { data: parts } = await db.from('portion').select('location, prepared_at').eq('cycle_id', second.cycleId)
     expect(parts, 'les barquettes ont été recréées').toHaveLength(4)
@@ -353,7 +353,7 @@ test.describe('la lecture de ce que la session prend', () => {
       .toBeVisible({ timeout: 40_000 })
     await expect(page.getByText('Reste au frigo :', { exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: /^Ranger / }).click()
-    await expect(page).toHaveURL(/\/frigo$/, { timeout: 20_000 })
+    await expect(page).toHaveURL(/\/semaine$/, { timeout: 20_000 })
 
     const { data: stock } = await db.from('stock_item').select('quantity').eq('household_id', tiers.householdId).eq('label', 'Farine de blé')
     expect(Number(stock![0].quantity), 'le stock a été retiré sans que l’hôte l’ait vu').toBe(2000)

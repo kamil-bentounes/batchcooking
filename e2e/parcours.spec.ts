@@ -294,7 +294,7 @@ test.describe('on clique comme on clique vraiment', () => {
        jour sont des boutons nommés « Midi », « Soir »… sous « Mangé sans
        barquette ? ». Si aucun n'est là, le test doit échouer, pas se taire. */
     await expect(page.getByText(/mangé sans barquette/i).first()).toBeVisible({ timeout: 15_000 })
-    const moment = page.getByRole('button', { name: /^(midi|soir|matin|petit)/i }).first()
+    const moment = page.getByRole('button', { name: /^(\+ Choisir le (midi|soir)|petit|collation)/i }).first()
     await expect(moment).toBeVisible()
     await moment.click()
     await capture(page, 'clic-06-semaine-repas-libre')
