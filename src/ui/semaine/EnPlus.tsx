@@ -10,11 +10,9 @@ import { NOM_REPAS, useAjouteExtra, useSupprimeExtra } from '../../lib/donnees/b
 import type { Case, Repas } from '../../lib/donnees/barquettes.ts'
 import type { Ligne as LigneBase } from '../../lib/supabase.ts'
 import { reperesDe } from '../../lib/reperes.ts'
+import { MOMENTS_EN_PLUS } from '../../lib/choix.ts'
 
 type Frequent = LigneBase<'frequent_food'>
-
-/** Les moments que « La semaine » ne choisit pas : on les note après coup. */
-export const MOMENTS_EN_PLUS: Repas[] = ['petit_dejeuner', 'collation']
 
 /**
  * Ce qu'on a mangé EN PLUS de la barquette (D26, D34, D38).

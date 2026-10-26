@@ -26,6 +26,9 @@ export const MOT_DU_REPAS: Record<RepasChoisi, { titre: string; minuscule: strin
   diner: { titre: 'Soir', minuscule: 'soir' },
 }
 
+/** Les moments que « La semaine » ne choisit pas : on les note après coup (le petit déjeuner, la collation). */
+export const MOMENTS_EN_PLUS: ('petit_dejeuner' | 'collation')[] = ['petit_dejeuner', 'collation']
+
 export const estUnRepasChoisi = (m: string | null | undefined): m is RepasChoisi =>
   m === 'dejeuner' || m === 'diner'
 

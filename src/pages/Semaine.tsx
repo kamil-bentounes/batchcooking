@@ -19,7 +19,7 @@ import { Attente, Ecran, Erreur } from '../ui/coque.tsx'
 import { Bandeau } from '../ui/semaine/Bandeau.tsx'
 import { CarteDuRepas, CarteVide } from '../ui/semaine/Carte.tsx'
 import { FeuilleDeChoix } from '../ui/semaine/FeuilleDeChoix.tsx'
-import { EnPlus, HorsBarquette, MOMENTS_EN_PLUS } from '../ui/semaine/EnPlus.tsx'
+import { EnPlus, HorsBarquette } from '../ui/semaine/EnPlus.tsx'
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
   NOM_REPAS, jour, useBarquettes, useChoisirUnRepas, useFrequents, useMange, useSemaine,
@@ -28,7 +28,7 @@ import type { Choix } from '../lib/donnees/barquettes.ts'
 import { usePrevus, useRecettesDesPlats } from '../lib/donnees/frigo.ts'
 import { groupeLesParts, nomCourt } from '../lib/frigo.ts'
 import {
-  REPAS_CHOISIS, MOT_DU_REPAS, cartesDuRepas, contenuDe, couleurDuPoint, joursDuBandeau, lisLAdresse,
+  MOMENTS_EN_PLUS, REPAS_CHOISIS, MOT_DU_REPAS, cartesDuRepas, contenuDe, couleurDuPoint, joursDuBandeau, lisLAdresse,
   messageDeLiberation, pourDit, titreDeLaFeuille,
 } from '../lib/choix.ts'
 import type { CaseLue, Carte, PointDuJour, RepasChoisi } from '../lib/choix.ts'
@@ -60,7 +60,8 @@ export function Semaine({ userId, va, remplace }: {
   /** La feuille ouverte : le repas, et pour qui « Pour » commence. */
   const [feuille, setFeuille] = useState<{ repas: RepasChoisi; pour: 'tous' | string } | null>(null)
   const [message, setMessage] = useState('')
-  const [rendreLeFocus, setRendreLeFocus] = useState<RepasChoisi | null>(null)
+  /* Le repas dont le bouton doit reprendre le focus une fois la feuille refermée (une ref : pas de rendu en plus). */
+  const rendreLeFocus = useRef<RepasChoisi | null>(null)
 
   const membres = useMemo(
     () => (foyer?.membres ?? []).map(m => ({ id: m.id, prenom: prenomDe(m.display_name) })), [foyer])
@@ -81,10 +82,10 @@ export function Semaine({ userId, va, remplace }: {
   /* Le focus revient au bouton du repas qu'on vient de choisir ou de laisser : celui qui a ouvert la feuille a
      peut-être changé (« + Choisir » est devenu une carte). */
   useEffect(() => {
-    if (!rendreLeFocus || feuille) return
-    document.querySelector<HTMLElement>(`[data-repas="${rendreLeFocus}"] [data-ouvre]`)?.focus()
-    setRendreLeFocus(null)
-  }, [rendreLeFocus, feuille, cases])
+    if (!rendreLeFocus.current || feuille) return
+    document.querySelector<HTMLElement>(`[data-repas="${rendreLeFocus.current}"] [data-ouvre]`)?.focus()
+    rendreLeFocus.current = null
+  }, [feuille, cases])
 
   const nettoieLAdresse = () => {
     if (!window.location.search) return
@@ -116,7 +117,7 @@ export function Semaine({ userId, va, remplace }: {
   const ferme = () => {
     const repas = feuille?.repas ?? null
     setFeuille(null)
-    setRendreLeFocus(repas)
+    rendreLeFocus.current = repas
     nettoieLAdresse()
   }
 
