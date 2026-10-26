@@ -4,7 +4,7 @@
  * « La semaine » choisit le midi et le soir ; ce qui reste — le petit déjeuner, la collation, le yaourt de
  * « en plus » — s'écrit ici, en un geste, comme avant.
  */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Erreur } from '../coque.tsx'
 import { NOM_REPAS, useAjouteExtra, useSupprimeExtra } from '../../lib/donnees/barquettes.ts'
 import type { Case, Repas } from '../../lib/donnees/barquettes.ts'
@@ -34,6 +34,14 @@ export function EnPlus({ cas, frequents, nosAliments = [], deployeParDefaut = fa
     deployeParDefaut?: boolean
     surAjoute?: () => void }) {
   const ajoute = useAjouteExtra({ onSuccess: surAjoute })
+  /* Un geste à la fois : un double toucher sur une pastille (nos aliments, une habitude, un repère) écrivait deux fois le
+     repas. Une ref, pas `ajoute.isPending` : le second toucher arrive avant que le rendu n'ait eu lieu. */
+  const enVol = useRef(false)
+  const geste = (e: Parameters<typeof ajoute.mutate>[0]) => {
+    if (enVol.current) return
+    enVol.current = true
+    ajoute.mutate(e, { onSettled: () => { enVol.current = false } })
+  }
   const supprime = useSupprimeExtra()
   const [ouvert, setOuvert] = useState(deployeParDefaut)
   const laCase = {
@@ -41,8 +49,8 @@ export function EnPlus({ cas, frequents, nosAliments = [], deployeParDefaut = fa
   }
   const [libre, setLibre] = useState({ label: '', kcal: '', prot: '' })
 
-  /* Un repère (ou une habitude) qu'un de nos aliments remplace — « Yaourt » pour « Yaourt dessert protéiné » — ne
-     se glisse plus à côté : c'est le nôtre, avec ses vrais chiffres. */
+  /* Un repère (ou une habitude) qu'un de nos aliments remplace — nommé dans son formulaire (« Remplace le repère »),
+     ou de même nom — ne se glisse plus à côté : c'est le nôtre, avec ses vrais chiffres. */
   const reperes = sansLesRemplaces(reperesDe(cas.meal), nosAliments)
   const habitudes = sansLesRemplaces(frequents, nosAliments)
   const k = Number(libre.kcal.replace(',', '.'))
@@ -79,8 +87,9 @@ export function EnPlus({ cas, frequents, nosAliments = [], deployeParDefaut = fa
               <p className="text-[13px] text-doux mb-1.5">Nos aliments</p>
               <div className="flex gap-2 flex-wrap">
                 {nosAliments.map(a => (
-                  <button key={a.id} onClick={() => ajoute.mutate({ cas: laCase, ...extraDeLUnite(a) })}
-                          className="min-h-11 px-3.5 rounded-full bg-sable text-[14px] inline-flex items-center gap-2">
+                  <button key={a.id} onClick={() => geste({ cas: laCase, ...extraDeLUnite(a) })}
+                          aria-disabled={ajoute.isPending || undefined}
+                          className="min-h-11 px-3.5 rounded-full bg-sable text-[14px] inline-flex items-center gap-2 aria-disabled:opacity-60">
                     <Pot largeur={13} />
                     <span>{a.label}</span>
                     <span className="text-doux">{ecrit(valeursDeLUnite(a).kcal)} kcal</span>
@@ -92,15 +101,16 @@ export function EnPlus({ cas, frequents, nosAliments = [], deployeParDefaut = fa
 
           {habitudes.length > 0 && (
             <div>
-              <p className="text-[13px] text-doux mb-1.5">Ce que tu reprends souvent</p>
+              <p className="text-[13px] text-doux mb-1.5">Ce que vous reprenez souvent</p>
               <div className="flex gap-2 flex-wrap">
                 {habitudes.slice(0, 6).map(f => (
-                  <button key={f.id} onClick={() => ajoute.mutate({
+                  <button key={f.id} onClick={() => geste({
                     cas: laCase, label: f.label, grammes: Number(f.grams),
                     kcal: Number(f.kcal), proteinG: Number(f.protein_g),
                     foodId: f.food_id,
                   })}
-                          className="min-h-11 px-3.5 rounded-full bg-surface text-[14px]">
+                          aria-disabled={ajoute.isPending || undefined}
+                          className="min-h-11 px-3.5 rounded-full bg-surface text-[14px] aria-disabled:opacity-60">
                     {f.label}
                   </button>
                 ))}
@@ -114,10 +124,11 @@ export function EnPlus({ cas, frequents, nosAliments = [], deployeParDefaut = fa
             </p>
             <div className="flex gap-2 flex-wrap">
               {reperes.map(r => (
-                <button key={r.label} onClick={() => ajoute.mutate({
+                <button key={r.label} onClick={() => geste({
                   cas: laCase, label: r.label, kcal: r.kcal, proteinG: r.proteinG,
                 })}
-                        className="min-h-11 px-3.5 rounded-full bg-brume/50 text-[14px]">
+                        aria-disabled={ajoute.isPending || undefined}
+                        className="min-h-11 px-3.5 rounded-full bg-brume/50 text-[14px] aria-disabled:opacity-60">
                   {r.label}
                   <span className="text-doux"> {r.kcal}</span>
                 </button>

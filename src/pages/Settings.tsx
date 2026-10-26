@@ -210,7 +210,7 @@ export function Settings({ va }: { va: (v: string) => void }) {
       <section className="mt-12">
         <h2 className="titre text-xl text-herbe">Nos aliments</h2>
         <p className="mt-1 text-doux text-[15px]">
-          Ton yaourt, ton skyr, ton pain, avec les vraies valeurs de l’étiquette. La semaine les propose avant
+          Votre yaourt, votre skyr, votre pain, avec les vraies valeurs de l’étiquette. La semaine les propose avant
           les repères, en un geste.
         </p>
         <div className="mt-4">

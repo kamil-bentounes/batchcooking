@@ -57,7 +57,9 @@ export function Semaine({ userId, va, remplace }: {
   const { data: barquettes = [] } = useBarquettes()
   const { data: frequents = [] } = useFrequents()
   /* Nos aliments (0124) : proposés AVANT les repères, dans la feuille et dans « en plus ». */
-  const { data: aliments = [] } = useAliments()
+  const { data: aliments = [], error: erreurAliments } = useAliments()
+  /* Une liste qu'on n'a pas pu lire n'est pas une liste vide : on le dit, on ne propose pas « ajouter » comme si rien n'existait. */
+  const alimentsEnPanne = !!erreurAliments && aliments.length === 0
   const mange = useMange()
   const choisit = useChoisirUnRepas()
 
@@ -137,7 +139,7 @@ export function Semaine({ userId, va, remplace }: {
 
   /* Une unité de chacun de nos aliments : un geste, avec ses vraies valeurs. */
   const nosAliments: NotreAliment[] = aliments.map(a => ({
-    id: a.id, label: a.label, detail: detailDeLUnite(a), reste: `${ecrit(valeursDeLUnite(a).kcal)} kcal`, choix: choixDeLUnite(a),
+    id: a.id, label: a.label, remplace_repere: a.remplace_repere, detail: detailDeLUnite(a), reste: `${ecrit(valeursDeLUnite(a).kcal)} kcal`, choix: choixDeLUnite(a),
   }))
 
   const dejaMange = feuille
@@ -165,6 +167,11 @@ export function Semaine({ userId, va, remplace }: {
           )}
         </div>
         <Erreur de={erreurCases ?? erreurPrevus ?? mange.error} />
+        {alimentsEnPanne && (
+          <p role="alert" className="mt-4 text-[15px] text-groseille">
+            Je n’ai pas pu lire nos aliments : les repères sont proposés à leur place.
+          </p>
+        )}
 
         <div className="mt-3.5 flex flex-col gap-3">
           {REPAS_CHOISIS.map(m => {
@@ -224,7 +231,7 @@ export function Semaine({ userId, va, remplace }: {
         repas={feuille?.repas ?? 'diner'} jour={jourChoisi.jour} membres={membres}
         pourInitial={feuille?.pour ?? 'tous'} dejaMange={dejaMange}
         groupes={groupes} prevus={lesPrevus ?? null} maintenant={now} photoDe={photoDe} frequents={frequents}
-        nosAliments={nosAliments}
+        nosAliments={nosAliments} alimentsEnPanne={alimentsEnPanne}
         versNosAliments={() => feuille && va(`/aliments?depuis=semaine&jour=${jourChoisi.jour}&repas=${feuille.repas}`)}
         enCours={choisit.isPending} erreur={choisit.error} surChoix={choisi} />
     </Ecran>

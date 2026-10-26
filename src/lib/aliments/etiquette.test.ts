@@ -3,7 +3,7 @@
  * entrerait dans le bilan sans que personne s'en aperçoive.
  */
 import { describe, expect, it } from 'vitest'
-import { champsDeLEtiquette, phraseDeLErreur } from './etiquette.ts'
+import { DELAI_ETIQUETTE_MS, champsDeLEtiquette, phraseDeLErreur, phraseDeLaPanne } from './etiquette.ts'
 import type { LectureEtiquette } from './etiquette.ts'
 
 const lue = (o: Partial<LectureEtiquette> = {}): LectureEtiquette => ({
@@ -28,10 +28,27 @@ describe('une étiquette nette', () => {
 })
 
 describe('le poids d’une unité', () => {
-  it('un paquet de 4 pots, 500 g net : 125 g l’unité, et on le dit', () => {
-    const { champs, notes } = champsDeLEtiquette(lue({ poids_g: 500, parts: 4 }))
+  it('un paquet de 4 pots, 500 g net : 125 g l’unité, et le calcul se montre', () => {
+    const { champs, calculDuPoids } = champsDeLEtiquette(lue({ poids_g: 500, parts: 4 }))
     expect(champs.poids).toBe('125')
-    expect(notes.join(' ')).toMatch(/4 portions de 500 g en tout : je compte 125 g l’unité/)
+    expect(calculDuPoids).toBe('500 g en 4 portions = 125 g')
+  })
+
+  it('pas de division, pas de calcul à montrer', () => {
+    expect(champsDeLEtiquette(lue({ poids_g: 125, parts: null })).calculDuPoids).toBeNull()
+    expect(champsDeLEtiquette(lue({ poids_g: 140, parts: 1 })).calculDuPoids).toBeNull()
+  })
+
+  it('un petit poids garde sa décimale : 18 g en 4 portions font 4,5 g, pas 5 ni 4', () => {
+    const { champs, calculDuPoids } = champsDeLEtiquette(lue({ poids_g: 18, parts: 4 }))
+    expect(champs.poids).toBe('4,5')
+    expect(calculDuPoids).toBe('18 g en 4 portions = 4,5 g')
+  })
+
+  it('sous 20 g (une décimale) comme au-dessus : 45 g en 4 portions font 11,3 g ; 90 g en 4 font 22,5 g', () => {
+    expect(champsDeLEtiquette(lue({ poids_g: 45, parts: 4 })).champs.poids).toBe('11,3')
+    expect(champsDeLEtiquette(lue({ poids_g: 90, parts: 4 })).champs.poids).toBe('22,5')
+    expect(champsDeLEtiquette(lue({ poids_g: 10, parts: 3 })).champs.poids).toBe('3,3')
   })
 
   it('« 1 portion » annoncée : le poids net est celui de l’unité', () => {
@@ -68,6 +85,17 @@ describe('ce qu’on ne remplit pas', () => {
     expect(notes.join(' ')).toMatch(/protéines ne sont pas lisibles/)
   })
 
+  it('des glucides, lipides ou fibres illisibles : vides, et une phrase le dit', () => {
+    const { champs, notes } = champsDeLEtiquette(lue({ glucides_100g: null, fibres_100g: null }))
+    expect(champs.glucides).toBeUndefined()
+    expect(champs.fibres).toBeUndefined()
+    expect(champs.lipides).toBe('1,4')
+    expect(notes).toContain('Je n’ai pas pu lire les glucides et les fibres : je les laisse vides (comptés pour 0 g). Complète-les d’après l’étiquette.')
+    expect(champsDeLEtiquette(lue({ lipides_100g: null })).notes.join(' ')).toMatch(/pas pu lire les lipides/)
+    expect(champsDeLEtiquette(lue({ glucides_100g: null, lipides_100g: null, fibres_100g: null })).notes.join(' '))
+      .toMatch(/les glucides, les lipides et les fibres/)
+  })
+
   it('un nutriment hors bornes (150 g pour 100 g) n’est pas repris', () => {
     expect(champsDeLEtiquette(lue({ glucides_100g: 150 })).champs.glucides).toBeUndefined()
     expect(champsDeLEtiquette(lue({ lipides_100g: -3 })).champs.lipides).toBeUndefined()
@@ -100,5 +128,22 @@ describe('les pannes de la fonction', () => {
   it('un message qui n’est pas du JSON reste tel quel ; rien du tout : une phrase par défaut', () => {
     expect(phraseDeLErreur(new Error('Pas de réseau.'))).toBe('Pas de réseau.')
     expect(phraseDeLErreur(undefined)).toBe('La lecture a échoué.')
+  })
+})
+
+describe('une lecture trop longue', () => {
+  const reseau = Object.assign(new Error('Pas de réseau : vérifie ta connexion, puis réessaie.'), { code: 'reseau' })
+
+  it('le délai est de 30 s', () => {
+    expect(DELAI_ETIQUETTE_MS).toBe(30_000)
+  })
+
+  it('un appel abandonné au bout du délai dit « trop de temps », pas « pas de réseau »', () => {
+    expect(phraseDeLaPanne(reseau, 30_005)).toBe('La lecture prend trop de temps (plus de 30 s). Réessaie, ou remplis à la main.')
+  })
+
+  it('une vraie panne de réseau (tout de suite) garde sa phrase ; un refus de la fonction aussi', () => {
+    expect(phraseDeLaPanne(reseau, 120)).toBe('Pas de réseau : vérifie ta connexion, puis réessaie.')
+    expect(phraseDeLaPanne(new Error('{"erreur":"Quota atteint : 40 étiquettes par mois."}'), 31_000)).toBe('Quota atteint : 40 étiquettes par mois.')
   })
 })

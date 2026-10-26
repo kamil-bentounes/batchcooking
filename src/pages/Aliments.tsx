@@ -72,7 +72,8 @@ export function Aliments({ va }: { va: (v: string) => void }) {
       <div className="mt-4"><Principal type="button" onClick={() => { setMessage(''); setEdition('nouveau') }}>Ajouter un aliment</Principal></div>
       <Erreur de={error} />
 
-      {isPending ? <Attente /> : aliments.length === 0 ? (
+      {/* Une liste qu'on n'a pas pu lire n'est pas une liste vide : sous l'erreur, pas de « Rien pour l'instant ». */}
+      {isPending ? <Attente /> : error && aliments.length === 0 ? null : aliments.length === 0 ? (
         <div className="mt-8 flex flex-col items-center text-center">
           <Pot largeur={44} />
           <p className="titre mt-4 text-[24px] font-semibold">Rien pour l’instant</p>

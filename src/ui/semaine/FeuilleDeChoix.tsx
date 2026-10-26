@@ -32,6 +32,8 @@ type Frequent = Ligne<'frequent_food'>
 /** Un aliment du foyer proposé en « Autre chose » (« Nos aliments ») : une unité, avec ses vraies valeurs. */
 export type NotreAliment = {
   id: string; label: string; detail: string
+  /** Le repère que cet aliment remplace (choisi dans le formulaire), s'il en remplace un. */
+  remplace_repere?: string | null
   /** « 95 kcal », à droite de la ligne. */
   reste?: string
   choix: Extract<Choix, { type: 'repere' }>
@@ -98,6 +100,8 @@ type Proprietes = {
   photoDe: (recipeId: string | null) => string | null
   frequents: Frequent[]
   nosAliments?: NotreAliment[]
+  /** Nos aliments n'ont pas pu être lus : ce n'est pas « il n'y en a pas ». */
+  alimentsEnPanne?: boolean
   /** Ouvre l'écran « Nos aliments » (ajouter ou modifier) ; la feuille se referme avec la semaine. */
   versNosAliments?: () => void
   enCours: boolean
@@ -119,7 +123,7 @@ export function FeuilleDeChoix({ ouverte, fermer, ...p }: Proprietes & { ouverte
 
 function Contenu({
   titre, repas, jour, membres, pourInitial, dejaMange, groupes, prevus, maintenant, photoDe, frequents,
-  nosAliments = [], versNosAliments, enCours, erreur, surChoix,
+  nosAliments = [], alimentsEnPanne = false, versNosAliments, enCours, erreur, surChoix,
 }: Proprietes) {
   const [pour, setPour] = useState<'tous' | string>(pourInitial)
   const peutManger = membres.filter(m => !dejaMange.includes(m.id))
@@ -208,6 +212,11 @@ function Contenu({
       </Section>
 
       <Section titre="Autre chose" aide="sans barquette">
+        {alimentsEnPanne && (
+          <p role="alert" className="text-[13px] leading-[1.4] text-groseille">
+            Je n’ai pas pu lire nos aliments : les repères sont proposés à leur place.
+          </p>
+        )}
         {/* Nos aliments : AVANT les repères, un geste = une unité, avec les vraies valeurs. */}
         {nosAliments.map(a => (
           <Rang key={a.id} nom={a.label} detail={a.detail} encre={ENCRE_DOUCE} surChoix={() => fait(a.choix)}
@@ -218,11 +227,11 @@ function Contenu({
           <button type="button" onClick={versNosAliments}
                   className="flex min-h-11 w-full items-center gap-2 rounded-[14px] px-3 text-left text-[14px] font-semibold text-herbe">
             <span aria-hidden="true" className="text-[18px] leading-none">+</span>
-            {nosAliments.length === 0 ? 'Ajouter un aliment à nous, avec ses vraies valeurs' : 'Ajouter ou modifier nos aliments'}
+            {nosAliments.length === 0 && !alimentsEnPanne ? 'Ajouter un aliment à nous, avec ses vraies valeurs' : 'Ajouter ou modifier nos aliments'}
           </button>
         )}
         {habitudes.slice(0, 6).map(f => (
-          <Rang key={f.id} nom={f.label} detail="ce que tu reprends souvent" encre={ENCRE_DOUCE}
+          <Rang key={f.id} nom={f.label} detail="ce que vous reprenez souvent" encre={ENCRE_DOUCE}
                 desactive={personnes.length === 0}
                 reste={`${Math.round(Number(f.kcal))} kcal`}
                 surChoix={() => fait({

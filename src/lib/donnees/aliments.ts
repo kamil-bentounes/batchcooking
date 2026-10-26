@@ -35,12 +35,13 @@ async function ecrit<T>(f: () => Promise<T>): Promise<T> {
 export function useEnregistreAliment() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, valeurs }: { id?: string; valeurs: Valeurs }): Promise<Aliment> => ecrit(async () => {
-      if (id) return ou(await supabase.from('aliment').update(valeurs).eq('id', id).select().single())
-      const foyer = ou(await supabase.rpc('current_household'))
+    mutationFn: async ({ id, valeurs }: { id?: string; valeurs: Valeurs }): Promise<Aliment> => {
+      if (id) return ecrit(async () => ou(await supabase.from('aliment').update(valeurs).eq('id', id).select().single()))
+      const foyer = await ecrit(async () => ou(await supabase.rpc('current_household')))
+      /* Nos propres phrases (« Aucun foyer. ») sont déjà en français : elles ne passent pas par la traduction des contraintes. */
       if (!foyer) throw new Error('Aucun foyer.')
-      return ou(await supabase.from('aliment').insert({ ...valeurs, household_id: foyer }).select().single())
-    }),
+      return ecrit(async () => ou(await supabase.from('aliment').insert({ ...valeurs, household_id: foyer }).select().single()))
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: CLE }),
   })
 }

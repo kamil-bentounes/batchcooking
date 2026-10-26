@@ -7,6 +7,7 @@
  * d'y mettre un chiffre douteux, car un chiffre inventé entrerait dans le bilan sans que personne s'en aperçoive.
  */
 import { ecrit } from './calcul.ts'
+import { phraseDesVides } from './absents.ts'
 
 export type LectureEtiquette = {
   nom: string | null
@@ -37,9 +38,13 @@ const entre = (v: number | null, max: number): v is number => v !== null && Numb
 
 /**
  * Remplit ce qui est sûr, dit ce qui ne l'est pas. `notes` : une phrase par doute, dans l'ordre où l'on vérifie.
+ * `calculDuPoids` : « 500 g en 4 portions = 125 g », quand le poids de l'unité est le poids net divisé par les portions
+ * (l'écran le montre sous le champ, qui reste modifiable).
  */
-export function champsDeLEtiquette(l: LectureEtiquette): { champs: ChampsLus; notes: string[] } {
-  if (!l.lisible) return { champs: {}, notes: ['Je n’ai rien pu lire sur cette photo. Reprends-la plus près, ou remplis à la main.'] }
+export function champsDeLEtiquette(l: LectureEtiquette): { champs: ChampsLus; notes: string[]; calculDuPoids: string | null } {
+  if (!l.lisible) {
+    return { champs: {}, notes: ['Je n’ai rien pu lire sur cette photo. Reprends-la plus près, ou remplis à la main.'], calculDuPoids: null }
+  }
 
   const champs: ChampsLus = {}
   const notes: string[] = []
@@ -61,23 +66,31 @@ export function champsDeLEtiquette(l: LectureEtiquette): { champs: ChampsLus; no
   if (entre(l.glucides_100g, 100)) champs.glucides = champ(l.glucides_100g)
   if (entre(l.lipides_100g, 100)) champs.lipides = champ(l.lipides_100g)
   if (entre(l.fibres_100g, 100)) champs.fibres = champ(l.fibres_100g)
+  /* Glucides, lipides, fibres illisibles : vides (ils comptent pour 0 g à l'enregistrement), et on le dit. */
+  const vides = phraseDesVides('Je n’ai pas pu lire', [
+    ...(champs.glucides === undefined ? ['glucides'] : []),
+    ...(champs.lipides === undefined ? ['lipides'] : []),
+    ...(champs.fibres === undefined ? ['fibres'] : []),
+  ])
+  if (vides) notes.push(vides)
 
   /* Le poids d'UNE unité : le poids net du paquet divisé par ses portions quand l'emballage en annonce plusieurs
      (4 pots de 125 g : 500 g / 4), sinon le poids net lui-même (un pot de 125 g). */
+  let calculDuPoids: string | null = null
   if (l.poids_g !== null && l.poids_g > 0) {
     const n = l.parts !== null && l.parts > 1 ? l.parts : 1
-    const g = l.poids_g / n
-    const rond = g >= 10 ? Math.round(g) : Math.round(g * 10) / 10
+    /* Au dixième, jamais à l'entier : 45 g en 4 portions font 11,3 g, et 18 g en 4 font 4,5 g. */
+    const rond = Math.round((l.poids_g / n) * 10) / 10
     if (rond >= 1 && rond <= 5000) {
       champs.poids = champ(rond)
-      if (n > 1) notes.push(`Le paquet annonce ${n} portions de ${ecrit(l.poids_g)} g en tout : je compte ${champ(rond)} g l’unité.`)
+      if (n > 1) calculDuPoids = `${ecrit(l.poids_g)} g en ${n} portions = ${ecrit(rond)} g`
     }
   }
   if (champs.poids === undefined) notes.push('Je n’ai pas vu le poids net : dis combien pèse un pot.')
 
   if (l.confiance < 0.7) notes.push('Le tableau n’est pas net : vérifie chaque chiffre.')
   if (l.commentaire && l.commentaire.trim()) notes.push(l.commentaire.trim())
-  return { champs, notes }
+  return { champs, notes, calculDuPoids }
 }
 
 /** Une erreur de `callFunction('etiquette', …)` : le corps est du JSON qui porte déjà une phrase française. */
@@ -86,4 +99,20 @@ export function phraseDeLErreur(e: unknown): string {
   let dit = brut || 'La lecture a échoué.'
   try { dit = JSON.parse(brut).erreur ?? dit } catch { /* pas du JSON */ }
   return dit
+}
+
+/** Au-delà, la lecture est abandonnée : un appel suspendu ne doit pas laisser « Je lis l’étiquette… » pour toujours. */
+export const DELAI_ETIQUETTE_MS = 30_000
+
+/**
+ * La phrase d'une lecture en panne. Un appel abandonné au bout du délai arrive comme une panne de réseau (`code`
+ * « reseau », voir `callFunction`) : si le temps écoulé est celui du délai, c'est qu'elle a pris trop de temps, et le
+ * dire est plus juste que « Pas de réseau ».
+ */
+export function phraseDeLaPanne(e: unknown, ecoulesMs: number): string {
+  const code = typeof e === 'object' && e !== null ? (e as { code?: unknown }).code : null
+  if (code === 'reseau' && ecoulesMs >= DELAI_ETIQUETTE_MS - 1000) {
+    return `La lecture prend trop de temps (plus de ${DELAI_ETIQUETTE_MS / 1000} s). Réessaie, ou remplis à la main.`
+  }
+  return phraseDeLErreur(e)
 }

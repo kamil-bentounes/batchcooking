@@ -10,6 +10,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { admin, makeActor, type Actor } from './helpers/db'
 import { choixDeLUnite } from '../src/lib/aliments/calcul'
+import { phraseDeLEcriture } from '../src/lib/aliments/brouillon'
 
 let kamil: Actor
 let autre: Actor
@@ -102,6 +103,10 @@ describe('les bornes', () => {
   const refus = async (o: Record<string, unknown>, motif: RegExp) => {
     const { error } = await cree(kamil, o)
     expect(error?.message, JSON.stringify(o)).toMatch(motif)
+    /* La vraie erreur de la base, passée par le vrai code de l'écran : une phrase française, jamais le nom d'un index. */
+    const phrase = phraseDeLEcriture(error!.message)
+    expect(phrase, JSON.stringify(o)).not.toMatch(/aliment_|violates|constraint|relation|row/i)
+    expect(phrase, JSON.stringify(o)).not.toBe('L’enregistrement a échoué : réessaie dans un instant.')
   }
 
   it('un aliment complet entre, avec ses défauts (« pot », source « main »)', async () => {
@@ -191,6 +196,7 @@ describe('les bornes', () => {
     ]) {
       const double = await cree(kamil, { label: variante })
       expect(double.error?.message, JSON.stringify(variante)).toMatch(/aliment_label_unique/)
+      expect(phraseDeLEcriture(double.error!.message)).toMatch(/porte déjà ce nom/)
     }
     expect((await cree(kamil, { label: `Crème brûlée vanille ${stamp}` })).error, 'un autre nom reste permis').toBeNull()
     /* Modifier un nom vers celui d'un autre aliment est refusé de même. */
