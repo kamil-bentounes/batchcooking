@@ -159,12 +159,14 @@ describe('les bornes', () => {
 })
 
 describe('un geste : une unité, avec les vraies valeurs', () => {
-  /* Les mêmes jours que la feuille de choix : la case est unique par personne, jour et repas. */
+  /* La base compare la date de l'appareil à la sienne (`choisir_un_repas`) : de vrais jours, pas des dates lointaines.
+     Une case est unique par personne, jour et repas : chaque test vit un autre jour. */
   let decalage = 0
-  const jourDans = (k: number) => new Date(Date.UTC(2043, 0, 1) + (decalage + k) * 86_400_000).toISOString().slice(0, 10)
+  const jourDans = (k: number) => new Date(Date.now() + (decalage + k) * 86_400_000).toISOString().slice(0, 10)
+  const aujourdhui = () => new Date().toISOString().slice(0, 10)
 
   it('« un pot » du yaourt dessert protéiné vaut 95 kcal et 12,5 g, écrits par `choisir_un_repas`', async () => {
-    decalage += 10
+    decalage += 3
     const a = (await cree(kamil, { label: nom('Yaourt dessert protéiné') })).data!
     const g = Number(a.unite_g)
     const unite = {
@@ -178,7 +180,7 @@ describe('un geste : une unité, avec les vraies valeurs', () => {
     expect(unite).toMatchObject({ grams: 125, kcal: 95, protein_g: 12.5, carb_g: 7, fat_g: 1.8 })
 
     const r = await kamil.client.rpc('choisir_un_repas', {
-      p_day: jourDans(0), p_meal: 'collation', p_users: [kamil.userId], p_today: jourDans(0),
+      p_day: jourDans(0), p_meal: 'collation', p_users: [kamil.userId], p_today: aujourdhui(),
       p_choix: { type: 'repere', ...unite },
     })
     expect(r.error).toBeNull()
@@ -198,10 +200,10 @@ describe('un geste : une unité, avec les vraies valeurs', () => {
   })
 
   it('l’extra est une COPIE : corriger l’aliment ensuite ne réécrit pas le repas d’hier', async () => {
-    decalage += 10
+    decalage += 3
     const a = (await cree(kamil, { label: nom('Copie') })).data!
     await kamil.client.rpc('choisir_un_repas', {
-      p_day: jourDans(0), p_meal: 'collation', p_users: [kamil.userId], p_today: jourDans(0),
+      p_day: jourDans(0), p_meal: 'collation', p_users: [kamil.userId], p_today: aujourdhui(),
       p_choix: { type: 'repere', label: a.label, grams: 125, kcal: 95, protein_g: 12.5 },
     })
     await kamil.client.from('aliment').update({ kcal_100g: 200 }).eq('id', a.id)
