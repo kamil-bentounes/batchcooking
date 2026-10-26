@@ -18,7 +18,7 @@ sources:
   - src/App.tsx
   - supabase/migrations/0047_peremption_donnee.sql
   - supabase/migrations/0120_la_session_prend_dans_le_stock.sql
-verifie_sur: 73f1b27
+verifie_sur: fd13da7
 ---
 ## Ce que fait l’écran
 
@@ -39,12 +39,12 @@ Les ingrédients des recettes sortent du stock : une puce par ingrédient (« Po
 
 ## Ranger
 
-**« Ranger les N barquettes »** fait tout d’un coup : il crée les barquettes avec leur lieu, retire les ingrédients, passe la semaine à « La semaine tourne » et ouvre le frigo (écran « Frigo »). Rien n’est posé tout seul sur les jours : tu choisis ce que tu manges quand. Il reste grisé le temps que l’appli lise ce que la session prend, pour ne rien retirer que tu n’aies vu.
+**« Ranger les N barquettes »** fait tout d’un coup : il crée les barquettes avec leur lieu, retire les ingrédients, passe la semaine à « La semaine tourne » et ouvre « La semaine » : c’est là que tu choisis ce que tu manges chaque jour (voir « cuisine-semaine »). Rien n’est posé tout seul sur les jours. Il reste grisé le temps que l’appli lise ce que la session prend, pour ne rien retirer que tu n’aies vu.
 
 Si deux personnes appuient en même temps, une seule range : l’autre arrive devant le travail déjà fait.
 
 ## Si ça échoue
 
 - Si la lecture de « La session a pris » échoue, l’écran dit « il ne sera pas retiré » : on range quand même, sans toucher au stock.
-- Si les barquettes existent déjà (un autre téléphone, une réponse perdue), l’écran les montre telles qu’elles sont écrites, sans réglage : le nombre au frigo et au congélateur de chaque recette, et la date. « Terminer le rangement » finit le travail ; une fois la semaine commencée, « Voir le frigo ».
+- Si les barquettes existent déjà (un autre téléphone, une réponse perdue), l’écran les montre telles qu’elles sont écrites, sans réglage : le nombre au frigo et au congélateur de chaque recette, et la date. « Terminer le rangement » finit le travail et ouvre « La semaine » ; une fois la semaine commencée, le bouton devient « Choisir les repas de la semaine », avec « Voir le frigo » dessous.
 - Rien n’est créé en double et les ingrédients ne sont pas retirés deux fois. Sans aucune barquette à ranger, l’écran le dit au lieu du bouton.

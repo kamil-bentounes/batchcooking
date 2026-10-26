@@ -36,6 +36,7 @@ export const SUR_CET_ECRAN: Record<string, string[]> = {
   '/reglages': ['Comment inviter quelqu’un ?'],
   '/profil': ['À quoi sert ma date d’arrivée ?'],
   '/cuisine-accueil': ['Comment se déroule une session de cuisine ?'],
+  '/semaine': ['Comment choisir ce que je mange ce soir ?', 'Comment changer un repas le jour même ?'],
   '/frigo': ['Comment congeler ou sortir une barquette du congélateur ?', 'Que dit l’aimant sur la porte du frigo ?'],
 }
 

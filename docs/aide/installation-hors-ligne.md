@@ -19,7 +19,7 @@ sources:
   - src/lib/session-perdue.ts
   - src/lib/budget/ecran.ts
   - .github/workflows/reveil.yml
-verifie_sur: 73f1b27
+verifie_sur: fd13da7
 ---
 ## Installer sur le téléphone
 

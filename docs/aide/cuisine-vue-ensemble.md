@@ -22,7 +22,7 @@ sources:
   - supabase/migrations/0013_cycle.sql
   - supabase/migrations/0117_cuisine_corrections.sql
   - supabase/migrations/0119_reprendre_une_session_recente.sql
-verifie_sur: 73f1b27
+verifie_sur: fd13da7
 ---
 ## Ce que fait l’appli
 
@@ -35,7 +35,7 @@ On choisit les recettes maintenant, on cuisine dimanche, on mange la semaine d�
 3. **Tout est là** : « Voir le plan de dimanche ».
 4. **Session en cours** : « Reprendre la cuisine ».
 5. **Il reste à dresser** : « Dresser les barquettes ».
-6. **La semaine tourne** : « Voir la semaine ». Si un repas est prévu aujourd’hui, l’accueil l’affiche en carte sombre (« Ce soir, pour vous deux ») avec « Je l’ai mangé » et « Changer » — « Je les sors » (« Je le sors » s’il n’y en a qu’une) à la place quand la barquette est au congélateur —, puis « Demain, midi et soir » et « La semaine ».
+6. **La semaine tourne** : « Voir la semaine ». Si un repas est prévu aujourd’hui, l’accueil l’affiche en carte sombre (« Ce soir, pour vous deux ») avec « Je l’ai mangé » et « Changer » — « Je les sors » (« Je le sors » s’il n’y en a qu’une) à la place quand la barquette est au congélateur —, puis « Demain, midi et soir » et « La semaine ». « Changer » ouvre « La semaine » sur aujourd’hui, la feuille de ce repas déjà ouverte ; « La semaine », sous « Demain », l’ouvre sur demain.
 
 « Clore et préparer la semaine prochaine » (dans « Bilan ») referme la semaine : retour à « Rien de prévu ». « Semaine close » ne s’affiche jamais. Une session à reprendre fait titrer « Session interrompue », avec « Reprendre la session interrompue » en gros bouton et « Choisir de nouvelles recettes » en second ; la carte « Cuisine » de l’accueil de Popote le dit aussi. La ligne « N actions, … les mains prises » sous « Tout est là » n’apparaît que si « Commencer la session » a échoué en route.
 

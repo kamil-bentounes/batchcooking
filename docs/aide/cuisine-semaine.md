@@ -1,59 +1,58 @@
 ---
 id: cuisine-semaine
-titre: La semaine : manger, sauter, noter un extra
+titre: La semaine : choisir ce que je mange, changer un repas, le manger
 ecrans: [/semaine]
 questions:
+  - Comment choisir ce que je mange à midi et le soir ?
+  - Comment changer un repas le jour même ?
+  - Que veulent dire les points sous chaque jour ?
   - Comment indiquer que j’ai mangé ma barquette ?
+  - Que se passe-t-il quand je choisis un plat congelé ?
   - Comment noter un repas au restaurant ?
-  - Que veut dire « Sauté » ?
-  - Pourquoi des jours sont vides dans la semaine ?
-  - Comment poser une barquette sur un repas ?
-  - Les calories d’un jour sans rien coché comptent-elles pour zéro ?
 sources:
   - src/pages/Semaine.tsx
   - src/pages/Accueil.tsx
+  - src/ui/semaine/Bandeau.tsx
+  - src/ui/semaine/Carte.tsx
+  - src/ui/semaine/FeuilleDeChoix.tsx
+  - src/ui/semaine/EnPlus.tsx
+  - src/lib/choix.ts
   - src/lib/semaine.ts
   - src/lib/reperes.ts
   - src/lib/donnees/barquettes.ts
-  - src/lib/suivi.ts
-  - supabase/migrations/0017_triggers_lot1.sql
+  - supabase/migrations/0123_choisir_un_repas.sql
   - src/lib/peremption.ts
-verifie_sur: 73f1b27
+verifie_sur: fd13da7
 ---
 ## Ce que fait l’appli
 
-« La semaine » montre, sur sept jours à partir d’aujourd’hui, quelle barquette tu manges à quel repas. Cocher ce que tu manges, c’est tout le suivi.
+« La semaine » est l’écran où **tu choisis ce que tu manges** à midi et le soir, sur sept jours à partir d’aujourd’hui. Après « On range », rien n’est posé tout seul : c’est ici que la semaine se remplit.
 
-## Comment faire
+Le bandeau du haut montre les sept jours. Sous chaque jour, deux points, midi puis soir : **vert**, du frigo ; **bleu**, du congélateur ; **safran**, autre chose (ou un repas sauté) ; **creux**, rien de choisi.
 
-- Choisis qui regarder (« Tout le monde » ou un prénom ; par défaut, toi) et quel repas (« Tous les repas », « Petit déjeuner », « Déjeuner », « Dîner », « Collation »).
-- Touche un repas : **« Je l’ai mangé »** marque la barquette mangée (elle quitte le frigo), **« Sauté »** dit que tu n’as rien mangé.
-- Sur l’accueil, « Je l’ai mangé » est aussi proposé pour le repas prévu aujourd’hui (« Je les sors », ou « Je le sors » s’il n’y en a qu’une, d’abord si la barquette est au congélateur).
-- Un repas dont la barquette a été jetée ou mangée par un autre repas ne montre plus de barquette.
-- « Poser une barquette » apparaît sur un repas sans barquette et propose celles qui n’ont pas de jour (six au plus).
+## Choisir un repas
 
-## Noter ce qui n’était pas prévu
+1. Sur un jour, la carte vide dit **« + Choisir le midi »** (ou « le soir »). Touche-la : une feuille s’ouvre (« Lundi midi »).
+2. **« Pour »** : « Vous deux » (tout le foyer) ou une seule personne, par son prénom.
+3. Choisis : **« Au frigo »** (ce qui presse d’abord, avec le nombre de barquettes libres), **« Au congélateur »** (à sortir la veille), ou **« Autre chose »** : ce que tu reprends souvent, les repères du repas (« Restaurant » 900 kcal, « Sandwich » 550…), et **« On saute ce repas »**.
 
-« + ce que j’ai mangé en plus » ouvre trois façons d’écrire :
+Choisir un plat pose une barquette libre dans la case de **chaque** personne visée, la plus pressée d’abord. Pour chacune, l’appli prend d’abord une barquette faite pour elle, puis une sans destinataire, puis celle d’un autre en dernier recours. Pas assez pour tout le monde : la ligne est grisée (« il en faut 2, 1 libre »).
 
-- « Ce que tu reprends souvent » : tes habitudes ;
-- des repères en un geste, selon le repas : « Restaurant » 900 kcal, « Sandwich » 550, « Pizza » 850, « Yaourt » 60. rien ne les distingue ensuite d’une saisie ;
-- « Autre chose », ses kcal et ses g de protéines, puis « Ajouter ».
+## Changer, manger
 
-« retirer » efface un extra. En regardant une seule personne, « Mangé sans barquette ? » crée un repas : « Petit déjeuner », « Déjeuner », « Dîner » ou « Collation ».
+- La carte pleine dit le plat, « Du frigo, pour vous deux » ou « Du congélateur, pour Kamil », et propose **« Changer »**, y compris le jour même.
+- Quand tu changes, l’ancienne barquette est lâchée, et l’appli le dit : « Les lasagnes retournent au frigo, libres pour un autre jour. » ou « Les wraps restent au congélateur. »
+- **« Je l’ai mangé »** apparaît aujourd’hui sur ta carte : la barquette est marquée mangée et quitte le frigo. Un repas que quelqu’un a mangé ne se change plus pour cette personne.
+- Un plat **congelé** a un bandeau bleu. Aujourd’hui : « C’est pour aujourd’hui : décongèle les 2 wraps au micro-ondes. » Un autre jour : « Pense à sortir les 2 wraps la veille au soir. » Demain, une fois l’heure venue (vingt-quatre heures avant le repas), la même phrase que la fiche du plat dans « Frigo ». Il n’existe pas aujourd’hui de rappel par mail.
+
+Sur l’accueil, « Changer » ouvre « La semaine » sur aujourd’hui avec la feuille du bon repas déjà ouverte.
+
+## Le petit déjeuner, la collation, un en-plus
+
+Sous « Autres moments », « Mangé sans barquette ? » note un petit déjeuner ou une collation pour toi. Sur un plat, « + ce que j’ai mangé en plus » ajoute un repère ou une saisie libre (« Autre chose », kcal, protéines) ; « retirer » l’efface.
 
 ## Les règles
 
-- Après « On range » (« cuisine-dressage »), **rien n’est posé tout seul** sur les jours : la semaine dit « Aucune barquette n’est encore posée sur un repas. » tant que personne n’a posé une barquette sur un repas.
-- Une barquette ne compte dans les calories du jour que si le repas est **mangé**. Un **extra compte toujours**.
-- « Sauté » est une réponse : le jour est renseigné, avec zéro pour ce repas.
-- **Un jour sans rien coché ni noté n’est pas un jour à zéro** : c’est un trou, hors des moyennes du bilan. Sur l’accueil : « N repas pas encore renseignés ».
-- « N barquettes sans jour » (et « N encore libres » en haut) ne compte que celles qui n’ont **aucun** jour, où qu’il tombe.
-
-## Les mots d’urgence
-
-Au frigo : « à manger aujourd'hui », « demain dernier délai », « périmée ». Au congélateur : « à sortir sous N j » dans la dernière semaine seulement.
-
-## Ce que l’appli ne fait pas
-
-Elle ne demande pas de saisir des calories chaque jour, et il n’existe pas aujourd’hui de rappel pour cocher ses repas.
+- « On saute ce repas » est une réponse : le jour est renseigné, sans rien compter. **Un repas jamais choisi n’est pas un repas à zéro** : c’est un trou, hors des moyennes du bilan.
+- Une barquette ne compte dans les calories que si le repas est **mangé** ; un en-plus compte toujours.
+- Choisir autre chose pour un repas remplace le plat : ses en-plus s’en vont avec lui.
