@@ -12,6 +12,7 @@ questions:
 sources:
   - src/pages/Ranger.tsx
   - src/pages/Dressage.tsx
+  - src/ui/dressage/Habillage.tsx
   - src/lib/ranger.ts
   - src/lib/donnees/barquettes.ts
   - src/lib/peremption.ts
@@ -22,11 +23,11 @@ verifie_sur: 99e3953
 ---
 ## Ce que fait l’écran
 
-Après « C’est dressé » (« cuisine-dressage »), « On range » te fait choisir, pour le foyer entier, combien de barquettes de chaque recette restent au frigo : le reste part au congélateur.
+Après « C’est dressé » (« cuisine-dressage »), « On range » te fait choisir, pour le foyer entier, combien de barquettes de chaque recette restent au frigo : le reste part au congélateur. La carte du haut garde le repère « 1 Dresser · 2 Ranger » (« Ranger » est l’étape en cours) et montre deux compteurs en grand, « 8 au frigo » et « 22 au congélateur », qui suivent tes réglages.
 
 ## Comment faire
 
-Une carte par recette : le total, une barre frigo / congélateur, « Frigo · N » avec **−** et **+**, « Congélateur · N », et la date : « à manger avant le … » au frigo, « se garde jusqu’au … » au congélateur.
+Une carte par recette : sa photo quand elle en a une, le total, une barre frigo / congélateur, « Frigo · N » avec **−** et **+**, « Congélateur · N », et la date : « à manger avant le … » au frigo, « se garde jusqu’au … » au congélateur.
 
 - **La proposition de départ** remplit le frigo jusqu’à **4 jours de dîners pour le foyer** (4 × le nombre de personnes), recette par recette dans l’ordre retenu ; le reste va au congélateur.
 - **« Rangé le »** : maintenant par défaut. « Modifier » ouvre un champ date et heure : pas dans le futur, et au plus **4 jours** en arrière (sinon un message le dit et « Ranger » reste grisé). Cette heure devient celle de préparation de chaque barquette, et celle de congélation pour celles du congélateur.
@@ -46,5 +47,5 @@ Si deux personnes appuient en même temps, une seule range : l’autre arrive de
 ## Si ça échoue
 
 - Si la lecture de « La session a pris » échoue, l’écran dit « il ne sera pas retiré » : on range quand même, sans toucher au stock.
-- Si les barquettes existent déjà (un autre téléphone, une réponse perdue), l’écran les montre telles qu’elles sont écrites, sans réglage : le nombre au frigo et au congélateur de chaque recette, et la date. « Terminer le rangement » finit le travail et ouvre « La semaine » ; une fois la semaine commencée, le bouton devient « Choisir les repas de la semaine », avec « Voir le frigo » dessous.
-- Rien n’est créé en double et les ingrédients ne sont pas retirés deux fois. Sans aucune barquette à ranger, l’écran le dit au lieu du bouton.
+- Si les barquettes existent déjà (un autre téléphone, une réponse perdue), l’écran dit « N barquettes déjà rangées pour vous deux : voilà ce qui est écrit. Il ne reste qu’à finir. » et les montre telles qu’elles sont écrites, sans réglage : le nombre au frigo et au congélateur de chaque recette, et la date. « Terminer le rangement » finit le travail et ouvre « La semaine » ; une fois la semaine commencée, le bouton devient « Choisir les repas de la semaine », avec « Voir le frigo » dessous.
+- Rien n’est créé en double et les ingrédients ne sont pas retirés deux fois. Sans aucune barquette à ranger, l’écran le dit au lieu du bouton. Si la lecture des barquettes déjà rangées échoue, l’écran dit « Je n’ai pas pu lire la session » et propose « Réessayer ».

@@ -11,9 +11,12 @@
  * « Ranger » est UN appel à la base (`range_la_session`) : barquettes, stock, passage à la semaine, dans
  * une transaction verrouillée. Si le rangement a déjà eu lieu, l'écran montre ce qui est écrit, en
  * lecture seule, et se contente de finir.
+ *
+ * Refaite le 27/10/2026 d'après la maquette `dressage.html` : carte encre avec les deux compteurs en valeur
+ * (« 8 au frigo », « 22 au congélateur »), une carte par recette avec sa photo, « La session a pris » en pastilles.
  */
-import { useMemo, useRef, useState } from 'react'
-import { Attente, Erreur, Passage, Principal, Secondaire } from '../ui/coque.tsx'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { enFrancais } from '../lib/reseau.ts'
 import type { Cycle } from '../lib/donnees/cycle.ts'
 import type { Membre } from '../lib/donnees/foyer.ts'
 import type { RecetteMesuree } from '../lib/donnees/recettes.ts'
@@ -21,6 +24,10 @@ import { useCeQueLaSessionPrend, usePortionsDuCycle, useRangeLaSession, useStock
 import type { ADresser } from '../lib/donnees/barquettes.ts'
 import type { Repartition } from '../lib/nutrition/portions.ts'
 import { maintenant } from '../lib/horloge.ts'
+import { barquettes } from '../lib/dressage.ts'
+import {
+  Action, Avis, BoutonAction, BoutonDiscret, Carte, Chargement, Colonnes, EnPanne, Page, Picto, Resume, Vignette,
+} from '../ui/dressage/Habillage.tsx'
 import type { LignePrise } from '../lib/ranger.ts'
 import {
   JOURS_AU_FRAIS, bilanDuFrigo, corrections, ecritLaPrise, jourEtHeure, lisLeReste, messageDuReste,
@@ -76,59 +83,64 @@ function lotsARanger(decoupes: Decoupe[], auFrigo: (recipeId: string) => number)
 
 const AUCUNE_PRISE: LignePrise[] = []
 
-/** Une recette rangée : la barre frigo/congélateur, les deux nombres, et — à régler — « − » et « + ». */
-function CartePlat({ titre, frigo, congelo, rangeLe, regle }: {
-  titre: string; frigo: number; congelo: number; rangeLe: Date
+/** Une recette rangée : sa photo, la barre frigo/congélateur, les deux nombres, et — à régler — « − » et « + ». */
+function CartePlat({ titre, photo, frigo, congelo, rangeLe, regle }: {
+  titre: string; photo: string | null | undefined; frigo: number; congelo: number; rangeLe: Date
   /** Absent : le rangement a déjà eu lieu, la carte se lit seulement. */
   regle?: (delta: number) => void
 }) {
   const n = frigo + congelo
+  const pas = 'grid size-11 place-items-center rounded-[14px] bg-piste disabled:opacity-40'
   return (
-    <section aria-label={titre}
-             className="rounded-[20px] bg-surface p-4 shadow-[inset_0_0_0_1px_var(--color-brume)]">
-      <div className="flex items-baseline justify-between gap-2.5">
-        <h2 className="titre text-[20px] font-semibold leading-[1.15]">{titre}</h2>
-        <span className="whitespace-nowrap text-[13px] text-doux">
-          {n} barquette{n > 1 ? 's' : ''}
-        </span>
+    <Carte label={titre}>
+      <div className="grid grid-cols-[56px_1fr] items-center gap-3.5">
+        <Vignette photo={photo} taille={56} />
+        <div className="min-w-0">
+          <h2 className="titre text-[19px] font-semibold leading-[1.15] [overflow-wrap:anywhere] min-[900px]:text-[21px]">{titre}</h2>
+          <span className="mt-0.5 block text-[13.5px] text-doux">{n} barquette{n > 1 ? 's' : ''}</span>
+        </div>
       </div>
 
-      <div className="mt-3 flex h-2.5 overflow-hidden rounded-md bg-congel-clair" aria-hidden="true">
+      <div className="my-3.5 flex h-3 overflow-hidden rounded-[7px] bg-congel-clair" aria-hidden="true">
         <div className="h-full bg-herbe transition-[width] duration-300 ease-out motion-reduce:transition-none"
              style={{ width: `${n > 0 ? Math.round((frigo / n) * 100) : 0}%` }} />
       </div>
 
-      <div className="mt-3 flex items-center gap-2.5">
-        <div className="flex-1">
-          <div className="text-[14px] font-bold text-frais-encre">Frigo · {frigo}</div>
-          <div className="mt-0.5 text-[12px] text-doux">{phraseDuFrigo(frigo, rangeLe)}</div>
+      <div className="flex min-h-11 items-center gap-2.5">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-[15px] font-bold text-frais-encre">
+            <Picto nom="frigo" taille={18} />Frigo · {frigo}
+          </div>
+          <div className="mt-px text-[12.5px] text-doux">{phraseDuFrigo(frigo, rangeLe)}</div>
         </div>
         {regle && (
-          <div role="group" aria-label={`Barquettes de ${titre} au frigo`}
-               className="flex items-center gap-1.5">
-            <button onClick={() => regle(-1)} disabled={frigo <= 0}
-                    aria-label="Une de moins au frigo"
-                    className="size-11 rounded-[14px] bg-piste text-[22px] leading-none
-                               disabled:opacity-40">−</button>
-            <button onClick={() => regle(1)} disabled={frigo >= n}
-                    aria-label="Une de plus au frigo"
-                    className="size-11 rounded-[14px] bg-piste text-[22px] leading-none
-                               disabled:opacity-40">+</button>
+          <div role="group" aria-label={`Barquettes de ${titre} au frigo`} className="flex gap-2">
+            <button onClick={() => regle(-1)} disabled={frigo <= 0} aria-label="Une de moins au frigo" className={pas}>
+              <Picto nom="moins" />
+            </button>
+            <button onClick={() => regle(1)} disabled={frigo >= n} aria-label="Une de plus au frigo" className={pas}>
+              <Picto nom="plus" />
+            </button>
           </div>
         )}
       </div>
-      <div className="mt-2">
-        <div className="text-[14px] font-bold text-congel-encre">Congélateur · {congelo}</div>
-        <div className="mt-0.5 text-[12px] text-doux">{phraseDuCongelo(congelo, rangeLe)}</div>
+      <div className="mt-1.5 flex min-h-11 items-center border-t border-brume pt-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-[15px] font-bold text-congel-encre">
+            <Picto nom="flocon" taille={18} />Congélateur · {congelo}
+          </div>
+          <div className="mt-px text-[12.5px] text-doux">{phraseDuCongelo(congelo, rangeLe)}</div>
+        </div>
       </div>
-    </section>
+    </Carte>
   )
 }
 
-export function Ranger({ cycle, decoupes, membres, retour, va }: {
+export function Ranger({ cycle, decoupes, membres, userId, retour, va }: {
   cycle: Cycle
   decoupes: Decoupe[]
   membres: Membre[]
+  userId?: string
   /** Revenir au dressage. */
   retour: () => void
   va: (v: string) => void
@@ -140,7 +152,12 @@ export function Ranger({ cycle, decoupes, membres, retour, va }: {
   /* Ce que la base a DÉJÀ : si le rangement a eu lieu (un autre téléphone, un premier appui dont la réponse
      s'est perdue), l'écran montre ce qui est écrit, en lecture seule — pas des réglages par défaut qui
      mentiraient sur le lieu et la date des barquettes. */
-  const { data: rangees, isPending: rangeesEnLecture } = usePortionsDuCycle(cycle.id)
+  const { data: rangees, isPending: rangeesEnLecture, isError: rangeesEnPanne, refetch: relireLesRangees } = usePortionsDuCycle(cycle.id)
+  /* On arrive du bas de la page précédente : l'écran repart du haut, et le titre annonce l'étape. */
+  const titre = useRef<HTMLHeadingElement>(null)
+  useEffect(() => { window.scrollTo?.(0, 0) }, [])
+  useEffect(() => { if (!rangeesEnLecture && !rangeesEnPanne) titre.current?.focus() }, [rangeesEnLecture, rangeesEnPanne])
+  const photoDe = useMemo(() => new Map(decoupes.map(d => [d.recette.recipeId, d.recette.photo])), [decoupes])
   const lectureSeule = (rangees?.length ?? 0) > 0
   /* Le cycle a quitté le dressage : tout est fait, il ne reste qu'à aller voir le frigo. */
   const fini = cycle.state !== 'dressage'
@@ -259,207 +276,244 @@ export function Ranger({ cycle, decoupes, membres, retour, va }: {
     }
   }
 
-  if (rangeesEnLecture) {
-    return <Passage retour={retour} retourTexte="Dressage"><Attente /></Passage>
-  }
+  const sortie = { retour, retourTexte: 'Dressage', va, userId }
+  if (rangeesEnLecture) return <Page {...sortie}><Chargement /></Page>
+  /* Sans cette lecture, on ne sait pas si le rangement a déjà eu lieu : on ne propose pas de réglages par défaut. */
+  if (rangeesEnPanne) return <Page {...sortie}><EnPanne reessayer={() => void relireLesRangees()} /></Page>
 
   const pour = pourLeFoyer(nbMembres)
   const pluriel = total > 1 ? 's' : ''
   const rienARanger = !lectureSeule && total === 0
+  const auFroid = total - auFrais
+  const dejaRange = lectureSeule && !fini
+  const taille = (n: number) => `minmax(124px, ${Math.max(n, 1)}fr)`
+
+  /* Le reste du frigo : dans la carte de la session ; seul quand elle n'a aucune pastille à montrer. */
+  const reste = restantAuFrigo.length > 0 && (
+    <Avis ton="frais" picto="info">
+      <strong className="font-semibold">Reste au frigo :</strong>{' '}
+      {restantAuFrigo.slice(0, 6).join(', ')}{restantAuFrigo.length > 6 ? '…' : '.'}
+    </Avis>
+  )
+
+  /* ── Ce que la session a pris : la carte des pastilles, ou la phrase qui dit pourquoi il n'y en a pas ─── */
+  const phraseSeule = (texte: string, statut?: 'status') => (
+    <Carte><p role={statut} className="text-[13.5px] leading-[1.45] text-doux">{texte}</p></Carte>
+  )
+  const session = dejaRetire
+    ? phraseSeule('Les ingrédients de la session sont déjà retirés du stock.')
+    : fini ? null : prisesEnLecture
+      ? phraseSeule('Je regarde ce que la session prend dans le stock…', 'status')
+      : prisesEnPanne
+        ? phraseSeule('Je n’ai pas pu lire ce que la session prend dans le stock : il ne sera pas retiré.')
+        : chips.length > 0 && (
+          <Carte>
+            <h2 className="titre text-[20px] font-semibold">La session a pris</h2>
+            <p className="mt-1.5 text-[13.5px] leading-[1.4] text-doux">
+              Retiré du frigo, du congélateur et du placard d’après les recettes. Il en reste ? Touche-le pour corriger.
+            </p>
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {chips.map(l => {
+                const corrige = restes[l.stock_item_id] !== undefined
+                  && Math.abs(resteApres(l, restes) - (l.reste ?? 0)) > 1e-9
+                const prise = (l.quantite ?? 0) - resteApres(l, restes)
+                return (
+                  <li key={l.stock_item_id}>
+                    <button onClick={() => touche(l.stock_item_id)}
+                            ref={el => {
+                              if (el) puceRef.current.set(l.stock_item_id, el)
+                              else puceRef.current.delete(l.stock_item_id)
+                            }}
+                            aria-expanded={ouverte === l.stock_item_id}
+                            className={`inline-flex min-h-11 items-center gap-1.5 rounded-full bg-surface px-3.5 text-[14px]
+                                        ${ouverte === l.stock_item_id
+                                          ? 'shadow-[inset_0_0_0_2px_var(--color-herbe)]'
+                                          : 'shadow-[inset_0_0_0_1.5px_var(--color-brume)]'}`}>
+                      <span className="font-semibold">{l.libelle}</span>
+                      <span className={corrige ? 'font-semibold text-ocre' : 'text-doux'}>
+                        {prise > 0 ? ecritLaPrise(prise, l.unite) : 'rien'}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+
+            {lignes && (() => {
+              const probleme = messageDuReste(saisie)
+              return (
+                <div role="group" aria-label={`Corriger ${lignes.libelle}`}
+                     onKeyDown={e => { if (e.key === 'Escape') ferme(lignes.stock_item_id) }}
+                     className="mt-3 rounded-[18px] bg-fond p-3.5">
+                  <label className="block text-[13.5px] text-doux" htmlFor="reste-session">
+                    {lignes.libelle} : il en reste
+                  </label>
+                  <div className="mt-2 flex flex-wrap items-center gap-2.5">
+                    <input id="reste-session" inputMode="decimal" value={saisie} autoFocus
+                           onChange={e => setSaisie(e.target.value)}
+                           onKeyDown={e => { if (e.key === 'Enter') valideLeReste() }}
+                           aria-invalid={probleme !== null}
+                           aria-describedby={probleme ? 'reste-probleme' : undefined}
+                           className="chiffre h-12 w-28 rounded-[14px] bg-surface px-3.5 text-[20px] font-semibold
+                                      shadow-[inset_0_0_0_1.5px_var(--color-brume)]" />
+                    <span className="text-[13.5px] text-doux">
+                      {lignes.unite && lignes.unite !== 'u' ? lignes.unite : ''}
+                      {` (il y en avait ${ecritLaPrise(lignes.quantite ?? 0, lignes.unite)})`}
+                    </span>
+                  </div>
+                  {probleme && (
+                    <p id="reste-probleme" role="alert" className="mt-2 text-[13.5px] font-semibold leading-[1.4] text-groseille">
+                      {probleme}
+                    </p>
+                  )}
+                  <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                    <button onClick={valideLeReste} disabled={probleme !== null}
+                            className="min-h-12 rounded-2xl bg-herbe px-[18px] text-[16px] font-semibold text-fond
+                                       disabled:bg-brume disabled:text-encre">
+                      Corriger
+                    </button>
+                    <button onClick={commeprevu}
+                            className="min-h-11 px-2 text-[15px] font-semibold text-herbe underline underline-offset-[3px]">
+                      Comme prévu
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {reste && <div className="mt-3">{reste}</div>}
+          </Carte>
+        )
 
   return (
-    <Passage retour={retour} retourTexte="Dressage">
-      <h1 className="titre text-[36px] font-semibold leading-[1.05]">On range</h1>
-      <p className="mt-2.5 text-[15px] leading-[1.45] text-doux">
-        {fini
-          ? `C’est rangé : ${total} barquette${pluriel} pour ${pour}.`
-          : lectureSeule
-            ? `${total} barquette${pluriel} déjà rangée${pluriel} pour ${pour} : voilà ce qui est écrit. Il ne reste qu’à finir.`
-            : `${total} barquette${pluriel} pour ${pour}. Choisis ce qui reste au frigo : le reste part au congélateur.`}
-      </p>
-
-      {/* Rangé le ───────────────────────────────────────────────────────────── */}
-      <div className="mt-5 rounded-[18px] bg-surface px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--color-brume)]">
-        <div className="flex items-center gap-3">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-herbe)" strokeWidth="1.8"
-               strokeLinecap="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
-          </svg>
-          <div className="flex-1">
-            <div className="text-[12px] text-doux">Rangé le</div>
-            <div className="mt-0.5 text-[15px] font-semibold">
-              {messageDate ? 'Date à corriger' : jourEtHeure(dateDuBilan)}
-            </div>
-          </div>
-          {!lectureSeule && (
-            <button onClick={() => setModifie(m => !m)} aria-expanded={modifie}
-                    className="min-h-11 px-1 text-[14px] font-semibold text-herbe underline underline-offset-[3px]">
-              {modifie ? 'Terminé' : 'Modifier'}
-            </button>
-          )}
-        </div>
-        {modifie && !lectureSeule && (
-          <input type="datetime-local" aria-label="Date et heure du rangement"
-                 value={champ} min={pourLeChamp(plusAncienRangement(maintenant()))} max={pourLeChamp(maintenant())}
-                 onChange={e => changeLaDate(e.target.value)}
-                 aria-invalid={messageDate !== null} aria-describedby={messageDate ? 'erreur-date' : undefined}
-                 className="mt-3 h-11 w-full rounded-xl bg-fond px-3 text-[15px]
-                            shadow-[inset_0_0_0_1px_var(--color-brume)]" />
-        )}
-        {messageDate && (
-          <p id="erreur-date" role="alert" className="mt-2 text-[13px] leading-[1.45] text-groseille">
-            {messageDate}
-          </p>
-        )}
-      </div>
-
-      {/* Une carte par recette ───────────────────────────────────────────────── */}
-      <div className="mt-3.5 flex flex-col gap-3">
-        {lectureSeule
-          ? plusRanges.map(p => (
-              <CartePlat key={p.recipeId ?? p.titre} titre={p.titre} frigo={p.frigo} congelo={p.congelo}
-                         rangeLe={p.rangeLe} />
-            ))
-          : aRanger.map(d => {
-              const { recipeId, titre } = d.recette
-              const n = nombreDe(d)
-              const frigo = auFrigo(recipeId)
-              return (
-                <CartePlat key={recipeId} titre={titre} frigo={frigo} congelo={n - frigo} rangeLe={rangeLe}
-                           regle={delta => setChoix(c => ({ ...c, [recipeId]: Math.max(0, Math.min(n, frigo + delta)) }))} />
-              )
-            })}
-      </div>
-
-      {/* Le bilan du frigo ───────────────────────────────────────────────────── */}
-      {!rienARanger && (
-        <div role="status"
-             className={`mt-3.5 rounded-[18px] px-4 py-3.5 ${bilan.trop ? 'bg-sable text-ocre' : 'bg-frais-fond text-frais-encre'}`}>
-          <div className="text-[15px] font-bold">{bilan.titre}</div>
-          <div className="mt-1 text-[13px] leading-[1.45]">{bilan.texte}</div>
-        </div>
-      )}
-
-      {/* La session a pris ───────────────────────────────────────────────────── */}
-      {dejaRetire ? (
-        <p className="mt-[30px] text-[13px] leading-[1.45] text-doux">
-          Les ingrédients de la session sont déjà retirés du stock.
-        </p>
-      ) : fini ? null : prisesEnLecture ? (
-        <p className="mt-[30px] text-[13px] leading-[1.45] text-doux" role="status">
-          Je regarde ce que la session prend dans le stock…
-        </p>
-      ) : prisesEnPanne ? (
-        <p className="mt-[30px] text-[13px] leading-[1.45] text-doux">
-          Je n’ai pas pu lire ce que la session prend dans le stock : il ne sera pas retiré.
-        </p>
-      ) : chips.length > 0 && (
-        <>
-          <h2 className="mt-[30px] text-[17px] font-bold">La session a pris</h2>
-          <p className="mt-1.5 text-[13px] leading-[1.45] text-doux">
-            Retiré du frigo, du congélateur et du placard d’après les recettes. Il en reste ? Touche-le pour corriger.
-          </p>
-          <ul className="mt-3 flex flex-wrap gap-2">
-            {chips.map(l => {
-              const corrige = restes[l.stock_item_id] !== undefined
-                && Math.abs(resteApres(l, restes) - (l.reste ?? 0)) > 1e-9
-              const prise = (l.quantite ?? 0) - resteApres(l, restes)
-              return (
-                <li key={l.stock_item_id}>
-                  <button onClick={() => touche(l.stock_item_id)}
-                          ref={el => {
-                            if (el) puceRef.current.set(l.stock_item_id, el)
-                            else puceRef.current.delete(l.stock_item_id)
-                          }}
-                          aria-expanded={ouverte === l.stock_item_id}
-                          className={`inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-surface px-3 text-[13px]
-                                      ${ouverte === l.stock_item_id
-                                        ? 'shadow-[inset_0_0_0_2px_var(--color-herbe)]'
-                                        : 'shadow-[inset_0_0_0_1px_var(--color-brume)]'}`}>
-                    <span className="font-semibold">{l.libelle}</span>
-                    <span className={corrige ? 'font-semibold text-ocre' : 'text-doux'}>
-                      {prise > 0 ? ecritLaPrise(prise, l.unite) : 'rien'}
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-
-          {lignes && (() => {
-            const probleme = messageDuReste(saisie)
-            return (
-              <div role="group" aria-label={`Corriger ${lignes.libelle}`}
-                   onKeyDown={e => { if (e.key === 'Escape') ferme(lignes.stock_item_id) }}
-                   className="mt-3 rounded-2xl bg-surface p-4 shadow-[inset_0_0_0_1px_var(--color-brume)]">
-                <label className="block text-[13px] text-doux" htmlFor="reste-session">
-                  {lignes.libelle} : il en reste
-                </label>
-                <div className="mt-2 flex items-center gap-2">
-                  <input id="reste-session" inputMode="decimal" value={saisie} autoFocus
-                         onChange={e => setSaisie(e.target.value)}
-                         onKeyDown={e => { if (e.key === 'Enter') valideLeReste() }}
-                         aria-invalid={probleme !== null}
-                         aria-describedby={probleme ? 'reste-probleme' : undefined}
-                         className="h-11 w-28 rounded-xl bg-fond px-3 text-[16px]
-                                    shadow-[inset_0_0_0_1px_var(--color-brume)]" />
-                  <span className="text-[14px] text-doux">
-                    {lignes.unite && lignes.unite !== 'u' ? lignes.unite : ''}
-                    {` (il y en avait ${ecritLaPrise(lignes.quantite ?? 0, lignes.unite)})`}
-                  </span>
+    <Page {...sortie}>
+      <Colonnes
+        resume={
+          <Resume etape="ranger">
+            <h1 ref={titre} tabIndex={-1} className="titre mt-4 text-[30px] font-semibold"
+                style={{ fontVariationSettings: '"opsz" 120, "SOFT" 50, "WONK" 0' }}>
+              On range
+            </h1>
+            {!dejaRange && (
+              <p className="mt-3 text-[15px] leading-[1.45] text-surface/80 min-[900px]:text-base">
+                {fini
+                  ? `C’est rangé : ${total} barquette${pluriel} pour ${pour}.`
+                  : `${total} barquette${pluriel} pour ${pour}. Choisis ce qui reste au frigo : le reste part au congélateur.`}
+              </p>
+            )}
+            {!rienARanger && (
+              <div className="mt-4 grid gap-1.5 min-[900px]:mb-0"
+                   style={{ gridTemplateColumns: `${taille(auFrais)} ${taille(auFroid)}` }}>
+                <div className="min-w-0 rounded-2xl bg-frais-fond/15 px-3 py-2.5">
+                  <b className="chiffre block text-[34px] font-semibold leading-none">{auFrais}</b>
+                  <span className="mt-[3px] block text-[12.5px] leading-[1.2] text-surface/75">au frigo</span>
                 </div>
-                {probleme && (
-                  <p id="reste-probleme" role="alert" className="mt-2 text-[13px] leading-[1.45] text-groseille">
-                    {probleme}
-                  </p>
-                )}
-                <div className="mt-3 flex items-center gap-3">
-                  <button onClick={valideLeReste} disabled={probleme !== null}
-                          className="min-h-11 rounded-xl bg-herbe px-5 text-[15px] font-semibold text-fond
-                                     disabled:bg-brume disabled:text-encre">
-                    Corriger
-                  </button>
-                  <button onClick={commeprevu}
-                          className="min-h-11 px-2 text-[14px] font-semibold text-herbe underline underline-offset-[3px]">
-                    Comme prévu
-                  </button>
+                <div className="min-w-0 rounded-2xl bg-congel/35 px-3 py-2.5">
+                  <b className="chiffre block text-[34px] font-semibold leading-none">{auFroid}</b>
+                  <span className="mt-[3px] block text-[12.5px] leading-[1.2] text-surface/75">au congélateur</span>
                 </div>
               </div>
-            )
-          })()}
-        </>
-      )}
+            )}
+          </Resume>
+        }
+        avis={
+          <>
+            {dejaRange && (
+              <Avis ton="frais" picto="coche" role="status">
+                {`${barquettes(total)} déjà rangée${pluriel} pour ${pour} : voilà ce qui est écrit. Il ne reste qu’à finir.`}
+              </Avis>
+            )}
+            {/* Rangé le ───────────────────────────────────────────────────────── */}
+            <Carte>
+              <div className="flex items-center gap-3">
+                <span className="grid size-11 shrink-0 place-items-center rounded-full bg-frais-fond text-herbe">
+                  <Picto nom="horloge" taille={22} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] text-doux">Rangé le</div>
+                  <div className="text-[16px] font-semibold">
+                    {messageDate ? 'Date à corriger' : jourEtHeure(dateDuBilan)}
+                  </div>
+                </div>
+                {!lectureSeule && (
+                  <button onClick={() => setModifie(m => !m)} aria-expanded={modifie}
+                          className="min-h-11 px-1 text-[15px] font-semibold text-herbe underline underline-offset-[3px]">
+                    {modifie ? 'Terminé' : 'Modifier'}
+                  </button>
+                )}
+              </div>
+              {modifie && !lectureSeule && (
+                <input type="datetime-local" aria-label="Date et heure du rangement"
+                       value={champ} min={pourLeChamp(plusAncienRangement(maintenant()))} max={pourLeChamp(maintenant())}
+                       onChange={e => changeLaDate(e.target.value)}
+                       aria-invalid={messageDate !== null} aria-describedby={messageDate ? 'erreur-date' : undefined}
+                       className="mt-3 h-12 w-full rounded-[14px] bg-fond px-3.5 text-[16px]
+                                  shadow-[inset_0_0_0_1.5px_var(--color-brume)]" />
+              )}
+              {messageDate && (
+                <p id="erreur-date" role="alert" className="mt-2 text-[13.5px] font-semibold leading-[1.4] text-groseille">
+                  {messageDate}
+                </p>
+              )}
+            </Carte>
 
-      {restantAuFrigo.length > 0 && (
-        <div className="mt-4 rounded-2xl bg-frais-fond px-3.5 py-3 text-[13px] leading-[1.45]">
-          <strong>Reste au frigo :</strong>{' '}
-          {restantAuFrigo.slice(0, 6).join(', ')}{restantAuFrigo.length > 6 ? '…' : '.'}
-        </div>
-      )}
-
-      <div className="mt-[26px]">
-        {rienARanger ? (
-          <p role="status" className="rounded-[18px] bg-sable px-4 py-3.5 text-[15px] leading-[1.45] text-ocre">
-            Il n’y a aucune barquette à ranger : le dressage n’en a produit aucune. Reviens au dressage pour
-            vérifier les parts.
-          </p>
-        ) : (
-          <Principal onClick={ranger} disabled={enCours || messageDate !== null || prisesEnLecture}>
-            {enCours ? 'Je range…'
-              : fini ? 'Choisir les repas de la semaine'
-              : lectureSeule ? 'Terminer le rangement'
-              : `Ranger ${total === 1 ? 'la barquette' : `les ${total} barquettes`}`}
-          </Principal>
-        )}
-        <Erreur de={erreur} />
-        {fini && <Secondaire onClick={() => va('/frigo')}>Voir le frigo</Secondaire>}
-        {!fini && !rienARanger && (
-          <p className="mt-3 text-center text-[13px] text-doux">
-            Le frigo garde {JOURS_AU_FRAIS} jours. Ensuite, tu choisis ce que tu manges chaque jour : la semaine
-            t’attend. Tout reste modifiable depuis le frigo.
-          </p>
-        )}
-      </div>
-    </Passage>
+            {/* Le bilan du frigo ───────────────────────────────────────────────── */}
+            {!rienARanger && (
+              <Avis ton={bilan.trop ? 'sable' : 'frais'} picto="frigo" role="status">
+                <b className="font-semibold">{bilan.titre}.</b> {bilan.texte}
+              </Avis>
+            )}
+          </>
+        }
+        recettes={
+          <div className="flex flex-col gap-3 min-[900px]:gap-5">
+            {/* Une carte par recette ─────────────────────────────────────────── */}
+            <div className="grid gap-3 min-[900px]:grid-cols-2 min-[900px]:items-start min-[900px]:gap-5">
+              {lectureSeule
+                ? plusRanges.map(p => (
+                    <CartePlat key={p.recipeId ?? p.titre} titre={p.titre} photo={p.recipeId ? photoDe.get(p.recipeId) : null}
+                               frigo={p.frigo} congelo={p.congelo} rangeLe={p.rangeLe} />
+                  ))
+                : aRanger.map(d => {
+                    const { recipeId, titre } = d.recette
+                    const n = nombreDe(d)
+                    const frigo = auFrigo(recipeId)
+                    return (
+                      <CartePlat key={recipeId} titre={titre} photo={d.recette.photo} frigo={frigo} congelo={n - frigo}
+                                 rangeLe={rangeLe}
+                                 regle={delta => setChoix(c => ({ ...c, [recipeId]: Math.max(0, Math.min(n, frigo + delta)) }))} />
+                    )
+                  })}
+            </div>
+            {session}
+            {chips.length === 0 && reste}
+          </div>
+        }
+        action={
+          <Action note={!fini && !rienARanger
+            ? `Le frigo garde ${JOURS_AU_FRAIS} jours. Ensuite, tu choisis ce que tu manges chaque jour : la semaine t’attend. Tout reste modifiable depuis le frigo.`
+            : undefined}>
+            {rienARanger ? (
+              <Avis ton="erreur" picto="alerte" role="alert">
+                Il n’y a aucune barquette à ranger : le dressage n’en a produit aucune. Reviens au dressage pour
+                vérifier les parts.
+              </Avis>
+            ) : (
+              <BoutonAction onClick={ranger} disabled={enCours || messageDate !== null || prisesEnLecture}>
+                {enCours ? 'Je range…'
+                  : fini ? 'Choisir les repas de la semaine'
+                  : lectureSeule ? 'Terminer le rangement'
+                  : `Ranger ${total === 1 ? 'la barquette' : `les ${total} barquettes`}`}
+              </BoutonAction>
+            )}
+            {erreur != null && (
+              <Avis ton="erreur" picto="alerte" role="alert" className="mt-3">
+                {enFrancais(erreur instanceof Error ? erreur.message : String(erreur))}
+              </Avis>
+            )}
+            {fini && <BoutonDiscret onClick={() => va('/frigo')}>Voir le frigo</BoutonDiscret>}
+          </Action>
+        } />
+    </Page>
   )
 }

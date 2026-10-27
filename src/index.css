@@ -198,3 +198,8 @@ dialog.feuille::backdrop { background: rgb(28 43 35 / 0.45); }
 /* Le fond ne défile pas sous la feuille : `showModal` le rend inerte, mais un glissé ou la molette
    sur le fond assombri faisait défiler la page de 400 px derrière (grand test, parcours budget). */
 html:has(dialog.feuille[open]) { overflow: hidden; }
+
+/* Le dressage : la carte encre se prolonge dans son bouton à partir de 900 px ; l'anneau s'y repeint comme sur `.sur-encre`. */
+@media (min-width: 900px) {
+  .sur-encre-large :focus-visible { outline-color: var(--color-fond); }
+}

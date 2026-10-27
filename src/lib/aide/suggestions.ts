@@ -13,7 +13,7 @@
  */
 export const SANS_BOUTON_D_ENTETE = [
   '/charges', '/budget-reglages', '/epargne', '/profil', '/semaine', '/frigo', '/bilan', '/choisir', '/magasin',
-  '/plan', '/cuisine', '/dressage', '/inventer', '/photo', '/ticket', '/peser', '/importer', '/objectifs',
+  '/plan', '/cuisine', '/inventer', '/photo', '/ticket', '/peser', '/importer', '/objectifs',
   '/reglages', '/motdepasse', '/mois-type', '/aliments', '/rappels',
 ]
 

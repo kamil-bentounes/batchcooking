@@ -13,6 +13,8 @@ import type { Plat } from '../nutrition/portions.ts'
 export type RecetteMesuree = {
   recipeId: string
   titre: string
+  /** La photo de la recette (un lien, jamais une copie), ou `null` : l'écran montre alors sa pastille neutre. */
+  photo?: string | null
   parts: number
   /** Masse totale du plat, somme des ingrédients pesés. */
   plat: Plat
@@ -34,9 +36,9 @@ export function useRecettesMesurees(cycleId: string | undefined) {
     enabled: !!cycleId,
     queryFn: async (): Promise<RecetteMesuree[]> => {
       const choisies = ou(await supabase.from('cycle_recipe')
-        .select('recipe_id, servings, recipe:recipe_id(title)')
+        .select('recipe_id, servings, recipe:recipe_id(title, image_url)')
         .eq('cycle_id', cycleId!).order('position')) as unknown as {
-          recipe_id: string; servings: number; recipe: { title: string | null } | null
+          recipe_id: string; servings: number; recipe: { title: string | null; image_url: string | null } | null
         }[]
       if (choisies.length === 0) return []
 
@@ -69,6 +71,7 @@ export function useRecettesMesurees(cycleId: string | undefined) {
         return {
           recipeId: c.recipe_id,
           titre: c.recipe?.title ?? 'Recette',
+          photo: c.recipe?.image_url ?? null,
           parts: c.servings,
           plat: { grammes, ...a.valeur },
           agregat: a,

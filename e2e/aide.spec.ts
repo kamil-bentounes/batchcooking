@@ -164,7 +164,7 @@ test('partout ailleurs le « ? » flotte dans la marge du haut, sans recouvrir r
 
   for (const route of [
     '/charges', '/budget-reglages', '/epargne', '/reglages', '/profil', '/semaine', '/frigo', '/bilan', '/choisir',
-    '/magasin', '/plan', '/cuisine', '/dressage', '/inventer', '/photo', '/ticket', '/peser', '/importer', '/objectifs',
+    '/magasin', '/plan', '/cuisine', '/inventer', '/photo', '/ticket', '/peser', '/importer', '/objectifs',
     '/motdepasse', '/cloture/2026-09',
   ]) {
     await page.goto(route)
@@ -187,7 +187,7 @@ test('partout ailleurs le « ? » flotte dans la marge du haut, sans recouvrir r
   }
 
   /* `/budget/` (barre finale) et une adresse inconnue tombent sur le hub, qui porte son « ? » : jamais deux. */
-  for (const route of ['/', '/budget', '/cuisine-accueil', '/budget/', '/inconnue']) {
+  for (const route of ['/', '/budget', '/cuisine-accueil', '/dressage', '/budget/', '/inconnue']) {
     await page.goto(route)
     await page.waitForLoadState('networkidle')
     await expect(bouton(page), `un seul « ? » sur ${route} (celui de l’en-tête)`).toHaveCount(1)

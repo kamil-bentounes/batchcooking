@@ -70,7 +70,7 @@ describe('les écrans de l’aide', () => {
     const app = readFileSync('src/App.tsx', 'utf8')
     const cases = [...app.matchAll(/case '(\/[a-z-]+)'/g)].map(m => m[1])
     expect(cases.length).toBeGreaterThan(15)
-    const entetes = ['/budget', '/cuisine-accueil']
+    const entetes = ['/budget', '/cuisine-accueil', '/dressage']
     for (const c of cases) {
       expect(entetes.includes(c) || SANS_BOUTON_D_ENTETE.includes(c), `${c} n'est classé nulle part`).toBe(true)
     }

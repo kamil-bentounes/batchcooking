@@ -11,23 +11,30 @@
  * encore fixé d'objectifs reçoit quand même ses parts, au poids moyen des autres.
  *
  * Deux étapes sur le même écran : on dresse (ici), puis « On range » (`Ranger`) —
- * où l'hôte choisit ce qui reste au frigo et ce qui part au congélateur.
+ * où l'hôte choisit ce qui reste au frigo et ce qui part au congélateur. Refait le 27/10/2026 d'après
+ * la maquette `dressage.html` : repère d'étapes, nombre en grand, une carte par recette avec sa photo.
  */
-import { useMemo, useState } from 'react'
-import { Attente, Chiffre, Passage, Vide } from '../ui/coque.tsx'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCycle } from '../lib/donnees/cycle.ts'
 import { useFoyer, aDesObjectifs, objectifDe, phraseSansObjectifs, prenomDe } from '../lib/donnees/foyer.ts'
 import { useRecettesMesurees } from '../lib/donnees/recettes.ts'
 import type { RecetteMesuree } from '../lib/donnees/recettes.ts'
 import { PART_DU_JOUR, repartit } from '../lib/nutrition/portions.ts'
-import { nb } from '../lib/nombre.ts'
 import type { Repartition } from '../lib/nutrition/portions.ts'
+import { barquettes, enGrasLesPrenoms, etiquettesCourtes } from '../lib/dressage.ts'
+import { nb } from '../lib/nombre.ts'
+import {
+  Action, Avis, BoutonAction, Carte, Chargement, Colonnes, EnPanne, EtatVide, Page, Pastille, Resume, Vignette,
+} from '../ui/dressage/Habillage.tsx'
 import { Ranger } from './Ranger.tsx'
 
 export function Dressage({ va, retour, userId }: { va: (v: string) => void; retour: () => void; userId?: string }) {
-  const { data: cycle } = useCycle()
-  const { data: foyer } = useFoyer()
-  const { data: recettes = [], isPending } = useRecettesMesurees(cycle?.id)
+  const cycleQ = useCycle()
+  const foyerQ = useFoyer()
+  const cycle = cycleQ.data
+  const foyer = foyerQ.data
+  const recettesQ = useRecettesMesurees(cycle?.id)
+  const recettes = useMemo(() => recettesQ.data ?? [], [recettesQ.data])
   const [etape, setEtape] = useState<'dresser' | 'ranger'>('dresser')
 
   // `foyer?.membres` garde son identité entre deux rendus tant que la requête
@@ -54,18 +61,40 @@ export function Dressage({ va, retour, userId }: { va: (v: string) => void; reto
     return { recette: r, repartition: repartit(r.plat, demandes) }
   }), [recettes, membres])
 
-  if (!cycle) return <Sombre><Vide titre="Aucune session" /></Sombre>
-  if (isPending) return <Sombre><Attente /></Sombre>
+  /* Le titre reçoit le focus quand on REVIENT de « On range » : sans cela, il tombe sur la page. */
+  const titre = useRef<HTMLHeadingElement>(null)
+  const revenu = useRef(false)
+  useEffect(() => {
+    if (etape === 'dresser' && revenu.current) titre.current?.focus()
+    if (etape === 'ranger') revenu.current = true
+  }, [etape])
+
+  const sortie = { retour, retourTexte: 'Accueil', va, userId }
+
+  if (cycleQ.isPending) return <Page {...sortie}><Chargement /></Page>
+  if (!cycle) {
+    return cycleQ.isError
+      ? <Page {...sortie}><EnPanne reessayer={() => void cycleQ.refetch()} /></Page>
+      : <Page {...sortie}><EtatVide titre="Aucune session" /></Page>
+  }
+  if (recettesQ.isPending || foyerQ.isPending) return <Page {...sortie}><Chargement /></Page>
+  if (recettesQ.isError || foyerQ.isError || !foyer) {
+    return (
+      <Page {...sortie}>
+        <EnPanne reessayer={() => { void recettesQ.refetch(); void foyerQ.refetch() }} />
+      </Page>
+    )
+  }
   if (recettes.length === 0) {
     return (
-      <Passage retour={retour}>
-        <Vide titre="Rien à dresser" texte="Aucune recette n’a été cuisinée dans ce cycle." />
-      </Passage>
+      <Page {...sortie}>
+        <EtatVide titre="Rien à dresser" texte="Aucune recette n’a été cuisinée dans ce cycle." />
+      </Page>
     )
   }
 
-  if (etape === 'ranger' && foyer) {
-    return <Ranger cycle={cycle} decoupes={decoupes} membres={foyer.membres}
+  if (etape === 'ranger') {
+    return <Ranger cycle={cycle} decoupes={decoupes} membres={foyer.membres} userId={userId}
                    retour={() => setEtape('dresser')} va={va} />
   }
 
@@ -73,95 +102,141 @@ export function Dressage({ va, retour, userId }: { va: (v: string) => void; reto
     (s, d) => s + d.repartition.parts.reduce((n, p) => n + p.nombre, 0), 0)
   /* Quelqu'un sans objectifs a ses parts, au poids moyen des autres : on le dit, on ne le tait pas. */
   const sansObjectifs = (membres ?? []).filter(m => !aDesObjectifs(m))
-  const phraseSans = phraseSansObjectifs(sansObjectifs.map(m => prenomDe(m.display_name)))
+  const prenomsSans = sansObjectifs.map(m => prenomDe(m.display_name))
+  const phraseSans = phraseSansObjectifs(prenomsSans)
+  const etiquettes = etiquettesCourtes(decoupes.map(d => d.recette.titre))
+  const rangDe = (id: string) => Math.max(0, (membres ?? []).findIndex(m => m.id === id))
+  const nomDe = (id: string) => {
+    const m = foyer.membres.find(x => x.id === id)
+    return m ? prenomDe(m.display_name) : 'indifférent'
+  }
 
   return (
-    <Sombre>
-      <p className="text-[14px] text-safran">Dernière étape</p>
-      <h1 className="titre text-[42px] mt-2.5">
-        Dresse<br />{total} barquette{total > 1 ? 's' : ''}
-      </h1>
-      <p className="mt-3.5 text-[15px] opacity-65">
-        Remplis chacune au poids indiqué : c’est ce qui rend les parts justes.
-      </p>
-
-      {phraseSans && (
-        <div className="mt-5 rounded-[14px] border border-fond/25 p-4">
-          <p className="text-[15px] leading-snug">{phraseSans}</p>
-          {sansObjectifs.some(m => m.id === userId) && (
-            <button onClick={() => va('/objectifs')}
-                    className="mt-3 min-h-11 px-5 rounded-full bg-safran text-encre text-[15px] font-semibold">
-              Fixe tes objectifs
-            </button>
-          )}
-        </div>
-      )}
-
-      <div className="mt-9 space-y-8">
-        {decoupes.map(({ recette, repartition }) => (
-          <Lot key={recette.recipeId} recette={recette} repartition={repartition}
-               nomDe={id => {
-                 const m = foyer?.membres.find(x => x.id === id)
-                 return m ? prenomDe(m.display_name) : 'indifférent'
-               }} />
-        ))}
-      </div>
-
-      <div className="mt-11">
-        <button onClick={() => setEtape('ranger')} disabled={total === 0}
-                className="w-full h-[58px] rounded-[18px] bg-safran text-encre
-                           text-[17px] font-semibold disabled:opacity-60">
-          C’est dressé
-        </button>
-        <p className="mt-3.5 text-[13px] opacity-55 text-center leading-relaxed">
-          Ensuite, tu choisis ce qui reste au frigo et ce qui part au congélateur.
-        </p>
-      </div>
-    </Sombre>
+    <Page {...sortie}>
+      <Colonnes
+        resume={
+          <Resume etape="dresser">
+            <h1 ref={titre} tabIndex={-1} className="titre mt-4 text-[30px] font-semibold"
+                style={{ fontVariationSettings: '"opsz" 120, "SOFT" 50, "WONK" 0' }}>
+              Dresse <span className="chiffre text-[72px] leading-[.9] text-safran max-[360px]:text-[60px] min-[900px]:text-[84px]">{total}</span> barquette{total > 1 ? 's' : ''}
+            </h1>
+            <p className="mt-3 text-[15px] leading-[1.45] text-surface/80 min-[900px]:text-base">
+              Remplis chacune au poids indiqué : c’est ce qui rend les parts justes.
+            </p>
+            <ul aria-label="Barquettes par recette" className="mt-4 flex flex-wrap gap-2 min-[900px]:mb-0">
+              {decoupes.map(({ recette, repartition }, i) => {
+                const n = repartition.parts.reduce((s, p) => s + p.nombre, 0)
+                return (
+                  <li key={recette.recipeId} aria-label={`${barquettes(n)} de ${recette.titre}`}
+                      className="min-w-[64px] flex-1 rounded-2xl bg-white/10 px-1.5 pb-[9px] pt-2.5 text-center">
+                    <b aria-hidden="true" className="chiffre block text-[26px] font-semibold leading-none max-[360px]:text-[22px]">{n}</b>
+                    <span aria-hidden="true" className="mt-1 block text-[12px] leading-[1.2] text-surface/70 [overflow-wrap:anywhere]">{etiquettes[i]}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          </Resume>
+        }
+        avis={phraseSans ? (
+          <>
+            <Avis ton="sable" picto="gens" role="status">
+              {enGrasLesPrenoms(phraseSans, prenomsSans).map((m, i) =>
+                m.gras ? <b key={i} className="font-semibold">{m.texte}</b> : <span key={i}>{m.texte}</span>)}
+            </Avis>
+            {sansObjectifs.some(m => m.id === userId) && (
+              <button onClick={() => va('/objectifs')}
+                      className="min-h-12 w-full rounded-2xl bg-herbe px-[18px] text-[16px] font-semibold text-fond">
+                Fixe tes objectifs
+              </button>
+            )}
+          </>
+        ) : undefined}
+        recettes={
+          <div className="grid gap-3 min-[900px]:grid-cols-2 min-[900px]:items-start min-[900px]:gap-5">
+            {decoupes.map(({ recette, repartition }) => (
+              <Lot key={recette.recipeId} recette={recette} repartition={repartition}
+                   nomDe={nomDe} rangDe={rangDe} />
+            ))}
+          </div>
+        }
+        action={
+          <Action note="Ensuite, tu choisis ce qui reste au frigo et ce qui part au congélateur.">
+            <BoutonAction onClick={() => setEtape('ranger')} disabled={total === 0}>
+              C’est dressé
+            </BoutonAction>
+          </Action>
+        } />
+    </Page>
   )
 }
 
-function Lot({ recette, repartition, nomDe }: {
+function Lot({ recette, repartition, nomDe, rangDe }: {
   recette: RecetteMesuree
   repartition: Repartition
   nomDe: (id: string) => string
+  rangDe: (id: string) => number
 }) {
+  const n = repartition.parts.reduce((s, p) => s + p.nombre, 0)
+  /* Un complément se lit sous la ligne de la personne qu'il complète. */
+  const dePersonne = (id: string) => repartition.complements.filter(c => c.userId === id)
+  const orphelins = repartition.complements.filter(c => !repartition.parts.some(p => p.userId === c.userId))
+  const complement = (c: Repartition['complements'][number]) => (
+    <li key={`${c.userId}-${c.source}`} className="pb-2">
+      <Avis ton="sable" picto="etincelle">
+        <b className="font-semibold">+ {c.grammes} g de {c.source}</b> pour {nomDe(c.userId)}
+      </Avis>
+    </li>
+  )
   return (
-    <section aria-label={recette.titre}>
-      <h2 className="titre text-[24px]">{recette.titre}</h2>
-
-      {!recette.fiable && (
-        <p className="mt-2 text-[13px] text-safran">
-          Recette mal quantifiée : les parts sont égales, faute de mieux.
-        </p>
-      )}
-
-      <div className="mt-3.5 space-y-2.5">
-        {repartition.parts.map(p => (
-          <div key={p.userId} className="flex items-baseline gap-3">
-            <span className="shrink-0 whitespace-nowrap">
-              <Chiffre valeur={`${p.nombre} × ${p.grammes} g`} taille={22} />
-            </span>
-            <span className="text-[14px] opacity-65 grow">
-              pour {nomDe(p.userId)}{p.sansObjectifs ? ' · parts égales' : ''}
-            </span>
-            <span className="shrink-0 whitespace-nowrap text-[14px] opacity-80 tabular-nums">
-              {p.kcal} kcal · {nb(p.proteinG)} g
-            </span>
-          </div>
-        ))}
+    <Carte label={recette.titre}>
+      <div className="grid grid-cols-[64px_1fr_auto] items-center gap-3.5 max-[360px]:grid-cols-[56px_1fr_auto] max-[360px]:gap-2.5
+                      min-[900px]:grid-cols-[64px_1fr]">
+        <Vignette photo={recette.photo} />
+        <div className="min-w-0">
+          <h2 className="titre text-[19px] font-semibold leading-[1.15] [overflow-wrap:anywhere] min-[900px]:text-[21px]">{recette.titre}</h2>
+          <span className="mt-0.5 block text-[13.5px] text-doux">{n} barquette{n > 1 ? 's' : ''} à remplir</span>
+        </div>
+        <div aria-hidden="true" className="text-right min-[900px]:hidden">
+          <span className="chiffre block text-[34px] font-semibold leading-none text-herbe max-[360px]:text-[28px]">{n}</span>
+          <small className="mt-[3px] block text-[12px] text-doux">barquette{n > 1 ? 's' : ''}</small>
+        </div>
       </div>
 
-      {repartition.complements.map(c => (
-        <p key={c.userId} className="mt-3 text-[14px] text-safran">
-          + {c.grammes} g de {c.source} pour {nomDe(c.userId)}
-        </p>
-      ))}
+      {!recette.fiable && (
+        <Avis ton="sable" picto="alerte" className="mt-3">
+          Recette mal quantifiée : les parts sont égales, faute de mieux.
+        </Avis>
+      )}
 
-      <p className="mt-3 text-[13px] opacity-55 leading-relaxed">
+      <ul className="mt-3">
+        {repartition.parts.map(p => (
+          <li key={p.userId} className="list-none">
+            <div className="grid grid-cols-[30px_1fr_auto] items-center gap-3 border-t border-brume py-[11px]
+                            max-[360px]:grid-cols-[28px_1fr_auto] max-[360px]:gap-2">
+              <Pastille nom={nomDe(p.userId)} rang={rangDe(p.userId)} />
+              <div className="min-w-0">
+                <span className="chiffre block whitespace-nowrap text-[24px] font-semibold leading-[1.05] max-[360px]:text-[20px]">
+                  {p.nombre} × {p.grammes} g
+                </span>
+                <span className="mt-0.5 block text-[13.5px] text-doux">
+                  pour {nomDe(p.userId)}{p.sansObjectifs ? ' · parts égales' : ''}
+                </span>
+              </div>
+              <div className="whitespace-nowrap text-right text-[13.5px] leading-[1.3] text-doux max-[360px]:text-[12.5px]">
+                <b className="block text-[14.5px] font-semibold text-encre max-[360px]:text-[13.5px]">{p.kcal} kcal</b>
+                {nb(p.proteinG)} g de prot.
+              </div>
+            </div>
+            {dePersonne(p.userId).length > 0 && <ul>{dePersonne(p.userId).map(complement)}</ul>}
+          </li>
+        ))}
+      </ul>
+      {orphelins.length > 0 && <ul>{orphelins.map(complement)}</ul>}
+
+      <p className="mt-2.5 text-[13px] leading-[1.45] text-doux">
         {repartition.explication}
       </p>
-    </section>
+    </Carte>
   )
 }
 
@@ -171,12 +246,4 @@ function repartitionParPersonne(parts: number, personnes: number): number[] {
   const base = Math.floor(parts / personnes)
   const reste = parts % personnes
   return Array.from({ length: personnes }, (_, i) => base + (i < reste ? 1 : 0))
-}
-
-function Sombre({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="min-h-dvh bg-encre text-fond px-6 pt-16 pb-14">
-      <div className="mx-auto w-full max-w-lg">{children}</div>
-    </main>
-  )
 }
