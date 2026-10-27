@@ -70,6 +70,36 @@ describe('RGPD', () => {
     expect(oubliees, 'tables de foyer absentes de l’export').toEqual([])
   })
 
+  it("exporte ses réglages de rappel et ses mails reçus, et SEULEMENT les siens (0127)", async () => {
+    /* `rappel_reglage` et `rappel_envoye` portent `user_id`, pas `household_id` : `tables_de_foyer` ne les réclame pas,
+       donc le test d'exhaustivité ci-dessus ne les verrait jamais manquer. Celui-ci les nomme. */
+    const bob = await makeActor('bob-rgpd-rappels')
+    const a = admin()
+    /* Dans le MÊME foyer qu'Alice : c'est ce qui rend l'isolement utile à dire. */
+    const { error: ep } = await a.from('user_profile').update({ household_id: alice.householdId }).eq('id', bob.userId)
+    expect(ep).toBeNull()
+    await alice.client.from('rappel_reglage').insert({ user_id: alice.userId, type: 'sortir_du_congelateur', actif: true })
+    await bob.client.from('rappel_reglage').insert({ user_id: bob.userId, type: 'barquette_perime', actif: true })
+    const envoyes = await a.from('rappel_envoye').insert([
+      { user_id: alice.userId, type: 'sortir_du_congelateur', cle: '2026-10-28' },
+      { user_id: bob.userId, type: 'barquette_perime', cle: '2026-10-28' },
+    ])
+    expect(envoyes.error).toBeNull()
+
+    const { data, error } = await alice.client.rpc('export_my_data')
+    expect(error).toBeNull()
+    expect(data.rappel_reglages.map((r: any) => [r.user_id, r.type, r.actif]))
+      .toEqual([[alice.userId, 'sortir_du_congelateur', true]])
+    expect(data.rappels_envoyes.map((r: any) => [r.user_id, r.type, r.cle]))
+      .toEqual([[alice.userId, 'sortir_du_congelateur', '2026-10-28']])
+
+    /* Le journal des passages n'a rien de personnel : il n'est pas dans l'export. */
+    expect(Object.keys(data)).not.toContain('rappel_passe')
+
+    await a.from('rappel_envoye').delete().in('user_id', [alice.userId, bob.userId])
+    await a.from('rappel_reglage').delete().in('user_id', [alice.userId, bob.userId])
+  })
+
   it('supprime le compte et ses données en cascade', async () => {
     const victim = await makeActor('victime')
     await victim.client.from('nutrition_target').insert({
