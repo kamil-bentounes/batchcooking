@@ -114,7 +114,7 @@ function Etapes({ etape }: { etape: 'dresser' | 'ranger' }) {
     return (
       <li aria-current={on ? 'step' : undefined}
           className={`inline-flex min-h-[34px] items-center gap-2 rounded-full pl-1.5 pr-3.5 text-[13.5px] font-semibold
-                      ${on ? 'bg-safran text-encre' : 'bg-white/10 text-surface/70'}`}>
+                      ${on ? 'bg-safran text-encre' : 'bg-white/10 text-surface/90'}`}>
         <b aria-hidden="true"
            className={`grid h-6 w-6 place-items-center rounded-full text-[13px] ${on ? 'bg-encre text-safran' : 'bg-white/15'}`}>{n}</b>
         {texte}

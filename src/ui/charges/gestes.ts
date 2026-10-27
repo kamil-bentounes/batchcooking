@@ -31,12 +31,19 @@ const VIDE: Formulaire = { libelle: '', montant: '', mode: 'fixe', rythme: 'annu
 /** Rend le focus au premier de ces contrôles qui existe, une fois l'écran redessiné : le panneau qu'on ferme (ou
     la ligne qu'on retire) le lui prenait. */
 export function rendLeFocus(...selecteurs: string[]) {
-  requestAnimationFrame(() => {
+  /* Le contrôle visé peut encore disparaître au rendu suivant (une catégorie vidée par un retrait s'en va après
+     la relecture) : tant que le focus retombe sur le corps de la page, on revise, une demi-seconde au plus. */
+  let essais = 0
+  const essaie = () => {
+    const actif = document.activeElement
+    if (essais > 0 && actif && actif !== document.body && actif.isConnected) return
     for (const s of selecteurs) {
       const el = document.querySelector<HTMLElement>(s)
-      if (el) { el.focus(); return }
+      if (el) { el.focus(); break }
     }
-  })
+    if (++essais < 30) requestAnimationFrame(essaie)
+  }
+  requestAnimationFrame(essaie)
 }
 
 /** Où le focus va quand une ligne disparaît : la suivante, sinon la précédente, sinon l'en-tête de sa catégorie,
