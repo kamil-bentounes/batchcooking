@@ -22,7 +22,7 @@ sources:
   - src/lib/nutrition/portions.ts
   - src/pages/Accueil.tsx
   - supabase/migrations/0005_policies.sql
-verifie_sur: 2ff18ce
+verifie_sur: 5fc4aa2
 ---
 ## Ce que fait l’écran
 

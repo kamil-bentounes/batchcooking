@@ -18,7 +18,7 @@ sources:
   - src/ui/budget/MoisType.tsx
   - src/lib/budget/mois-type.ts
   - src/lib/donnees/cycle.ts
-verifie_sur: cc8b190
+verifie_sur: 5fc4aa2
 ---
 La tuile « Budget » de l'accueil (« Le budget », à côté du frigo) donne l'état du mois en cours. Un toucher dessus ouvre l'écran du mois. Ouvrir l'accueil ouvre aussi le mois en cours : Popote crée ses lignes.
 

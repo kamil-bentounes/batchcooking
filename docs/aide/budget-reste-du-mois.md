@@ -15,7 +15,7 @@ sources:
   - src/ui/budget/Ligne.tsx
   - src/pages/Budget.tsx
   - src/pages/Hub.tsx
-verifie_sur: 9b03c3e
+verifie_sur: 5fc4aa2
 ---
 « Il te reste » est la carte sombre de l'écran du mois. L'accueil donne le même chiffre, arrondi à l'euro.
 

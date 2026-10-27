@@ -17,7 +17,7 @@ sources:
   - supabase/migrations/0013_cycle.sql
   - supabase/migrations/0117_cuisine_corrections.sql
   - supabase/migrations/0119_reprendre_une_session_recente.sql
-verifie_sur: 9b03c3e
+verifie_sur: 5fc4aa2
 ---
 ## Quand tout est coché
 

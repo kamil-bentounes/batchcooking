@@ -18,7 +18,7 @@ sources:
   - src/lib/annuler-mange.ts
   - src/lib/donnees/barquettes.ts
   - supabase/migrations/0129_annuler_mange.sql
-verifie_sur: 9b03c3e
+verifie_sur: 5fc4aa2
 ---
 ## Ce que fait l’appli
 
