@@ -62,6 +62,8 @@ high** : c'est sa demande, notée en mémoire sous `agents-en-sonnet-high`.
   - `npm test` : 4 157 verts ; lint à 0 ;
   - les 34 specs e2e vertes sur le port 4173. Trois échecs au premier passage : le contraste du repère d'étapes du dressage et le focus après le retrait d'une charge, corrigés ; un banc de `derniers-constats`, instable, vert en trois reprises.
 
+- **Puis, le même soir** : « Ta journée » sur l'accueil (kcal et protéines du jour contre les objectifs, repas pas encore notés, lien vers le bilan). Site `index-Brcdp4zT.js`, `aide` redéployée, poussé à 4cf65bb.
+
 ## Reprendre ici
 
 1. `main` est à 49cca8d (les recettes), poussé. Le Budget se code sur **`feat/budget-refait`**.
