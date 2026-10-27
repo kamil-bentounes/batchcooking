@@ -17,7 +17,7 @@ sources:
   - supabase/functions/rappels/index.ts
   - supabase/functions/_shared/rappels/mails.ts
   - supabase/functions/_shared/rappels/service.ts
-verifie_sur: 8748fad
+verifie_sur: 84225ae
 ---
 ## Ce que fait l’appli
 
