@@ -15,7 +15,7 @@ import { DELAI_ESSAI_CLIENT_MS } from '../src/lib/rappels.ts'
 const BASE = 'https://kamil-bentounes.github.io/batchcooking'
 const SECRET = 'le-secret-de-la-fonction-0123456789'
 const JETON = 'jwt-de-kamil'
-const MOI = { id: '00000000-0000-4000-8000-0000000000aa', email: 'kamil.moi@exemple.test' }
+const MOI = { id: '00000000-0000-4000-8000-0000000000aa', email: 'kamil.moi@exemple.test', email_confirmed_at: '2026-10-01T08:00:00Z' }
 const ID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 /** Mardi 11 juin 2030, 19 h à Paris. */
 const T0 = new Date('2030-06-11T17:00:00Z')
@@ -25,7 +25,7 @@ function banc(o: {
   env?: Record<string, string | undefined>
   dus?: RappelDu[] | Error
   profil?: { display_name: string | null } | null
-  utilisateur?: { id: string; email: string | null } | null
+  utilisateur?: { id: string; email: string | null; email_confirmed_at?: string | null } | null
   preparation?: Error
   envoi?: (opts: OptionsDuMail) => Error | undefined
   verifie?: Error
@@ -257,6 +257,10 @@ describe('l’essai', () => {
     expect((await sert(requete({ corps: { essai: 'choisir_les_repas' } }), b.dep)).status).toBe(401)
     expect((await sert(requete({ jeton: 'un-autre-jeton', corps: { essai: 'choisir_les_repas' } }), b.dep)).status).toBe(401)
     expect((await sert(requete({ jeton: JETON, corps: { essai: 'choisir_les_repas' } }), banc({ utilisateur: { id: MOI.id, email: null } }).dep)).status).toBe(401)
+    // Une adresse jamais confirmée : 403, et rien n'est réservé ni envoyé.
+    const nonConfirme = banc({ utilisateur: { id: MOI.id, email: MOI.email, email_confirmed_at: null } })
+    expect((await sert(requete({ jeton: JETON, corps: { essai: 'choisir_les_repas' } }), nonConfirme.dep)).status).toBe(403)
+    expect(nonConfirme.appels).not.toContain('reserve_rappel')
     expect(b.envoyes).toEqual([])
   })
 
@@ -316,7 +320,7 @@ describe('l’essai', () => {
   it('un autre membre a sa propre limite', async () => {
     const pris = new Set<string>()
     const a = banc({ reservationsPrises: pris })
-    const c = banc({ reservationsPrises: pris, utilisateur: { id: '00000000-0000-4000-8000-0000000000bb', email: 'thauba@exemple.test' } })
+    const c = banc({ reservationsPrises: pris, utilisateur: { id: '00000000-0000-4000-8000-0000000000bb', email: 'thauba@exemple.test', email_confirmed_at: '2026-10-01T08:00:00Z' } })
     expect((await sert(requete({ jeton: JETON, corps: { essai: 'choisir_les_repas' } }), a.dep)).status).toBe(200)
     expect((await sert(requete({ jeton: JETON, corps: { essai: 'choisir_les_repas' } }), c.dep)).status).toBe(200)
     expect(c.envoyes[0].to).toBe('thauba@exemple.test')

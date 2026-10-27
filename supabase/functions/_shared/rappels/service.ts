@@ -36,7 +36,7 @@ type Reponse<T> = PromiseLike<{ data: T; error: { message: string } | null }>
 /** Ce que la fonction demande à la base : un sous-ensemble du client `supabase-js`, avec la clé de service. */
 export type ClientAdmin = {
   rpc(nom: string, args?: Record<string, unknown>): Reponse<unknown>
-  auth: { getUser(jwt: string): PromiseLike<{ data: { user: { id: string; email?: string | null } | null } }> }
+  auth: { getUser(jwt: string): PromiseLike<{ data: { user: { id: string; email?: string | null; email_confirmed_at?: string | null } | null } }> }
   from(table: string): {
     select(colonnes: string): {
       eq(colonne: string, valeur: string): { maybeSingle(): Reponse<{ display_name?: string | null } | null> }
@@ -182,6 +182,9 @@ async function essai(
   const { data: u } = await admin.auth.getUser(jwt)
   const moi = u?.user
   if (!moi?.email) return reply('Non authentifié', 401)
+  /* Une adresse jamais confirmée n'est peut-être pas la sienne : le Gmail de Kamil n'y écrit pas, pas même un exemple
+     (les vrais rappels l'exigent aussi, dans `rappel_actifs`). */
+  if (!moi.email_confirmed_at) return reply('Confirme d’abord ton adresse e-mail.', 403)
 
   if (Number(req.headers.get('content-length') ?? 0) > CORPS_MAX) return reply('Corps trop gros', 413)
   const corps = await req.json().catch(() => null) as { essai?: unknown } | null

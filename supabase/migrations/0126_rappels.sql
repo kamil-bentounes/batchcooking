@@ -451,6 +451,12 @@ begin
     raise exception 'Réservé au rôle de service.' using errcode = 'insufficient_privilege';
   end if;
   if p_cles is null or cardinality(p_cles) = 0 then return false; end if;
+  /* Coupé entre la lecture et l'envoi : on ne réserve plus, donc rien ne part. Un exemple (`essai:…`) n'est pas un
+     rappel et se demande coupé. */
+  if exists (select 1 from unnest(p_cles) c where c not like 'essai:%')
+     and not exists (select 1 from public.rappel_reglage r where r.user_id = p_user and r.type = p_type and r.actif) then
+    return false;
+  end if;
   if exists (select 1 from public.rappel_envoye e
              where e.user_id = p_user and e.type = p_type and e.cle = any (p_cles)) then
     return false;

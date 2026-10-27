@@ -143,6 +143,16 @@ describe('qui peut appeler', () => {
   it('le rôle de service y accède', async () => {
     expect((await db.rpc('rappels_a_envoyer', { p_maintenant: MARDI_19H })).error).toBeNull()
   })
+
+  it('coupé entre la lecture et l’envoi : la réservation refuse, donc rien ne part ; un exemple se réserve coupé', async () => {
+    const reserve = async (cles: string[]) =>
+      (await db.rpc('reserve_rappel', { p_user: d.t.userId, p_type: 'noter_les_depenses', p_cles: cles })).data
+    await active(d.t.userId, 'noter_les_depenses', true)
+    expect(await reserve(['2030-06-11']), 'activé : réservé').toBe(true)
+    await active(d.t.userId, 'noter_les_depenses', false)
+    expect(await reserve(['2030-06-12']), 'coupé : rien').toBe(false)
+    expect(await reserve(['essai:noter_les_depenses:2030-06-12T08']), 'un exemple, coupé : réservé').toBe(true)
+  })
 })
 
 describe('coupé par défaut', () => {
