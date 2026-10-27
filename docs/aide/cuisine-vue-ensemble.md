@@ -54,4 +54,4 @@ On choisit les recettes maintenant, on cuisine dimanche, on mange la semaine d�
 
 ## Ce que l’appli ne fait pas
 
-Il n’existe pas aujourd’hui de notification : tout se lit en ouvrant l’appli.
+Il n’existe pas de notification sur le téléphone : tout se lit en ouvrant l’appli. Seuls les rappels par mail, que chacun active lui-même, préviennent hors de l’appli (voir « rappels-par-mail »).

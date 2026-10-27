@@ -57,4 +57,4 @@ Quantité (« Enregistrer »), lieu (Frigo, Congélateur, Placard : le congélat
 
 ## Ce que l’appli ne fait pas
 
-Ni mail ni notification. Le stock ne diminue pas quand tu manges : seuls « On range » (ce que la session a pris), « Fini » et la liste de courses le font.
+Le stock n’envoie aucun mail ni notification : seul le rappel « Une barquette va périmer » (voir « rappels-les-sept »), que chacun active lui-même, prévient par mail, et il ne parle que des barquettes. Le stock ne diminue pas quand tu manges : seuls « On range » (ce que la session a pris), « Fini » et la liste de courses le font.

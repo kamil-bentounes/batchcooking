@@ -37,6 +37,8 @@ sources:
   - supabase/migrations/0051_budget_socle_corrige.sql
   - supabase/migrations/0097_budget_tables.sql
   - supabase/migrations/0112_budget_depart.sql
+  - supabase/migrations/0126_rappels.sql
+  - supabase/migrations/0127_export_des_rappels.sql
 verifie_sur: 715cb8e
 ---
 ## Ce que le foyer voit de l’autre
@@ -44,6 +46,8 @@ verifie_sur: 715cb8e
 Dans le foyer, tout se partage, c’est voulu. **Le revenu de chacun est visible des deux** (« Réglages du budget » liste le net de chacun). Les objectifs nutritionnels, les charges (même celles marquées perso), les comptes, les courses et le stock aussi. Chacun ne modifie que son propre profil, son propre revenu et ses propres objectifs.
 
 Un **foyer ami** voit les prénoms et les recettes marquées « partagée ». S’il a rejoint une de tes sessions de cuisine, il voit aussi cette session tant qu’elle est prête, en cuisine ou au dressage : étapes, appareils et recettes de l’hôte, même non partagées. Rien d’autre : ni budget, ni objectifs, ni courses.
+
+**Tes rappels par mail sont à toi seul** : l’autre ne voit pas ceux que tu as activés (voir « rappels-par-mail »).
 
 ## Ce que voient les modèles de langage
 
@@ -63,8 +67,8 @@ Aucun appel à un modèle ne lit les revenus ou les prénoms. Rien n’est enreg
 
 ## Exporter
 
-Réglages, « Tes données », « Exporter mes données » : un fichier « mes-donnees.json » avec **tout ce que le foyer a enregistré**, y compris les données de l’autre (son revenu, par exemple) et les réponses de l’aide que tu as signalées comme fausses.
+Réglages, « Tes données », « Exporter mes données » : un fichier « mes-donnees.json » avec **tout ce que le foyer a enregistré**, y compris les données de l’autre (son revenu, par exemple) et les réponses de l’aide que tu as signalées comme fausses. Y figurent aussi tes réglages de rappel et l’historique de tes mails de rappel : les tiens seulement, pas ceux de l’autre.
 
 ## Supprimer
 
-« Supprimer mon compte » demande « Supprimer ton compte et tes données ? C’est définitif. » Partent ton profil, ton revenu, tes objectifs et tes comptes perso. Tes charges à toi seul s’arrêtent ou disparaissent. Le foyer reste pour l’autre : les mois ouverts se repartagent entre ceux qui restent, les mois clôturés ne bougent pas. Il n’est supprimé que s’il ne reste personne.
+« Supprimer mon compte » demande « Supprimer ton compte et tes données ? C’est définitif. » Partent ton profil, ton revenu, tes objectifs, tes comptes perso, tes réglages de rappel et l’historique de tes mails. Tes charges à toi seul s’arrêtent ou disparaissent. Le foyer reste pour l’autre : les mois ouverts se repartagent entre ceux qui restent, les mois clôturés ne bougent pas. Il n’est supprimé que s’il ne reste personne.

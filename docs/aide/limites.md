@@ -40,7 +40,7 @@ Chaque « je n’ai pas trouvé » vient d’une recherche dans les écrans, les
 ## Compte et foyer
 
 - **Je n’ai pas trouvé de mode hors ligne.** Sans réseau, l’appli s’ouvre sans données (« installation-hors-ligne »).
-- **Je n’ai pas trouvé de notification qui s’affiche sur le téléphone.** Une invitation à cuisiner se découvre en ouvrant l’appli.
+- **Je n’ai pas trouvé de notification qui s’affiche sur le téléphone.** Une invitation à cuisiner se découvre en ouvrant l’appli ; seuls les rappels par mail, que chacun active lui-même, préviennent hors de l’appli (voir « rappels-par-mail »).
 - **Je n’ai pas trouvé d’envoi d’e-mail pour inviter** : c’est toi qui envoies le lien. Je n’ai pas trouvé non plus d’écran qui liste ou annule une invitation de foyer en attente.
 - **Je n’ai pas trouvé de connexion par Google ou Apple.** On entre avec un e-mail et un mot de passe.
 - **Je n’ai pas trouvé de moyen de changer son adresse e-mail.**
