@@ -28,6 +28,7 @@ import {
 import type { Case, Choix } from '../lib/donnees/barquettes.ts'
 import { usePrevus, useRecettesDesPlats } from '../lib/donnees/frigo.ts'
 import { useAliments } from '../lib/donnees/aliments.ts'
+import { useRappelActif } from '../lib/donnees/rappels.ts'
 import { choixDeLUnite, detailDeLUnite, ecrit, valeursDeLUnite } from '../lib/aliments/calcul.ts'
 import { groupeLesParts, lisLeJour, nomCourt } from '../lib/frigo.ts'
 import {
@@ -37,9 +38,6 @@ import {
 import type { CaseLue, Carte, PointDuJour, RepasChoisi } from '../lib/choix.ts'
 import { maintenant } from '../lib/horloge.ts'
 import { useJourLocal } from '../lib/jour-local.ts'
-
-/** Les rappels par mail n'existent pas encore (chantier 5) : le bandeau bleu dit « Pense à sortir… ». */
-const RAPPEL_PAR_MAIL_ACTIF = false
 
 export function Semaine({ userId, va, remplace }: {
   userId: string
@@ -67,6 +65,9 @@ export function Semaine({ userId, va, remplace }: {
   /* Une liste qu'on n'a pas pu lire n'est pas une liste vide : on le dit, on ne propose pas « ajouter » comme si rien n'existait. */
   const alimentsEnPanne = !!lectureAliments.error && aliments.length === 0
   const mange = useMange()
+  /* Le bandeau bleu d'un plat congelé dit « Mail mardi à 19 h… » quand MON rappel « Sortir du congélateur » est activé,
+     « Pense à sortir… » sinon. Tant que les réglages ne sont pas lus, il ne promet pas de mail. */
+  const rappelActif = useRappelActif('sortir_du_congelateur')
   const choisit = useChoisirUnRepas()
   /* « Sauté » du petit déjeuner et de la collation, et sa remise : hors de la feuille, donc leur propre état. */
   const saute = useChoisirUnRepas()
@@ -218,7 +219,7 @@ export function Semaine({ userId, va, remplace }: {
                     return (
                       <CarteDuRepas key={carte.cle} carte={carte} membres={membres} moi={userId} jour={jourChoisi.jour} repas={m}
                                     photo={c.genre === 'plat' ? photoDe(c.recipeId) : null}
-                                    maintenant={now} rappelActif={RAPPEL_PAR_MAIL_ACTIF}
+                                    maintenant={now} rappelActif={rappelActif}
                                     surChange={() => ouvre(m, pourDeLaCarte(carte, sansChoix, membres.length), carte.cle)}
                                     surMange={surMange} enCours={mange.isPending}
                                     enPlus={mienne && c.genre === 'plat'

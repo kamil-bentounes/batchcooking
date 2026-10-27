@@ -49,4 +49,4 @@ En rejoignant, ta date d’arrivée est posée au **1er du mois suivant**, pas �
 
 ## Ce que l’appli ne fait pas
 
-Je n’ai pas trouvé de code qui envoie un mail de bienvenue ou de rappel.
+Je n’ai pas trouvé de code qui envoie un mail de bienvenue. Les rappels par mail existent, mais chacun les active lui-même (voir « rappels-par-mail »).

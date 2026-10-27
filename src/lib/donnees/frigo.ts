@@ -107,7 +107,12 @@ export function useCongele() {
 export function useSortDuCongelo() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (ids: string[]) => metsAJour(ids, { location: 'frigo' }),
+    /* Seulement ce qui est encore au congélateur : un lien « C'est fait » rouvert, ou deux appareils, ne ramènent
+       pas au frigo (et ne redatent pas) une barquette déjà sortie. */
+    mutationFn: async (ids: string[]) => {
+      if (ids.length === 0) return []
+      return ou(await supabase.from('portion').update({ location: 'frigo' }).in('id', ids).eq('location', 'congelateur').select())
+    },
     onSuccess: () => qc.invalidateQueries(),
   })
 }

@@ -227,6 +227,19 @@ export function Settings({ va }: { va: (v: string) => void }) {
       </section>
 
       <section className="mt-12">
+        <h2 className="titre text-xl text-herbe">Les rappels par mail</h2>
+        <p className="mt-1 text-doux text-[15px]">
+          Décongeler, une barquette qui va périmer, noter les dépenses, clôturer le mois : un mail quand il y a quelque
+          chose à faire. Chacun règle les siens, et tout est coupé tant que tu n’as rien activé.
+        </p>
+        <div className="mt-4">
+          <Bouton variante="discret" onClick={() => va('/rappels')}>
+            Régler mes rappels
+          </Bouton>
+        </div>
+      </section>
+
+      <section className="mt-12">
         <h2 className="titre text-xl text-herbe">Ton mot de passe</h2>
         <p className="mt-1 text-doux text-[15px]">
           Celui qui te fait entrer. Le changer prend dix secondes.

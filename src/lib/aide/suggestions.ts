@@ -14,7 +14,7 @@
 export const SANS_BOUTON_D_ENTETE = [
   '/charges', '/budget-reglages', '/epargne', '/profil', '/semaine', '/frigo', '/bilan', '/choisir', '/magasin',
   '/plan', '/cuisine', '/dressage', '/inventer', '/photo', '/ticket', '/peser', '/importer', '/objectifs',
-  '/reglages', '/motdepasse', '/mois-type', '/aliments',
+  '/reglages', '/motdepasse', '/mois-type', '/aliments', '/rappels',
 ]
 
 export function aLeBoutonDansSonEntete(ici: string): boolean {
@@ -34,6 +34,7 @@ export const SUR_CET_ECRAN: Record<string, string[]> = {
   '/mois-type': ['Comment est calculé le mois type ?', 'Combien chacun paie par mois ?'],
   '/toutes-les-charges': ['Comment filtrer les charges par personne ?'],
   '/reglages': ['Comment inviter quelqu’un ?'],
+  '/rappels': ['Comment activer un rappel par mail ?', 'Thauba voit-elle mes rappels ?'],
   '/profil': ['À quoi sert ma date d’arrivée ?'],
   '/cuisine-accueil': ['Comment se déroule une session de cuisine ?'],
   '/semaine': ['Comment choisir ce que je mange ce soir ?', 'Comment changer un repas le jour même ?'],
