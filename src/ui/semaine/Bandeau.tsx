@@ -15,11 +15,18 @@ const COULEUR: Record<PointDuJour, string> = {
   frigo: '#2F5D45', congelateur: '#3E6A84', autre: '#E8A33D', vide: 'transparent',
 }
 
+/* Sur le fond encre du jour choisi, le vert et le bleu du fond clair disparaissent (1,9:1 et 2,5:1) :
+   on prend leurs frères clairs, qui passent 3:1 avec une grande marge (6,7:1 et 6,6:1). */
+const COULEUR_SUR_ENCRE: Record<PointDuJour, string> = {
+  frigo: '#6FBF94', congelateur: '#7DB4D2', autre: '#E8A33D', vide: 'transparent',
+}
+
 function Point({ genre, choisi }: { genre: PointDuJour; choisi: boolean }) {
   const creux = genre === 'vide'
+  const couleur = (choisi ? COULEUR_SUR_ENCRE : COULEUR)[genre]
   return (
     <span data-point={genre} className="size-[7px] rounded-full"
-          style={{ background: COULEUR[genre], boxShadow: `inset 0 0 0 1.2px ${creux ? (choisi ? '#8DA095' : '#9FB0A4') : COULEUR[genre]}` }} />
+          style={{ background: couleur, boxShadow: `inset 0 0 0 1.2px ${creux ? (choisi ? '#8DA095' : '#9FB0A4') : couleur}` }} />
   )
 }
 

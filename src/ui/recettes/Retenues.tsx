@@ -28,7 +28,9 @@ export function Retenues({
   /** Le motif d'un refus de saisie (« 2.5 », « 21 »), ou `null` quand elle est valide. */
   surRefus: (message: string | null) => void
   surCible: (parts: number) => void
-  surParts: (recipeId: string, parts: number) => void
+  /** `pas` : l'appui sur « − » (-1) ou « + » (1). Le parent repart alors de la dernière valeur posée, pas de celle
+   *  qui s'affiche : deux appuis rapides font deux pas. */
+  surParts: (recipeId: string, parts: number, pas?: 1 | -1) => void
   surRetire: (id: string) => void
 }) {
   const [regle, setRegle] = useState(false)
@@ -128,7 +130,7 @@ export function Retenues({
               <div className="mt-auto flex items-center justify-between px-0.5 pb-1.5">
                 <button type="button" aria-label={`Une part de moins, ${c.recipe.title}`}
                         disabled={c.servings <= 1} className={`${pas} bg-fond/14`}
-                        onClick={() => surParts(c.recipe_id, c.servings - 1)}>
+                        onClick={() => surParts(c.recipe_id, c.servings - 1, -1)}>
                   <Icone nom="moins" taille={18} />
                 </button>
                 <span className="text-center leading-none">
@@ -144,7 +146,7 @@ export function Retenues({
                 </span>
                 <button type="button" aria-label={`Une part de plus, ${c.recipe.title}`}
                         disabled={c.servings >= PARTS_MAX_RECETTE} className={`${pas} bg-fond/14`}
-                        onClick={() => surParts(c.recipe_id, c.servings + 1)}>
+                        onClick={() => surParts(c.recipe_id, c.servings + 1, 1)}>
                   <Icone nom="plus" taille={18} />
                 </button>
               </div>

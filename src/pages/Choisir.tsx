@@ -20,14 +20,17 @@
  * Et une forme nouvelle (R1) : le catalogue entier est chargé en léger, on le lit
  * dix recettes à la fois, la photo à gauche, et (i) ouvre la fiche.
  */
+import { useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef, useState } from 'react'
 import {
   Attente, BarreAction, Chiffre, Erreur, Passage, Vide, dateLongue,
 } from '../ui/coque.tsx'
 import {
-  dimancheDe, useChangeEtat, useChoisitRecette, useCycle, useMajCycle, useRecettesDuCycle,
+  CLE, dimancheDe, useChangeEtat, useChoisitRecette, useCycle, useMajCycle, useRecettesDuCycle,
   useRetireRecette,
 } from '../lib/donnees/cycle.ts'
+import type { RecetteChoisie } from '../lib/donnees/cycle.ts'
+import { PARTS_MAX_RECETTE } from '../lib/recettes/parts.ts'
 import { useGenereListe } from '../lib/donnees/courses.ts'
 import { useStock } from '../lib/donnees/barquettes.ts'
 import {
@@ -81,6 +84,7 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
   const { de, a } = bornesDeLaPage(pageSure, filtrees.length)
   const { data: manques } = useManques(affichees.map(r => r.id), placard)
 
+  const qc = useQueryClient()
   const choisit = useChoisitRecette()
   const retire = useRetireRecette()
   const majCycle = useMajCycle()
@@ -136,8 +140,15 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
       issue('cible', setEchecCarte, reprend))
   }
 
-  function reglePartsDeLaRecette(recipeId: string, parts: number) {
+  function reglePartsDeLaRecette(recipeId: string, parts: number, pas?: 1 | -1) {
     if (!cycle) return
+    /* « + » « + » : chaque appui part de la DERNIÈRE valeur posée (le cache, mis à jour d'avance par la
+       mutation), pas de celle que l'écran affiche encore — il n'a pas eu le temps de se redessiner. */
+    if (pas) {
+      const posee = qc.getQueryData<RecetteChoisie[]>(CLE.recettesDuCycle(cycle.id))
+        ?.find(c => c.recipe_id === recipeId)?.servings
+      if (posee !== undefined) parts = Math.min(PARTS_MAX_RECETTE, Math.max(1, posee + pas))
+    }
     regle.mutate({ cycleId: cycle.id, recipeId, parts }, issue('parts', setEchecCarte, reprend))
   }
 
@@ -179,7 +190,8 @@ export function Choisir({ retour, va }: { retour: () => void; va: (v: string) =>
       <BarreAction>
         <div className="flex items-center gap-4">
           <span className="grow">
-            <Chiffre valeur={`${partsPrises} / ${cible}`} taille={30} unite="parts" />
+            {/* Insécables : « 6 / 10 » ne se coupe pas en « 6 / » puis « 10 » à 320 px. */}
+            <Chiffre valeur={`${partsPrises}\u00a0/\u00a0${cible}`} taille={30} unite="parts" />
             <span className="block text-[13px] text-doux mt-0.5">
               {choisies.length === 0
                 ? 'Aucune recette choisie'

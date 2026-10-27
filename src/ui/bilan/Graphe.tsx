@@ -67,10 +67,14 @@ export function Graphe({ titre, unite, mot, jours, valeur, moyenne, cible, tenus
               </span>
             )
           }
+          /* Un jour hors cible a une teinte plus claire, comme dans l'écran d'avant. La couleur n'est pas le
+             seul signe : la phrase du bas dit « N jours sous / au-dessus de la cible », et la cible est tracée. */
+          const tenu = cible === null ? true : sens === 'plafond' ? v <= cible : v >= cible
           return (
             <span key={j.jour} className="flex h-full min-w-0 flex-1 items-end">
-              <span data-barre="" className={`w-full min-h-[5px] ${arrondi} ${aplat}`}
-                    style={{ height: `${Math.min(100, (v / max) * 100)}%` }} />
+              <span data-barre="" className={`w-full min-h-[5px] ${arrondi} ${aplat} ${tenu ? '' : 'opacity-40'}`}
+                    style={{ height: `${Math.min(100, (v / max) * 100)}%` }}
+                    {...(tenu ? {} : { 'data-hors-cible': '' })} />
             </span>
           )
         })}

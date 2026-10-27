@@ -75,6 +75,8 @@ export function EnPlus({ cas, frequents, nosAliments = [], deployeParDefaut = fa
           ))}
         </ul>
       )}
+      {/* Retirer un extra qui échoue : la ligne restait, sans un mot. */}
+      <Erreur de={supprime.error} />
 
       {!ouvert ? (
         <button onClick={() => setOuvert(true)}

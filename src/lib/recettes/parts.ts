@@ -44,3 +44,14 @@ export function lireSaisie(
   if (l.etat === 'vide' || l.valeur === courant) return { commit: null, refus: null }
   return { commit: l.valeur, refus: null }
 }
+
+/**
+ * La liste des recettes retenues, avec les parts d'UNE recette posées d'avance : le chiffre bouge
+ * tout de suite, et l'appui suivant sur « + » part de lui, pas de ce que la base a rendu il y a
+ * une seconde (deux appuis rapides à 4 parts donnaient 5, le second repartait de 4).
+ */
+export function avecLesParts<T extends { recipe_id: string; servings: number }>(
+  liste: T[], recipeId: string, nombre: number,
+): T[] {
+  return liste.map(c => (c.recipe_id === recipeId ? { ...c, servings: nombre } : c))
+}

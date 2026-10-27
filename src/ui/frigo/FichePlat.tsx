@@ -75,6 +75,11 @@ export function FichePlat({ groupe, prevus, erreurPrevus, membres, recette, foye
   const avecLesRepas = (geste: string, libere: Ecarte['libere']) =>
     [geste, phraseDesRepasLibres(libere, moi, membres, now)].filter(Boolean).join(' ')
 
+  /* Un geste en vol verrouille les autres : « Congeler » puis « Jeter » en deux appuis rapides visaient les
+     mêmes parts (la fiche n'a pas encore relu le frigo), et la seconde écriture échouait ou jetait ce qu'on
+     venait de congeler. */
+  const occupe = mange.isPending || congele.isPending || sort.isPending || ecarte.isPending
+
   const erreur = mange.error ?? congele.error ?? sort.error ?? ecarte.error ?? dates.error ?? photo.error ?? erreurPrevus
 
   const efface = () => { mange.reset(); congele.reset(); sort.reset(); ecarte.reset(); dates.reset(); photo.reset() }
@@ -231,13 +236,13 @@ export function FichePlat({ groupe, prevus, erreurPrevus, membres, recette, foye
 
       <div className="mx-1 mt-4 flex flex-col gap-2.5">
         {auFroid ? (
-          <button type="button" disabled={sort.isPending || !lus}
+          <button type="button" disabled={occupe || !lus}
                   onClick={() => sorties ? sortir(sorties.map(p => p.id)) : n > 1 ? setQuestion('sortir') : sortir(ids)}
                   className="h-[52px] rounded-2xl bg-herbe text-[16px] font-semibold text-fond disabled:opacity-60">
             Je les sors du congélateur
           </button>
         ) : (
-          <button type="button" disabled={mange.isPending || !lus} onClick={mangerUne}
+          <button type="button" disabled={occupe || !lus} onClick={mangerUne}
                   className="h-[52px] rounded-2xl bg-herbe text-[16px] font-semibold text-fond disabled:opacity-60">
             En manger une maintenant
           </button>
@@ -249,20 +254,20 @@ export function FichePlat({ groupe, prevus, erreurPrevus, membres, recette, foye
               Changer le repas
             </button>
           ) : (
-            <button type="button" disabled={congele.isPending || !lus}
+            <button type="button" disabled={occupe || !lus}
                     onClick={() => n > 1 ? setQuestion('congeler') : congeler(1)}
                     className="h-12 flex-1 rounded-2xl bg-piste text-[15px] font-semibold disabled:opacity-60">
               Congeler
             </button>
           )}
-          <button type="button" disabled={ecarte.isPending || !lus}
+          <button type="button" disabled={occupe || !lus}
                   onClick={() => n > 1 ? setQuestion('jeter') : jeter(1)}
                   className="h-12 flex-1 rounded-2xl bg-transparent text-[15px] font-semibold shadow-[inset_0_0_0_1.5px_var(--color-brume)] disabled:opacity-60"
                   style={{ color: ROUGE }}>
             Jeter
           </button>
         </div>
-        <button type="button" disabled={ecarte.isPending || !lus}
+        <button type="button" disabled={occupe || !lus}
                 onClick={() => n > 1 ? setQuestion('retirer') : retirer(1)}
                 className="min-h-11 self-start px-1 text-[14px] font-semibold text-doux underline underline-offset-[3px] disabled:opacity-60">
           {auFroid ? 'Retirer du congélateur' : 'Retirer du frigo'}

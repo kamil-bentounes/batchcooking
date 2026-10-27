@@ -54,6 +54,15 @@ describe('les graphes des deux personnes', () => {
   const cK = renderToStaticMarkup(<CartePersonne p={kamil} rang={0} echelle={echelle} />)
   const cT = renderToStaticMarkup(<CartePersonne p={thauba} rang={1} echelle={echelle} />)
 
+  it('un jour hors cible a une teinte plus claire ; sans cible, aucun ne l’est', () => {
+    // Kamil : 620 kcal sous le plafond (tenu), 34 g de protéines sous le plancher de 150 g (hors cible), deux jours.
+    expect(cK.match(/data-hors-cible/g)).toHaveLength(2)
+    expect(cK.match(/data-barre="" class="[^"]*opacity-40/g)).toHaveLength(2)
+    expect(cT).not.toContain('data-hors-cible')
+    // La phrase reste : la couleur n'est pas le seul signe.
+    expect(cK).toMatch(/jours? au-dessus de la cible|jours? sous la cible/)
+  })
+
   it('une même valeur fait la même hauteur chez l’un et chez l’autre', () => {
     const solo = renderToStaticMarkup(<CartePersonne p={thauba} rang={1} echelle={echelleCommune([thauba])} />)
     expect(hauteurs(cT)).not.toEqual(hauteurs(solo))

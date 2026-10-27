@@ -8,6 +8,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ou, ouNul, supabase } from '../supabase.ts'
 import type { Ligne } from '../supabase.ts'
+import { avecLesParts } from '../recettes/parts.ts'
 
 export type Cycle = Ligne<'cycle'>
 export type Etat = Cycle['state']
@@ -187,9 +188,12 @@ export function useRecettesDuCycle(cycleId: string | undefined) {
   })
 }
 
+const CLE_ECRITURE_PARTS = ['cycle_recipe'] as const
+
 export function useChoisitRecette() {
   const qc = useQueryClient()
   return useMutation({
+    mutationKey: CLE_ECRITURE_PARTS,
     // Les écritures des parts se suivent (même `scope` = file d'attente) : « 1 » puis « 12 »
     // tapés dans le champ partaient ensemble, et celle qui arrivait la dernière gagnait,
     // pas la dernière tapée. La base gardait « 1 » : le champ montrait 12.
@@ -202,7 +206,24 @@ export function useChoisitRecette() {
         cycle_id: cycleId, household_id: foyer, recipe_id: recipeId, servings: parts,
       }, { onConflict: 'cycle_id,recipe_id' }).select().single())
     },
-    onSuccess: () => qc.invalidateQueries({ predicate: q => garderLeCatalogue(q.queryKey) }),
+    /* Optimiste : le chiffre d'une recette DÉJÀ retenue bouge tout de suite. Sans ça, « + » « + »
+       à 4 parts calculait deux fois « 4 + 1 » (la base n'avait pas encore répondu) et le second
+       appui se perdait. Une recette qu'on retient pour la première fois n'est pas dans la liste :
+       rien à poser d'avance, elle apparaît à la réponse. */
+    onMutate: async ({ cycleId, recipeId, parts }) => {
+      const cle = CLE.recettesDuCycle(cycleId)
+      /* Le cache d'abord, de façon synchrone : l'appui suivant le relit (`Choisir`) avant que l'écran
+         ait eu le temps de se redessiner. */
+      const annule = qc.cancelQueries({ queryKey: cle })
+      qc.setQueryData<RecetteChoisie[]>(cle, l => (l ? avecLesParts(l, recipeId, parts) : l))
+      await annule
+    },
+    /* Réussie OU ratée, la base fait foi : en cas d'erreur le chiffre revient à sa valeur. Mais pas
+       entre deux appuis rapides — relire la base alors qu'une écriture attend ferait revenir le
+       chiffre en arrière, et le troisième appui repartirait de la mauvaise valeur. */
+    onSettled: () => (qc.isMutating({ mutationKey: CLE_ECRITURE_PARTS }) <= 1
+      ? qc.invalidateQueries({ predicate: q => garderLeCatalogue(q.queryKey) })
+      : undefined),
   })
 }
 

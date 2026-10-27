@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { lienDeploye, useRoute } from './lib/route.ts'
+import { garderLeRetour, prendreLeRetour, retourApresConnexion } from './lib/lien.ts'
 import { SESSION_PERDUE } from './lib/session-perdue.ts'
 import { LA_BASE_NE_REPOND_PAS, PAS_DE_RESEAU, classeLaPanne, estUnePanneDeReseau } from './lib/reseau.ts'
 import { BandeauDePanne } from './ui/BandeauDePanne.tsx'
@@ -93,13 +94,20 @@ export default function App() {
     setPanne(r.ratee)
     appliLa.current = !r.ratee && !!r.session
     if (r.session) setPerdue(false)
+    /* Le lien d'un mail (`/frigo?sortir=…`) ouvert déconnecté : la connexion par mot de passe garde l'adresse,
+       mais un lien de connexion par e-mail renvoie sur le chemin SEUL, et la requête se perdait. On la remet
+       avant que l'écran se monte : `Frigo` lit sa requête une fois, au montage. */
+    if (r.session && !r.ratee) {
+      const retour = prendreLeRetour()
+      if (retour) remplace(retour)
+    }
     sessionRef.current = r.session
     setSession(r.session)
     setFoyer(r.foyer)
     setMdpPose(r.profil ? !!r.profil.password_set : true)
     setSansPrenom(r.profil ? (r.profil.display_name ?? '').trim() === '' : false)
     setPret(true)
-  }, [])
+  }, [remplace])
 
   /* Le numéro de la DERNIÈRE relecture : une plus ancienne qui répond après
      elle n'a plus rien à dire. */
@@ -189,6 +197,13 @@ export default function App() {
     window.addEventListener(SESSION_PERDUE, surSessionPerdue)
     return () => { sub.subscription.unsubscribe(); window.removeEventListener(SESSION_PERDUE, surSessionPerdue) }
   }, [relire])
+
+  /* Déconnectée sur un lien à requête : on garde le chemin ET la requête jusqu'après la connexion. */
+  useEffect(() => {
+    if (!pret || session || panne) return
+    const vers = retourApresConnexion(ici, window.location.search)
+    if (vers) garderLeRetour(vers)
+  }, [pret, session, panne, ici])
 
   const ecran = (): ReactNode => {
   if (!pret) return <main className="min-h-dvh grid place-items-center text-doux">Un instant…</main>

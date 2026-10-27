@@ -5,7 +5,7 @@
  * main sur le chariot. D'où les cibles larges, l'ordre des rayons appris du
  * geste, et une sortie par enseigne — on ne fait pas trois magasins d'un trait.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Attente, BarreAction, Erreur, Passage, Principal, Surface, Vide,
 } from '../ui/coque.tsx'
@@ -22,6 +22,9 @@ import { messageEchec } from '../lib/recettes/echecs.ts'
 import { ecritQuantiteEtUnite } from '../lib/quantite.ts'
 import type { Geste } from '../lib/recettes/echecs.ts'
 import { DESSINS, PictoRayon, TuileIcone } from '../ui/rayons.tsx'
+
+/** Le temps que « Oui, rentrer sans les N » reste armé avant de redevenir « Rentrer sans les N ». */
+const DELAI_ARME_MS = 5_000
 
 /** Le prix payé d'un article : au-delà, c'est une faute de frappe, pas un ticket. */
 const PRIX_MAX = 10_000
@@ -54,9 +57,21 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
     magasins.find(m => m.id === id)?.name ?? 'Sans magasin'
   const restants = articles.filter(a => !a.checked_at).length
   const sous = budget(articles)
+  /* « Rentrer sans les 12 » est le bouton plein, toujours sous le pouce, au-dessus d'une liste qu'on
+     coche en marchant : un appui de trop et la session est rendue avec douze articles oubliés. Tant
+     qu'il en reste, le premier appui l'arme quelques secondes, seul le second rentre. */
+  const [armeA, setArmeA] = useState<number | null>(null)
+  // Armé POUR ce nombre d'articles : qu'on en coche ou qu'on en ajoute un, le bouton redemande.
+  const arme = armeA === restants
+  useEffect(() => {
+    if (armeA === null) return
+    const t = setTimeout(() => setArmeA(null), DELAI_ARME_MS)
+    return () => clearTimeout(t)
+  }, [armeA])
 
   async function termine() {
     if (!cycle) return
+    setArmeA(null)
     for (const s of sorties) {
       if (s.storeId) await sortie.mutateAsync({ cycleId: cycle.id, storeId: s.storeId })
     }
@@ -90,11 +105,18 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
                     className="min-h-11 px-2 text-[14px] text-doux shrink-0">Fermer</button>
           </div>
         )}
-        <Principal onClick={termine} disabled={change.isPending || articles.length === 0}>
+        <Principal onClick={() => (restants > 0 && !arme ? setArmeA(restants) : termine())}
+                   disabled={change.isPending || articles.length === 0}>
           {restants === 0 ? 'J’ai tout, rentrons'
-            : restants === 1 ? 'Rentrer sans cet article'
-              : `Rentrer sans les ${restants} articles`}
+            : arme
+              ? (restants === 1 ? 'Oui, rentrer sans cet article' : `Oui, rentrer sans les ${restants}`)
+              : restants === 1 ? 'Rentrer sans cet article'
+                : `Rentrer sans les ${restants} articles`}
         </Principal>
+        {/* Annoncé : le texte du bouton change sous le doigt, pas sous l'oreille. */}
+        <p role="status" aria-live="polite" className="sr-only">
+          {arme ? `Appuie encore pour rentrer sans ${restants === 1 ? 'cet article' : `les ${restants} articles`}.` : ''}
+        </p>
         <Erreur de={change.error ?? sortie.error} />
       </BarreAction>
     }>
@@ -104,9 +126,9 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
       {articles.length > 0 && (
         <section aria-label="Le total estimé"
                  className="mt-4 rounded-[28px] bg-encre text-fond p-5 shadow-carte">
-          <div className="flex items-end justify-between gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-3">
             <div className="min-w-0">
-              <p className="chiffre text-[56px] font-semibold leading-[.95] text-safran">
+              <p className="chiffre text-[clamp(40px,14vw,56px)] font-semibold leading-[.95] text-safran">
                 {sous.paye !== null ? prix(sous.paye)
                   : sous.estime > 0 ? prix(sous.estime) : restants}
                 {(sous.paye !== null || sous.estime > 0) && (
@@ -124,7 +146,7 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
                       : `article${restants > 1 ? 's' : ''} à prendre`)}
               </p>
             </div>
-            <div className="text-right shrink-0">
+            <div className="ml-auto text-right shrink-0">
               <p className="chiffre text-[30px] font-semibold leading-none">
                 {dansLePanier}
                 <span className="ml-1.5 text-[20px] font-normal text-fond/70">sur {enBoutique}</span>
@@ -315,7 +337,7 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surRefus
       </div>
 
       {ouvert && (
-        <div className="pb-4 pl-[72px] pr-[18px] space-y-3">
+        <div className="pb-4 pl-4 min-[400px]:pl-[72px] pr-[18px] space-y-3">
           <div className="flex gap-2 flex-wrap">
             {magasins.map(m => (
               <button key={m.id} onClick={() => surMaj({ store_id: m.id })}
@@ -326,7 +348,7 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surRefus
               </button>
             ))}
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-wrap gap-2 items-center">
             <label htmlFor={`prix-${article.id}`} className="text-[13px] text-doux">Prix payé</label>
             <input type="number" step="0.01" min="0" max={PRIX_MAX} id={`prix-${article.id}`}
                    aria-label="Prix payé"
@@ -354,7 +376,8 @@ function Ligne({ article, ouvert, magasins, surOuvre, surCoche, surMaj, surRefus
               </span>
             ) : (
               <button onClick={surSupprime}
-                      className="ml-auto text-groseille text-[14px] px-2 min-h-11">
+                      className="ml-auto text-groseille text-[14px] px-2 min-h-11 min-w-11 shrink-0
+                                 whitespace-nowrap">
                 Supprimer
               </button>
             )}

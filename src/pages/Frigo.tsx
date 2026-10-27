@@ -47,7 +47,7 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
      « libre » que des repas réclament peut-être, ni un geste qui s'en fierait. */
   const prevus = lesPrevus ?? null
   const [boite, echelle] = useEchelle(LARGEUR)
-  const { data: ingredients = [] } = useIngredients()
+  const { data: ingredients = [], error: erreurIngredients } = useIngredients()
   const { data: foyer } = useFoyer()
   const now = maintenant()
 
@@ -176,6 +176,7 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
           </div>
           <Erreur de={erreurParts} />
           <Erreur de={erreurPrevus} />
+          <Erreur de={erreurIngredients} />
         </div>
 
         {/* Le sol : une bande plus sombre derrière le bas du frigo, comme la maquette. Elle commence 68 px (à
@@ -198,12 +199,13 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
       </div>
 
       <InterieurFrigo visible={vue === 'frigo'} plats={platsFrigo} ingredients={duLieu('frigo')}
-                      annonce={vue === 'frigo' ? annonce : null} erreur={erreurPrevus} attente={charge} surFerme={ferme}
+                      annonce={vue === 'frigo' ? annonce : null} erreur={erreurPrevus ?? erreurIngredients} ingredientsEnPanne={!!erreurIngredients}
+                      attente={charge} surFerme={ferme}
                       surPlat={setFicheCle} surIngredient={setIngredientId}
                       surAjoute={() => setAjout('frigo')} surPhoto={() => va('/photo')} />
       <InterieurCongelo visible={vue === 'congelo'} plats={platsCongelo} ingredients={duLieu('congelateur')}
-                        plusTard={plusTard} annonce={vue === 'congelo' ? annonce : null} erreur={erreurPrevus} attente={charge}
-                        surFerme={ferme} surPlat={setFicheCle} surIngredient={setIngredientId}
+                        plusTard={plusTard} annonce={vue === 'congelo' ? annonce : null} erreur={erreurPrevus ?? erreurIngredients} ingredientsEnPanne={!!erreurIngredients}
+                        attente={charge} surFerme={ferme} surPlat={setFicheCle} surIngredient={setIngredientId}
                         surAjoute={() => setAjout('congelateur')} />
 
       {/* Le lien « C'est fait » d'un mail : sortir ces barquettes du congélateur, après confirmation. */}
@@ -243,7 +245,9 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
       {/* Le placard : une simple liste. */}
       <Feuille ouverte={placard && !ingredientOuvert} fermer={() => { setPlacard(false); setAjoutPlacard(false) }} titre="Le placard">
         <h2 className="titre mx-1 text-[24px] font-semibold">Le placard</h2>
-        {duLieu('placard').length === 0 ? (
+        {/* Une lecture en panne n'est pas un placard vide : on le dit, on n'écrit pas « rien ». */}
+        {erreurIngredients ? <div className="mx-1"><Erreur de={erreurIngredients} /></div>
+          : duLieu('placard').length === 0 ? (
           <p className="mx-1 mt-3 text-[14px] text-doux">Rien au placard pour l’instant.</p>
         ) : (
           <ul className="mx-1 mt-3 flex flex-wrap gap-2">

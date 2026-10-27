@@ -8,7 +8,9 @@
  * local rend pour une adresse de retour qui portait déjà ce fragment.
  */
 import { describe, it, expect } from 'vitest'
-import { erreurDeLien, fragmentRepare } from './lien.ts'
+import {
+  erreurDeLien, fragmentRepare, garderLeRetour, prendreLeRetour, retourApresConnexion,
+} from './lien.ts'
 
 const BASE = 'https://kamil-bentounes.github.io/batchcooking/invite/3fb8'
 const EXPIRE = '#error=access_denied&error_code=otp_expired'
@@ -65,5 +67,57 @@ describe('fragmentRepare', () => {
 
   it('garde le DERNIER fragment, même empoisonné deux fois', () => {
     expect(fragmentRepare(`${EXPIRE}#${EXPIRE.slice(1)}#${JETONS}`)).toBe(`#${JETONS}`)
+  })
+})
+
+describe('le retour après la connexion (lien d’un mail ouvert déconnecté)', () => {
+  const ID = '0b9c1f4e-1d2a-4b3c-8d4e-5f6a7b8c9d0e'
+  const stock = () => {
+    const m = new Map<string, string>()
+    return {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => { m.set(k, v) },
+      removeItem: (k: string) => { m.delete(k) },
+    }
+  }
+
+  it('garde le chemin ET la requête du lien « C’est fait »', () => {
+    expect(retourApresConnexion('/frigo', `?sortir=${ID}`)).toBe(`/frigo?sortir=${ID}`)
+    expect(retourApresConnexion('/semaine', '?jour=2026-10-27&repas=diner')).toBe('/semaine?jour=2026-10-27&repas=diner')
+  })
+  it('n’a rien à garder sans requête connue', () => {
+    expect(retourApresConnexion('/frigo', '')).toBeNull()
+    expect(retourApresConnexion('/frigo', '?x=1')).toBeNull()
+  })
+  it('ne rejoue ni une erreur de lien ni un jeton', () => {
+    expect(retourApresConnexion('/frigo', `?error=access_denied&code=abc&sortir=${ID}`)).toBe(`/frigo?sortir=${ID}`)
+  })
+  it('n’accepte qu’un chemin interne, jamais une adresse externe', () => {
+    for (const mauvais of ['//autre.example/frigo', 'https://autre.example/frigo', '/\\autre.example', '/../frigo',
+      'frigo', '/', '', '/frigo?x', 'javascript:alert(1)']) {
+      expect(retourApresConnexion(mauvais, `?sortir=${ID}`), mauvais).toBeNull()
+    }
+  })
+  it('refuse une valeur qui n’est pas un identifiant de liste', () => {
+    expect(retourApresConnexion('/frigo', '?sortir=<script>')).toBeNull()
+    expect(retourApresConnexion('/frigo', `?sortir=${'a'.repeat(500)}`)).toBeNull()
+  })
+  it('rend le retour une fois, puis plus rien', () => {
+    const s = stock()
+    garderLeRetour(`/frigo?sortir=${ID}`, s)
+    expect(prendreLeRetour(s)).toBe(`/frigo?sortir=${ID}`)
+    expect(prendreLeRetour(s)).toBeNull()
+  })
+  it('ne rend pas un retour vieux de plus d’une heure', () => {
+    const s = stock()
+    garderLeRetour(`/frigo?sortir=${ID}`, s, 1_000)
+    expect(prendreLeRetour(s, 1_000 + 61 * 60 * 1000)).toBeNull()
+  })
+  it('ne rend pas un stockage trafiqué', () => {
+    const s = stock()
+    garderLeRetour('//autre.example/x?sortir=a', s)
+    expect(prendreLeRetour(s)).toBeNull()
+    s.setItem('popote:retour', 'pas du json')
+    expect(prendreLeRetour(s)).toBeNull()
   })
 })

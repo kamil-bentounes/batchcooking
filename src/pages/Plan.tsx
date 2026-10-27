@@ -40,7 +40,10 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
   const convie = useConvie()
   const { data: choisies = [] } = useRecettesDuCycle(cycle?.id)
   const { data: foyersAmis = [] } = useFoyersAmis()
-  const [reglages, setReglages] = useState(false)
+  /* Où s'ouvre la carte de l'équipement : sous la carte du goulot si c'est elle qu'on a touchée,
+     en bas si c'est le crayon. Sans appareil enregistré (le premier plan), elle n'a pas à s'ouvrir :
+     elle est déjà là, au-dessus de la frise. */
+  const [reglages, setReglages] = useState<null | 'goulot' | 'bas'>(null)
   const [convies, setConvies] = useState<string[]>([])
 
   const capacites = useMemo(
@@ -79,9 +82,22 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
   const nomAppareil = (code: string) =>
     catalogue.find(a => a.code === code)?.label ?? code
   const cuisiniers = simulation.ressources.cuisiniers
-  const equipementOuvert = reglages || choisis.length === 0
-  const carteOuverte = equipementOuvert && (precedent !== undefined || precedentEnPanne)
+  const goulotVisible = !!bloquant && gainSiElargi > 2
+  const placeDeLaCarte: null | 'haut' | 'goulot' | 'bas' =
+    choisis.length === 0 ? 'haut'
+      : reglages === 'goulot' && goulotVisible ? 'goulot'
+        : reglages ? 'bas' : null
+  const carteDispo = (precedent !== undefined || precedentEnPanne)
     && !lisLesAppareils && catalogue.length > 0
+  // `precedent` d'abord : l'état initial de la carte se pose UNE fois, au montage.
+  const carte = (marge: string) => carteDispo && (
+    <Equipement catalogue={catalogue} marge={marge}
+                depart={equipementInitial({ propres: capacites, derniere: precedent ?? {}, catalogue })}
+                surValide={codes => {
+                  choisitAppareils.mutate({ cycleId: cycle.id, codes })
+                  setReglages(null)
+                }} />
+  )
   const menu = choisies.filter(c => c.recipe !== null)
   const titres = new Map(menu.map(c => [c.recipe!.id, c.recipe!.title]))
   const nomsDesPlats = (ids: string[]) => ids.map(id => titres.get(id)).filter((n): n is string => !!n)
@@ -127,7 +143,7 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
       </section>
 
       {/* L'arbitrage (D5) : on chiffre le coût de l'appareil et on laisse trancher. */}
-      {bloquant && gainSiElargi > 2 && (
+      {goulotVisible && (
         <Surface className="mt-4 shadow-carte">
           <p className="text-[15px]">
             <strong className="font-semibold">{nomAppareil(bloquant)}</strong> est le goulot.
@@ -137,11 +153,13 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
             <strong className="text-encre font-semibold">{duree(gainSiElargi)} de moins</strong>.
             À toi de voir si tes plats y tiennent.
           </p>
-          <button onClick={() => setReglages(true)}
+          <button onClick={() => setReglages('goulot')}
+                  aria-expanded={placeDeLaCarte === 'goulot'}
                   className="mt-2 text-[14px] font-semibold text-herbe inline-flex items-center
                              min-h-11">Modifier l’équipement</button>
         </Surface>
       )}
+      {placeDeLaCarte === 'goulot' && carte('mt-3')}
 
       {menu.length > 0 && (
         <>
@@ -161,6 +179,10 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
           </ul>
         </>
       )}
+
+      {/* Le premier plan : rien n'est enregistré, la question « de quoi disposes-tu » passe avant
+          la frise, comme avant la refonte — on ne lance pas une session sans l'avoir vue. */}
+      {placeDeLaCarte === 'haut' && carte('mt-6')}
 
       <Frise plan={base} nomAppareil={nomAppareil} nomsDesPlats={nomsDesPlats} />
 
@@ -217,8 +239,9 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
               {resumeEquipement(choisis, nomAppareil)}
             </p>
           </div>
-          <button onClick={() => setReglages(r => !r)} aria-expanded={reglages}
-                  aria-label={reglages ? 'Masquer l’équipement' : 'Changer l’équipement du jour'}
+          <button onClick={() => setReglages(r => (r === 'bas' ? null : 'bas'))}
+                  aria-expanded={placeDeLaCarte === 'bas'}
+                  aria-label={placeDeLaCarte === 'bas' ? 'Masquer l’équipement' : 'Changer l’équipement du jour'}
                   className="size-11 rounded-full bg-piste text-encre grid place-items-center shrink-0">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -227,15 +250,7 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
           </button>
         </div>
       )}
-      {/* `precedent` d'abord : l'état initial de la carte se pose UNE fois, au montage. */}
-      {carteOuverte && (
-        <Equipement catalogue={catalogue} seul={choisis.length === 0}
-                    depart={equipementInitial({ propres: capacites, derniere: precedent ?? {}, catalogue })}
-                    surValide={codes => {
-                      choisitAppareils.mutate({ cycleId: cycle.id, codes })
-                      setReglages(false)
-                    }} />
-      )}
+      {placeDeLaCarte === 'bas' && carte('mt-3')}
     </Passage>
   )
 }
@@ -255,10 +270,12 @@ function Titre({ children }: { children: string }) {
 /** Un chiffre de la tuile du haut : en Fraunces, sa légende dessous. */
 function Chiffre3({ valeur, legende, sable }: { valeur: string; legende: string; sable?: boolean }) {
   return (
-    <div className={`rounded-[18px] p-3 ${sable ? 'bg-sable' : 'bg-piste'}`}>
-      <p className={`chiffre text-[26px] font-semibold leading-none tracking-[-.02em]
-                     ${sable ? 'text-ocre' : ''}`}>{valeur}</p>
-      <p className={`mt-1.5 text-[12.5px] leading-[1.25] ${sable ? 'text-doux' : 'text-encre'}`}>{legende}</p>
+    <div className={`rounded-[18px] p-2 min-[360px]:p-3 ${sable ? 'bg-sable' : 'bg-piste'}`}>
+      {/* Insécables, et plus petit sous 360 px : « 1 h 05 » ne se coupe pas sur deux lignes. */}
+      <p className={`chiffre text-[clamp(19px,6.2vw,26px)] font-semibold leading-none tracking-[-.02em]
+                     whitespace-nowrap ${sable ? 'text-ocre' : ''}`}>{valeur.replace(/ /g, '\u00a0')}</p>
+      <p className={`mt-1.5 text-[11px] min-[360px]:text-[12.5px] leading-[1.25] [overflow-wrap:anywhere]
+                    ${sable ? 'text-doux' : 'text-encre'}`}>{legende}</p>
     </div>
   )
 }
@@ -313,10 +330,16 @@ function Frise({ plan, nomAppareil, nomsDesPlats }:
             <li key={t.id} className="grid grid-cols-[62px_1fr] gap-3 items-center min-h-16 py-2
                                       border-t border-brume first:border-0">
               <p className="chiffre text-[15px] font-semibold leading-[1.15] text-doux tracking-normal">
-                {t.debutMin < 1 ? '0' : duree(t.debutMin)}
-                <small className="block font-[family-name:var(--font-texte)] text-[12px] font-normal">
-                  {duree(t.dureeMin)}
-                </small>
+                <span aria-hidden="true">
+                  {t.debutMin < 1 ? '0' : duree(t.debutMin)}
+                  <small className="block font-[family-name:var(--font-texte)] text-[12px] font-normal">
+                    {duree(t.dureeMin)}
+                  </small>
+                </span>
+                {/* Sans la mise en page, « 1 h 05 » puis « 20 min » ne disent plus ni début ni durée. */}
+                <span className="sr-only">
+                  {t.debutMin < 1 ? 'dès le début' : `à ${duree(t.debutMin)}`}, pendant {duree(t.dureeMin)}
+                </span>
               </p>
               <div className="min-w-0">
                 <p className="font-semibold text-[15.5px] leading-[1.25] [overflow-wrap:anywhere]">
@@ -364,10 +387,10 @@ function Frise({ plan, nomAppareil, nomsDesPlats }:
 }
 
 /** L'équipement du jour : il change d'une session à l'autre (D8). */
-function Equipement({ catalogue, depart, surValide, seul }: {
+function Equipement({ catalogue, depart, surValide, marge }: {
   catalogue: { code: string; label: string; default_capacity: number }[]
-  /** Aucun appareil choisi : pas de ligne de résumé au-dessus, la carte prend sa place. */
-  seul: boolean
+  /** L'espace au-dessus : il dépend de ce qui la précède (la frise, la carte du goulot, la ligne du résumé). */
+  marge: string
   /** Ce qui arrive coché : la dernière session du foyer, sinon le catalogue (`equipementInitial`). */
   depart: Record<string, number>
   surValide: (codes: Record<string, number>) => void
@@ -375,7 +398,7 @@ function Equipement({ catalogue, depart, surValide, seul }: {
   const [choix, setChoix] = useState<Record<string, number>>(depart)
 
   return (
-    <Surface className={`${seul ? 'mt-8' : 'mt-3'} shadow-carte`}>
+    <Surface className={`${marge} shadow-carte`}>
       <p className="text-[15px] font-semibold">Ce dont tu disposes aujourd’hui</p>
       <p className="text-[13.5px] text-doux mt-1.5">
         Le nombre dit combien de plats l’appareil prend à la fois. C’est lui qui

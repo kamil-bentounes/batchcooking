@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PARTS_MAX_CYCLE, PARTS_MAX_RECETTE, lireParts, lireSaisie, parts } from './parts.ts'
+import { PARTS_MAX_CYCLE, PARTS_MAX_RECETTE, avecLesParts, lireParts, lireSaisie, parts } from './parts.ts'
 
 describe('parts', () => {
   it('écrit le singulier jusqu’à 1, le pluriel au-delà', () => {
@@ -72,5 +72,28 @@ describe('lireSaisie', () => {
       commit: null, refus: 'Les parts se comptent en nombres entiers.' })
     expect(lireSaisie('21', 20, 4)).toEqual({ commit: null, refus: 'Pas plus de 20 parts.' })
     expect(lireSaisie('0', 20, 4)).toEqual({ commit: null, refus: 'Il faut au moins 1 part.' })
+  })
+})
+
+describe('avecLesParts (le chiffre bouge avant la base)', () => {
+  const liste = [{ recipe_id: 'a', servings: 4 }, { recipe_id: 'b', servings: 2 }]
+
+  it('ne change que la recette visée, sans toucher la liste d’origine', () => {
+    const l = avecLesParts(liste, 'a', 5)
+    expect(l).toEqual([{ recipe_id: 'a', servings: 5 }, { recipe_id: 'b', servings: 2 }])
+    expect(liste[0].servings).toBe(4)
+  })
+
+  it('deux appuis rapides sur « + » à 4 parts donnent 6 : chacun part de la dernière valeur posée', () => {
+    let affiche = liste
+    for (let appui = 0; appui < 2; appui++) {
+      const courant = affiche.find(c => c.recipe_id === 'a')!.servings
+      affiche = avecLesParts(affiche, 'a', courant + 1)
+    }
+    expect(affiche.find(c => c.recipe_id === 'a')!.servings).toBe(6)
+  })
+
+  it('une recette absente de la liste n’ajoute rien', () => {
+    expect(avecLesParts(liste, 'z', 9)).toEqual(liste)
   })
 })

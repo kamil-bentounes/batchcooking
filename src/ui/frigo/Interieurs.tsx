@@ -64,12 +64,14 @@ function Interieur({ visible, origine, fond, nom, titre, soustitre, couleurSoust
 
 export type PlatAffiche = { groupe: Groupe; photo: string | null; quand: Quand }
 
-export function InterieurFrigo({ visible, plats, ingredients, annonce, erreur, attente, surFerme, surPlat, surIngredient, surAjoute, surPhoto }: {
+export function InterieurFrigo({ visible, plats, ingredients, annonce, erreur, ingredientsEnPanne, attente, surFerme, surPlat, surIngredient, surAjoute, surPhoto }: {
   visible: boolean
   plats: PlatAffiche[]
   ingredients: IngredientRange[]
   annonce: string | null
   erreur?: unknown
+  /** Les ingrédients n'ont pas pu être lus : « rien » ne se dit pas à leur place. */
+  ingredientsEnPanne?: boolean
   attente: boolean
   surFerme: () => void
   surPlat: (cle: string) => void
@@ -83,7 +85,9 @@ export function InterieurFrigo({ visible, plats, ingredients, annonce, erreur, a
   const bac = parEtagere.get('Bac à légumes')!
   return (
     <Interieur visible={visible} origine="72% 45%" nom="Dans le frigo" titre="Frigo"
-               soustitre={attente ? 'Un instant…' : soustitreDuFrigo(parts, ingredients.length)}
+               soustitre={attente ? 'Un instant…'
+                 : ingredientsEnPanne && parts === 0 ? 'Les ingrédients ne se lisent pas'
+                   : soustitreDuFrigo(parts, ingredients.length)}
                couleurSoustitre="var(--color-doux)" annonce={annonce} erreur={erreur} surFerme={surFerme}
                fond="linear-gradient(90deg, rgba(255, 246, 222, 0.9) 0, rgba(255, 255, 255, 0) 14px, rgba(255, 255, 255, 0) calc(100% - 14px), rgba(255, 246, 222, 0.9) 100%), linear-gradient(180deg, #FFFFFF 0%, #F4F8F6 100%)">
       <div aria-hidden="true" className="absolute left-1/2 top-0 -ml-[90px] h-[5px] w-[180px] rounded-b-[5px]"
@@ -130,7 +134,8 @@ export function InterieurFrigo({ visible, plats, ingredients, annonce, erreur, a
                  background: 'linear-gradient(180deg, rgba(214, 228, 221, 0.75), rgba(200, 218, 210, 0.75))',
                  boxShadow: 'inset 0 0 0 1.5px rgba(160, 184, 172, 0.6), inset 0 10px 0 rgba(255, 255, 255, 0.4)',
                }}>
-        {bac.length === 0
+        {ingredientsEnPanne ? 'Bac à légumes : illisible'
+          : bac.length === 0
           ? 'Bac à légumes : rien'
           : bac.map(i => <TuileIngredient key={i.id} item={i} surOuvre={() => surIngredient(i.id)} />)}
       </section>
@@ -138,13 +143,14 @@ export function InterieurFrigo({ visible, plats, ingredients, annonce, erreur, a
   )
 }
 
-export function InterieurCongelo({ visible, plats, ingredients, plusTard, annonce, erreur, attente, surFerme, surPlat, surIngredient, surAjoute }: {
+export function InterieurCongelo({ visible, plats, ingredients, plusTard, annonce, erreur, ingredientsEnPanne, attente, surFerme, surPlat, surIngredient, surAjoute }: {
   visible: boolean
   plats: PlatAffiche[]
   ingredients: IngredientRange[]
   plusTard: Date | null
   annonce: string | null
   erreur?: unknown
+  ingredientsEnPanne?: boolean
   attente: boolean
   surFerme: () => void
   surPlat: (cle: string) => void
@@ -154,7 +160,9 @@ export function InterieurCongelo({ visible, plats, ingredients, plusTard, annonc
   const parts = plats.reduce((n, p) => n + p.groupe.parts.length, 0)
   return (
     <Interieur visible={visible} origine="28% 45%" nom="Dans le congélateur" titre="Congélateur"
-               soustitre={attente ? 'Un instant…' : soustitreDuCongelo(parts, plusTard)}
+               soustitre={attente ? 'Un instant…'
+                 : ingredientsEnPanne && parts === 0 ? 'Les ingrédients ne se lisent pas'
+                   : soustitreDuCongelo(parts, plusTard)}
                couleurSoustitre="var(--color-congel-encre)" annonce={annonce} erreur={erreur} surFerme={surFerme}
                fond="radial-gradient(circle at 10px 10px, rgba(255, 255, 255, 0.9) 0 1.2px, transparent 2px) 0 0 / 22px 22px, linear-gradient(180deg, #F4F9FB 0%, #DFEAEF 100%)">
       <div className="mt-5 flex flex-col gap-4">
@@ -166,7 +174,8 @@ export function InterieurCongelo({ visible, plats, ingredients, plusTard, annonc
         <section aria-label="Tiroir du bas"
                  className="flex min-h-20 flex-wrap items-center justify-center gap-2 rounded-2xl p-3 text-[13px] text-congel-encre"
                  style={{ boxShadow: 'inset 0 0 0 2px #C6D6DD' }}>
-          {ingredients.length === 0
+          {ingredientsEnPanne ? 'Tiroir du bas : illisible'
+            : ingredients.length === 0
             ? 'Tiroir du bas : vide'
             : ingredients.map(i => <TuileIngredient key={i.id} item={i} froid surOuvre={() => surIngredient(i.id)} />)}
         </section>
