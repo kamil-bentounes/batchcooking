@@ -16,7 +16,7 @@ sources:
   - src/lib/donnees/pesee.ts
   - src/lib/donnees/courses.ts
   - supabase/migrations/0025_pesee.sql
-verifie_sur: 9504cf2
+verifie_sur: ff3539b
 ---
 ## Ce que fait l’appli
 

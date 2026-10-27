@@ -18,7 +18,7 @@ sources:
   - src/App.tsx
   - supabase/migrations/0047_peremption_donnee.sql
   - supabase/migrations/0120_la_session_prend_dans_le_stock.sql
-verifie_sur: fc7f6dc
+verifie_sur: ff3539b
 ---
 ## Ce que fait l’écran
 

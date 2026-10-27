@@ -17,7 +17,7 @@ sources:
   - supabase/functions/importer/index.ts
   - supabase/migrations/0033_import.sql
   - src/lib/nutrition/macros.ts
-verifie_sur: 9504cf2
+verifie_sur: ff3539b
 ---
 ## Ce que fait l’appli
 

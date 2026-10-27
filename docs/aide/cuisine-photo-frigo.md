@@ -15,7 +15,7 @@ sources:
   - src/lib/photo.ts
   - src/lib/donnees/barquettes.ts
   - supabase/functions/frigo/index.ts
-verifie_sur: 0021cf9
+verifie_sur: ff3539b
 ---
 ## Ce que fait l’appli
 

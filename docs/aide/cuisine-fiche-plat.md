@@ -22,7 +22,7 @@ sources:
   - supabase/migrations/0092_la_photo_et_les_gestes.sql
   - supabase/migrations/0121_photo_des_plats.sql
   - supabase/migrations/0122_frigo_corrections.sql
-verifie_sur: d0d3e29
+verifie_sur: ff3539b
 ---
 ## Ce que fait l’appli
 

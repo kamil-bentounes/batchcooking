@@ -20,7 +20,7 @@ sources:
   - supabase/functions/ticket/lignes.ts
   - supabase/migrations/0024_prix.sql
   - supabase/migrations/0031_apprentissage.sql
-verifie_sur: fc7f6dc
+verifie_sur: ff3539b
 ---
 ## Ce que fait l’appli
 

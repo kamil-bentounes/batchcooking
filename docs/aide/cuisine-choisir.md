@@ -24,7 +24,7 @@ sources:
   - src/lib/donnees/cycle.ts
   - src/pages/Inventer.tsx
   - supabase/migrations/0003_class_b.sql
-verifie_sur: 9504cf2
+verifie_sur: ff3539b
 ---
 ## Ce que fait l’appli
 
@@ -33,7 +33,7 @@ Tu retiens les recettes de dimanche. L’écran compte les parts : « 6 / 10 par
 ## Comment faire
 
 1. Cherche ou filtre, puis touche le **+** rond d’une recette (sur sa photo). Le **i**, en haut à droite de la photo, ouvre sa fiche ; une coche verte (« Retenue ») et un cadre vert marquent une recette retenue.
-2. En haut, la carte sombre montre une bande de photos qui défile de côté : une petite carte par recette retenue, toutes ensemble. Le **−** et le **+** changent ses parts d’une en une (de 1 à 20 ; tu peux aussi taper le nombre), et la croix (« Retirer ») la retire.
+2. En haut, la carte sombre montre une bande de photos qui défile de côté : une petite carte par recette retenue, toutes ensemble. Le **−** et le **+** changent ses parts d’une en une (de 1 à 20 ; tu peux aussi taper le nombre ; deux appuis rapides font deux pas, et si l’écriture échoue le chiffre revient à celui de la base avec l’erreur), et la croix (« Retirer ») la retire.
 3. « N repas à couvrir » règle les « Parts visées cette semaine » (jusqu’à 40 ; 10 par défaut).
 4. « Faire la liste » (dès une recette) mène aux courses.
 

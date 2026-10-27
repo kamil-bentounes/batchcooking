@@ -19,7 +19,7 @@ sources:
   - src/lib/lien.ts
   - src/pages/Onboarding.tsx
   - supabase/config.toml
-verifie_sur: fc7f6dc
+verifie_sur: ff3539b
 ---
 ## Se connecter
 
@@ -29,7 +29,7 @@ L’écran de connexion s’intitule « On s’y met ? ». Des liens en bas choi
 - **« Première connexion »** : à utiliser quand ton compte n’a pas encore de mot de passe. « Recevoir le lien » envoie un lien par mail. Il sert une fois ; ouvre-le depuis le même appareil, puis choisis ton mot de passe.
 - **« Mot de passe oublié »** : « Réinitialiser mon mot de passe » envoie un lien de réinitialisation, valable une heure. L’appli répond « Si un compte existe pour … » : même message avec ou sans compte. Le lien mène droit à l’écran du nouveau mot de passe, qu’on ne peut pas passer.
 
-Un lien trop vieux ou déjà utilisé affiche « Ce lien a expiré ou a déjà servi » : redemande-en un. Si tu redemandes trop vite : « Doucement : attends une minute avant de redemander un lien. »
+Un lien de mail ouvert sans être connecté (le « C’est fait » d’un rappel, par exemple) te ramène sur la même page après la connexion, dans l’heure. Un lien trop vieux ou déjà utilisé affiche « Ce lien a expiré ou a déjà servi » : redemande-en un. Si tu redemandes trop vite : « Doucement : attends une minute avant de redemander un lien. »
 
 ## Choisir ou changer son mot de passe
 

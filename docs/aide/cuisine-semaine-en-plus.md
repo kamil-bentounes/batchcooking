@@ -17,7 +17,7 @@ sources:
   - src/lib/donnees/barquettes.ts
   - src/lib/semaine.ts
   - supabase/migrations/0125_semaine_corrections.sql
-verifie_sur: 0021cf9
+verifie_sur: ff3539b
 ---
 ## Ce que fait l’appli
 
@@ -31,7 +31,7 @@ verifie_sur: 0021cf9
   - « Ce que vous reprenez souvent » : les habitudes du foyer ;
   - « Un repère, pas une pesée » : des repères en un geste, selon le repas — « Restaurant » 900 kcal, « Sandwich » 550, « Pizza » 850, « Yaourt » 60. Un repère n’apparaît plus quand un de nos aliments le remplace : il le nomme (champ « Remplace le repère » : « Yaourt dessert protéiné » peut remplacer « Yaourt ») ou porte exactement son nom. Rien ne les distingue ensuite d’une saisie ;
   - « Autre chose », ses kcal et ses g de protéines, puis « Ajouter ».
-- **« retirer »** efface un en-plus. Retirer le dernier d’un petit déjeuner ou d’une collation efface aussi ce moment : tu peux le noter de nouveau.
+- **« retirer »** efface un en-plus ; s’il échoue, l’erreur s’affiche. Retirer le dernier d’un petit déjeuner ou d’une collation efface aussi ce moment : tu peux le noter de nouveau.
 - **« Je saute le petit déjeuner »** (ou **« Je saute la collation »**) dit que tu ne manges rien à ce moment ; **« annuler »** le remet.
 
 ## Les règles

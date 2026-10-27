@@ -17,7 +17,7 @@ sources:
   - src/lib/peremption.ts
   - supabase/migrations/0047_peremption_donnee.sql
   - supabase/migrations/0122_frigo_corrections.sql
-verifie_sur: d0d3e29
+verifie_sur: ff3539b
 ---
 ## Ce que fait l’appli
 
@@ -26,7 +26,7 @@ Les gestes de la fiche d’un plat (« cuisine-fiche-plat » dit ce qu’elle af
 ## Au frigo
 
 - **« En manger une maintenant »** : ton repas du moment (matin avant 10 h, midi avant 16 h, sinon soir) devient mangé ; refusé s’il l’est déjà. L’appli prend **ta** part d’abord, puis une part pour tout le monde, celle d’un autre en dernier recours ; une part non posée avant une posée, la plus pressée d’abord. Si une part posée est prise, son repas la perd et la fiche le dit (« Le dîner de dimanche n’a plus de barquette. »). Deux personnes qui en mangent en même temps ne prennent jamais la même.
-- **« Congeler »** : la part tient trois mois à partir de maintenant.
+- **« Congeler »** : la part tient trois mois à partir de maintenant. Pendant qu’un geste s’écrit, les autres boutons de la fiche sont grisés.
 - **« Jeter »** compte la part comme jetée. **« Retirer du frigo »** la supprime : ni mangée ni jetée, pour une barquette mangée en douce, donnée ou perdue. Dans les deux cas, le repas qui l’attendait la perd.
 
 ## Au congélateur
