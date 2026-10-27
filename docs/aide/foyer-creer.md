@@ -13,7 +13,7 @@ sources:
   - supabase/migrations/0009_create_household.sql
   - supabase/migrations/0070_un_seul_foyer.sql
   - supabase/migrations/0091_le_createur_choisit_son_prenom.sql
-verifie_sur: e4c18ef
+verifie_sur: 0021cf9
 ---
 ## Ce que fait l’appli
 

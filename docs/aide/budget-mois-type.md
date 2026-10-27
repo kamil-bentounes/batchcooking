@@ -19,7 +19,7 @@ sources:
   - src/lib/budget/categories.ts
   - src/lib/budget/mois.ts
   - supabase/migrations/0102_budget_mois_suivis.sql
-verifie_sur: e4c18ef
+verifie_sur: 0021cf9
 ---
 ## Ce que c’est
 

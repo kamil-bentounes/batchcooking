@@ -14,7 +14,7 @@ sources:
   - src/ui/budget/MoisType.tsx
   - src/App.tsx
   - src/lib/budget/categories.ts
-verifie_sur: e4c18ef
+verifie_sur: 0021cf9
 ---
 ## Ce que fait l’écran
 

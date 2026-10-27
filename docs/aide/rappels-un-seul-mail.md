@@ -12,7 +12,7 @@ sources:
   - supabase/migrations/0126_rappels.sql
   - supabase/functions/_shared/rappels/mails.ts
   - supabase/functions/_shared/rappels/texte.ts
-verifie_sur: 1d6efe2
+verifie_sur: 0021cf9
 ---
 ## Un mail perdu vaut mieux qu’un doublon
 
