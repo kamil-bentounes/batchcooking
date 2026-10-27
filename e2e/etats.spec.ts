@@ -28,7 +28,7 @@ async function connecte(page: Page, email: string) {
   await page.goto('/')
   await page.getByLabel(/e-?mail/i).fill(email)
   await page.getByLabel(/mot de passe/i).fill(MOT_DE_PASSE)
-  await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+  await page.getByRole('button', { name: 'Entrer', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Popote' }))
     .toBeVisible({ timeout: 15_000 })
   /* ⚠️ ICI, avant le premier `page.goto` : une navigation dure remet
@@ -89,7 +89,7 @@ test.describe('avant d’être connecté', () => {
   test('les trois chemins d’entrée, et ce qu’ils disent', async ({ page }) => {
     test.setTimeout(120_000)
     await page.goto('/')
-    await expect(page.getByRole('button', { name: 'Se connecter', exact: true }))
+    await expect(page.getByRole('button', { name: 'Entrer', exact: true }))
       .toBeVisible({ timeout: 20_000 })
     await prend(page, 'avant-01-connexion')
 
@@ -97,7 +97,7 @@ test.describe('avant d’être connecté', () => {
        l'argent, et c'est le premier mot qu'on lit d'elle. */
     await expect(page.getByRole('heading', { name: /on cuisine/i }),
       'le titre d’entrée ne parle que de cuisine').toHaveCount(0)
-    /* La marque est un `span`, pas un titre — on vise le texte. */
+    /* La marque est un texte, pas un titre : le titre « Popote » est celui du hub. */
     await expect(page.getByText('Popote', { exact: true }),
       'rien ne dit où l’on vient d’arriver').toBeVisible()
 
@@ -115,7 +115,7 @@ test.describe('avant d’être connecté', () => {
     await page.getByRole('button', { name: 'J’ai déjà un mot de passe' }).click()
     await page.getByLabel(/e-?mail/i).fill('personne@nulle-part.test')
     await page.getByLabel(/mot de passe/i).fill('faux-mot-de-passe')
-    await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+    await page.getByRole('button', { name: 'Entrer', exact: true }).click()
     await expect(page.getByText(/incorrect/i)).toBeVisible({ timeout: 20_000 })
     await prend(page, 'avant-04-refus')
   })
@@ -174,7 +174,7 @@ test.describe('arriver sans foyer', () => {
     await page.goto('/')
     await page.getByLabel(/e-?mail/i).fill(perdu.email)
     await page.getByLabel(/mot de passe/i).fill(MOT_DE_PASSE)
-    await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+    await page.getByRole('button', { name: 'Entrer', exact: true }).click()
     /* Pas de marque « Popote » ici : l'écran d'arrivée n'est pas le hub. On
        attend donc n'importe lequel des deux titres possibles. */
     await expect(page.getByRole('heading').first()).toBeVisible({ timeout: 20_000 })

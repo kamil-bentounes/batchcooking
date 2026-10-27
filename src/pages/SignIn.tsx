@@ -18,23 +18,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { erreurDeLien } from '../lib/lien.ts'
 import { PAS_DE_RESEAU, estUnePanneDeReseau } from '../lib/reseau.ts'
-import { Page, Bouton, Champ, Message } from '../ui/kit'
-
-type Mode = 'mdp' | 'premiere' | 'oubli'
-
-const CHAPEAU: Record<Mode, string> = {
-  mdp: 'Ton e-mail et ton mot de passe.',
-  premiere: 'On t’envoie un lien. Il sert une fois, à prouver que l’adresse est '
-    + 'la tienne — ensuite tu choisis ton mot de passe.',
-  oubli: 'On t’envoie un lien de réinitialisation. Il te mènera droit à l’écran '
-    + 'du nouveau mot de passe.',
-}
-
-const ACTION: Record<Mode, string> = {
-  mdp: 'Se connecter',
-  premiere: 'Recevoir le lien',
-  oubli: 'Réinitialiser mon mot de passe',
-}
+import { EcranDeConnexion } from '../ui/porte/EcranDeConnexion.tsx'
+import type { Mode } from '../ui/porte/modes.ts'
 
 /**
  * `redirectTo` est OBLIGATOIRE : le défaut `window.location.href` emportait le
@@ -48,6 +33,7 @@ export function SignIn({ redirectTo: cible, info }: {
   const [mode, setMode] = useState<Mode>('mdp')
   const [email, setEmail] = useState('')
   const [mdp, setMdp] = useState('')
+  const [voir, setVoir] = useState(false)
   /* Un lien mort le DIT. L'écran se taisait : on arrivait d'un clic sur un
      lien, et rien n'expliquait pourquoi on se retrouvait à la porte. */
   const [lienMort] = useState(() => erreurDeLien(window.location.href))
@@ -133,54 +119,20 @@ export function SignIn({ redirectTo: cible, info }: {
     }
   }
 
+  /* ⚠️ Le titre « On s’y met ? » datait du premier jour — 17 septembre, « interface, 5 écrans » —
+     quand l'application ne faisait que le batch cooking. Elle s'appelle Popote depuis, et gère
+     aussi ce que ça coûte : l'écran porte la marque et dit les deux, sur la porte d'un frigo.
+
+     Personne ne l'avait vu parce que TOUS les bancs commencent par se connecter : le seul écran
+     qu'on voit avant de l'être est le seul que personne ne regardait.
+
+     Les portes s'ouvrent pendant l'envoi (`envoi`) et se referment à l'erreur : elles suivent l'état
+     sans jamais l'attendre — la connexion part au clic, l'animation la regarde. */
   return (
-    /* ⚠️ Le titre date du premier jour — 17 septembre, « interface, 5 écrans » —
-       quand l'application ne faisait que le batch cooking. « On cuisine ? »
-       était alors la bonne question. Elle s'appelle Popote depuis, et gère
-       aussi ce que ça coûte : on ne se connecte plus seulement pour cuisiner.
-
-       Personne ne l'avait vu parce que TOUS les bancs commencent par se
-       connecter : le seul écran qu'on voit avant de l'être est le seul que
-       personne ne regardait. */
-    <Page centre marque titre="On s’y met ?" chapeau={CHAPEAU[mode]}>
-      <div className="space-y-5">
-        <Champ label="Ton e-mail" type="email" value={email} autoComplete="email"
-               placeholder="toi@exemple.fr" onChange={e => setEmail(e.target.value)} />
-
-        {mode === 'mdp' && (
-          <Champ label="Mot de passe" type="password" value={mdp} autoComplete="current-password"
-                 placeholder="••••••••" onChange={e => setMdp(e.target.value)} />
-        )}
-
-        <Bouton onClick={agir}
-                disabled={!email || (mode === 'mdp' && !mdp) || envoi}>
-          {envoi ? 'Un instant…' : ACTION[mode]}
-        </Bouton>
-      </div>
-
-      <Message texte={msg} erreur={err} />
-
-      {/* Les deux chemins sont SÉPARÉS, et nommés pour ce qu'ils font. */}
-      <div className="mt-7 space-y-2.5">
-        {mode !== 'mdp' && (
-          <button onClick={() => { setMode('mdp'); setMsg('') }}
-                  className="block text-herbe underline underline-offset-4 text-[15px]">
-            J’ai déjà un mot de passe
-          </button>
-        )}
-        {mode !== 'premiere' && (
-          <button onClick={() => { setMode('premiere'); setMsg('') }}
-                  className="block text-herbe underline underline-offset-4 text-[15px]">
-            Première connexion
-          </button>
-        )}
-        {mode !== 'oubli' && (
-          <button onClick={() => { setMode('oubli'); setMsg('') }}
-                  className="block text-doux underline underline-offset-4 text-[15px]">
-            Mot de passe oublié
-          </button>
-        )}
-      </div>
-    </Page>
+    <EcranDeConnexion
+      mode={mode} email={email} mdp={mdp} voir={voir} envoi={envoi} msg={msg} err={err}
+      onEmail={setEmail} onMdp={setMdp} onVoir={() => setVoir(v => !v)}
+      onMode={m => { setMode(m); setMsg(''); setVoir(false) }}
+      onEnvoi={agir} />
   )
 }

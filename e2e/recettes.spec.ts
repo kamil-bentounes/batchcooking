@@ -391,7 +391,7 @@ async function entre(page: Page) {
   await page.goto('/')
   await page.getByLabel('Ton e-mail').fill(EMAIL)
   await page.getByLabel('Mot de passe').fill(MOT_DE_PASSE)
-  await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+  await page.getByRole('button', { name: 'Entrer', exact: true }).click()
   await expect(HUB(page)).toBeVisible({ timeout: 20_000 })
 }
 
