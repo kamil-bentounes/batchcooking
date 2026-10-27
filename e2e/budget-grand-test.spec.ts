@@ -97,7 +97,7 @@ test('« Je retire » ne retire pas plus que ce qu’on a versé', async ({ page
   const avant = await somme()
   await expect(page.getByText('Urgence').first()).toBeVisible({ timeout: 15_000 })
   // Le solde doit être LU : « Je retire » attend lui aussi, mais on ne parie pas sur la course.
-  await expect(page.getByText(/^dont /).first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('list', { name: 'Qui a versé quoi' }).first()).toBeVisible({ timeout: 15_000 })
   await page.getByLabel('Verser (€)').first().fill('100000')
   await expect(page.getByRole('button', { name: 'Je retire' }).first()).toBeEnabled()
   await page.getByRole('button', { name: 'Je retire' }).first().click()

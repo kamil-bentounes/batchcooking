@@ -225,7 +225,7 @@ test('épargne : « Je retire » reste éteint tant que le solde n’est pas lu,
     await expect(page.getByText(/Tu n’as rien versé ici/)).toHaveCount(0)
 
     libere()
-    await expect(page.getByText(/^dont /).first()).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('list', { name: 'Qui a versé quoi' }).first()).toBeVisible({ timeout: 15_000 })
     await expect(retire).toBeEnabled()
     await retire.click()
     await expect(page.getByText(/Tu n’as versé que .* ici : tu ne peux pas en retirer plus\./)).toBeVisible()
