@@ -3,7 +3,7 @@ id: budget-arrivee-dans-le-foyer
 titre: L’arrivée dans le foyer et les mois qui comptent
 ecrans: [/, /budget, /profil]
 questions:
-  - Pourquoi la carte Budget dit « Commence en novembre » ?
+  - Pourquoi mon budget dit « Dans 5 jours » ?
   - Pourquoi je n’ai aucune part sur octobre ?
   - Où je change ma date d’arrivée ?
   - Pourquoi mon revenu compte à partir d’un autre mois ?
@@ -40,7 +40,7 @@ Un mois compte pour toi si ton arrivée n'est pas après son dernier jour : arri
 Avant ton arrivée :
 
 - tu ne portes aucune part et on ne te demande aucun revenu ;
-- la carte Budget de l'accueil dit **« Commence en novembre »**, avec « Ton mois type : 1 850 € de charges, il te reste 420 €. » si des charges sont posées, sinon « Tu entres dans le foyer à cette date : rien n’est à poser avant. » ;
+- la tuile « Budget » de l'accueil dit ton **mois type** (« Ton mois type, chaque mois : 420 € pour toi », charges 1 850 €) et compte les jours : « 5 jours avant ton premier mois, le 1er novembre » (« Dans 5 jours » sur téléphone). Sans charges posées, elle dit **« Commence en novembre »** et « Tu entres dans le foyer à cette date : rien n’est à poser avant. » ;
 - l'écran du mois dit « Tu n’es pas encore dans le foyer : tu y entres en novembre. Ce mois-là ne te compte aucune part. » (« Tu n’étais pas encore… » sur un mois passé). Sur un mois vide, il montre le **mois type** de ton arrivée (« budget-mois-type ») ; tant qu’aucune charge n’est posée, il dit « Pas encore » ;
 - aucun bandeau « … est fini : on le clôture ? » ne paraît pour ces mois.
 

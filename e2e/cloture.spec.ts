@@ -49,8 +49,9 @@ async function epargne(): Promise<number> {
 test('le 19 octobre : septembre est à clôturer, sur le hub et dans le bandeau', async ({ page }) => {
   await joue(page, `${A}-10-19T10:00:00Z`)
   await connecte(page)
-  const carte = page.getByRole('button', { name: /^Budget/ })
-  await expect(carte.getByText('Septembre est à clôturer')).toBeVisible({ timeout: 15_000 })
+  /* Au téléphone, la tuile du budget le dit en deux mots (la ligne entière est celle du bureau). */
+  const carte = page.locator('[data-tuile="budget"]')
+  await expect(carte.getByText('Septembre à clôturer')).toBeVisible({ timeout: 15_000 })
   await page.goto('/budget')
   await expect(page.getByText('Septembre est fini : on le clôture ?')).toBeVisible({ timeout: 15_000 })
   await prend(page, '01-bandeau')
@@ -109,7 +110,7 @@ test('le rappel avant le 27, puis « se termine » à partir du 27', async ({ pa
   await joue(page, `${A}-10-19T10:00:00Z`)
   await connecte(page)
   /* Septembre est clôturé : le hub passe aux montants à dire d'octobre. */
-  await expect(page.getByRole('button', { name: /^Budget/ }).getByText(/montants? à dire/))
+  await expect(page.locator('[data-tuile="budget"]').getByText(/\d+ à dire/))
     .toBeVisible({ timeout: 15_000 })
   await page.goto('/budget')
   await expect(page.getByText('Le mois fini, on le clôture : tu confirmes les factures, et tu choisis quoi faire de ce qui reste.'))
@@ -154,8 +155,8 @@ test('le 1er novembre : octobre se clôture, on revient dessus, l’épargne rev
 test('le hub : « Tout est à jour » quand chaque ligne au fil du mois a sa dépense', async ({ page }) => {
   await joue(page, `${A}-11-01T10:00:00Z`)
   await connecte(page)
-  const carte = page.getByRole('button', { name: /^Budget/ })
-  await expect(carte.getByText(/montants? à dire/)).toBeVisible({ timeout: 15_000 })
+  const carte = page.locator('[data-tuile="budget"]')
+  await expect(carte.getByText(/\d+ à dire/)).toBeVisible({ timeout: 15_000 })
   const { data: lignes } = await db.from('depense').select('id')
     .eq('household_id', foyer.householdId).eq('mois', `${A}-11-01`).eq('facon', 'au_fil')
   expect((lignes ?? []).length).toBeGreaterThan(0)
@@ -167,7 +168,7 @@ test('le hub : « Tout est à jour » quand chaque ligne au fil du mois a sa dé
     expect(error).toBeNull()
   }
   await page.reload()
-  await expect(carte.getByText('Tout est à jour')).toBeVisible({ timeout: 15_000 })
+  await expect(carte.locator('[data-pastille="budget"]')).toHaveText('À jour', { timeout: 15_000 })
   await prend(page, '06-hub-a-jour')
 })
 

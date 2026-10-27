@@ -37,7 +37,7 @@ Ton profil donne à l’appli ton prénom, ton revenu et ta date d’entrée dan
 
 - **Sans ton revenu** (ou si l’un de ceux qui sont là ce mois-là n’en a pas), le partage se fait à parts égales. Sur l’accueil, le bandeau « Complète ton profil. » s’affiche quand ton prénom ou ton revenu manque (il ne regarde que toi).
 - Ton **premier revenu** compte dès le mois de ton arrivée, sauf pour un mois déjà clôturé. Les revenus suivants prennent effet le mois où tu les saisis.
-- **Date dans le futur** : l’appli écrit « Tu arrives plus tard : tu ne participeras à aucune charge d’ici là. » L’accueil dit « Commence en » suivi du mois.
+- **Date dans le futur** : l’appli écrit « Tu arrives plus tard : tu ne participeras à aucune charge d’ici là. » L’accueil de Popote compte les jours jusqu’au 1er de ce mois (« Commence en … » quand aucune charge n’est posée).
 - **Changer la date** repartage les mois situés entre l’ancienne et la nouvelle date. Un mois déjà clôturé ne bouge pas.
 - À ton arrivée, tu es ajouté(e) aux charges communes déjà posées.
 

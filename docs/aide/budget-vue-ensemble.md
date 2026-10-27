@@ -25,7 +25,7 @@ sources:
   - supabase/migrations/0114_budget_donnees.sql
 verifie_sur: 9504cf2
 ---
-Popote tient aussi le budget du foyer. L'accueil a deux cartes : « Cuisine » et « Budget ». La carte « Budget » donne le chiffre qui compte : ce qu'il te reste ce mois-ci.
+Popote tient aussi le budget du foyer. L'accueil est la page de ta journée : le repas du jour (bouton « Cuisine »), ce qui vient, le frigo, et la tuile « Budget » qui donne le chiffre qui compte : ce qu'il te reste ce mois-ci.
 
 ## Ce que fait le budget
 

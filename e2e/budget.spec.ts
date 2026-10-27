@@ -136,9 +136,10 @@ test.describe('l’écran du mois', () => {
 
   test('la carte Budget du hub : ce qui reste, et la ligne qui suit', async ({ page }) => {
     await connecte(page)
-    const carte = page.getByRole('button', { name: /^Budget/ })
-    await expect(carte.getByText(/Il te reste/)).toBeVisible({ timeout: 15_000 })
-    await expect(carte.getByText(/montants? à dire|Tout est à jour|est à clôturer/)).toBeVisible()
+    /* Au téléphone : « il te reste en octobre » sous le chiffre, et la ligne de suite en pastille. */
+    const carte = page.locator('[data-tuile="budget"]')
+    await expect(carte.getByText(/il te reste en /)).toBeVisible({ timeout: 15_000 })
+    await expect(carte.locator('[data-pastille="budget"]')).toHaveText(/\d+ à dire|À jour|à clôturer/)
     await prend(page, '06-hub')
   })
 

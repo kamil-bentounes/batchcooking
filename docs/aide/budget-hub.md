@@ -1,9 +1,9 @@
 ---
 id: budget-hub
-titre: La carte Budget de l’accueil
+titre: La tuile Budget de l’accueil
 ecrans: [/]
 questions:
-  - Pourquoi ma carte Budget dit « Commence en novembre » ?
+  - Pourquoi mon budget dit « Dans 5 jours » ?
   - Pourquoi la carte dit « Rien de posé » ?
   - Que veut dire « 2 montants à dire » ?
   - Pourquoi « Ajoute ton revenu » alors que je l’ai déjà mis ?
@@ -20,31 +20,31 @@ sources:
   - src/lib/donnees/cycle.ts
 verifie_sur: 7409ab5
 ---
-La carte « Budget » de l'accueil donne l'état du mois en cours. Un toucher dessus ouvre l'écran du mois. Ouvrir l'accueil ouvre aussi le mois en cours : Popote crée ses lignes.
+La tuile « Budget » de l'accueil (« Le budget », à côté du frigo) donne l'état du mois en cours. Un toucher dessus ouvre l'écran du mois. Ouvrir l'accueil ouvre aussi le mois en cours : Popote crée ses lignes.
 
-## Ce que la carte peut dire
+## Ce que la tuile peut dire
 
 Dans cet ordre :
 
 1. **« … »** : Popote lit encore ses données.
 2. **« Je n’ai pas pu lire le budget : tu n’as plus de connexion. »** (ou la raison de la panne) : aucun chiffre tant que tout n'est pas lu.
-3. **« Commence en novembre »** (sans l’année) : ton arrivée dans le foyer tombe après le mois en cours. Dessous, si des charges sont posées pour ton arrivée : **« Ton mois type : 1 850 € de charges, il te reste 420 €. »** (ou « il te manque 90 € » ; sans revenu posé, la phrase s’arrête aux charges). C’est ta part, ramenée au mois (« budget-mois-type »). Sinon : « Tu entres dans le foyer à cette date : rien n’est à poser avant. »
+3. **Avant ton arrivée** (elle tombe après le mois en cours) : si des charges sont posées pour ton arrivée, **« Ton mois type, chaque mois »** et ton reste (**« 420 € pour toi »**, ou « Il te manque 90 € » ; sans revenu posé, tes charges seules), une barre charges et reste, puis le compte à rebours : **« 5 jours avant ton premier mois, le 1er novembre »** (« Dans 5 jours » sur téléphone). C’est ta part, ramenée au mois (« budget-mois-type »). Sans charge posée : **« Commence en novembre »** (sans l’année) et « Tu entres dans le foyer à cette date : rien n’est à poser avant. »
 4. **« Rien de posé »**, avec « Les charges du foyer, et ce que chacun verse. » : aucune ligne ce mois-ci.
 5. **« Ajoute ton revenu »** : le mois a des lignes, pas ton revenu.
-6. **« Il te reste 560 € en octobre »** ou **« Il te manque 40 € en octobre »** : même calcul que sur l'écran du mois.
+6. **« Il te reste 560 € en octobre »** ou **« Il te manque 40 € en octobre »** : même calcul que sur l'écran du mois. Une barre met tes charges face à ce qui reste (sans barre si le revenu manque, ou s'il ne reste rien).
 
 ## La ligne sous le chiffre
 
-Sous le chiffre (cas 5 et 6), une seule phrase, la première qui s'applique :
+Sous le chiffre (cas 5 et 6), une seule phrase, la première qui s'applique (sur téléphone, une pastille la dit en deux mots : « Septembre à clôturer », « 2 à dire », « À jour ») :
 
 - **« Septembre est à clôturer »** : le mois précédent n'est pas clôturé, tu y avais un revenu et tu étais déjà dans le foyer.
 - **« 2 montants à dire : Courses et Essence »** : des lignes « Plusieurs dépenses dans le mois » n'ont encore aucune dépense déclarée. Trois lignes nommées au plus, puis « et 2 autres ».
 - **« Tout est à jour »** : rien à clôturer, rien à dire.
 
 
-## Les autres cartes de l'accueil
+## Le reste de l'accueil
 
-- **La carte « Cuisine »** dit « Session interrompue » et « Reprends-la depuis la cuisine. » quand une session est à reprendre (« cuisine-session-fin »).
+- **La carte sombre du jour** dit « Session interrompue » et « Reprends-la depuis la cuisine. » quand une session est à reprendre (« cuisine-session-fin »). Son bouton « Cuisine » ouvre l'accueil de la cuisine.
 - **« Inviter quelqu’un. »** (« Tu obtiens un lien à lui envoyer. ») : tant que tu es seul dans le foyer.
 - **« Complète ton profil. »** : il manque ton prénom ou ton revenu ; un toucher mène au profil.
 - **« Fixe tes objectifs. »** : prénom et revenu sont posés, pas tes objectifs.

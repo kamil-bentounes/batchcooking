@@ -110,7 +110,10 @@ test('avant leur arrivée, le budget montre le mois type au lieu de « Pas encor
   await db.from('user_profile').update({ entre_le: suivant }).in('id', [foyer.userId, foyer.elleId])
   await connecte(page, foyer.email)
 
-  await expect(page.getByText(/^Ton mois type : .+ de charges, il te reste .+\.$/)).toBeVisible({ timeout: 15_000 })
+  /* Le hub, au téléphone : le reste du mois type (« chaque mois »), la barre et « Dans N jours ». */
+  const budget = page.locator('[data-tuile="budget"]')
+  await expect(budget.getByText(/pour toi, chaque mois|il te manque, chaque mois|de charges, chaque mois/)).toBeVisible({ timeout: 15_000 })
+  await expect(budget.locator('[data-pastille="budget"]')).toHaveText(/^(Dans \d+ jours|Demain)$/)
   await page.screenshot({ path: '.shots/mois-type/05-hub-avant.png' })
   await page.goto('/budget')
   await expect(page.getByRole('region', { name: 'Le foyer, par mois' })).toBeVisible({ timeout: 15_000 })
@@ -159,10 +162,10 @@ test('une session interrompue dont le plan date d’un mois se retrouve sur l’
     .eq('id', foyer.cycleId)
   await connecte(page, foyer.email)
 
-  await expect(page.getByText('Session interrompue')).toBeVisible({ timeout: 15_000 })
+  /* Le hub dit le geste du moment dans sa carte sombre, avec son bouton : on reprend d'ici. */
+  await expect(page.getByRole('heading', { name: 'Session interrompue' })).toBeVisible({ timeout: 15_000 })
   await expect(page.getByText('Reprends-la depuis la cuisine.')).toBeVisible()
   await page.screenshot({ path: '.shots/mois-type/08-hub-interrompue.png' })
-  await page.getByText('Session interrompue').click()
   await page.getByRole('button', { name: 'Reprendre la session interrompue' }).click()
   await expect(page).toHaveURL(/\/cuisine$/)
   const { data: cycle } = await db.from('cycle').select('state').eq('id', foyer.cycleId).single()

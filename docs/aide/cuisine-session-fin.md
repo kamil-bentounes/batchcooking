@@ -7,7 +7,7 @@ questions:
   - Comment passer au dressage sans cocher toutes les actions ?
   - Comment interrompre la session de cuisine ?
   - Comment reprendre une session interrompue ?
-  - Pourquoi la carte Cuisine dit « Session interrompue » ?
+  - Pourquoi l’accueil de Popote dit « Session interrompue » ?
   - Que veut dire « J’ai fini · passer au dressage » ?
 sources:
   - src/pages/Cuisine.tsx
@@ -40,6 +40,6 @@ Il demande « Tout est cuit ? » et nomme les actions non cochées (quatre au pl
 ## Reprendre
 
 - L’accueil de la cuisine titre **« Session interrompue »** quand aucune semaine n’est ouverte, avec **« Reprendre la session interrompue »** en gros bouton et « Choisir de nouvelles recettes » en second.
-- La carte « Cuisine » de l’accueil de Popote dit « Session interrompue » et « Reprends-la depuis la cuisine. »
+- La carte sombre de l’accueil de Popote dit « Session interrompue » et « Reprends-la depuis la cuisine. », avec le même bouton « Reprendre la session interrompue ».
 - Une session se reprend si sa semaine est la précédente, la courante ou une à venir, **ou** si elle a commencé il y a moins de 7 jours. Au-delà, elle ne se propose plus.
 - La semaine n’aura pas d’autre session : « Cette semaine a une session interrompue : reprends-la. »
