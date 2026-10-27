@@ -83,6 +83,8 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
   const carteOuverte = equipementOuvert && (precedent !== undefined || precedentEnPanne)
     && !lisLesAppareils && catalogue.length > 0
   const menu = choisies.filter(c => c.recipe !== null)
+  const titres = new Map(menu.map(c => [c.recipe!.id, c.recipe!.title]))
+  const nomsDesPlats = (ids: string[]) => ids.map(id => titres.get(id)).filter((n): n is string => !!n)
 
   return (
     <Passage retour={retour} barre={
@@ -160,7 +162,7 @@ export function Plan({ retour, va }: { retour: () => void; va: (v: string) => vo
         </>
       )}
 
-      <Frise plan={base} nomAppareil={nomAppareil} />
+      <Frise plan={base} nomAppareil={nomAppareil} nomsDesPlats={nomsDesPlats} />
 
       {/*
         * Qui cuisine avec toi ?
@@ -262,12 +264,25 @@ function Chiffre3({ valeur, legende, sable }: { valeur: string; legende: string;
 }
 
 /**
+ * Le plat que sert un geste : « Émincer les oignons » trois fois de suite ne dit pas
+ * lequel. Un geste fusionné nomme tous ses plats ; sans titre connu, leur nombre.
+ */
+function PourQui({ noms, nombre }: { noms: string[]; nombre: number }) {
+  if (noms.length === 0) {
+    return nombre > 1 ? <p className="text-[12.5px] text-doux">pour {nombre} recettes</p> : null
+  }
+  const liste = noms.length === 1 ? noms[0]
+    : `${noms.slice(0, -1).join(', ')} et ${noms[noms.length - 1]}`
+  return <p className="text-[12.5px] leading-[1.3] text-doux [overflow-wrap:anywhere]">pour {liste}</p>
+}
+
+/**
  * Les gestes dans l'ordre, puis les appareils. Le temps de la session fait la
  * largeur de chaque piste : le début d'un geste est à sa place, sa durée est sa
  * longueur.
  */
-function Frise({ plan, nomAppareil }:
-  { plan: PlanCalcule; nomAppareil: (c: string) => string }) {
+function Frise({ plan, nomAppareil, nomsDesPlats }:
+  { plan: PlanCalcule; nomAppareil: (c: string) => string; nomsDesPlats: (ids: string[]) => string[] }) {
   const appareils = useMemo(
     () => [...new Set(plan.taches.map(t => t.appareil).filter((a): a is string => !!a))],
     [plan])
@@ -308,9 +323,7 @@ function Frise({ plan, nomAppareil }:
                   {critiques.has(t.id) && <span aria-hidden="true" className="text-ocre mr-1">•</span>}
                   {t.label}
                 </p>
-                {t.recettes.length > 1 && (
-                  <p className="text-[12.5px] text-doux">pour {t.recettes.length} recettes</p>
-                )}
+                <PourQui noms={nomsDesPlats(t.recettes)} nombre={t.recettes.length} />
                 <div className="relative mt-2 h-2.5 rounded-full bg-piste" aria-hidden="true">
                   <i className="absolute top-0 h-2.5 min-w-2.5 rounded-full bg-herbe"
                      style={{ left: pct(t.debutMin), width: pct(t.dureeMin) }} />

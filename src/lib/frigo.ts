@@ -293,7 +293,7 @@ const GLACE = 'var(--color-congel-encre)'
 
 /**
  * Ce qui presse déjà, et que le calendrier ne rattrape pas : des parts PÉRIMÉES, ou réclamées par un repas
- * d'APRÈS leur péremption. Le mot d'urgence, dans sa couleur — le planning (« mar. midi → mer. midi ») dirait
+ * d'APRÈS leur péremption. Le mot d'urgence, dans sa couleur — le planning (« mar. midi à mer. midi ») dirait
  * le contraire de ce qui est vrai.
  */
 function enRetard(g: Groupe, mes: Prevu[], maintenant: Date): Quand | null {
@@ -349,12 +349,12 @@ export function quand(g: Groupe, prevus: Prevu[] | null, maintenant: Date): Quan
   if (mes.length > 0) {
     const premier = repasEnMots(mes[0].day, mes[0].meal, maintenant)
     const dernier = repasEnMots(mes[mes.length - 1].day, mes[mes.length - 1].meal, maintenant)
-    return { texte: premier === dernier ? premier : `${premier} → ${dernier}`, encre: repos }
+    return { texte: premier === dernier ? premier : `${premier} à ${dernier}`, encre: repos }
   }
   return { texte: u.mot, encre: u.niveau !== 'ok' ? u.encre : repos }
 }
 
-/** Le texte lu par un lecteur d'écran sur la carte : « Lasagnes, 6 parts, mar. midi → mer. midi ». */
+/** Le texte lu par un lecteur d'écran sur la carte : « Lasagnes, 6 parts, mar. midi à mer. midi ». */
 export function ariaDeCarte(g: Groupe, q: Quand): string {
   const n = g.parts.length
   return `${g.nom}, ${n} part${n > 1 ? 's' : ''}, ${q.texte}`

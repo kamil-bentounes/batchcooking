@@ -277,7 +277,7 @@ test('le frigo : les plats, les étagères, une photo, congeler, corriger une da
   const interieur = page.getByRole('region', { name: 'Dans le frigo' })
   await expect(interieur).toBeVisible({ timeout: 5_000 })
   await expect(interieur.getByRole('heading', { name: 'Frigo' })).toBeFocused()
-  await expect(interieur.getByRole('button', { name: /^Lasagnes saumon-poireaux, 6 parts, \w+\. midi → \w+\. midi/ })).toBeVisible()
+  await expect(interieur.getByRole('button', { name: /^Lasagnes saumon-poireaux, 6 parts, \w+\. midi à \w+\. midi/ })).toBeVisible()
   await expect(interieur.getByRole('button', { name: /^Pizza vietnamienne, 2 parts/ })).toBeVisible()
   await expect(interieur.getByRole('region', { name: 'Laitages et frais' })).toContainText('Yaourts dessert protéinés')
   /* « 3 pot » : l'unité s'accorde avec la quantité. */

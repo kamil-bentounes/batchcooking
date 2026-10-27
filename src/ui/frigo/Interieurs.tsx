@@ -104,7 +104,7 @@ export function InterieurFrigo({ visible, plats, ingredients, annonce, erreur, a
         const liste = parEtagere.get(e)!
         return liste.length > 0 && (
           <section key={e} aria-label={e}>
-            <h3 className="pt-3.5 text-[12px] font-semibold uppercase tracking-[0.04em] text-doux">{e}</h3>
+            <h3 className="pt-3.5 text-[13px] font-semibold text-doux">{e}</h3>
             <div className="flex flex-wrap gap-2 pb-3.5 pt-2">
               {liste.map(i => <TuileIngredient key={i.id} item={i} surOuvre={() => surIngredient(i.id)} />)}
             </div>

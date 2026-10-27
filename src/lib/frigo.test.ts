@@ -248,7 +248,7 @@ describe('ce que dit une carte', () => {
       prevu(l[2], '2026-10-28', 'dejeuner'), prevu(l[3], '2026-10-28', 'dejeuner', THAUBA),
       prevu(l[4], '2026-10-27', 'diner'), prevu(l[5], '2026-10-27', 'diner', THAUBA),
     ]
-    expect(quand(g, prevus, LUNDI).texte).toBe('mar. midi → mer. midi')
+    expect(quand(g, prevus, LUNDI).texte).toBe('mar. midi à mer. midi')
   })
   it('un seul repas : sans flèche', () => {
     const p = fois(2, { label: 'Pizza', location: 'frigo' })

@@ -31,7 +31,7 @@ verifie_sur: 9504cf2
 - En très grand : le temps **en cuisine**, puis trois chiffres : « X les mains prises » (le temps où quelqu’un a les mains occupées ; une cuisson au four dure mais n’occupe personne), « X d’attente » et « N actions pour une personne » (ou « N personnes » : les membres du foyer).
 - « Puis X de repos, sans toi » : repos compté à part.
 - « Au menu » : les photos des recettes retenues.
-- « Dans l’ordre » : un geste par ligne, avec son heure de début, sa durée et sa barre. Un point (•) marque les gestes qui fixent la durée.
+- « Dans l’ordre » : un geste par ligne, avec son heure de début, sa durée, le plat qu’il sert (« pour Chili con carne ») et sa barre. Un point (•) marque les gestes qui fixent la durée.
 - « Les appareils » : quand chacun travaille.
 
 ## L’équipement du jour
@@ -43,7 +43,7 @@ Si un appareil retarde tout : « X est le goulot » et « S’il prenait deux pl
 ## Les règles de calcul
 
 - Les durées sont celles des étapes des recettes : elles ne changent ni avec les parts retenues ni avec les quantités.
-- Deux recettes ne partagent une action (« pour 2 recettes ») que si le geste est le même (même verbe, même appareil, même charge) **et** que les deux quantités sont connues. Durée : la somme, moins la mise en place payée une fois (2,5 minutes au plus). Exemple : émincer 8 min + émincer 6 min = 11,5 min. Sans quantités, seul « préchauffer » se partage, avec la durée la plus longue.
+- Deux recettes ne partagent une action (« pour Chili con carne et Lasagnes ») que si le geste est le même (même verbe, même appareil, même charge) **et** que les deux quantités sont connues. Durée : la somme, moins la mise en place payée une fois (2,5 minutes au plus). Exemple : émincer 8 min + émincer 6 min = 11,5 min. Sans quantités, seul « préchauffer » se partage, avec la durée la plus longue.
 - Une étape sans durée compte pour 1 minute.
 
 ## Commencer
