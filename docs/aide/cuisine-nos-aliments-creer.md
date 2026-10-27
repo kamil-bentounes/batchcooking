@@ -22,6 +22,7 @@ sources:
   - src/lib/donnees/aliments.ts
   - src/ui/semaine/FeuilleDeChoix.tsx
   - src/ui/semaine/EnPlus.tsx
+  - src/lib/aliments/consigne.ts
   - src/pages/Settings.tsx
   - supabase/functions/etiquette/index.ts
   - supabase/migrations/0124_nos_aliments.sql

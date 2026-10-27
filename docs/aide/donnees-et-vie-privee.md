@@ -53,8 +53,8 @@ Un **foyer ami** voit les prénoms et les recettes marquées « partagée ». S�
 
 Ces appels partent vers un service d’IA extérieur :
 
-- **photo du frigo** : la photo (réduite avant l’envoi) et le lieu ;
-- **ticket** : la photo et l’enseigne si tu l’as choisie ; **étiquette** (« Nos aliments ») : jusqu’à trois photos ;
+- **photo du frigo** : la photo et le lieu ;
+- **ticket** : la photo et l’enseigne si tu l’as choisie ; **étiquette** (« Nos aliments ») : jusqu’à trois photos et, si tu l’écris, ta consigne (300 caractères) ;
 - **dictée de charges** : le texte, avec la liste type des charges (la voix est transcrite par ton clavier : aucun son n’est envoyé) ;
 - **relecture des charges** : libellés, montants, rythmes, commun ou perso, comptes (nom écrit par toi), enveloppes, date de début ; ni revenus, ni parts, ni prénoms ;
 - **recette inventée** : ton envie (300 caractères), les aliments du stock, des limites chiffrées ; jamais de prénom, de poids ni d’objectif ;

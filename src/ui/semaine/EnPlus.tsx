@@ -105,8 +105,10 @@ export function EnPlus({ cas, frequents, nosAliments = [], userId, deployeParDef
     } catch (e) { setErreurPhoto(photoEnFrancais(e)) }
   }
 
-  const zone = (c: keyof SaisieAMain, nom: string, extra: { inputMode: 'text' | 'decimal' }) => (
-    <div>
+  /* `rangees` : deux cases côte à côte partagent leurs rangées (nom, case, phrase) : un nom qui passe sur deux lignes à
+     320 px ne décale pas la case de sa voisine. */
+  const zone = (c: keyof SaisieAMain, nom: string, extra: { inputMode: 'text' | 'decimal'; rangees?: boolean }) => (
+    <div className={extra.rangees ? 'row-span-3 grid grid-rows-subgrid' : undefined}>
       <label htmlFor={`${id}-${c}`} className="block text-[14px] font-bold">{nom}</label>
       <input id={`${id}-${c}`} value={libre[c]} onChange={ev => tape(c)(ev.target.value)} inputMode={extra.inputMode}
              autoComplete="off" aria-invalid={erreurs[c] ? true : undefined}
@@ -222,9 +224,9 @@ export function EnPlus({ cas, frequents, nosAliments = [], userId, deployeParDef
               Autre chose, à la main : les calories et les protéines sont obligatoires
             </p>
             {zone('label', 'Quoi', { inputMode: 'text' })}
-            <div className="grid grid-cols-2 gap-2.5">
-              {zone('kcal', 'Calories', { inputMode: 'decimal' })}
-              {zone('prot', 'Protéines, en g', { inputMode: 'decimal' })}
+            <div className="grid grid-cols-2 gap-x-2.5">
+              {zone('kcal', 'Calories', { inputMode: 'decimal', rangees: true })}
+              {zone('prot', 'Protéines, en g', { inputMode: 'decimal', rangees: true })}
             </div>
             <button type="submit" disabled={ajoute.isPending}
                     className="min-h-[52px] w-full rounded-[16px] bg-herbe px-4 text-[17px] font-semibold text-fond disabled:opacity-60">

@@ -35,7 +35,7 @@ import { useRappelActif } from '../lib/donnees/rappels.ts'
 import { detailDeLUnite, ecrit, valeursDeLUnite } from '../lib/aliments/calcul.ts'
 import { groupeLesParts, lisLeJour, nomCourt } from '../lib/frigo.ts'
 import {
-  MOMENTS_EN_PLUS, REPAS_CHOISIS, MOT_DU_REPAS, caseVide, cartesDuRepas, contenuDe, couleurDuPoint, joursDuBandeau,
+  MOMENTS_EN_PLUS, REPAS_CHOISIS, MOT_DU_REPAS, caseVide, cartesDuRepas, contenuDe, couleurDuPoint, indexDAujourdhui, joursDuBandeau,
   lisLAdresse, messageDeLiberation, titreDeLaFeuille,
 } from '../lib/choix.ts'
 import type { CaseLue, Carte, PointDuJour, RepasChoisi } from '../lib/choix.ts'
@@ -77,7 +77,11 @@ export function Semaine({ userId, va, remplace }: {
   const saute = useChoisirUnRepas()
   const remet = useRetireLaCase()
 
-  const [choisiJour, setChoisiJour] = useState(() => jours[demande.index].jour)
+  /* Le jour choisi est une date, pas un rang : il reste le même quand le bandeau avance. Sauf aujourd'hui, qu'on ne « choisit »
+     pas : `null` le suit — une page laissée ouverte sur aujourd'hui passe à demain à minuit, elle ne reste pas sur hier. */
+  const auj = indexDAujourdhui(jours)
+  const [choisiExplicite, setChoisiExplicite] = useState<string | null>(() => (demande.index === auj ? null : jours[demande.index].jour))
+  const choisiJour = choisiExplicite ?? jours[auj].jour
   const index = Math.max(0, jours.findIndex(j => j.jour === choisiJour))
   /** La feuille ouverte : le repas, et pour qui « Pour » commence. */
   const [feuille, setFeuille] = useState<{ repas: RepasChoisi; pour: 'tous' | string } | null>(null)
@@ -184,7 +188,7 @@ export function Semaine({ userId, va, remplace }: {
 
       <Bandeau jours={jours} points={points} index={index}
                surChoix={i => {
-                 setChoisiJour(jours[i].jour); setMessage(''); mange.reset(); saute.reset(); remet.reset(); nettoieLAdresse()
+                 setChoisiExplicite(i === auj ? null : jours[i].jour); setMessage(''); mange.reset(); saute.reset(); remet.reset(); nettoieLAdresse()
                }} />
 
       <section aria-label={jourChoisi.long} className="mt-5">

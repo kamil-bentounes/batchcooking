@@ -22,6 +22,7 @@ sources:
   - src/lib/donnees/barquettes.ts
   - supabase/migrations/0123_choisir_un_repas.sql
   - supabase/migrations/0125_semaine_corrections.sql
+  - supabase/migrations/0128_semaine_hier.sql
   - src/lib/peremption.ts
 verifie_sur: 545fd1b
 ---
