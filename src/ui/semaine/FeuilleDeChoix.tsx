@@ -4,17 +4,17 @@
  *  · « Pour » : vous deux, ou chaque personne du foyer ;
  *  · « Au frigo » : ce qui presse d'abord, avec combien de barquettes sont libres ;
  *  · « Au congélateur » : à sortir la veille (la même heure que le frigo) ;
- *  · « Autre chose » : nos aliments (avec leurs vraies valeurs : un geste = une unité), ce qu'on reprend souvent, les
- *    repères du repas — nos aliments d'abord, et un repère qu'un de nos aliments remplace (« Yaourt ») ne s'y glisse
- *    plus —, et « On saute ce repas ».
+ *  · « Autre chose » : nos aliments (avec leurs vraies valeurs ; un appui demande « combien ? » : deux pots, 30 g), ce
+ *    qu'on reprend souvent, les repères du repas — nos aliments d'abord, et un repère qu'un de nos aliments remplace
+ *    (« Yaourt ») ne s'y glisse plus —, et « On saute ce repas ».
  * Choisir un plat pose une barquette libre dans la case de CHAQUE personne visée : c'est la base qui l'écrit,
- * d'un bloc (`choisir_un_repas`, 0123).
+ * d'un bloc (`choisir_un_repas`, 0123). Sur un jour PASSÉ, ce qu'on choisit est noté mangé (0128), et la feuille le dit.
  */
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { Feuille } from '../budget/Feuille.tsx'
 import { Erreur } from '../coque.tsx'
 import { PlatImage } from '../frigo/PlatImage.tsx'
-import { fondDuPlat, momentDuRepas, nomCourt } from '../../lib/frigo.ts'
+import { ecartEnJours, fondDuPlat, momentDuRepas, nomCourt } from '../../lib/frigo.ts'
 import type { Groupe, Part, Prevu } from '../../lib/frigo.ts'
 import {
   choisirLesParts, dejaPosees, detailDuCongele, detailDuFrigo, libresPourLeChoix, ordonneLesChoix, personnesDuChoix,
@@ -22,6 +22,10 @@ import {
 } from '../../lib/choix.ts'
 import type { Cible, ChoixDuFrigo, Membre } from '../../lib/choix.ts'
 import { pourLeFoyer } from '../../lib/ranger.ts'
+import { MOT_DU_REPAS } from '../../lib/choix.ts'
+import { choixDeLaQuantite } from '../../lib/aliments/en-plus.ts'
+import type { Aliment } from '../../lib/donnees/aliments.ts'
+import { QuantiteDeLAliment } from '../aliments/Quantite.tsx'
 import { reperesDe } from '../../lib/reperes.ts'
 import { sansLesRemplaces } from '../../lib/aliments/ordre.ts'
 import { Pot } from '../aliments/Pictos.tsx'
@@ -33,23 +37,26 @@ type Frequent = Ligne<'frequent_food'>
 /** Un aliment du foyer proposé en « Autre chose » (« Nos aliments ») : une unité, avec ses vraies valeurs. */
 export type NotreAliment = {
   id: string; label: string; detail: string
+  /** L'aliment lui-même : le panneau « combien ? » en tire la quantité et ses valeurs. */
+  aliment: Aliment
   /** Le repère que cet aliment remplace (choisi dans le formulaire), s'il en remplace un. */
   remplace_repere?: string | null
   /** « 95 kcal », à droite de la ligne. */
   reste?: string
-  choix: Extract<Choix, { type: 'repere' }>
 }
 
 const ENCRE_DOUCE = 'var(--color-doux)'
 const ENCRE_OCRE = 'var(--color-ocre)'
 const ENCRE_GLACE = 'var(--color-congel-encre)'
 
-function Rang({ nom, detail, encre, reste, pastille, desactive, surChoix }: {
+function Rang({ nom, detail, encre, reste, pastille, desactive, surChoix, deplie }: {
   nom: string; detail: string; encre: string; reste?: string; pastille: React.ReactNode
   desactive?: boolean; surChoix: () => void
+  /** Une ligne qui ouvre un panneau dessous : `true` quand il est ouvert. */
+  deplie?: boolean
 }) {
   return (
-    <button type="button" onClick={surChoix} disabled={desactive}
+    <button type="button" onClick={surChoix} disabled={desactive} aria-expanded={deplie}
             className="flex min-h-14 w-full items-center gap-3 rounded-[14px] bg-surface px-3 py-2 text-left disabled:opacity-55"
             style={{ boxShadow: 'inset 0 0 0 1px var(--color-brume)' }}>
       {pastille}
@@ -103,6 +110,8 @@ type Proprietes = {
   pourInitial: 'tous' | string
   /** Ceux qui ont déjà mangé ce repas : on ne le change plus pour eux. */
   dejaMange: string[]
+  /** Moi : ce sont MES quantités récentes que le panneau « combien ? » propose. */
+  moi: string
   /** Les plats encore là, regroupés. */
   groupes: Groupe<Part>[]
   /** Les repas posés ; `null` tant qu'ils ne sont pas lus (on ne dit pas « libre » de ce qu'on ne sait pas). */
@@ -135,14 +144,21 @@ export function FeuilleDeChoix({ ouverte, fermer, ...p }: Proprietes & { ouverte
 }
 
 function Contenu({
-  titre, repas, jour, membres, pourInitial, dejaMange, groupes, prevus, maintenant, photoDe, frequents, lectures,
+  titre, repas, jour, membres, pourInitial, dejaMange, moi, groupes, prevus, maintenant, photoDe, frequents, lectures,
   nosAliments = [], alimentsEnPanne = false, versNosAliments, enCours, erreur, surChoix,
 }: Proprietes) {
   const [pour, setPour] = useState<'tous' | string>(pourInitial)
+  /* L'aliment dont le panneau « combien ? » est ouvert. */
+  const [choisiAliment, setChoisiAliment] = useState<string | null>(null)
+  /* Un jour passé : le repas a eu lieu, ce qu'on choisit est noté mangé. */
+  const passe = ecartEnJours(jour, maintenant) < 0
   const peutManger = membres.filter(m => !dejaMange.includes(m.id))
   /* « Vous deux » n'a de sens que pour tout le foyer, et personne n'en a encore mangé ce repas. */
   const tousPossible = membres.length > 1 && dejaMange.length === 0
-  const choisi = pour === 'tous' && !tousPossible ? (peutManger[0]?.id ?? 'tous') : pour
+  /* « Pour » commence sur quelqu'un qui n'a pas encore mangé ce repas : ma case d'un jour passé déjà notée, la feuille passe
+     à la personne qui reste (nommée à l'écran), jamais sur une ligne grisée. */
+  const choisi = pour === 'tous' && !tousPossible ? (peutManger[0]?.id ?? 'tous')
+    : pour !== 'tous' && dejaMange.includes(pour) ? (peutManger[0]?.id ?? pour) : pour
   const personnes = personnesDuChoix(choisi, membres).filter(id => !dejaMange.includes(id))
   const cible: Cible = { jour, repas, personnes }
 
@@ -187,6 +203,11 @@ function Contenu({
   return (
     <>
       <h2 className="titre mx-1 text-[24px] font-semibold">{titre}</h2>
+      {passe && (
+        <p data-passe="" className="mx-1 mt-1 text-[13px] leading-[1.45] text-doux">
+          Un jour passé : ce que tu choisis est noté mangé, et la barquette sort du frigo ou du congélateur.
+        </p>
+      )}
 
       {membres.length > 1 && (
         <div role="group" aria-label="Pour qui" className="mx-1 mt-3 flex flex-wrap gap-1 rounded-[14px] bg-piste p-1">
@@ -222,7 +243,7 @@ function Contenu({
         </SiLue>
       </Section>
 
-      <Section titre="Au congélateur" aide="à sortir la veille">
+      <Section titre="Au congélateur" aide={passe ? 'sort du congélateur' : 'à sortir la veille'}>
         <SiLue lue={lectures.barquettes} enCours="Je lis le congélateur…">
           {congelo.length === 0 && <p className="text-[13px] text-doux">Rien au congélateur pour l’instant.</p>}
           {congelo.map(c => {
@@ -247,9 +268,17 @@ function Contenu({
         )}
         {/* Nos aliments : AVANT les repères, un geste = une unité, avec les vraies valeurs. */}
         {nosAliments.map(a => (
-          <Rang key={a.id} nom={a.label} detail={a.detail} encre={ENCRE_DOUCE} surChoix={() => fait(a.choix)}
-                desactive={occupe || personnes.length === 0} reste={a.reste}
-                pastille={<span aria-hidden="true" className="grid h-[30px] w-9 shrink-0 place-items-center rounded-lg bg-sable"><Pot largeur={16} /></span>} />
+          <Fragment key={a.id}>
+            <Rang nom={a.label} detail={a.detail} encre={ENCRE_DOUCE} deplie={choisiAliment === a.id}
+                  surChoix={() => setChoisiAliment(c => (c === a.id ? null : a.id))}
+                  desactive={occupe || personnes.length === 0} reste={a.reste}
+                  pastille={<span aria-hidden="true" className="grid h-[30px] w-9 shrink-0 place-items-center rounded-lg bg-sable"><Pot largeur={16} /></span>} />
+            {choisiAliment === a.id && (
+              <QuantiteDeLAliment aliment={a.aliment} moi={moi} enCours={occupe}
+                                  bouton={`${passe ? 'Noter' : 'Choisir'} pour le ${MOT_DU_REPAS[repas as keyof typeof MOT_DU_REPAS]?.minuscule ?? 'repas'}`}
+                                  surAjoute={q => fait(choixDeLaQuantite(a.aliment, q))} />
+            )}
+          </Fragment>
         ))}
         {versNosAliments && (
           <button type="button" onClick={versNosAliments}

@@ -2,10 +2,13 @@
  * La semaine qu'on choisit (maquette `Semaine.dc.html`, hors dépôt : `~/PERSO/sauvegardes-popote/maquettes-2026-10-26-frigo/`).
  *
  * « Pour les repas de la semaine, je veux que ce soit moi qui choisisse ce que je souhaite manger tous les jours. »
- * Sept jours en bandeau, avec deux points (midi, soir) qui disent d'où vient le repas ; le jour choisi a deux
- * cartes, vides (« + Choisir le midi ») ou pleines (le plat, pour qui, « Changer », « Je l'ai mangé ») ; un plat
- * congelé porte un bandeau bleu qui dit quand le sortir ; la feuille de choix propose le frigo (le plus pressé
- * d'abord), le congélateur, puis autre chose. On peut changer le repas le jour même.
+ * Le bandeau remonte de sept jours : sept jours passés, aujourd'hui, les six suivants, avec deux points (midi, soir) qui
+ * disent d'où vient le repas ; le jour choisi a deux cartes, vides (« + Choisir le midi ») ou pleines (le plat, pour qui,
+ * « Changer », « Je l'ai mangé ») ; un plat congelé porte un bandeau bleu qui dit quand le sortir ; la feuille de choix
+ * propose le frigo (le plus pressé d'abord), le congélateur, puis autre chose. On peut changer le repas le jour même.
+ *
+ * Un jour PASSÉ se note : « + Noter ce que j'ai mangé ce midi » ouvre la même feuille, et ce qu'on y choisit est
+ * mangé (le repas a eu lieu : `choisir_un_repas`, 0128) ; un repas posé mais pas marqué mangé dit « pas encore noté ».
  *
  * Rien n'est distribué tout seul : après « On range », c'est cet écran qui remplit la semaine. Ce qui reste de
  * l'ancien écran : les extras (le petit déjeuner, la collation, « en plus »), et « sauté », qui est une réponse
@@ -29,13 +32,13 @@ import type { Case, Choix } from '../lib/donnees/barquettes.ts'
 import { usePrevus, useRecettesDesPlats } from '../lib/donnees/frigo.ts'
 import { useAliments } from '../lib/donnees/aliments.ts'
 import { useRappelActif } from '../lib/donnees/rappels.ts'
-import { choixDeLUnite, detailDeLUnite, ecrit, valeursDeLUnite } from '../lib/aliments/calcul.ts'
+import { detailDeLUnite, ecrit, valeursDeLUnite } from '../lib/aliments/calcul.ts'
 import { groupeLesParts, lisLeJour, nomCourt } from '../lib/frigo.ts'
 import {
-  MOMENTS_EN_PLUS, REPAS_CHOISIS, MOT_DU_REPAS, caseVide, cartesDuRepas, contenuDe, couleurDuPoint, joursDuBandeau,
-  lisLAdresse, messageDeLiberation, pourDit, titreDeLaFeuille,
+  MOMENTS_EN_PLUS, REPAS_CHOISIS, MOT_DU_REPAS, caseVide, cartesDuRepas, contenuDe, couleurDuPoint, indexDAujourdhui, joursDuBandeau,
+  lisLAdresse, messageDeLiberation, titreDeLaFeuille,
 } from '../lib/choix.ts'
-import type { CaseLue, Carte, PointDuJour, RepasChoisi } from '../lib/choix.ts'
+import type { CaseLue, Carte, JourDuBandeau, PointDuJour, RepasChoisi } from '../lib/choix.ts'
 import { maintenant } from '../lib/horloge.ts'
 import { useJourLocal } from '../lib/jour-local.ts'
 
@@ -53,7 +56,8 @@ export function Semaine({ userId, va, remplace }: {
   const demande = useMemo(() => lisLAdresse(window.location.search, jours), [jours])
 
   const { data: foyer, isPending: foyerEnCours, error: erreurFoyer } = useFoyer()
-  const { data: cases, isPending, error: erreurCases } = useSemaine(debut, 7)
+  /* Le bandeau remonte : la semaine se lit depuis son premier jour (sept jours avant aujourd'hui). */
+  const { data: cases, isPending, error: erreurCases } = useSemaine(lisLeJour(jours[0].jour), jours.length)
   const { data: lesPrevus, error: erreurPrevus } = usePrevus()
   const lectureBarquettes = useBarquettes()
   const lectureFrequents = useFrequents()
@@ -73,10 +77,15 @@ export function Semaine({ userId, va, remplace }: {
   const saute = useChoisirUnRepas()
   const remet = useRetireLaCase()
 
-  const [choisiJour, setChoisiJour] = useState(() => jours[demande.index].jour)
+  /* Le jour choisi est une date, pas un rang : il reste le même quand le bandeau avance. Sauf aujourd'hui, qu'on ne « choisit »
+     pas : `null` le suit — une page laissée ouverte sur aujourd'hui passe à demain à minuit, elle ne reste pas sur hier. */
+  const auj = indexDAujourdhui(jours)
+  const [choisiExplicite, setChoisiExplicite] = useState<string | null>(() => (demande.index === auj ? null : jours[demande.index].jour))
+  const choisiJour = choisiExplicite ?? jours[auj].jour
   const index = Math.max(0, jours.findIndex(j => j.jour === choisiJour))
-  /** La feuille ouverte : le repas, et pour qui « Pour » commence. */
-  const [feuille, setFeuille] = useState<{ repas: RepasChoisi; pour: 'tous' | string } | null>(null)
+  /** La feuille ouverte : le jour (figé à l'ouverture : passé minuit, « aujourd'hui » change, pas ce qu'on est en train de noter),
+      le repas, et pour qui « Pour » commence. */
+  const [feuille, setFeuille] = useState<{ jour: JourDuBandeau; repas: RepasChoisi; pour: 'tous' | string } | null>(null)
   const [message, setMessage] = useState('')
   /* Le bouton exact qui a ouvert la feuille (le repas, et la clé de sa carte) : c'est lui qui reprend le focus une fois
      la feuille refermée (une ref : pas de rendu en plus). */
@@ -98,7 +107,8 @@ export function Semaine({ userId, va, remplace }: {
     const { cartes, sansChoix } = cartesDuRepas(les as unknown as CaseLue[], membres, userId)
     const mienne = cartes.find(c => c.personnes.includes(userId))
     rendreLeFocus.current = { repas: demande.repas, cle: mienne?.cle ?? 'vide' }
-    setFeuille({ repas: demande.repas, pour: pourDeLaCarte(mienne, sansChoix, membres.length) })
+    const j = jours[demande.index]
+    setFeuille({ jour: j, repas: demande.repas, pour: pourDeLaCarte(mienne, sansChoix, membres.length, j.passe, userId) })
   }, [demande, membres, isPending, cases, jours, userId])
 
   /* Le focus revient au bouton exact qui a ouvert la feuille. Après un choix il peut avoir changé (« + Choisir » est
@@ -141,7 +151,7 @@ export function Semaine({ userId, va, remplace }: {
     choisit.reset()
     setMessage('')
     rendreLeFocus.current = { repas, cle }
-    setFeuille({ repas, pour })
+    setFeuille({ jour: jourChoisi, repas, pour })
   }
   const ferme = () => {
     setFeuille(null)
@@ -152,7 +162,7 @@ export function Semaine({ userId, va, remplace }: {
     if (!feuille || enVol.current) return
     enVol.current = true
     try {
-      const r = await choisit.mutateAsync({ jour: jourChoisi.jour, repas: feuille.repas, personnes, choix })
+      const r = await choisit.mutateAsync({ jour: feuille.jour.jour, repas: feuille.repas, personnes, choix })
       setMessage(messageDeLiberation(r.liberees))
       ferme()
     } catch { /* l'erreur est dite dans la feuille (`choisit.error`) */ } finally { enVol.current = false }
@@ -163,13 +173,13 @@ export function Semaine({ userId, va, remplace }: {
     saute.mutate({ jour: jourChoisi.jour, repas: moment, personnes: [userId], choix: { type: 'saute' } })
   }
 
-  /* Une unité de chacun de nos aliments : un geste, avec ses vraies valeurs. */
+  /* Nos aliments : une ligne chacun, avec les valeurs d'UNE unité ; un appui demande « combien ? ». */
   const nosAliments: NotreAliment[] = aliments.map(a => ({
-    id: a.id, label: a.label, remplace_repere: a.remplace_repere, detail: detailDeLUnite(a), reste: `${ecrit(valeursDeLUnite(a).kcal)} kcal`, choix: choixDeLUnite(a),
+    id: a.id, label: a.label, remplace_repere: a.remplace_repere, detail: detailDeLUnite(a), reste: `${ecrit(valeursDeLUnite(a).kcal)} kcal`, aliment: a,
   }))
 
   const dejaMange = feuille
-    ? duJour(jourChoisi.jour, feuille.repas).filter(c => c.state === 'mange').map(c => c.user_profile_id)
+    ? duJour(feuille.jour.jour, feuille.repas).filter(c => c.state === 'mange').map(c => c.user_profile_id)
     : []
   const mesCasesDuJour = lues.filter(c => c.day === jourChoisi.jour && c.user_profile_id === userId)
 
@@ -180,14 +190,20 @@ export function Semaine({ userId, va, remplace }: {
 
       <Bandeau jours={jours} points={points} index={index}
                surChoix={i => {
-                 setChoisiJour(jours[i].jour); setMessage(''); mange.reset(); saute.reset(); remet.reset(); nettoieLAdresse()
+                 setChoisiExplicite(i === auj ? null : jours[i].jour); setMessage(''); mange.reset(); saute.reset(); remet.reset(); nettoieLAdresse()
                }} />
 
       <section aria-label={jourChoisi.long} className="mt-5">
         <div className="flex items-baseline gap-2.5">
           <h2 className="titre text-[24px] font-semibold">{jourChoisi.long}</h2>
           {jourChoisi.aujourdhui && <span className="text-[13px] font-bold text-herbe">aujourd’hui</span>}
+          {jourChoisi.hier && <span data-hier="" className="text-[13px] font-bold text-ocre">hier</span>}
         </div>
+        {jourChoisi.passe && (
+          <p data-jour-passe="" className="mt-1 text-[15px] leading-[1.45] text-doux">
+            Un jour passé : tu notes ce que tu as mangé. Les barquettes que tu coches sortent du frigo ou du congélateur.
+          </p>
+        )}
 
         <div role="status" aria-live="polite">
           {message && (
@@ -220,16 +236,16 @@ export function Semaine({ userId, va, remplace }: {
                       <CarteDuRepas key={carte.cle} carte={carte} membres={membres} moi={userId} jour={jourChoisi.jour} repas={m}
                                     photo={c.genre === 'plat' ? photoDe(c.recipeId) : null}
                                     maintenant={now} rappelActif={rappelActif}
-                                    surChange={() => ouvre(m, pourDeLaCarte(carte, sansChoix, membres.length), carte.cle)}
-                                    surMange={surMange} enCours={mange.isPending}
+                                    surChange={() => ouvre(m, pourDeLaCarte(carte, sansChoix, membres.length, jourChoisi.passe, userId), carte.cle)}
+                                    surMange={surMange} enCours={mange.isPending} passe={jourChoisi.passe}
                                     enPlus={mienne && c.genre === 'plat'
-                                      ? <EnPlus cas={laMienne!} frequents={frequents} nosAliments={aliments} /> : null} />
+                                      ? <EnPlus cas={laMienne!} frequents={frequents} nosAliments={aliments} userId={userId} /> : null} />
                     )
                   })}
                   {(cartes.length === 0 || sansChoix.length > 0) && (
-                    <CarteVide repas={m}
-                               pour={cartes.length > 0 ? pourDit(sansChoix, membres) : undefined}
-                               surOuvre={() => ouvre(m, pourDeLaCarte(undefined, sansChoix, membres.length), 'vide')} />
+                    <CarteVide repas={m} passe={jourChoisi.passe}
+                               pour={cartes.length > 0 ? { ids: sansChoix, membres, moi: userId } : undefined}
+                               surOuvre={() => ouvre(m, pourDeLaCarte(undefined, sansChoix, membres.length, jourChoisi.passe, userId), 'vide')} />
                   )}
                 </div>
               </div>
@@ -245,7 +261,7 @@ export function Semaine({ userId, va, remplace }: {
             /* Une case vide (ce que laissait « retirer » le dernier extra) ne se montre pas : elle n'est rien. */
             if (!c || caseVide(c)) return null
             return (
-              <div key={moment} className="mt-2 rounded-2xl bg-brume/25 p-3.5">
+              <div key={moment} data-moment={moment} className="mt-2 rounded-2xl bg-brume/25 p-3.5">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-[14px]">{NOM_REPAS[moment]}{c.portion ? ` · ${nomCourt(c.portion.label)}` : ''}{c.state === 'saute' ? ' · sauté' : ''}</span>
                   {c.state === 'saute' && (
@@ -256,7 +272,7 @@ export function Semaine({ userId, va, remplace }: {
                     </button>
                   )}
                 </div>
-                <EnPlus cas={c} frequents={frequents} nosAliments={aliments} />
+                <EnPlus cas={c} frequents={frequents} nosAliments={aliments} userId={userId} />
               </div>
             )
           })}
@@ -269,9 +285,9 @@ export function Semaine({ userId, va, remplace }: {
       <FeuilleDeChoix
         ouverte={feuille !== null}
         fermer={ferme}
-        titre={feuille ? titreDeLaFeuille(jourChoisi, feuille.repas) : 'Choisir un repas'}
-        repas={feuille?.repas ?? 'diner'} jour={jourChoisi.jour} membres={membres}
-        pourInitial={feuille?.pour ?? 'tous'} dejaMange={dejaMange}
+        titre={feuille ? titreDeLaFeuille(feuille.jour, feuille.repas) : 'Choisir un repas'}
+        repas={feuille?.repas ?? 'diner'} jour={(feuille?.jour ?? jourChoisi).jour} membres={membres}
+        pourInitial={feuille?.pour ?? 'tous'} dejaMange={dejaMange} moi={userId}
         groupes={groupes} prevus={lesPrevus ?? null} maintenant={now} photoDe={photoDe} frequents={frequents}
         lectures={{
           barquettes: { enCours: lectureBarquettes.isPending, erreur: lectureBarquettes.error },
@@ -279,7 +295,7 @@ export function Semaine({ userId, va, remplace }: {
           prevus: { enCours: lesPrevus === undefined && !erreurPrevus, erreur: erreurPrevus },
         }}
         nosAliments={nosAliments} alimentsEnPanne={alimentsEnPanne}
-        versNosAliments={() => feuille && va(`/aliments?depuis=semaine&jour=${jourChoisi.jour}&repas=${feuille.repas}`)}
+        versNosAliments={() => feuille && va(`/aliments?depuis=semaine&jour=${feuille.jour.jour}&repas=${feuille.repas}`)}
         enCours={choisit.isPending} erreur={choisit.error} surChoix={choisi} />
     </Ecran>
   )
@@ -291,8 +307,14 @@ function ordreDeLecture(les: CaseLue[], membres: { id: string }[], moi: string):
   return [...les].sort((a, b) => rang(a.user_profile_id) - rang(b.user_profile_id))
 }
 
-/** Pour qui la feuille commence : ceux de la carte qu'on change, ou ceux qui n'ont encore rien. */
-function pourDeLaCarte(carte: Carte | undefined, sansChoix: string[], nbMembres: number): 'tous' | string {
+/**
+ * Pour qui la feuille commence : ceux de la carte qu'on change, ou ceux qui n'ont encore rien. Sur un jour PASSÉ, « moi » :
+ * un appui note mangé et consomme la barquette — on n'agit jamais au nom de l'autre ; « Vous deux » reste un choix explicite.
+ */
+function pourDeLaCarte(
+  carte: Carte | undefined, sansChoix: string[], nbMembres: number, passe = false, moi = '',
+): 'tous' | string {
+  if (passe && moi !== '') return moi
   const ids = carte ? carte.personnes : sansChoix
   return ids.length === 1 && nbMembres > 1 ? ids[0] : 'tous'
 }

@@ -225,11 +225,11 @@ describe('changer un repas', () => {
     expect((await caseDe(thauba.userId, aujourdhui(), 'diner'))!.state).toBe('mange')
   })
 
-  it('un repas d’hier ne se choisit plus', async () => {
+  it('un repas de plus de sept jours en arrière ne se note plus (hier se note : tests/semaine-hier.test.ts)', async () => {
     const a = nouveauPlat()
     await parts(a, [{ expire: 1 }])
-    const r = await choisit(kamil.client, jourDans(-1), 'diner', [kamil.userId], lePlat(a))
-    expect(r.error?.message).toMatch(/d’hier/)
+    const r = await choisit(kamil.client, jourDans(-8), 'diner', [kamil.userId], lePlat(a))
+    expect(r.error?.message).toMatch(/trop ancien/)
   })
 })
 

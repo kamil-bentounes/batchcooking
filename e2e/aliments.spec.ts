@@ -211,7 +211,12 @@ test('dans la semaine : nos aliments avant les repères, un geste = un pot, les 
   await f.evaluate(el => { el.scrollTo(0, el.scrollHeight) })
   await capture(page, '05-feuille-midi-390', false)
 
+  /* Un appui ouvre « combien ? » (un pot, d'office) ; c'est « Choisir pour le midi » qui écrit. */
   await lignes.first().click()
+  const combien = f.getByRole('group', { name: `${YAOURT} : combien ?` })
+  await expect(combien).toContainText('1 pot')
+  await expect(combien).toContainText('95 kcal · 12,5 g de protéines')
+  await combien.getByRole('button', { name: 'Choisir pour le midi' }).click()
   await expect(f).toBeHidden({ timeout: 10_000 })
   await expect(page.locator('[data-repas="dejeuner"]')).toContainText(YAOURT)
 
@@ -219,7 +224,7 @@ test('dans la semaine : nos aliments avant les repères, un geste = un pot, les 
   const extras = (await lesExtras()).filter(e => e.meal_slot.meal === 'dejeuner' && e.meal_slot.day === jourLocal(0))
   expect(extras).toHaveLength(2)
   for (const e of extras) {
-    expect(e.label).toBe(YAOURT)
+    expect(e.label).toBe(`${YAOURT} × 1 pot`)
     expect([e.kcal, e.protein_g, e.carb_g, e.fat_g, e.fiber_g, e.grams].map(Number)).toEqual([95, 12.5, 7, 1.8, 0, 125])
   }
   /* Posé par la feuille (`choisir_un_repas`) : planifié, il ne compte au bilan qu'une fois mangé ou passé. */
@@ -233,7 +238,8 @@ test('dans « en plus » : le repère « Yaourt » ne se glisse plus à côté ;
   await page.goto('/semaine')
   await page.getByRole('button', { name: 'Collation' }).click()
   await expect(page.getByText('Nos aliments', { exact: true })).toBeVisible()
-  const chip = page.getByRole('button', { name: new RegExp(`${YAOURT}\\s*95 kcal`) })
+  /* La pastille dit l'unité (« pot ») : les calories dépendent de la quantité, qu'on dit ensuite. */
+  const chip = page.getByRole('button', { name: new RegExp(`${YAOURT}\\s*pot$`) })
   await expect(chip).toBeVisible()
   /* Le repère générique « Yaourt » (60 kcal) est remplacé ; les autres restent. */
   await expect(page.getByRole('button', { name: /^Yaourt\s*60$/ })).toHaveCount(0)
@@ -246,18 +252,19 @@ test('dans « en plus » : le repère « Yaourt » ne se glisse plus à côté ;
   await capture(page, '06-en-plus-390', true)
 
   /* Un double toucher sur la pastille n'écrit le repas qu'UNE fois. */
-  await chip.dblclick()
+  await chip.click()
+  await page.getByRole('group', { name: `${YAOURT} : combien ?` }).getByRole('button', { name: 'Ajouter à la collation' }).dblclick()
   await expect.poll(async () => (await lesExtras()).filter(e => e.meal_slot.meal === 'collation').length, { timeout: 10_000 }).toBe(1)
   await page.waitForTimeout(1500)
   expect((await lesExtras()).filter(e => e.meal_slot.meal === 'collation'), 'un double toucher, un seul repas').toHaveLength(1)
   const [e] = (await lesExtras()).filter(e => e.meal_slot.meal === 'collation')
   expect(e.meal_slot.user_profile_id).toBe(foyer.userId)
-  expect(e.label).toBe(YAOURT)
+  expect(e.label).toBe(`${YAOURT} × 1 pot`)
   expect([e.kcal, e.protein_g, e.carb_g, e.fat_g, e.grams].map(Number)).toEqual([95, 12.5, 7, 1.8, 125])
   /* Noté après coup dans « en plus » : pas planifié, il compte tout de suite. */
   expect(e.planifie).toBe(false)
   /* Et l'écran le dit, avec les mêmes chiffres. */
-  await expect(page.getByText(`${YAOURT} · 95 kcal · 12,5 g de protéines`)).toBeVisible()
+  await expect(page.getByText(`${YAOURT} × 1 pot · 95 kcal · 12,5 g de protéines`)).toBeVisible()
 })
 
 test('modifier le pot (150 g) : la liste recalcule, les repas déjà notés gardent leurs chiffres', async ({ page }) => {
@@ -276,7 +283,7 @@ test('modifier le pot (150 g) : la liste recalcule, les repas déjà notés gard
   await expect(page.getByRole('button', { name: `Modifier ${YAOURT}` })).toContainText('15')
 
   expect(Number((await lesAliments())[0].unite_g)).toBe(150)
-  const extras = (await lesExtras()).filter(e => e.label === YAOURT)
+  const extras = (await lesExtras()).filter(e => e.label.startsWith(YAOURT))
   expect(extras.length).toBeGreaterThanOrEqual(3)
   expect(extras.every(e => Number(e.kcal) === 95), 'le repas d’hier a gardé ses chiffres').toBe(true)
 
@@ -477,10 +484,11 @@ test('retirer un aliment : on demande, « Non » le garde (et le focus revient),
   await page.goto('/semaine')
   await page.getByRole('button', { name: '+ ce que j’ai mangé en plus' }).first().click()
   await expect(page.getByRole('button', { name: /Skyr ou fromage blanc/ })).toHaveCount(0)
-  const chipSkyr = page.getByRole('button', { name: /Skyr Danone\s*80 kcal/ })
+  const chipSkyr = page.getByRole('button', { name: /Skyr Danone\s*pot$/ })
   await chipSkyr.click()
-  await expect.poll(async () => (await lesExtras()).filter(e => e.label === 'Skyr Danone').length, { timeout: 10_000 }).toBe(1)
-  const avant = (await lesExtras()).filter(e => e.label === 'Skyr Danone')
+  await page.getByRole('group', { name: 'Skyr Danone : combien ?' }).getByRole('button', { name: /^Ajouter / }).click()
+  await expect.poll(async () => (await lesExtras()).filter(e => e.label.startsWith('Skyr Danone')).length, { timeout: 10_000 }).toBe(1)
+  const avant = (await lesExtras()).filter(e => e.label.startsWith('Skyr Danone'))
   expect([avant[0].kcal, avant[0].protein_g, avant[0].grams].map(Number)).toEqual([80, 14, 140])
 
   await page.goto('/aliments')
@@ -508,11 +516,11 @@ test('retirer un aliment : on demande, « Non » le garde (et le focus revient),
   expect((await lesAliments()).some(a => a.label === 'Skyr Danone')).toBe(false)
 
   /* Les extras DU SKYR retiré gardent leurs chiffres : c'est une copie, pas une référence. */
-  const apres = (await lesExtras()).filter(e => e.label === 'Skyr Danone')
+  const apres = (await lesExtras()).filter(e => e.label.startsWith('Skyr Danone'))
   expect(apres, 'le repas noté avec le Skyr est toujours là').toHaveLength(1)
   expect(apres[0].id).toBe(avant[0].id)
   expect([apres[0].kcal, apres[0].protein_g, apres[0].carb_g, apres[0].fat_g, apres[0].grams].map(Number)).toEqual([80, 14, 5.5, 0.3, 140])
-  expect((await lesExtras()).filter(e => e.label === YAOURT).length, 'ceux du yaourt aussi').toBeGreaterThanOrEqual(3)
+  expect((await lesExtras()).filter(e => e.label.startsWith(YAOURT)).length, 'ceux du yaourt aussi').toBeGreaterThanOrEqual(3)
 
   /* Et le repère qu'il remplaçait revient : plus rien ne le cache. */
   await page.goto('/semaine')
@@ -863,7 +871,7 @@ test('« Remplace le repère » : proposé d’après le premier mot, retirable 
   await page.goto('/semaine')
   await page.getByRole('button', { name: '+ ce que j’ai mangé en plus' }).first().click()
   await expect(page.getByRole('button', { name: /^Fruit\s*80$/ }), 'rien n’est caché par préfixe').toBeVisible()
-  await expect(page.getByRole('button', { name: /Fruit sec maison\s*135 kcal/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Fruit sec maison\s*pot$/ })).toBeVisible()
 
   /* On le nomme : le repère disparaît. */
   await page.goto('/aliments')

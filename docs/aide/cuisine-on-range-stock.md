@@ -13,7 +13,7 @@ sources:
   - src/lib/ranger.ts
   - src/lib/donnees/barquettes.ts
   - supabase/migrations/0120_la_session_prend_dans_le_stock.sql
-verifie_sur: 7a0673e
+verifie_sur: 99e3953
 ---
 ## Ce que fait l’écran
 

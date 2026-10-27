@@ -13,6 +13,8 @@ export type LectureEtiquette = {
   nom: string | null
   marque?: string | null
   poids_g: number | null
+  /** « pot », « barre » : l'unité qu'on mange, quand l'emballage ou la consigne la dit (absente d'une ancienne fonction). */
+  unite?: string | null
   parts: number | null
   kcal_100g: number | null
   proteines_100g: number | null
@@ -29,6 +31,8 @@ export type LectureEtiquette = {
 /** Les champs de l'écran que la lecture remplit (des textes : ce sont des champs de saisie). */
 export type ChampsLus = Partial<{
   label: string; kcal: string; proteines: string; glucides: string; lipides: string; fibres: string; poids: string
+  /** L'unité lue (« pot »), seulement quand elle est dite : jamais rempli d'un mot vide. */
+  unite: string
 }>
 
 /** Un texte de champ : « 12,5 », « 95 ». */
@@ -86,6 +90,9 @@ export function champsDeLEtiquette(l: LectureEtiquette): { champs: ChampsLus; no
       if (n > 1) calculDuPoids = `${ecrit(l.poids_g)} g en ${n} portions = ${ecrit(rond)} g`
     }
   }
+  /* L'unité : un mot, au singulier et en minuscules (20 caractères au plus, comme la base) ; sinon on ne la remplit pas. */
+  const mot = (l.unite ?? '').trim().toLowerCase()
+  if (mot !== '' && mot.length <= 20 && !/\d/.test(mot)) champs.unite = mot
   if (champs.poids === undefined) notes.push('Je n’ai pas vu le poids net : dis combien pèse un pot.')
 
   if (l.confiance < 0.7) notes.push('Le tableau n’est pas net : vérifie chaque chiffre.')

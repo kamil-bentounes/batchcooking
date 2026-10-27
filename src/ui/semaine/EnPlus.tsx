@@ -4,18 +4,26 @@
  * « La semaine » choisit le midi et le soir ; ce qui reste — le petit déjeuner, la collation, le yaourt de
  * « en plus » — s'écrit ici, en un geste, comme avant.
  */
-import { useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Erreur } from '../coque.tsx'
 import { NOM_REPAS, useAjouteExtra, useSupprimeExtra } from '../../lib/donnees/barquettes.ts'
 import type { Case, Repas } from '../../lib/donnees/barquettes.ts'
 import type { Ligne as LigneBase } from '../../lib/supabase.ts'
 import { reperesDe } from '../../lib/reperes.ts'
-import { MOMENTS_EN_PLUS, caseVide } from '../../lib/choix.ts'
+import { MOMENTS_EN_PLUS, MOT_DU_MOMENT, caseVide } from '../../lib/choix.ts'
 import type { CaseLue } from '../../lib/choix.ts'
 import type { Aliment } from '../../lib/donnees/aliments.ts'
-import { ecrit, extraDeLUnite, valeursDeLUnite } from '../../lib/aliments/calcul.ts'
+import { ecrit } from '../../lib/aliments/calcul.ts'
+import {
+  boutonAjouter, extraDeLaQuantite, lisLaSaisieAMain, motDeLaPastille, premierChampRefuse,
+} from '../../lib/aliments/en-plus.ts'
+import type { ErreursDeLaSaisie, SaisieAMain } from '../../lib/aliments/en-plus.ts'
 import { sansLesRemplaces } from '../../lib/aliments/ordre.ts'
+import { prepare } from '../../lib/photo.ts'
+import { photoEnFrancais } from '../../lib/reseau.ts'
 import { Pot } from '../aliments/Pictos.tsx'
+import { QuantiteDeLAliment } from '../aliments/Quantite.tsx'
+import { BoutonAppareil, EtiquetteEnPlus } from './EtiquetteEnPlus.tsx'
 
 type Frequent = LigneBase<'frequent_food'>
 
@@ -27,36 +35,91 @@ type Frequent = LigneBase<'frequent_food'>
  * afficher. Mais personne ne tape des calories deux semaines de suite : d'où
  * des repères en UN GESTE, et ce que le foyer remange sans cesse à portée de
  * pouce. Approximatif et tenu vaut mieux que précis et abandonné.
+ *
+ * Nos aliments demandent « combien ? » (un panneau sous les pastilles : deux pots, 30 g) ; ce qui n'est nulle part se
+ * tape à la main (les calories ET les protéines sont obligatoires) ou se lit sur une étiquette photographiée.
  */
-export function EnPlus({ cas, frequents, nosAliments = [], deployeParDefaut = false, surAjoute }:
+export function EnPlus({ cas, frequents, nosAliments = [], userId, deployeParDefaut = false, surAjoute }:
   { cas: Case; frequents: Frequent[]
-    /** Nos aliments (migration 0124) : AVANT les repères, un geste = une unité, avec leurs vraies valeurs. */
+    /** Nos aliments (migration 0124) : AVANT les repères, avec leur quantité (« combien ? »). */
     nosAliments?: Aliment[]
+    /** Moi : ce sont MES quantités récentes que le panneau propose. */
+    userId: string
     deployeParDefaut?: boolean
     surAjoute?: () => void }) {
   const ajoute = useAjouteExtra({ onSuccess: surAjoute })
   /* Un geste à la fois : un double toucher sur une pastille (nos aliments, une habitude, un repère) écrivait deux fois le
      repas. Une ref, pas `ajoute.isPending` : le second toucher arrive avant que le rendu n'ait eu lieu. */
   const enVol = useRef(false)
-  const geste = (e: Parameters<typeof ajoute.mutate>[0]) => {
+  const geste = (e: Parameters<typeof ajoute.mutate>[0], apres?: () => void) => {
     if (enVol.current) return
     enVol.current = true
-    ajoute.mutate(e, { onSettled: () => { enVol.current = false } })
+    ajoute.mutate(e, { onSuccess: apres, onSettled: () => { enVol.current = false } })
   }
   const supprime = useSupprimeExtra()
   const [ouvert, setOuvert] = useState(deployeParDefaut)
+  /* L'aliment dont le panneau « combien ? » est ouvert. */
+  const [choisi, setChoisi] = useState<string | null>(null)
   const laCase = {
     id: cas.id, user_profile_id: cas.user_profile_id, day: cas.day, meal: cas.meal,
   }
-  const [libre, setLibre] = useState({ label: '', kcal: '', prot: '' })
+  const mot = MOT_DU_MOMENT[cas.meal] ?? MOT_DU_MOMENT.diner
+  const id = useId()
+  const [libre, setLibre] = useState<SaisieAMain>({ label: '', kcal: '', prot: '' })
+  const [erreurs, setErreurs] = useState<ErreursDeLaSaisie>({})
+  /* Une photo d'étiquette en attente de lecture : la feuille s'ouvre dessus. `n` : une nouvelle photo, une nouvelle feuille. */
+  const [photo, setPhoto] = useState<{ n: number; url: string } | null>(null)
+  const [erreurPhoto, setErreurPhoto] = useState('')
+  const boutonPhoto = useRef<HTMLInputElement>(null)
+  /* Les pastilles de nos aliments : l'ajout ferme le panneau qui portait le focus, qui revient alors à la pastille. */
+  const pastilles = useRef(new Map<string, HTMLButtonElement>())
 
   /* Un repère (ou une habitude) qu'un de nos aliments remplace — nommé dans son formulaire (« Remplace le repère »),
      ou de même nom — ne se glisse plus à côté : c'est le nôtre, avec ses vrais chiffres. */
   const reperes = sansLesRemplaces(reperesDe(cas.meal), nosAliments)
   const habitudes = sansLesRemplaces(frequents, nosAliments)
-  const k = Number(libre.kcal.replace(',', '.'))
-  const pr = Number(libre.prot.replace(',', '.'))
-  const saisi = libre.label.trim() !== '' && Number.isFinite(k) && k >= 0
+  const alimentChoisi = nosAliments.find(a => a.id === choisi)
+
+  function ajouteLaSaisie(ev: React.FormEvent) {
+    ev.preventDefault()
+    if (enVol.current) return
+    const r = lisLaSaisieAMain(libre)
+    if (!r.ok) {
+      setErreurs(r.erreurs)
+      const premier = premierChampRefuse(r.erreurs)
+      if (premier) document.getElementById(`${id}-${premier}`)?.focus()
+      return
+    }
+    setErreurs({})
+    geste({ cas: laCase, label: r.valeurs.label, kcal: r.valeurs.kcal, proteinG: r.valeurs.proteinG },
+      () => setLibre({ label: '', kcal: '', prot: '' }))
+  }
+  const tape = (c: keyof SaisieAMain) => (v: string) => {
+    setLibre(p => ({ ...p, [c]: v }))
+    setErreurs(e => (e[c] ? { ...e, [c]: undefined } : e))
+  }
+
+  async function surPhoto(f: File) {
+    setErreurPhoto('')
+    try {
+      const { dataUrl } = await prepare(f)
+      setPhoto(p => ({ n: (p?.n ?? 0) + 1, url: dataUrl }))
+    } catch (e) { setErreurPhoto(photoEnFrancais(e)) }
+  }
+
+  /* `rangees` : deux cases côte à côte partagent leurs rangées (nom, case, phrase) : un nom qui passe sur deux lignes à
+     320 px ne décale pas la case de sa voisine. */
+  const zone = (c: keyof SaisieAMain, nom: string, extra: { inputMode: 'text' | 'decimal'; rangees?: boolean }) => (
+    <div className={extra.rangees ? 'row-span-3 grid grid-rows-subgrid' : undefined}>
+      <label htmlFor={`${id}-${c}`} className="block text-[14px] font-bold">{nom}</label>
+      <input id={`${id}-${c}`} value={libre[c]} onChange={ev => tape(c)(ev.target.value)} inputMode={extra.inputMode}
+             autoComplete="off" aria-invalid={erreurs[c] ? true : undefined}
+             aria-describedby={erreurs[c] ? `${id}-${c}-erreur` : undefined}
+             className="mt-1 h-12 w-full rounded-[14px] bg-surface px-3.5 text-[16px] text-encre"
+             style={erreurs[c] ? { boxShadow: 'inset 0 0 0 1.5px var(--color-groseille)' } : { boxShadow: 'inset 0 0 0 1px var(--color-brume)' }} />
+      {erreurs[c] && <p id={`${id}-${c}-erreur`} className="mt-1 text-[13px] leading-[1.35] text-groseille">{erreurs[c]}</p>}
+    </div>
+  )
 
   return (
     <div>
@@ -79,26 +142,48 @@ export function EnPlus({ cas, frequents, nosAliments = [], deployeParDefaut = fa
       <Erreur de={supprime.error} />
 
       {!ouvert ? (
-        <button onClick={() => setOuvert(true)}
+        <button onClick={() => setOuvert(true)} data-en-plus=""
                 className="inline-flex min-h-11 items-center text-[13px] text-doux underline underline-offset-2">
           + ce que j’ai mangé en plus
         </button>
       ) : (
-        <div className="space-y-3">
+        <div role="group" aria-label={`En plus ${mot.du}`}
+             className={deployeParDefaut ? 'space-y-3' : 'space-y-3 rounded-[18px] bg-brume/30 p-3.5'}>
+          {!deployeParDefaut && (
+            <div className="flex items-baseline justify-between gap-3">
+              <h4 className="text-[16px] font-bold">En plus {mot.du}</h4>
+              <button type="button" onClick={() => { setOuvert(false); setChoisi(null) }}
+                      className="inline-flex min-h-11 items-center text-[14px] text-doux">
+                fermer
+              </button>
+            </div>
+          )}
           {nosAliments.length > 0 && (
             <div>
               <p className="text-[13px] text-doux mb-1.5">Nos aliments</p>
               <div className="flex gap-2 flex-wrap">
                 {nosAliments.map(a => (
-                  <button key={a.id} onClick={() => geste({ cas: laCase, ...extraDeLUnite(a) })}
-                          aria-disabled={ajoute.isPending || undefined}
-                          className="min-h-11 px-3.5 rounded-full bg-sable text-[14px] inline-flex items-center gap-2 aria-disabled:opacity-60">
+                  <button key={a.id} type="button" onClick={() => setChoisi(c => (c === a.id ? null : a.id))}
+                          ref={el => { if (el) pastilles.current.set(a.id, el); else pastilles.current.delete(a.id) }}
+                          aria-pressed={choisi === a.id}
+                          className="min-h-11 px-3.5 rounded-full bg-sable text-[14px] inline-flex items-center gap-2"
+                          style={choisi === a.id ? { boxShadow: 'inset 0 0 0 2px var(--color-herbe)' } : undefined}>
                     <Pot largeur={13} />
                     <span>{a.label}</span>
-                    <span className="text-doux">{ecrit(valeursDeLUnite(a).kcal)} kcal</span>
+                    <span className="text-doux">{motDeLaPastille(a)}</span>
                   </button>
                 ))}
               </div>
+              {alimentChoisi && (
+                <div className="mt-2.5">
+                  <QuantiteDeLAliment key={alimentChoisi.id} aliment={alimentChoisi} moi={userId}
+                                      bouton={boutonAjouter(mot.au)} enCours={ajoute.isPending}
+                                      surAjoute={q => geste({ cas: laCase, ...extraDeLaQuantite(alimentChoisi, q) }, () => {
+                                        setChoisi(null)
+                                        setTimeout(() => pastilles.current.get(alimentChoisi.id)?.focus(), 0)
+                                      })} />
+                </div>
+              )}
             </div>
           )}
 
@@ -131,7 +216,7 @@ export function EnPlus({ cas, frequents, nosAliments = [], deployeParDefaut = fa
                   cas: laCase, label: r.label, kcal: r.kcal, proteinG: r.proteinG,
                 })}
                         aria-disabled={ajoute.isPending || undefined}
-                        className="min-h-11 px-3.5 rounded-full bg-brume/50 text-[14px] aria-disabled:opacity-60">
+                        className="min-h-11 px-3.5 rounded-full bg-surface text-[14px] aria-disabled:opacity-60">
                   {r.label}
                   <span className="text-doux"> {r.kcal}</span>
                 </button>
@@ -139,49 +224,39 @@ export function EnPlus({ cas, frequents, nosAliments = [], deployeParDefaut = fa
             </div>
           </div>
 
-          <div className="flex gap-2 items-end">
-            <label className="grow">
-              <span className="sr-only">Quoi</span>
-              <input value={libre.label} placeholder="Autre chose"
-                     onChange={e => setLibre({ ...libre, label: e.target.value })}
-                     className="w-full h-[44px] px-3 rounded-[13px] bg-brume/40 text-[15px]" />
-            </label>
-            <label className="w-[74px]">
-              <span className="sr-only">Kilocalories</span>
-              <input inputMode="numeric" value={libre.kcal} placeholder="kcal"
-                     onChange={e => setLibre({ ...libre, kcal: e.target.value })}
-                     className="w-full h-[44px] px-2 rounded-[13px] bg-brume/40
-                                text-[15px] text-center" />
-            </label>
-            <label className="w-[64px]">
-              <span className="sr-only">Grammes de protéines</span>
-              <input inputMode="numeric" value={libre.prot} placeholder="g prot"
-                     onChange={e => setLibre({ ...libre, prot: e.target.value })}
-                     className="w-full h-[44px] px-2 rounded-[13px] bg-brume/40
-                                text-[15px] text-center" />
-            </label>
-            <button disabled={!saisi}
-                    onClick={() => {
-                      ajoute.mutate({
-                        cas: laCase, label: libre.label, kcal: k,
-                        proteinG: Number.isFinite(pr) ? pr : 0,
-                      })
-                      setLibre({ label: '', kcal: '', prot: '' })
-                    }}
-                    className="h-[44px] px-4 rounded-[13px] bg-herbe text-fond text-[15px]
-                               disabled:bg-brume disabled:text-encre">
-              Ajouter
+          {/* À la main : les calories ET les protéines sont obligatoires, chaque manque a sa phrase. */}
+          <form onSubmit={ajouteLaSaisie} noValidate className="space-y-2.5">
+            <p className="text-[13px] leading-[1.45] text-doux">
+              Autre chose, à la main : les calories et les protéines sont obligatoires
+            </p>
+            {zone('label', 'Quoi', { inputMode: 'text' })}
+            <div className="grid grid-cols-2 gap-x-2.5">
+              {zone('kcal', 'Calories', { inputMode: 'decimal', rangees: true })}
+              {zone('prot', 'Protéines, en g', { inputMode: 'decimal', rangees: true })}
+            </div>
+            <button type="submit" disabled={ajoute.isPending}
+                    className="min-h-[52px] w-full rounded-[16px] bg-herbe px-4 text-[17px] font-semibold text-fond disabled:opacity-60">
+              {boutonAjouter(mot.au)}
             </button>
+          </form>
+
+          {/* ou : l'étiquette d'un produit, photographiée. */}
+          <div role="separator" aria-label="ou" className="flex items-center gap-3 text-[14px] text-doux">
+            <span aria-hidden="true" className="h-px flex-1 bg-brume" />
+            <span aria-hidden="true">ou</span>
+            <span aria-hidden="true" className="h-px flex-1 bg-brume" />
           </div>
+          <BoutonAppareil texte="Photographier l’étiquette" onFichier={surPhoto} inputRef={boutonPhoto}
+                          className="min-h-[52px] w-full rounded-[16px] bg-surface text-[16px] font-semibold text-herbe" />
+          {erreurPhoto && <p role="alert" className="text-[13px] leading-[1.45] text-groseille">{erreurPhoto}</p>}
 
           <Erreur de={ajoute.error} />
-          {!deployeParDefaut && (
-            <button onClick={() => setOuvert(false)}
-                    className="inline-flex min-h-11 items-center text-[13px] text-doux underline underline-offset-2">
-              Fermer
-            </button>
-          )}
         </div>
+      )}
+
+      {photo && (
+        <EtiquetteEnPlus key={photo.n} cas={laCase} photoInitiale={photo.url} surFini={surAjoute}
+                         fermer={() => { setPhoto(null); setTimeout(() => boutonPhoto.current?.focus(), 0) }} />
       )}
     </div>
   )
@@ -205,6 +280,19 @@ export function HorsBarquette({ jour: j, userId, frequents, nosAliments, dejaLa,
   enCours?: boolean
 }) {
   const [moment, setMoment] = useState<Repas | null>(null)
+  /* Le moment dont le panneau vient de se fermer : le focus qu'il portait est perdu avec lui, et revient à la carte du moment
+     (« + ce que j'ai mangé en plus »), qui paraît quand la case a été relue, ou au bouton qui l'avait ouvert (« annuler »). */
+  const rendre = useRef<{ moment: Repas; carte: boolean } | null>(null)
+  const ferme = (carte: boolean) => { if (moment) rendre.current = { moment, carte }; setMoment(null) }
+  const etatDesCases = dejaLa.map(c => `${c.id}:${c.extras.length}:${c.state}`).join()
+  useEffect(() => {
+    const o = rendre.current
+    if (!o || moment !== null) return
+    const cible = o.carte
+      ? document.querySelector<HTMLElement>(`[data-moment="${o.moment}"] [data-en-plus]`)
+      : document.querySelector<HTMLElement>(`[data-ouvre-moment="${o.moment}"]`)
+    if (cible) { cible.focus(); rendre.current = null }
+  }, [moment, etatDesCases])
   /* Une case VIDE (ce que laissait « retirer » le dernier extra) ne prend pas la place du moment : on peut y noter. */
   const pris = new Set(dejaLa.filter(c => !caseVide(c as unknown as CaseLue)).map(c => c.meal))
   const libres = MOMENTS_EN_PLUS.filter(r => !pris.has(r))
@@ -216,7 +304,7 @@ export function HorsBarquette({ jour: j, userId, frequents, nosAliments, dejaLa,
         <div className="flex gap-2 flex-wrap items-center">
           <span className="text-[13px] text-doux">Mangé sans barquette ?</span>
           {libres.map(r => (
-            <button key={r} onClick={() => setMoment(r)}
+            <button key={r} onClick={() => setMoment(r)} data-ouvre-moment={r}
                     className="px-3 min-h-11 inline-flex items-center rounded-full bg-brume/50 text-[13px]
                                hover:bg-brume transition-colors">
               {NOM_REPAS[r]}
@@ -227,19 +315,19 @@ export function HorsBarquette({ jour: j, userId, frequents, nosAliments, dejaLa,
         <div className="rounded-[16px] bg-brume/25 p-3.5">
           <div className="flex items-baseline justify-between mb-2">
             <span className="text-[14px]">{NOM_REPAS[moment]}</span>
-            <button onClick={() => setMoment(null)}
+            <button onClick={() => ferme(false)}
                     className="inline-flex min-h-11 items-center text-[13px] text-doux underline underline-offset-2">
               annuler
             </button>
           </div>
           {surSaute && (moment === 'petit_dejeuner' || moment === 'collation') && (
-            <button type="button" disabled={enCours} onClick={() => { surSaute(moment); setMoment(null) }}
+            <button type="button" disabled={enCours} onClick={() => { surSaute(moment); ferme(true) }}
                     className="mb-2 inline-flex min-h-11 items-center rounded-full bg-brume/50 px-3.5 text-[14px] disabled:opacity-60">
               {moment === 'collation' ? 'Je saute la collation' : 'Je saute le petit déjeuner'}
             </button>
           )}
-          <EnPlus frequents={frequents} nosAliments={nosAliments} deployeParDefaut
-                  surAjoute={() => setMoment(null)}
+          <EnPlus frequents={frequents} nosAliments={nosAliments} userId={userId} deployeParDefaut
+                  surAjoute={() => ferme(true)}
                   cas={{
                     // Une case seulement AFFICHÉE : elle n'existe en base que
                     // si l'on y met quelque chose.

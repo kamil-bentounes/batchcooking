@@ -84,3 +84,10 @@ describe('ce qui s’écrit', () => {
     expect(uniteEtPoids({ unite: 'part', unite_g: 80.5 })).toBe('1 part (80,5 g)')
   })
 })
+
+describe('un aliment au gramme', () => {
+  it('se dit « 100 g », pas « 1 g (100 g) »', () => {
+    expect(uniteEtPoids({ unite: 'g', unite_g: 100 })).toBe('100 g')
+    expect(uniteEtPoids({ unite: 'pot', unite_g: 125 })).toBe('1 pot (125 g)')
+  })
+})

@@ -22,15 +22,16 @@ sources:
   - src/lib/donnees/aliments.ts
   - src/ui/semaine/FeuilleDeChoix.tsx
   - src/ui/semaine/EnPlus.tsx
+  - src/lib/aliments/consigne.ts
   - src/pages/Settings.tsx
   - supabase/functions/etiquette/index.ts
   - supabase/migrations/0124_nos_aliments.sql
-verifie_sur: 545fd1b
+verifie_sur: 99e3953
 ---
 ## Créer un aliment
 
 Dans « Nos aliments » (voir « cuisine-nos-aliments »), « Ajouter un aliment », un nom, puis trois façons de remplir, qui ne remplissent que les champs du dessous :
-- **« Étiquette »** : photographie le tableau nutritionnel. L’appli recopie les valeurs pour 100 g et le poids net, elle n’estime rien. « Reprendre la photo », « Ajouter l’autre face » (jusqu’à trois photos), « Réessayer » si la lecture échoue ou dépasse 30 secondes. Chaque lecture compte dans les 40 étiquettes par mois du foyer.
+- **« Étiquette »** : photographie le tableau nutritionnel. L’appli recopie les valeurs pour 100 g et le poids net, elle n’estime rien. « Reprendre la photo », « Ajouter l’autre face » (jusqu’à trois photos), « Réessayer » si la lecture échoue ou dépasse 30 secondes. Le champ facultatif **« Dis-moi ce que c’est (facultatif) »** et **« Relire avec cette consigne »** donnent un indice (le nom, l’unité, le poids), jamais des chiffres. Chaque lecture compte dans les 40 étiquettes par mois du foyer.
 - **« À la main »** : tape les valeurs pour 100 g.
 - **« Code-barres »** : les chiffres puis « Chercher », ou « Lire avec l’appareil photo » si ton navigateur sait le faire. Les valeurs viennent d’Open Food Facts, une base collaborative : vérifie-les.
 

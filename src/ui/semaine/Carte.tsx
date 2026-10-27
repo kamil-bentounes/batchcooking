@@ -8,7 +8,9 @@
 import type { ReactNode } from 'react'
 import { PlatImage } from '../frigo/PlatImage.tsx'
 import { fondDuPlat } from '../../lib/frigo.ts'
-import { detailDeLaPart, ligneDeLaCarte, nomDeLaCarte, peremptionDeLaCarte, phraseDuBandeau } from '../../lib/choix.ts'
+import {
+  detailDeLaPart, ligneDeLaCarte, nomDeLaCarte, peremptionDeLaCarte, phraseDuBandeau, texteDeLaCarteVide,
+} from '../../lib/choix.ts'
 import type { Carte, Membre, RepasChoisi } from '../../lib/choix.ts'
 import { MOT_DU_REPAS } from '../../lib/choix.ts'
 
@@ -31,7 +33,7 @@ export function Pastille({ carte, photo }: { carte: Carte; photo: string | null 
 }
 
 export function CarteDuRepas({
-  carte, membres, moi, photo, jour, repas, maintenant, rappelActif, surChange, surMange, enCours, enPlus,
+  carte, membres, moi, photo, jour, repas, maintenant, rappelActif, surChange, surMange, enCours, enPlus, passe = false,
 }: {
   carte: Carte
   membres: Membre[]
@@ -48,6 +50,8 @@ export function CarteDuRepas({
   enCours: boolean
   /** Ce que j'ai mangé en plus de ce plat. */
   enPlus: ReactNode
+  /** Un jour passé : un repas pas marqué mangé dit « pas encore noté ». */
+  passe?: boolean
 }) {
   const c = carte.contenu
   const tousMange = carte.mangePar.length === carte.cases.length
@@ -66,7 +70,7 @@ export function CarteDuRepas({
         <Pastille carte={carte} photo={photo} />
         <div className="min-w-0 flex-1">
           <div className="text-[15px] font-semibold leading-[1.25] [overflow-wrap:anywhere]">{nomDeLaCarte(carte)}</div>
-          <div className="mt-[3px] text-[13px] text-doux">{ligneDeLaCarte(carte, membres)}</div>
+          <div className="mt-[3px] text-[13px] text-doux">{ligneDeLaCarte(carte, membres, passe)}</div>
           {detail && <div data-detail="" className="mt-0.5 text-[12px] text-doux">{detail}</div>}
           {peremption && (
             <div data-peremption="" className="mt-0.5 text-[12px] font-semibold" style={{ color: peremption.encre }}>
@@ -102,14 +106,18 @@ export function CarteDuRepas({
   )
 }
 
-/** « + Choisir le midi » : la carte vide, en pointillés. `pour` : les prénoms quand une autre carte existe déjà. */
-export function CarteVide({ repas, pour, surOuvre }: { repas: RepasChoisi; pour?: string; surOuvre: () => void }) {
-  const mot = MOT_DU_REPAS[repas].minuscule
+/**
+ * « + Choisir le midi » : la carte vide, en pointillés. Un jour passé : « + Noter ce que j'ai mangé ce midi ». `pour` : les
+ * personnes sans choix quand une autre carte existe déjà.
+ */
+export function CarteVide({ repas, pour, passe = false, surOuvre }: {
+  repas: RepasChoisi; pour?: { ids: string[]; membres: Membre[]; moi: string }; passe?: boolean; surOuvre: () => void
+}) {
   return (
     <button type="button" onClick={surOuvre} data-ouvre="vide"
             className="flex min-h-[72px] w-full items-center justify-center gap-2 rounded-[20px] border-[1.5px] border-dashed
                        border-[#9FB0A4] bg-transparent px-3 text-center text-[15px] font-semibold text-herbe">
-      + Choisir le {mot}{pour ? ` pour ${pour}` : ''}
+      {texteDeLaCarteVide(repas, passe, pour)}
     </button>
   )
 }

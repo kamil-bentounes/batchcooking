@@ -1473,6 +1473,7 @@ export type Database = {
       }
       meal_extra: {
         Row: {
+          aliment_id: string | null
           carb_g: number
           created_at: string
           fat_g: number
@@ -1488,6 +1489,7 @@ export type Database = {
           protein_g: number
         }
         Insert: {
+          aliment_id?: string | null
           carb_g?: number
           created_at?: string
           fat_g?: number
@@ -1503,6 +1505,7 @@ export type Database = {
           protein_g?: number
         }
         Update: {
+          aliment_id?: string | null
           carb_g?: number
           created_at?: string
           fat_g?: number
@@ -1518,6 +1521,13 @@ export type Database = {
           protein_g?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "meal_extra_aliment_id_fkey"
+            columns: ["aliment_id"]
+            isOneToOne: false
+            referencedRelation: "aliment"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "meal_extra_food_id_fkey"
             columns: ["food_id"]

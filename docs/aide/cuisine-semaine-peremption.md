@@ -14,7 +14,7 @@ sources:
   - src/lib/jour-local.ts
   - src/pages/Semaine.tsx
   - supabase/migrations/0125_semaine_corrections.sql
-verifie_sur: 0021cf9
+verifie_sur: 99e3953
 ---
 ## Ce que fait l’appli
 
@@ -26,7 +26,7 @@ Si toutes les barquettes libres périment avant le repas, elle en pose quand mê
 
 - **Dans la feuille**, la ligne d’un plat annonce la barquette qui sera vraiment posée : « à manger avant jeudi », ou « périme avant ce repas » en ocre quand il n’y en a pas de meilleure.
 - **Sur la carte d’un repas**, sous « Du frigo, pour vous deux » : le poids, les calories et les protéines de ta part (« 784 g · 682 kcal · 56 g de protéines »), ou de la première personne de la carte, nommée, si tu n’en fais pas partie. Puis, quand il y a lieu, « périmée », « périme avant ce repas » (en ocre) ou, au frigo, « à manger aujourd’hui ».
-- Un repas mangé n’affiche plus ni part ni péremption.
+- Un repas mangé n’affiche plus ni part ni péremption ; un jour passé non plus (voir « cuisine-semaine-hier »).
 
 ## Le jour qui avance
 

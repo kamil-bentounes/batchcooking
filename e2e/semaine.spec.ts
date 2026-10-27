@@ -112,12 +112,12 @@ test('la semaine neuve : sept jours, deux points creux sous chacun, deux cartes 
   const onglet = page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('button', { name: 'Semaine' })
   await expect(onglet).toHaveAttribute('aria-current', 'page')
 
-  /* Le bandeau : sept jours, aujourd'hui choisi (`aria-pressed`), tous les points creux. */
+  /* Le bandeau : sept jours passés, aujourd'hui (choisi : `aria-pressed`) et six jours à venir, tous les points creux. */
   const bandeau = page.getByRole('group', { name: 'Choisir le jour' })
-  await expect(bandeau.getByRole('button')).toHaveCount(7)
+  await expect(bandeau.getByRole('button')).toHaveCount(14)
   await expect(jourBouton(page, 0)).toHaveAttribute('aria-pressed', 'true')
   await expect(jourBouton(page, 1)).toHaveAttribute('aria-pressed', 'false')
-  for (let i = 0; i < 7; i++) {
+  for (let i = -7; i < 7; i++) {
     await expect(points(page, i)).toHaveCount(2)
     await expect(points(page, i).first()).toHaveAttribute('data-point', 'vide')
     await expect(points(page, i).last()).toHaveAttribute('data-point', 'vide')
@@ -666,7 +666,8 @@ test('L5 · la page ouverte hier soir passe à aujourd’hui quand elle redevien
     document.dispatchEvent(new Event('visibilitychange'))
   })
   await expect(page.locator(`[data-jour="${jourLocal(1)}"]`).first()).toContainText('auj.', { timeout: 10_000 })
-  await expect(page.locator(`[data-jour="${jourLocal(0)}"]`)).toHaveCount(0)
+  /* Le jour d'hier est devenu « hier » : le bandeau remonte avec la date. */
+  await expect(page.locator(`[data-jour="${jourLocal(0)}"]`)).toContainText('hier')
   await expect(page.getByText('aujourd’hui', { exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2 }).first()).toContainText(semaineDe(1))
 })
