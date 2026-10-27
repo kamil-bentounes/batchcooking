@@ -268,6 +268,19 @@ export function useMange() {
 }
 
 /**
+ * Annuler « Je l'ai mangé » (`annule_mange`, 0129) : MA case repasse à « prévu », l'heure s'efface, et la part est rendue là où
+ * elle était (frigo ou congélateur). La base vérifie que la case est la mienne et qu'elle est encore « mangé » : un double
+ * appui, ou l'autre téléphone, ne rend pas la part deux fois — l'écran se relit dans tous les cas.
+ */
+export function useAnnuleMange() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (caseId: string) => ou(await supabase.rpc('annule_mange', { p_case: caseId })) as unknown as Json,
+    onSettled: () => qc.invalidateQueries(),
+  })
+}
+
+/**
  * Remettre un moment « sauté » : la case s'en va (elle redevient « on ne sait pas », pas « rien mangé » : D33). Ne touche
  * qu'une case qui est encore « sautée » — jamais un repas qu'un autre téléphone vient de noter mangé.
  */

@@ -26,7 +26,7 @@ import type { NotreAliment } from '../ui/semaine/FeuilleDeChoix.tsx'
 import { EnPlus, HorsBarquette } from '../ui/semaine/EnPlus.tsx'
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
-  NOM_REPAS, jour, useBarquettes, useChoisirUnRepas, useFrequents, useMange, useRetireLaCase, useSemaine,
+  NOM_REPAS, jour, useBarquettes, useChoisirUnRepas, useAnnuleMange, useFrequents, useMange, useRetireLaCase, useSemaine,
 } from '../lib/donnees/barquettes.ts'
 import type { Case, Choix } from '../lib/donnees/barquettes.ts'
 import { usePrevus, useRecettesDesPlats } from '../lib/donnees/frigo.ts'
@@ -41,6 +41,7 @@ import {
 import type { CaseLue, Carte, JourDuBandeau, PointDuJour, RepasChoisi } from '../lib/choix.ts'
 import { maintenant } from '../lib/horloge.ts'
 import { useJourLocal } from '../lib/jour-local.ts'
+import { heureDite, useNoteRecente } from '../lib/annuler-mange.ts'
 
 export function Semaine({ userId, va, remplace }: {
   userId: string
@@ -69,6 +70,9 @@ export function Semaine({ userId, va, remplace }: {
   /* Une liste qu'on n'a pas pu lire n'est pas une liste vide : on le dit, on ne propose pas « ajouter » comme si rien n'existait. */
   const alimentsEnPanne = !!lectureAliments.error && aliments.length === 0
   const mange = useMange()
+  /* Annuler « Je l'ai mangé » (0129) : le bandeau de 6 secondes pour la case qu'on vient de cocher, puis le lien. */
+  const annule = useAnnuleMange()
+  const { notee, note, clos } = useNoteRecente()
   /* Le bandeau bleu d'un plat congelé dit « Mail mardi à 19 h… » quand MON rappel « Sortir du congélateur » est activé,
      « Pense à sortir… » sinon. Tant que les réglages ne sont pas lus, il ne promet pas de mail. */
   const rappelActif = useRappelActif('sortir_du_congelateur')
@@ -190,7 +194,7 @@ export function Semaine({ userId, va, remplace }: {
 
       <Bandeau jours={jours} points={points} index={index}
                surChoix={i => {
-                 setChoisiExplicite(i === auj ? null : jours[i].jour); setMessage(''); mange.reset(); saute.reset(); remet.reset(); nettoieLAdresse()
+                 setChoisiExplicite(i === auj ? null : jours[i].jour); setMessage(''); mange.reset(); saute.reset(); remet.reset(); annule.reset(); clos(); nettoieLAdresse()
                }} />
 
       <section aria-label={jourChoisi.long} className="mt-5">
@@ -210,7 +214,7 @@ export function Semaine({ userId, va, remplace }: {
             <p className="mt-3 rounded-[14px] bg-frais-fond px-3.5 py-2.5 text-[14px] text-frais-encre">{message}</p>
           )}
         </div>
-        <Erreur de={erreurCases ?? erreurPrevus ?? mange.error ?? saute.error ?? remet.error} />
+        <Erreur de={erreurCases ?? erreurPrevus ?? mange.error ?? saute.error ?? remet.error ?? annule.error} />
         {alimentsEnPanne && (
           <p role="alert" className="mt-4 text-[15px] text-groseille">
             Je n’ai pas pu lire nos aliments : les repères sont proposés à leur place.
@@ -231,13 +235,16 @@ export function Semaine({ userId, va, remplace }: {
                     const laMienne = mienne ? lesCases.find(x => x.id === mienne.id) : undefined
                     const surMange = laMienne && mienne!.state === 'prevu' && (c.genre === 'plat' || c.genre === 'autre')
                       && jourChoisi.jour <= jour(now)
-                      ? () => mange.mutate(laMienne) : undefined
+                      ? () => mange.mutate(laMienne, { onSuccess: () => note(laMienne.id) }) : undefined
+                    const jeLaiMange = laMienne && mienne!.state === 'mange' && (c.genre === 'plat' || c.genre === 'autre')
+                      ? { heure: heureDite(laMienne.eaten_at), notee: notee === laMienne.id, surFerme: clos, enCours: annule.isPending,
+                          surAnnule: () => annule.mutate(laMienne.id, { onSuccess: clos }) } : undefined
                     return (
                       <CarteDuRepas key={carte.cle} carte={carte} membres={membres} moi={userId} jour={jourChoisi.jour} repas={m}
                                     photo={c.genre === 'plat' ? photoDe(c.recipeId) : null}
                                     maintenant={now} rappelActif={rappelActif}
                                     surChange={() => ouvre(m, pourDeLaCarte(carte, sansChoix, membres.length, jourChoisi.passe, userId), carte.cle)}
-                                    surMange={surMange} enCours={mange.isPending} passe={jourChoisi.passe}
+                                    surMange={surMange} enCours={mange.isPending} passe={jourChoisi.passe} mange={jeLaiMange}
                                     enPlus={mienne && c.genre === 'plat'
                                       ? <EnPlus cas={laMienne!} frequents={frequents} nosAliments={aliments} userId={userId} /> : null} />
                     )
