@@ -399,17 +399,18 @@ test('un bandeau qui apparaît sous un pointeur immobile ne reste pas en pause :
   await seme()
   await connecte(page)
   await page.goto('/semaine')
-  const carte = repas(page, 'diner').getByRole('group', { name: `Soir : ${COURT}` })
+  const carte = repas(page, 'dejeuner').getByRole('group', { name: `Midi : ${COURT}` })
   await expect(carte).toBeVisible({ timeout: 20_000 })
-  const bouton = carte.getByRole('button', { name: 'Je l’ai mangé' })
-  const b = (await bouton.boundingBox())!
-  const x = b.x + b.width / 2, y = b.y + b.height - 4
-  await page.mouse.move(x, y)
-  await page.mouse.down(); await page.mouse.up()
+  await carte.getByRole('button', { name: 'Je l’ai mangé' }).click()
   await expect(bandeau(page)).toBeVisible({ timeout: 10_000 })
-  const sous = (await bandeau(page).boundingBox())!
-  expect(x >= sous.x && x <= sous.x + sous.width && y >= sous.y && y <= sous.y + sous.height,
-    'le pointeur est bien resté sous le bandeau').toBe(true)
+  /* Ce que le navigateur envoie à un élément qui apparaît sous un pointeur qui ne bouge pas : « pointerover / enter »
+     et un « pointermove » SANS déplacement (movementX/Y = 0). Rien de tout cela n'est un survol. */
+  await bandeau(page).evaluate(el => {
+    const init = { bubbles: true, pointerType: 'mouse', movementX: 0, movementY: 0 }
+    el.dispatchEvent(new PointerEvent('pointerover', init))
+    el.dispatchEvent(new PointerEvent('pointerenter', { ...init, bubbles: false }))
+    el.dispatchEvent(new PointerEvent('pointermove', init))
+  })
   await expect(bandeau(page)).toHaveCount(0, { timeout: 12_000 })
 })
 
