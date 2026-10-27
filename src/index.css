@@ -16,6 +16,8 @@
                                   seize fois avant d'exister ici. */
   --color-brume:     #DCE2D6;  /* filets et séparateurs */
   --color-groseille: #B3402F;  /* erreurs seulement */
+  --color-erreur-fond:  #F6DEDA;  /* l'encart d'erreur : une panne, un blocage */
+  --color-erreur-encre: #7E2A1E;  /* son texte : 7,3:1 sur le fond ci-dessus */
   --color-piste:     #E4E9E1;  /* le fond des jauges, des filtres, des pastilles, des pictos (§ 6.1) */
   --color-sable:     #F6EAD2;  /* le fond de ce qui demande tes mains */
 
@@ -198,3 +200,8 @@ dialog.feuille::backdrop { background: rgb(28 43 35 / 0.45); }
 /* Le fond ne défile pas sous la feuille : `showModal` le rend inerte, mais un glissé ou la molette
    sur le fond assombri faisait défiler la page de 400 px derrière (grand test, parcours budget). */
 html:has(dialog.feuille[open]) { overflow: hidden; }
+
+/* Le dressage : la carte encre se prolonge dans son bouton à partir de 900 px ; l'anneau s'y repeint comme sur `.sur-encre`. */
+@media (min-width: 900px) {
+  .sur-encre-large :focus-visible { outline-color: var(--color-fond); }
+}
