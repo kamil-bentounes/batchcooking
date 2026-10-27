@@ -7,12 +7,13 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { construis, contenuDe, NOM_DU_RAPPEL } from '../supabase/functions/_shared/rappels/mails.ts'
 import { baseSure, illustration, lien, photoSure } from '../supabase/functions/_shared/rappels/liens.ts'
-import { envoieLesRappels, MAXIMUM_PAR_PASSAGE } from '../supabase/functions/_shared/rappels/orchestre.ts'
+import { BUDGET_MS, envoieLesRappels, MAXIMUM_PAR_PASSAGE } from '../supabase/functions/_shared/rappels/orchestre.ts'
+import { avantLesDonnees, optionsDuMail } from '../supabase/functions/_shared/rappels/smtp.ts'
 import { secretValide } from '../supabase/functions/_shared/rappels/secret.ts'
 import { exemple } from '../supabase/functions/_shared/rappels/exemples.ts'
 import {
-  barquettes, deMois, echappe, euros, insecables, jourEnToutesLettres, laBarquetteDe, momentDePeremption, pourDit,
-  quandEnvoye, quoi,
+  barquettes, deMois, echappe, euros, insecables, jourEnToutesLettres, laBarquetteDe, momentDePeremption, partsDuPlat,
+  pourDit, prenomSur, quandEnvoye,
 } from '../supabase/functions/_shared/rappels/texte.ts'
 import { TYPES_DE_RAPPEL } from '../supabase/functions/_shared/rappels/types.ts'
 import type { Contexte, RappelDu, TypeDeRappel } from '../supabase/functions/_shared/rappels/types.ts'
@@ -38,9 +39,11 @@ function donneesDe(type: TypeDeRappel): Record<string, unknown> {
       }
     case 'barquette_perime':
       return {
-        label: 'Lasagnes au saumon-poireaux', recipe_id: null, image_url: 'https://exemple.test/lasagnes.jpg', n: 1,
-        portion_ids: [ID(5)], expire: '2030-06-12T19:00:00Z',
-        frigo: [{ label: 'Lasagnes au saumon-poireaux', n: 5, libres: 1 }, { label: 'Pizza', n: 2, libres: 0 }],
+        n: 1,
+        plats: [{
+          label: 'Lasagnes au saumon-poireaux', recipe_id: null, image_url: 'https://exemple.test/lasagnes.jpg', n: 1,
+          portion_ids: [ID(5)], expire: '2030-06-12T19:00:00Z', tardives: [],
+        }],
       }
     case 'choisir_les_repas':
       return {
@@ -58,11 +61,14 @@ function donneesDe(type: TypeDeRappel): Record<string, unknown> {
         lignes: [{ libelle: 'Électricité', montant_cents: 8240 }, { libelle: 'Internet', montant_cents: 3700 }],
       }
     case 'cloturer_le_mois':
-      return { mois: '2030-06-01', lignes: 18, a_confirmer: 2 }
+      return { mois: '2030-06-01', lignes: 18, a_confirmer: 2, absent: null }
     case 'facture_annuelle':
       return {
-        charge_id: ID(9), libelle: 'Taxe foncière', annee: 2030, mois: '2030-09-01',
-        derniere_paye_le: '2029-09-14', derniere_montant_cents: 142_000,
+        n: 1,
+        charges: [{
+          charge_id: ID(9), libelle: 'Taxe foncière', annee: 2030, mois: '2030-09-01',
+          derniere_paye_le: '2029-09-14', derniere_montant_cents: 142_000,
+        }],
       }
   }
 }
@@ -83,6 +89,14 @@ function structure(html: string): string | null {
   }
   return pile.length ? `non refermées : ${pile.join(', ')}` : null
 }
+
+/** Le mail « barquette qui périme » d'un seul plat, avec ces champs changés. */
+const perimeAvec = (champs: Record<string, unknown>) => {
+  const d = donneesDe('barquette_perime') as { plats: Record<string, unknown>[] }
+  return { ...d, plats: [{ ...d.plats[0], ...champs }] }
+}
+const plat = (label: string, n: number, expire: string, tardives: string[] = []) =>
+  ({ label, recipe_id: null, image_url: null, n, portion_ids: [], expire, tardives })
 
 const hrefs = (html: string) => [...html.matchAll(/href="([^"]*)"/g)].map(m => m[1].replace(/&amp;/g, '&'))
 const srcs = (html: string) => [...html.matchAll(/src="([^"]*)"/g)].map(m => m[1])
@@ -163,7 +177,7 @@ describe('les liens', () => {
     expect(photoSure('http://127.0.0.1:54321/storage/v1/a.jpg')).toBeNull()
     expect(photoSure('javascript:alert(1)')).toBeNull()
     expect(photoSure(null)).toBeNull()
-    const sans = construis('barquette_perime', { ...donneesDe('barquette_perime'), image_url: 'http://x.test/a.jpg' }, ctx)
+    const sans = construis('barquette_perime', perimeAvec({ image_url: 'http://x.test/a.jpg' }), ctx)
     expect(sans.html).not.toContain('x.test')
     const avec = construis('barquette_perime', donneesDe('barquette_perime'), ctx)
     expect(avec.html).toContain('src="https://exemple.test/lasagnes.jpg"')
@@ -171,32 +185,62 @@ describe('les liens', () => {
 })
 
 describe('le texte s’accorde au nombre', () => {
-  it('sortir : « 1 wrap », « 2 wraps », « 4 wraps »', () => {
-    const un = construis('sortir_du_congelateur', {
-      jour: '2030-06-12',
-      plats: [{ label: 'Wraps poulet', recipe_id: null, image_url: null, n: 1, portion_ids: [ID(1)], restant: 0,
-        repas: [{ meal: 'diner', pour: ['Kamil'] }] }],
-    }, ctx)
+  const sortirDe = (label: string, n: number, restant: number, pour = ['Kamil']) => construis('sortir_du_congelateur', {
+    jour: '2030-06-12',
+    plats: [{ label, recipe_id: null, image_url: null, n, portion_ids: Array.from({ length: n }, (_, i) => ID(i + 1)), restant,
+      repas: [{ meal: 'diner', pour }] }],
+  }, ctx)
+
+  it('sortir : un libellé d’un seul mot prend le pluriel simple (« 1 wrap », « 2 wraps », « 3 gâteaux »)', () => {
+    const un = sortirDe('Wrap', 1, 0)
     expect(un.sujet).toBe('Ce soir, sors 1 wrap du congélateur')
     expect(un.texte).toContain('Il n’en restera plus au congélateur.')
     expect(un.texte).toContain('pour toi')
 
-    const deux = construis('sortir_du_congelateur', {
-      jour: '2030-06-12',
-      plats: [{ label: 'Burger de feuilles de riz', recipe_id: null, image_url: null, n: 2, portion_ids: [ID(1), ID(2)], restant: 1,
-        repas: [{ meal: 'diner', pour: ['Kamil', 'Thauba'] }] }],
-    }, ctx)
+    const deux = sortirDe('Burger', 2, 1, ['Kamil', 'Thauba'])
     expect(deux.sujet).toBe('Ce soir, sors 2 burgers du congélateur')
     expect(deux.texte).toContain('Il restera ensuite 1 burger au congélateur.')
     expect(deux.texte).toContain('pour vous deux')
 
+    expect(sortirDe('Gâteau', 3, 0).sujet).toBe('Ce soir, sors 3 gâteaux du congélateur')
+    expect(sortirDe('Pizzas', 2, 0).sujet).toBe('Ce soir, sors 2 pizzas du congélateur')
+  })
+
+  it('sortir : plusieurs mots → « 4 barquettes de … », jamais un « s » collé au premier mot', () => {
     const quatre = construis('sortir_du_congelateur', donneesDe('sortir_du_congelateur'), ctx)
-    expect(quatre.sujet).toBe('Ce soir, sors 4 wraps du congélateur')
+    expect(quatre.sujet).toBe('Ce soir, sors 4 barquettes de wraps poulet du congélateur')
     expect(quatre.texte).toContain('demain midi et soir, pour vous deux')
-    expect(quatre.texte).toContain('Il restera ensuite 3 wraps au congélateur.')
+    expect(quatre.texte).toContain('Il restera ensuite 3 barquettes de wraps poulet au congélateur.')
     // Le détail : une ligne par repas, deux personnes.
     expect(quatre.texte).toContain('- Midi : Wraps poulet, pour vous deux (2)')
     expect(quatre.texte).toContain('- Soir : Wraps poulet, pour vous deux (2)')
+
+    expect(sortirDe('Petit salé aux lentilles', 2, 0).sujet).toBe('Ce soir, sors 2 barquettes de petit salé aux lentilles du congélateur')
+    expect(sortirDe('Petit salé aux lentilles', 1, 3).texte).toContain('Il restera ensuite 3 barquettes de petit salé aux lentilles')
+    expect(sortirDe('Pâtes au pesto', 2, 0).sujet).toBe('Ce soir, sors 2 barquettes de pâtes au pesto du congélateur')
+    expect(sortirDe('Bœuf bourguignon', 1, 0).sujet).toBe('Ce soir, sors 1 barquette de bœuf bourguignon du congélateur')
+    expect(sortirDe('Agneau aux olives', 2, 0).sujet).toBe('Ce soir, sors 2 barquettes d’agneau aux olives du congélateur')
+  })
+
+  it('partsDuPlat : la règle du dépôt principal (src/lib/frigo.ts), cas pour cas', () => {
+    expect(partsDuPlat('Wrap', 2)).toBe('2 wraps')
+    expect(partsDuPlat('Wrap', 1)).toBe('1 wrap')
+    expect(partsDuPlat('Burger', 3)).toBe('3 burgers')
+    expect(partsDuPlat('Pizzas', 2)).toBe('2 pizzas')
+    expect(partsDuPlat('Gâteau', 2)).toBe('2 gâteaux')
+    expect(partsDuPlat('Tuyau', 2)).toBe('2 tuyaux')
+    expect(partsDuPlat('Couscous', 2)).toBe('2 couscous')
+    expect(partsDuPlat('Wrap', 2, true)).toBe('les 2 wraps')
+    expect(partsDuPlat('Wrap', 1, true)).toBe('1 wrap')
+    const salé = 'Petit salé aux lentilles'
+    expect(partsDuPlat(salé, 1, true)).toBe('la barquette de petit salé aux lentilles')
+    expect(partsDuPlat(salé, 2, true)).toBe('les 2 barquettes de petit salé aux lentilles')
+    expect(partsDuPlat(salé, 1)).toBe('1 barquette de petit salé aux lentilles')
+    expect(partsDuPlat(salé, 3)).toBe('3 barquettes de petit salé aux lentilles')
+    for (const l of [salé, 'Pot-au-feu', 'Gâteau de patates douces', 'Burger de feuilles de riz', 'Tajine d’agneau', 'Pâtes au pesto', 'Bœuf bourguignon']) {
+      expect(partsDuPlat(l, 2), l).toBe(`2 barquettes de ${l[0].toLowerCase()}${l.slice(1)}`)
+    }
+    expect(partsDuPlat('Pizza vietnamienne protéinée', 2)).toBe('2 barquettes de pizza vietnamienne')
   })
 
   it('plusieurs plats : on compte les barquettes', () => {
@@ -217,17 +261,15 @@ describe('le texte s’accorde au nombre', () => {
     expect(laBarquetteDe('Agneau aux olives', 3)).toBe('les 3 barquettes d’agneau aux olives')
     expect(barquettes(1)).toBe('1 barquette')
     expect(barquettes(2)).toBe('2 barquettes')
-    expect(quoi('Wraps poulet', 1)).toBe('1 wrap')
-    expect(quoi('Wraps poulet', 2)).toBe('2 wraps')
 
-    const un = construis('barquette_perime', { ...donneesDe('barquette_perime'), label: 'Petit salé aux lentilles' }, ctx)
+    const un = construis('barquette_perime', perimeAvec({ label: 'Petit salé aux lentilles' }), ctx)
     expect(un.sujet).toBe('La barquette de petit salé aux lentilles périme demain soir')
     expect(un.texte).toContain('Une barquette n’est prévue nulle part')
     expect(un.texte).toContain('Elle tient jusqu’à demain soir. Mange-la avant, ou congèle-la aujourd’hui')
     expect(un.texte).toContain('La prévoir pour un repas')
     expect(un.texte).toContain('La congeler')
 
-    const trois = construis('barquette_perime', { ...donneesDe('barquette_perime'), label: 'Lasagnes au saumon', n: 3 }, ctx)
+    const trois = construis('barquette_perime', perimeAvec({ label: 'Lasagnes au saumon', n: 3 }), ctx)
     expect(trois.sujet).toBe('Les 3 barquettes de lasagnes au saumon périment demain soir')
     expect(trois.texte).toContain('3 barquettes ne sont prévues nulle part')
     expect(trois.texte).toContain('Elles tiennent jusqu’à demain soir. Mange-les avant, ou congèle-les aujourd’hui')
@@ -312,9 +354,9 @@ describe('le texte inséré est échappé', () => {
   it('un nom de plat avec un script', () => {
     for (const [type, d] of [
       ['sortir_du_congelateur', { ...donneesDe('sortir_du_congelateur'), plats: [{ ...(donneesDe('sortir_du_congelateur').plats as any[])[0], label: piege }] }],
-      ['barquette_perime', { ...donneesDe('barquette_perime'), label: piege, frigo: [{ label: piege, n: 1, libres: 1 }] }],
+      ['barquette_perime', perimeAvec({ label: piege })],
       ['confirmer_les_charges', { ...donneesDe('confirmer_les_charges'), lignes: [{ libelle: piege, montant_cents: 100 }] }],
-      ['facture_annuelle', { ...donneesDe('facture_annuelle'), libelle: piege }],
+      ['facture_annuelle', { n: 1, charges: [{ ...(donneesDe('facture_annuelle').charges as any[])[0], libelle: piege }] }],
     ] as [TypeDeRappel, Record<string, unknown>][]) {
       const m = construis(type, d, ctx)
       expect(m.html, type).not.toContain('<script')
@@ -326,7 +368,7 @@ describe('le texte inséré est échappé', () => {
   it('un prénom et une photo piégés', () => {
     const m = construis('sortir_du_congelateur', donneesDe('sortir_du_congelateur'), { ...ctx, prenom: '"><img src=x onerror=alert(1)>' })
     expect(m.html).not.toContain('<img src=x')
-    const p = construis('barquette_perime', { ...donneesDe('barquette_perime'), image_url: 'https://a.test/x.jpg" onerror="alert(1)' }, ctx)
+    const p = construis('barquette_perime', perimeAvec({ image_url: 'https://a.test/x.jpg" onerror="alert(1)' }), ctx)
     expect(p.html).not.toMatch(/src="https:\/\/a\.test\/x\.jpg" onerror/)
     expect(echappe(`<a href="x">&'`)).toBe('&lt;a href=&quot;x&quot;&gt;&amp;&#39;')
   })
@@ -345,7 +387,7 @@ describe('les espaces insécables', () => {
 
   it('« 4 wraps », « 16 wraps », « 19 h », « Oublié ? »', () => {
     const m = construis('sortir_du_congelateur', donneesDe('sortir_du_congelateur'), ctx).html
-    expect(m).toContain('Ce soir, sors 4&nbsp;wraps du congélateur')
+    expect(m).toContain('Ce soir, sors 4&nbsp;barquettes de wraps poulet du congélateur')
     expect(m).toContain('Oublié&nbsp;?')
     expect(insecables('<p>16 wraps à 19 h : fini !</p>')).toBe('<p>16&nbsp;wraps à 19&nbsp;h&nbsp;: fini&nbsp;!</p>')
     expect(insecables('<p style="margin:0 auto">x</p>')).toBe('<p style="margin:0 auto">x</p>')
@@ -374,7 +416,7 @@ describe('le gabarit', () => {
   })
 
   it('un plat sans photo : la pastille seule, pas d’image cassée', () => {
-    const m = construis('barquette_perime', { ...donneesDe('barquette_perime'), image_url: null }, ctx).html
+    const m = construis('barquette_perime', perimeAvec({ image_url: null }), ctx).html
     expect(m).not.toContain('<img')
     expect(m).toContain('Demain, 21&nbsp;h')
   })
@@ -392,6 +434,214 @@ describe('le gabarit', () => {
     const t = construis('choisir_les_repas', donneesDe('choisir_les_repas'), ctx).texte
     expect(t).toContain('lun. 10 : midi du congélateur, soir du congélateur')
     expect(t).toContain('mar. 11 : midi rien de prévu, soir rien de prévu')
+  })
+})
+
+describe('barquette_perime : UN mail par membre et par jour, tous les plats dans une carte', () => {
+  const D = (j: number, h: number) => new Date(Date.UTC(2030, 5, j, h)).toISOString()   // 2030-06-<j> à <h> h UTC
+  const quatrePlats = {
+    n: 5,
+    plats: [
+      plat('Lasagnes au saumon', 2, D(12, 19)),
+      plat('Pizza vietnamienne protéinée', 1, D(12, 7)),
+      plat('Soupe', 1, D(12, 19)),
+      plat('Wrap', 1, D(12, 10)),
+    ],
+  }
+
+  it('quatre plats : un seul mail, quatre lignes dans la carte', () => {
+    const m = construis('barquette_perime', quatrePlats, ctx)
+    expect(m.html.match(/<h1/g)).toHaveLength(1)
+    // La carte : une ligne par plat (un titre, un sous-titre, un nombre).
+    const carte = m.html.slice(m.html.indexOf('Ce qui périme'))
+    expect(carte.match(/font-size:15px;font-weight:700/g)).toHaveLength(4)
+    for (const nom of ['Lasagnes au saumon', 'Pizza vietnamienne protéinée', 'Soupe', 'Wrap']) expect(carte).toContain(nom)
+    expect(m.texte).toContain('- Pizza vietnamienne protéinée : Périme demain matin (1)')
+    expect(m.texte).toContain('- Lasagnes au saumon : Périme demain soir (2)')
+  })
+
+  it('le héros parle du nombre total ; la vignette, du plat le plus pressé', () => {
+    const m = construis('barquette_perime', quatrePlats, ctx)
+    expect(m.sujet).toBe('5 barquettes à manger ou à congeler d’ici demain matin')
+    expect(m.texte).toContain('5 barquettes ne sont prévues nulle part')
+    expect(m.texte).toContain('La plus pressée tient jusqu’à demain matin.')
+    // Le plus pressé est la pizza (demain, 9 h à Paris).
+    expect(m.html).toContain('Demain, 9&nbsp;h')
+    expect(m.html).toContain('Pizza vietnamienne protéinée, 1&nbsp;barquette au frigo et 3&nbsp;autres plats')
+    expect(m.texte).toContain('Les prévoir pour un repas')
+  })
+
+  it('l’ordre de la carte suit l’urgence, pas l’ordre reçu', () => {
+    const m = construis('barquette_perime', quatrePlats, ctx)
+    const ordre = ['Pizza vietnamienne protéinée', 'Wrap', 'Lasagnes au saumon', 'Soupe'].map(x => m.texte.indexOf(`- ${x}`))
+    expect([...ordre].sort((a, b) => a - b)).toEqual(ordre)
+  })
+
+  it('un seul plat : le sujet nomme la barquette', () => {
+    expect(construis('barquette_perime', { n: 1, plats: [plat('Soupe', 1, D(12, 19))] }, ctx).sujet).toBe('La barquette de soupe périme demain soir')
+  })
+
+  it('une barquette périmée depuis moins de 24 h : « est périmée : à jeter », jamais « tient jusqu’à ce matin »', () => {
+    // Mardi 11 juin, 19 h à Paris : elle a péri ce matin à 7 h (5 h UTC).
+    const m = construis('barquette_perime', { n: 1, plats: [plat('Soupe', 1, D(11, 5))] }, ctx)
+    expect(m.sujet).toBe('La barquette de soupe est périmée : à jeter')
+    expect(m.texte).toContain('Une barquette est périmée')
+    expect(m.texte).toContain('Elle est périmée : à jeter.')
+    expect(m.texte).not.toMatch(/tient jusqu|ce matin|Mange-la|congèle/)
+    expect(m.texte).toContain('Périmée : à jeter')
+    expect(m.texte).toContain('Ouvrir le frigo')
+    expect(m.texte).not.toContain('La prévoir')
+    expect(hrefs(m.html)).toEqual([`${BASE}/frigo`, `${BASE}/rappels`])
+    expect(m.html).toContain('>Périmée<')
+  })
+
+  it('plusieurs périmées, ou un mélange : on jette les unes, on sauve les autres', () => {
+    const toutes = construis('barquette_perime', { n: 3, plats: [plat('Soupe', 2, D(11, 5)), plat('Riz', 1, D(11, 8))] }, ctx)
+    expect(toutes.sujet).toBe('3 barquettes périmées : à jeter')
+    expect(toutes.texte).toContain('3 barquettes sont périmées')
+    const mixte = construis('barquette_perime', { n: 3, plats: [plat('Soupe', 2, D(11, 5)), plat('Riz', 1, D(12, 19))] }, ctx)
+    expect(mixte.sujet).toBe('3 barquettes : 2 à jeter, 1 à sauver')
+    expect(mixte.texte).toContain('2 sont périmées : à jeter. Pour l’autre, la plus pressée tient jusqu’à demain soir.')
+    expect(mixte.texte).toContain('La prévoir pour un repas')
+  })
+
+  it('une barquette qui périme d’ici demain soir est annoncée avec le bon moment', () => {
+    const m = (h: number, j = 11) => construis('barquette_perime', { n: 1, plats: [plat('Soupe', 1, D(j, h))] }, ctx).sujet
+    expect(m(19)).toBe('La barquette de soupe périme ce soir')                // 21 h à Paris, ce soir (mardi)
+    expect(m(21)).toBe('La barquette de soupe périme ce soir')                // 23 h, ce soir
+    expect(m(5, 12)).toBe('La barquette de soupe périme demain matin')
+    expect(m(21, 12)).toBe('La barquette de soupe périme demain soir')        // 23 h demain
+  })
+
+  it('prévue pour un repas APRÈS sa péremption : elle compte, avec la mention', () => {
+    // Elle périme mercredi 12 (soir) ; elle est prévue samedi 15.
+    const m = construis('barquette_perime', { n: 1, plats: [plat('Soupe', 1, D(12, 19), ['2030-06-15'])] }, ctx)
+    expect(m.texte).toContain('- Soupe : Prévue samedi, mais elle périme demain soir (1)')
+    const deux = construis('barquette_perime', { n: 2, plats: [plat('Soupe', 2, D(12, 19), ['2030-06-15', '2030-06-16'])] }, ctx)
+    expect(deux.texte).toContain('2 prévues samedi et dimanche, mais elles périment demain soir')
+    const morte = construis('barquette_perime', { n: 1, plats: [plat('Soupe', 1, D(11, 5), ['2030-06-11'])] }, ctx)
+    expect(morte.texte).toContain('Prévue mardi, mais elle est périmée')
+  })
+
+  it('les noms et les photos du mail groupé sont échappés', () => {
+    const m = construis('barquette_perime', { n: 2, plats: [plat('<b>x</b>', 1, D(12, 19)), plat('<script>', 1, D(12, 7))] }, ctx)
+    expect(m.html).not.toMatch(/<b>x|<script/)
+    expect(structure(m.html)).toBeNull()
+  })
+
+  it('une donnée fausse arrête le mail', () => {
+    expect(() => construis('barquette_perime', { n: 0, plats: [] }, ctx)).toThrow(/invalides/)
+    expect(() => construis('barquette_perime', { n: 1, plats: [plat('Soupe', 1, 'pas une date')] }, ctx)).toThrow(/invalides/)
+  })
+})
+
+describe('facture_annuelle : un mail par membre et par jour, les charges listées', () => {
+  const charge = (libelle: string, cents: number, paye = '2029-09-14') =>
+    ({ charge_id: ID(9), libelle, annee: 2030, mois: '2030-09-01', derniere_paye_le: paye, derniere_montant_cents: cents })
+  it('deux charges : un mail, deux lignes', () => {
+    const m = construis('facture_annuelle', { n: 2, charges: [charge('Taxe foncière', 142_000), charge('Assurance habitation', 38_600, '2029-09-20')] }, ctx)
+    expect(m.sujet).toBe('2 factures annuelles approchent')
+    expect(m.texte).toContain('2 factures annuelles arrivent en septembre')
+    const t = m.texte.replace(/\s/g, ' ')
+    expect(t).toContain('- 14 septembre 2029 : Taxe foncière (1 420 €)')
+    expect(t).toContain('- 20 septembre 2029 : Assurance habitation (386 €)')
+    expect(m.html.match(/<h1/g)).toHaveLength(1)
+  })
+})
+
+describe('cloturer_le_mois : le revenu qui manque', () => {
+  it('un autre membre n’a pas posé son revenu : le mail le dit au lieu de promettre la clôture', () => {
+    const m = construis('cloturer_le_mois', { mois: '2030-11-01', lignes: 12, a_confirmer: 0, absent: 'Thauba' }, ctx)
+    expect(m.sujet).toBe('Novembre se termine : Thauba doit poser son revenu')
+    expect(m.texte).toContain('Thauba doit encore poser son revenu de novembre : tant que ce n’est pas fait, le mois ne peut pas être clôturé.')
+    expect(m.texte).not.toContain('Demain, tu pourras le clôturer')
+    expect(m.texte).toContain('Le revenu de novembre de Thauba')
+  })
+  it('sans absent, la promesse reste ; « d’octobre » s’élide', () => {
+    expect(construis('cloturer_le_mois', donneesDe('cloturer_le_mois'), ctx).texte).toContain('Demain, tu pourras le clôturer')
+    const m = construis('cloturer_le_mois', { mois: '2030-10-01', lignes: 1, a_confirmer: 0, absent: 'Léa' }, ctx)
+    expect(m.texte).toContain('Léa doit encore poser son revenu d’octobre')
+  })
+  it('le prénom de l’absent est échappé', () => {
+    const m = construis('cloturer_le_mois', { mois: '2030-11-01', lignes: 1, a_confirmer: 0, absent: '<img src=x onerror=alert(1)>' }, ctx)
+    expect(m.html).not.toContain('<img src=x')
+  })
+})
+
+describe('les prénoms : normalisés partout, du destinataire à « pour qui »', () => {
+  it('le premier mot, 40 signes, un repli sûr', () => {
+    expect(prenomSur('  Kamil  Bentounes ', 'toi')).toBe('Kamil')
+    expect(prenomSur('', 'toi')).toBe('toi')
+    expect(prenomSur('   ', 'Quelqu’un')).toBe('Quelqu’un')
+    expect(prenomSur(null, 'toi')).toBe('toi')
+    expect(prenomSur('x'.repeat(100), 'toi')).toHaveLength(40)
+  })
+
+  it('le destinataire sans prénom s’appelle « toi » ; l’autre sans prénom, « Quelqu’un »', () => {
+    const m = construis('sortir_du_congelateur', {
+      jour: '2030-06-12',
+      plats: [{ label: 'Wrap', recipe_id: null, image_url: null, n: 2, portion_ids: [ID(1), ID(2)], restant: 0,
+        repas: [{ meal: 'diner', pour: ['toi', '  '] }] }],
+    }, { ...ctx, prenom: '   ' })
+    expect(m.texte).toContain('pour vous deux')   // « toi » et « Quelqu’un » : deux personnes
+    const seul = construis('sortir_du_congelateur', {
+      jour: '2030-06-12',
+      plats: [{ label: 'Wrap', recipe_id: null, image_url: null, n: 1, portion_ids: [ID(1)], restant: 0,
+        repas: [{ meal: 'diner', pour: ['   '] }] }],
+    }, ctx)
+    expect(seul.texte).toContain('pour Quelqu’un')
+  })
+
+  it('le prénom piégé de l’AUTRE membre (`pour`) est échappé dans le HTML et sage dans le texte', () => {
+    const piege = '<img src=x onerror=alert(1)> Dupont'
+    const m = construis('sortir_du_congelateur', {
+      jour: '2030-06-12',
+      plats: [{ label: 'Wrap', recipe_id: null, image_url: null, n: 2, portion_ids: [ID(1), ID(2)], restant: 0,
+        repas: [{ meal: 'diner', pour: ['Thauba', piege] }] }],
+    }, ctx)
+    expect(m.html).not.toContain('<img src=x')
+    expect(m.html).toContain('pour Thauba et &lt;img')
+    expect(structure(m.html)).toBeNull()
+    // Le premier mot seulement (comme la base) : « <img » — échappé, il ne devient jamais une balise.
+    expect(m.sujet).not.toContain('Dupont')
+  })
+})
+
+describe('ce qui part sur le fil', () => {
+  it('l’en-tête List-Unsubscribe mène à l’écran des rappels ; le destinataire est celui qu’on donne', () => {
+    const o = optionsDuMail({ a: 'moi@exemple.test', sujet: 'Sujet', texte: 'T', html: '<p>H</p>', preEntete: 'p' }, 'popote@exemple.test', BASE)
+    expect(o.headers).toEqual({ 'List-Unsubscribe': `<${BASE}/rappels>` })
+    expect(o.to).toBe('moi@exemple.test')
+    expect(o.from).toEqual({ name: 'Popote', address: 'popote@exemple.test' })
+    expect([o.subject, o.text, o.html]).toEqual(['Sujet', 'T', '<p>H</p>'])
+    expect(() => optionsDuMail({ a: 'a@b.c', sujet: '', texte: '', html: '', preEntete: '' }, 'x@y.z', 'pas une adresse')).toThrow()
+  })
+
+  it('une erreur d’envoi avant les données : connexion, authentification, destinataire', () => {
+    const e = (code: string, command: string, message = '') => Object.assign(new Error(message), { code, command })
+    // Sûrement avant DATA : on peut rendre la réservation.
+    expect(avantLesDonnees(e('EAUTH', 'AUTH PLAIN', 'Invalid login'))).toBe(true)
+    expect(avantLesDonnees(e('EDNS', 'CONN', 'getaddrinfo ENOTFOUND smtp.gmail.com'))).toBe(true)
+    expect(avantLesDonnees(e('ECONNECTION', 'CONN', 'connect ECONNREFUSED 142.250.1.1:465'))).toBe(true)
+    expect(avantLesDonnees(e('ETIMEDOUT', 'CONN', 'Connection timeout'))).toBe(true)
+    expect(avantLesDonnees(e('ETIMEDOUT', 'CONN', 'Greeting never received'))).toBe(true)
+    expect(avantLesDonnees(e('ECONNECTION', 'EHLO', 'Server terminates connection'))).toBe(true)
+    expect(avantLesDonnees(e('EENVELOPE', 'RCPT TO', 'Can’t send mail - all recipients were rejected'))).toBe(true)
+    expect(avantLesDonnees(e('EENVELOPE', 'API', 'Invalid recipient'))).toBe(true)
+  })
+
+  it('après DATA, ou dans le doute : la réservation reste', () => {
+    const e = (code: string, command: string, message = '') => Object.assign(new Error(message), { code, command })
+    expect(avantLesDonnees(e('EMESSAGE', 'DATA', 'Message failed'))).toBe(false)
+    expect(avantLesDonnees(e('EENVELOPE', 'DATA', 'Data command failed'))).toBe(false)
+    // nodemailer marque « CONN » les coupures de socket de TOUTES les étapes : celles-ci ont pu tomber après DATA.
+    expect(avantLesDonnees(e('ECONNECTION', 'CONN', 'Connection closed unexpectedly'))).toBe(false)
+    expect(avantLesDonnees(e('ETIMEDOUT', 'CONN', 'Timeout'))).toBe(false)
+    expect(avantLesDonnees(e('ESOCKET', 'CONN', 'read ECONNRESET'))).toBe(false)
+    expect(avantLesDonnees(e('EPROTOCOL', 'CONN', 'Unexpected Response'))).toBe(false)
+    expect(avantLesDonnees(new Error('?'))).toBe(false)
+    expect(avantLesDonnees(null)).toBe(false)
+    expect(avantLesDonnees('ECONNECTION')).toBe(false)
   })
 })
 
@@ -452,77 +702,157 @@ describe('le secret', () => {
 describe('réserver, envoyer, libérer', () => {
   const du = (i: number, type = 'sortir_du_congelateur'): RappelDu => ({
     user_id: ID(100 + i), email: `membre${i}@exemple.test`, prenom: 'Kamil', type, cle: `cle-${i}`, cles: [`cle-${i}`],
-    donnees: type === 'sortir_du_congelateur' ? donneesDe('sortir_du_congelateur') : donneesDe(type as TypeDeRappel),
+    donnees: donneesDe(type as TypeDeRappel),
   })
+  const erreurSmtp = (code: string, command: string, message: string) => Object.assign(new Error(message), { code, command })
 
-  function banc(dus: RappelDu[], o: { envoiEchoue?: (r: string) => boolean; reservations?: Set<string> } = {}) {
+  type Panne = { reserve?: (r: string) => Error | undefined; libere?: (r: string) => Error | undefined }
+  function banc(dus: RappelDu[], o: {
+    envoiEchoue?: (a: string) => Error | undefined; reservations?: Set<string>; pret?: () => Promise<void>
+    ms?: number; panne?: Panne
+  } = {}) {
     const journal: string[] = []
     const envoyes: string[] = []
     const pris = o.reservations ?? new Set<string>()
+    let horloge = MAINTENANT.getTime()
     return {
       journal, envoyes, pris,
       dep: {
         base: BASE,
-        maintenant: () => MAINTENANT,
+        maintenant: () => new Date(horloge),
         dus: async () => dus,
         reserve: async (r: RappelDu) => {
           journal.push(`reserve ${r.cle}`)
+          const e = o.panne?.reserve?.(r.cle)
+          if (e) throw e
           const k = `${r.user_id}|${r.type}|${r.cles.join(',')}`
           if (pris.has(k)) return false
           pris.add(k); return true
         },
-        libere: async (r: RappelDu) => { journal.push(`libere ${r.cle}`); pris.delete(`${r.user_id}|${r.type}|${r.cles.join(',')}`) },
+        libere: async (r: RappelDu) => {
+          journal.push(`libere ${r.cle}`)
+          const e = o.panne?.libere?.(r.cle)
+          if (e) throw e
+          pris.delete(`${r.user_id}|${r.type}|${r.cles.join(',')}`)
+        },
         envoie: async (m: { a: string }) => {
           journal.push(`envoie ${m.a}`)
-          if (o.envoiEchoue?.(m.a)) throw new Error('SMTP en panne')
+          horloge += o.ms ?? 0
+          const e = o.envoiEchoue?.(m.a)
+          if (e) throw e
           envoyes.push(m.a)
         },
+        ...(o.pret ? { pret: o.pret } : {}),
       },
     }
   }
+  const bilanDe = (b: Partial<Awaited<ReturnType<typeof envoieLesRappels>>>, dus: number) =>
+    ({ dus, envoyes: 0, ignores: 0, echecs: 0, reportes: 0, ...b })
 
   it('réserve AVANT d’envoyer, et n’envoie qu’une fois', async () => {
     const b = banc([du(1)])
     const bilan = await envoieLesRappels(b.dep)
-    expect(bilan).toEqual({ envoyes: 1, ignores: 0, echecs: 0 })
+    expect(bilan).toEqual(bilanDe({ envoyes: 1 }, 1))
     expect(b.journal).toEqual(['reserve cle-1', 'envoie membre1@exemple.test'])
   })
 
   it('un second passage ne renvoie rien (la réservation tient)', async () => {
     const b = banc([du(1), du(2)])
     expect((await envoieLesRappels(b.dep)).envoyes).toBe(2)
-    const encore = await envoieLesRappels(b.dep)
-    expect(encore).toEqual({ envoyes: 0, ignores: 2, echecs: 0 })
+    expect(await envoieLesRappels(b.dep)).toEqual(bilanDe({ ignores: 2 }, 2))
     expect(b.envoyes).toHaveLength(2)
   })
 
-  it('un envoi qui échoue rend sa réservation : l’heure suivante réessaie', async () => {
+  it('une erreur AVANT les données (authentification) rend la réservation : l’heure suivante réessaie', async () => {
     let panne = true
-    const b = banc([du(1), du(2)], { envoiEchoue: a => panne && a.startsWith('membre1') })
-    const premier = await envoieLesRappels(b.dep)
-    expect(premier).toEqual({ envoyes: 1, ignores: 0, echecs: 1 })
+    const b = banc([du(1), du(2)], {
+      envoiEchoue: a => (panne && a.startsWith('membre1') ? erreurSmtp('EAUTH', 'AUTH PLAIN', 'Invalid login') : undefined),
+    })
+    expect(await envoieLesRappels(b.dep)).toEqual(bilanDe({ envoyes: 1, echecs: 1 }, 2))
     expect(b.journal).toEqual([
-      'reserve cle-1', 'envoie membre1@exemple.test', 'libere cle-1',   // rendu
+      'reserve cle-1', 'envoie membre1@exemple.test', 'libere cle-1',   // rendu : sûrement pas parti
       'reserve cle-2', 'envoie membre2@exemple.test',                   // l'autre part quand même
     ])
     panne = false
-    const second = await envoieLesRappels(b.dep)
-    expect(second).toEqual({ envoyes: 1, ignores: 1, echecs: 0 })
+    expect(await envoieLesRappels(b.dep)).toEqual(bilanDe({ envoyes: 1, ignores: 1 }, 2))
     expect(b.envoyes).toEqual(['membre2@exemple.test', 'membre1@exemple.test'])
   })
 
-  it('un gabarit qui lève (données fausses) rend aussi la réservation, sans rien envoyer', async () => {
+  it('une erreur APRÈS les données, ou ambiguë : la réservation reste (le mail est peut-être parti)', async () => {
+    for (const e of [
+      erreurSmtp('EMESSAGE', 'DATA', 'Message failed'),
+      erreurSmtp('ECONNECTION', 'CONN', 'Connection closed unexpectedly'),
+      erreurSmtp('ETIMEDOUT', 'CONN', 'Timeout'),
+      new Error('quelque chose'),
+    ]) {
+      const b = banc([du(1)], { envoiEchoue: () => e })
+      expect(await envoieLesRappels(b.dep), `${(e as any).code}`).toEqual(bilanDe({ echecs: 1 }, 1))
+      expect(b.journal.some(l => l.startsWith('libere'))).toBe(false)
+      expect(b.pris.size).toBe(1)
+      // La passe suivante ne renvoie pas : un mail perdu vaut mieux qu'un doublon.
+      expect(await envoieLesRappels(b.dep)).toEqual(bilanDe({ ignores: 1 }, 1))
+      expect(b.envoyes).toEqual([])
+    }
+  })
+
+  it('un gabarit qui lève (données fausses) rend la réservation, sans rien envoyer', async () => {
     const faux = { ...du(1), donnees: { jour: '2030-06-12', plats: 'pas une liste' } }
     const b = banc([faux])
-    const bilan = await envoieLesRappels(b.dep)
-    expect(bilan.echecs).toBe(1)
+    expect((await envoieLesRappels(b.dep)).echecs).toBe(1)
     expect(b.envoyes).toEqual([])
-    expect(b.journal).toContain('libere cle-1')
+    expect(b.journal).toEqual(['reserve cle-1', 'libere cle-1'])
+  })
+
+  it('`reserve` qui lève : ce rappel échoue, les autres passent', async () => {
+    const b = banc([du(1), du(2)], { panne: { reserve: c => (c === 'cle-1' ? new Error('base injoignable') : undefined) } })
+    expect(await envoieLesRappels(b.dep)).toEqual(bilanDe({ envoyes: 1, echecs: 1 }, 2))
+    expect(b.envoyes).toEqual(['membre2@exemple.test'])
+    expect(b.journal.filter(l => l.startsWith('envoie'))).toEqual(['envoie membre2@exemple.test'])
+  })
+
+  it('`libere` qui lève : l’échec est compté, la passe continue', async () => {
+    const lignes: string[] = []
+    const b = banc([du(1), du(2)], {
+      envoiEchoue: a => (a.startsWith('membre1') ? erreurSmtp('EAUTH', 'AUTH PLAIN', 'Invalid login') : undefined),
+      panne: { libere: () => new Error('base injoignable') },
+    })
+    expect(await envoieLesRappels({ ...b.dep, journal: l => lignes.push(l) })).toEqual(bilanDe({ envoyes: 1, echecs: 1 }, 2))
+    expect(lignes.some(l => /n’a pas pu être rendue/.test(l))).toBe(true)
+    expect(b.envoyes).toEqual(['membre2@exemple.test'])
+  })
+
+  it('le transport en panne (connexion, authentification) : rien n’est réservé, tout est compté en échec', async () => {
+    const b = banc([du(1), du(2)], { pret: async () => { throw erreurSmtp('EAUTH', 'AUTH PLAIN', 'Invalid login') } })
+    expect(await envoieLesRappels(b.dep)).toEqual(bilanDe({ echecs: 2 }, 2))
+    expect(b.journal).toEqual([])        // ni réservation, ni envoi, ni libération
+  })
+
+  it('le transport n’est vérifié que s’il y a quelque chose à envoyer', async () => {
+    let appels = 0
+    const b = banc([], { pret: async () => { appels++ } })
+    await envoieLesRappels(b.dep)
+    expect(appels).toBe(0)
+    const c = banc([du(1)], { pret: async () => { appels++ } })
+    await envoieLesRappels(c.dep)
+    expect(appels).toBe(1)
+  })
+
+  it('un budget de temps : au-delà de 20 s on s’arrête, les suivants (non réservés) partent à la passe suivante', async () => {
+    const b = banc(Array.from({ length: 6 }, (_, i) => du(i)), { ms: 8_000 })
+    const premiere = await envoieLesRappels(b.dep)
+    // 0 s : envoi 1 (8 s) ; 8 s : envoi 2 (16 s) ; 16 s : envoi 3 (24 s) ; 24 s > 20 s : stop.
+    expect(premiere).toEqual(bilanDe({ envoyes: 3, reportes: 3 }, 6))
+    expect(b.pris.size).toBe(3)                       // les trois reportés n'ont rien réservé
+    expect(b.journal.filter(l => l.startsWith('reserve'))).toHaveLength(3)
+    expect(BUDGET_MS).toBe(20_000)
+    const suivante = await envoieLesRappels(b.dep)
+    expect(suivante.ignores).toBe(3)                  // les trois premiers : déjà partis
+    expect(b.envoyes).toHaveLength(6)                 // les trois autres partent (le temps repart de zéro à chaque passe)
   })
 
   it('un type que cette version ne connaît pas est ignoré, sans réservation', async () => {
     const b = banc([{ ...du(1), type: 'nouveau_rappel' }, du(2)])
-    expect(await envoieLesRappels(b.dep)).toEqual({ envoyes: 1, ignores: 1, echecs: 0 })
+    expect(await envoieLesRappels(b.dep)).toEqual(bilanDe({ envoyes: 1, ignores: 1 }, 2))
     expect(b.journal).not.toContain('reserve cle-1')
   })
 
@@ -534,8 +864,11 @@ describe('réserver, envoyer, libérer', () => {
 
   it('le journal ne porte ni adresse ni contenu', async () => {
     const lignes: string[] = []
-    const b = banc([du(1), { ...du(2), type: 'inconnu' }])
+    const b = banc([du(1), { ...du(2), type: 'inconnu' }, du(3)], {
+      envoiEchoue: a => (a.startsWith('membre3') ? erreurSmtp('EAUTH', 'AUTH PLAIN', 'Invalid login for membre3@exemple.test') : undefined),
+    })
     await envoieLesRappels({ ...b.dep, journal: l => lignes.push(l) })
-    expect(lignes.join('\n')).not.toMatch(/@|Wraps|Kamil/)
+    expect(lignes.length).toBeGreaterThan(2)
+    expect(lignes.join('\n')).not.toMatch(/@|Wraps|Kamil|membre/)
   })
 })

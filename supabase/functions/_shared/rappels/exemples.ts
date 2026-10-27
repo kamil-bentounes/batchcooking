@@ -31,14 +31,19 @@ export function exemple(type: TypeDeRappel, maintenant: Date, prenom: string, ba
       }
     case 'barquette_perime':
       return {
-        label: 'Lasagnes au saumon-poireaux', recipe_id: null,
-        // La photo de l'exemple est servie par le site (`public/mail/lasagnes.png`) : jamais celle d'un autre site.
-        image_url: illustration(base, 'lasagnes'), n: 1, portion_ids: [],
-        // Demain soir : le plus tard qu'un vrai rappel annonce.
-        expire: `${jourPlus(maintenant, 1)}T19:30:00Z`,
-        frigo: [
-          { label: 'Lasagnes au saumon-poireaux', n: 6, libres: 1 },
-          { label: 'Pizza vietnamienne protéinée', n: 2, libres: 0 },
+        n: 2,
+        plats: [
+          {
+            label: 'Lasagnes au saumon-poireaux', recipe_id: null,
+            // La photo de l'exemple est servie par le site (`public/mail/lasagnes.png`) : jamais celle d'un autre site.
+            image_url: illustration(base, 'lasagnes'), n: 1, portion_ids: [],
+            expire: `${jourPlus(maintenant, 1)}T07:00:00Z`, tardives: [],
+          },
+          {
+            // Demain soir : le plus tard qu'un vrai rappel annonce. Prévue après : le mail le dit.
+            label: 'Pizza vietnamienne protéinée', recipe_id: null, image_url: null, n: 1, portion_ids: [],
+            expire: `${jourPlus(maintenant, 1)}T19:30:00Z`, tardives: [jourPlus(maintenant, 3)],
+          },
         ],
       }
     case 'choisir_les_repas': {
@@ -63,9 +68,17 @@ export function exemple(type: TypeDeRappel, maintenant: Date, prenom: string, ba
       return { mois: moisPlus(maintenant, 0), lignes: 18, a_confirmer: 2 }
     case 'facture_annuelle':
       return {
-        charge_id: '', libelle: 'Taxe foncière', annee: Number(jourDeParis(maintenant).slice(0, 4)),
-        mois: moisPlus(maintenant, 1),
-        derniere_paye_le: jourPlus(maintenant, -330), derniere_montant_cents: 142_000,
+        n: 2,
+        charges: [
+          {
+            charge_id: '', libelle: 'Taxe foncière', annee: Number(jourDeParis(maintenant).slice(0, 4)),
+            mois: moisPlus(maintenant, 1), derniere_paye_le: jourPlus(maintenant, -330), derniere_montant_cents: 142_000,
+          },
+          {
+            charge_id: '', libelle: 'Assurance habitation', annee: Number(jourDeParis(maintenant).slice(0, 4)),
+            mois: moisPlus(maintenant, 1), derniere_paye_le: jourPlus(maintenant, -335), derniere_montant_cents: 38_600,
+          },
+        ],
       }
   }
 }

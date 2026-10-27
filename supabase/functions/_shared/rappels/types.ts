@@ -68,16 +68,20 @@ export type PlatASortir = {
 }
 export type DonneesSortir = { jour: string; plats: PlatASortir[] }
 
-export type DonneesPerime = {
+/** Un plat dont des barquettes périment (ou ont péri il y a moins de 24 h). */
+export type PlatQuiPerime = {
   label: string
   recipe_id: string | null
   image_url: string | null
   n: number
   portion_ids: string[]
-  /** L'instant où la première périme (ISO). */
+  /** L'instant où la première périme (ISO) ; passé, elle est périmée. */
   expire: string
-  frigo: { label: string; n: number; libres: number }[]
+  /** Une entrée par barquette prévue pour un repas APRÈS sa péremption : le jour de ce repas (ISO). */
+  tardives: string[]
 }
+/** UN mail par membre et par jour : tous les plats concernés. */
+export type DonneesPerime = { n: number; plats: PlatQuiPerime[] }
 
 export type PointDuJour = 'frigo' | 'congelateur' | 'autre' | 'vide'
 export type DonneesChoisir = {
@@ -96,9 +100,10 @@ export type DonneesConfirmer = {
   lignes: { libelle: string; montant_cents: number }[]
 }
 
-export type DonneesCloturer = { mois: string; lignes: number; a_confirmer: number }
+/** `absent` : le prénom de l'autre membre qui n'a pas posé son revenu du mois (la clôture serait refusée). */
+export type DonneesCloturer = { mois: string; lignes: number; a_confirmer: number; absent?: string | null }
 
-export type DonneesFacture = {
+export type ChargeAnnuelle = {
   charge_id: string
   libelle: string
   annee: number
@@ -106,3 +111,5 @@ export type DonneesFacture = {
   derniere_paye_le: string
   derniere_montant_cents: number
 }
+/** UN mail par membre et par jour : toutes les charges annuelles qui approchent. */
+export type DonneesFacture = { n: number; charges: ChargeAnnuelle[] }

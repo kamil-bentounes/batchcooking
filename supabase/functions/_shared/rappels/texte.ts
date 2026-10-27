@@ -28,21 +28,20 @@ export function nomCourt(label: string): string {
 }
 
 /**
- * « burger » → « burgers » ; « wraps » au pluriel reste « wraps », et au singulier devient « wrap » (le nom d'un plat
- * est souvent au pluriel : « Wraps poulet », « Lasagnes saumon »). Un mot qui finit par « is », « os », « us »… garde
- * son s (« pois »). Adaptée de `motDuPlat` (src/lib/frigo.ts), qui ne sait pas retirer le s d'un seul.
+ * Le pluriel d'UN mot : « wrap » → « wraps », « gâteau » → « gâteaux » ; « pizzas », « burgers », « choux » restent
+ * (s, x, z ne changent pas). COPIE de `plurielDuMot` (src/lib/frigo.ts du dépôt principal).
  */
-export function motDuPlat(label: string, n: number): string {
-  const mot = nomCourt(label).split(/\s+/)[0].toLowerCase()
-  if (n > 1) return !/[sxz]$/.test(mot) ? `${mot}s` : mot
-  return /[epltrn]s$/.test(mot) && mot.length > 3 ? mot.slice(0, -1) : mot
+function plurielDuMot(mot: string): string {
+  if (/[sxz]$/.test(mot)) return mot
+  if (/(?:eau|au)$/.test(mot)) return `${mot}x`
+  return `${mot}s`
 }
 
-/** « 1 wrap », « 2 wraps » : combien, de quoi. */
-export const quoi = (label: string, n: number) => `${n} ${motDuPlat(label, n)}`
+/* Le « protéinée » des recettes du foyer n'ajoute rien à l'oreille (c'est aussi ce que `nomCourt` retire). */
+const sansProteinee = (label: string) => label.trim().replace(/\s+prot[ée]in[ée]e?s?$/i, '')
 
-/** « 1 barquette », « 3 barquettes ». */
-export const barquettes = (n: number) => `${n} barquette${n > 1 ? 's' : ''}`
+/** Un libellé d'un seul mot (« Wrap »), qu'on sait mettre au pluriel : ni espace ni trait d'union (« pot-au-feu »). */
+export const unSeulMot = (label: string): boolean => !/[\s-]/.test(sansProteinee(label))
 
 /** « de » devant un nom : « d’agneau », « de lasagnes ». */
 function de(mot: string): string {
@@ -50,11 +49,42 @@ function de(mot: string): string {
 }
 
 /**
+ * Combien de parts d'un plat, et de quoi : « 2 wraps », « 1 wrap » quand le libellé est UN mot (« Wrap », « Burger »),
+ * qu'on sait mettre au pluriel ; « 2 barquettes de petit salé aux lentilles », « 1 barquette de … » sinon. Mettre
+ * un « s » au premier mot d'un libellé qui en compte plusieurs disait « les petits retournent au frigo » (petit salé),
+ * « 2 pot-au-feus », « 2 gâteaus ». `defini` : « les 2 wraps », « les 2 barquettes de … », « la barquette de … » (une
+ * seule part d'un plat qui n'a pas un seul mot) ; une part d'un mot seul reste « 1 wrap ».
+ *
+ * C'est LA règle de `partsDuPlat` (src/lib/frigo.ts du dépôt principal, mêmes cas de test), à une élision près :
+ * « d’agneau » plutôt que « de agneau ». Le bundle d'une fonction ne contient que son dossier : on la copie.
+ */
+export function partsDuPlat(label: string, n: number, defini = false): string {
+  const nom = sansProteinee(label)
+  const les = defini && n > 1 ? 'les ' : ''
+  if (unSeulMot(label)) {
+    const mot = nom.toLowerCase()
+    return `${les}${n} ${n > 1 ? plurielDuMot(mot) : mot}`
+  }
+  const bas = nom.replace(/^\p{Lu}/u, c => c.toLowerCase())
+  if (n > 1) return `${les}${n} barquettes ${de(bas)}${bas}`
+  return defini ? `la barquette ${de(bas)}${bas}` : `1 barquette ${de(bas)}${bas}`
+}
+
+/** Un prénom, normalisé comme la base (`rappel_prenom`) : le premier mot, 40 signes au plus, un repli s'il est vide. */
+export function prenomSur(nom: unknown, repli: string): string {
+  const mot = String(nom ?? '').trim().split(/\s+/)[0].slice(0, 40)
+  return mot || repli
+}
+
+/** « 1 barquette », « 3 barquettes ». */
+export const barquettes = (n: number) => `${n} barquette${n > 1 ? 's' : ''}`
+
+/**
  * « la barquette de petit salé aux lentilles », « les 3 barquettes de lasagnes », « la barquette d’agneau ».
  * Le nom du plat est entier (la fiche, pas la carte) et passe en minuscule.
  */
 export function laBarquetteDe(label: string, n: number): string {
-  const nom = minuscule(label.trim())
+  const nom = minuscule(sansProteinee(label))
   return n > 1 ? `les ${n} barquettes ${de(nom)}${nom}` : `la barquette ${de(nom)}${nom}`
 }
 
