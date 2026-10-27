@@ -5,6 +5,7 @@
  * « Je l'ai mangé » ; et, pour un plat congelé, le bandeau bleu qui dit quand le sortir. Un repas encore à choisir
  * est une carte vide : « + Choisir le midi ».
  */
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { PlatImage } from '../frigo/PlatImage.tsx'
 import { fondDuPlat } from '../../lib/frigo.ts'
@@ -13,6 +14,8 @@ import {
 } from '../../lib/choix.ts'
 import type { Carte, Membre, RepasChoisi } from '../../lib/choix.ts'
 import { MOT_DU_REPAS } from '../../lib/choix.ts'
+import { puceDuMange } from '../../lib/annuler-mange.ts'
+import { BandeauNote, LienAnnuler, PuceMange } from './AnnulerLeMange.tsx'
 
 /** Le fond d'une pastille sans photo : le plat a sa teinte, le congelé son givre, « autre chose » le sable. */
 function fondDeLaPastille(carte: Carte): string {
@@ -33,7 +36,7 @@ export function Pastille({ carte, photo }: { carte: Carte; photo: string | null 
 }
 
 export function CarteDuRepas({
-  carte, membres, moi, photo, jour, repas, maintenant, rappelActif, surChange, surMange, enCours, enPlus, passe = false,
+  carte, membres, moi, photo, jour, repas, maintenant, rappelActif, surChange, surMange, enCours, enPlus, passe = false, mange,
 }: {
   carte: Carte
   membres: Membre[]
@@ -52,8 +55,23 @@ export function CarteDuRepas({
   enPlus: ReactNode
   /** Un jour passé : un repas pas marqué mangé dit « pas encore noté ». */
   passe?: boolean
+  /**
+   * MA case est « mangé » (annuler « Je l'ai mangé », 0129) : la puce « Mangé à 12 h 40 », puis, 6 secondes, le bandeau
+   * « Noté : mangé. » (`notee`), ensuite le lien « Pas mangé ? Annuler ». `surAnnule` remet MA case à « prévu ».
+   * `undefined` : pas ma case, ou pas mangée.
+   */
+  mange?: { eatenAt: string | null; notee: boolean; surFerme: () => void; surAnnule: () => void; enCours: boolean }
 }) {
   const c = carte.contenu
+  /* Une fois annulé, le bouton « Je l'ai mangé » revient : le focus y retourne (celui de « Oui, remettre » a disparu). */
+  const boutonMange = useRef<HTMLButtonElement>(null)
+  const etaitMange = useRef(false)
+  useEffect(() => {
+    if (etaitMange.current && !mange && (!document.activeElement || document.activeElement === document.body)) {
+      boutonMange.current?.focus()
+    }
+    etaitMange.current = !!mange
+  }, [mange])
   const tousMange = carte.mangePar.length === carte.cases.length
   const bandeau = c.genre === 'plat' && c.lieu === 'congelateur' && !tousMange
     ? phraseDuBandeau({
@@ -66,9 +84,10 @@ export function CarteDuRepas({
     <div data-carte={carte.cle} aria-label={`${MOT_DU_REPAS[repas].titre} : ${nomDeLaCarte(carte)}`} role="group"
          className="flex flex-col gap-2.5 rounded-[20px] bg-surface p-3.5"
          style={{ boxShadow: 'inset 0 0 0 1px var(--color-brume)' }}>
-      <div className="flex items-center gap-3">
+      {/* À 320 px, « Changer » passe sur sa propre ligne (maquette) : le nom du plat garde toute la largeur. */}
+      <div className="flex items-center gap-3 max-[360px]:flex-wrap">
         <Pastille carte={carte} photo={photo} />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 max-[360px]:basis-[calc(100%-68px)]">
           <div className="text-[15px] font-semibold leading-[1.25] [overflow-wrap:anywhere]">{nomDeLaCarte(carte)}</div>
           <div className="mt-[3px] text-[13px] text-doux">{ligneDeLaCarte(carte, membres, passe)}</div>
           {detail && <div data-detail="" className="mt-0.5 text-[12px] text-doux">{detail}</div>}
@@ -77,11 +96,12 @@ export function CarteDuRepas({
               {peremption.texte}
             </div>
           )}
+          {mange && <div className="mt-2"><PuceMange texte={mange.notee ? 'Mangé' : puceDuMange(mange.eatenAt, jour)} /></div>}
         </div>
         {!tousMange && (
           <button type="button" onClick={surChange} data-ouvre={carte.cle}
                   aria-label={`Changer le ${MOT_DU_REPAS[repas].minuscule}`}
-                  className="min-h-11 shrink-0 rounded-xl bg-piste px-3.5 text-[14px] font-semibold">
+                  className="min-h-11 shrink-0 rounded-xl bg-piste px-3.5 text-[14px] font-semibold max-[360px]:w-full">
             Changer
           </button>
         )}
@@ -95,8 +115,12 @@ export function CarteDuRepas({
           <span className="text-[13px] leading-[1.4]">{bandeau}</span>
         </div>
       )}
+      {mange && (mange.notee
+        ? <BandeauNote surAnnule={mange.surAnnule} surFerme={mange.surFerme} enCours={mange.enCours} />
+        : <LienAnnuler avecBarquette={c.genre === 'plat'} surConfirme={mange.surAnnule} enCours={mange.enCours}
+                       nom={`${MOT_DU_REPAS[repas].titre} : ${nomDeLaCarte(carte)}`} />)}
       {surMange && (
-        <button type="button" onClick={surMange} disabled={enCours}
+        <button type="button" ref={boutonMange} onClick={surMange} disabled={enCours}
                 className="min-h-11 rounded-xl bg-herbe px-4 text-[15px] font-semibold text-fond disabled:opacity-60">
           Je l’ai mangé
         </button>

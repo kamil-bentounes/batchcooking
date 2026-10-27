@@ -23,7 +23,7 @@ sources:
   - supabase/migrations/0102_budget_mois_suivis.sql
   - supabase/migrations/0108_budget_cloture.sql
   - supabase/migrations/0114_budget_donnees.sql
-verifie_sur: a1cd902
+verifie_sur: 9b03c3e
 ---
 Popote tient aussi le budget du foyer. L'accueil est la page de ta journée : le repas du jour, ce qui vient, le frigo, et la tuile « Budget » : ce qu'il te reste ce mois-ci.
 

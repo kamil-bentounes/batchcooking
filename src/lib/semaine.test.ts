@@ -84,37 +84,41 @@ describe('le bilan du jour (D33)', () => {
   })
 })
 
-describe('un repère planifié ne compte pas avant d’être mangé (revue du 26/10, M3)', () => {
+describe('un repère planifié ne compte que si la case est mangée (revue du 26/10 M3, puis annuler « mangé », 0129)', () => {
   const resto = { kcal: 900, protein_g: 35, planifie: true }
   const yaourt = { kcal: 60, protein_g: 4, planifie: false }
   const J = '2026-09-18'
-  it('choisi par la feuille, pas encore mangé : aujourd’hui ou plus tard, il ne compte pas et ne « renseigne » pas', () => {
-    for (const aujourdhui of [J, '2026-09-17']) {
-      const b = bilanDuJour([cas({ state: 'prevu', extras: [resto] })], 'k', J, aujourdhui)
-      expect(b, `aujourd’hui = ${aujourdhui}`).toEqual({ kcal: 0, proteinG: 0, renseignes: 0, prevus: 1 })
-    }
+  it('choisi par la feuille, pas encore mangé : il ne compte pas et ne « renseigne » pas', () => {
+    const b = bilanDuJour([cas({ state: 'prevu', extras: [resto] })], 'k', J)
+    expect(b).toEqual({ kcal: 0, proteinG: 0, renseignes: 0, prevus: 1 })
   })
   it('la case est mangée (« Je l’ai mangé ») : il compte', () => {
-    const b = bilanDuJour([cas({ state: 'mange', extras: [resto] })], 'k', J, J)
+    const b = bilanDuJour([cas({ state: 'mange', extras: [resto] })], 'k', J)
     expect(b).toEqual({ kcal: 900, proteinG: 35, renseignes: 1, prevus: 1 })
   })
-  it('le jour est passé et personne n’a rien noté : il compte, comme avant', () => {
-    const b = bilanDuJour([cas({ state: 'prevu', extras: [resto] })], 'k', J, '2026-09-19')
-    expect(b).toEqual({ kcal: 900, proteinG: 35, renseignes: 1, prevus: 1 })
+  it('sur un jour passé, un repas « prévu » (pas noté, ou annulé) ne compte pas non plus : le jour qui passe n’y change rien', () => {
+    /* Avant : un repère planifié comptait dès que son jour était passé, donc un « autre chose » annulé sur un jour passé
+       gardait ses kcal, et recomptait à minuit. La case, seule, dit ce qui a été mangé. */
+    const b = bilanDuJour([cas({ day: '2026-09-10', state: 'prevu', extras: [resto] })], 'k', '2026-09-10')
+    expect(b).toEqual({ kcal: 0, proteinG: 0, renseignes: 0, prevus: 1 })
   })
-  it('un en-plus noté après coup compte toujours, même sur une case « prévue » d’un jour à venir', () => {
-    const b = bilanDuJour([cas({ state: 'prevu', extras: [yaourt] })], 'k', J, '2026-09-17')
+  it('annulé puis noté de nouveau : il ne compte pas, puis compte', () => {
+    expect(bilanDuJour([cas({ state: 'prevu', extras: [resto] })], 'k', J).kcal).toBe(0)
+    expect(bilanDuJour([cas({ state: 'mange', extras: [resto] })], 'k', J).kcal).toBe(900)
+  })
+  it('un en-plus noté après coup compte toujours, même sur une case « prévue »', () => {
+    const b = bilanDuJour([cas({ state: 'prevu', extras: [yaourt] })], 'k', J)
     expect(b).toEqual({ kcal: 60, proteinG: 4, renseignes: 1, prevus: 1 })
   })
   it('les deux ensemble : seul ce qui est noté compte avant le repas', () => {
-    const b = bilanDuJour([cas({ state: 'prevu', extras: [resto, yaourt] })], 'k', J, J)
+    const b = bilanDuJour([cas({ state: 'prevu', extras: [resto, yaourt] })], 'k', J)
     expect(b.kcal).toBe(60)
   })
-  it('extraCompte : l’ancien extra (sans la colonne) compte', () => {
-    expect(extraCompte({}, { state: 'prevu', day: J }, J)).toBe(true)
-    expect(extraCompte({ planifie: true }, { state: 'prevu', day: J }, J)).toBe(false)
-    expect(extraCompte({ planifie: true }, { state: 'mange', day: J }, J)).toBe(true)
-    expect(extraCompte({ planifie: true }, { state: 'prevu', day: '2026-09-17' }, J)).toBe(true)
+  it('extraCompte : l’ancien extra (sans la colonne) compte ; un planifié ne compte que sur une case mangée', () => {
+    expect(extraCompte({}, { state: 'prevu' })).toBe(true)
+    expect(extraCompte({ planifie: true }, { state: 'prevu' })).toBe(false)
+    expect(extraCompte({ planifie: true }, { state: 'mange' })).toBe(true)
+    expect(extraCompte({ planifie: false }, { state: 'prevu' })).toBe(true)
   })
 })
 

@@ -4,7 +4,6 @@
  * Pur : aucune requête. Le choix des repas se fait à l'écran « La semaine » (`choix.ts`, et `choisir_un_repas` côté
  * base) : plus aucune distribution automatique ne vit ici.
  */
-import { maintenant } from './horloge.ts'
 
 
 export const REPAS = ['petit_dejeuner', 'dejeuner', 'diner', 'collation'] as const
@@ -55,14 +54,12 @@ export type CaseConsommee = {
 /**
  * Un extra compte-t-il au bilan ? Ce qu'on a noté APRÈS coup (« en plus » : `planifie` faux) compte toujours — on ne
  * l'a pas écrit par erreur. Ce que la feuille de choix a PLANIFIÉ (« autre chose » : un restaurant, un sandwich) ne
- * compte que quand le repas est mangé, ou que son jour est passé : un restaurant choisi mardi pour jeudi n'est pas
- * encore dans l'assiette (revue du 26/10 : il comptait dès qu'il était choisi, et rien ne le confirmait jamais).
- * `aujourdhui` : le jour local, « 2026-10-26 ».
+ * compte QUE si la case est « mangé » : un restaurant choisi pour jeudi n'est pas encore dans l'assiette, et un repas
+ * remis à « prévu » (« Pas mangé ? Annuler », 0129) n'y est plus, ni demain, ni sur un jour passé. Un jour passé se note
+ * (0128) : un repas qu'on n'a pas noté reste « pas encore noté », il ne compte pas de lui-même.
  */
-export function extraCompte(
-  e: { planifie?: boolean }, c: { state: string; day: string }, aujourdhui: string,
-): boolean {
-  return !e.planifie || c.state === 'mange' || c.day < aujourdhui
+export function extraCompte(e: { planifie?: boolean }, c: { state: string }): boolean {
+  return !e.planifie || c.state === 'mange'
 }
 
 /**
@@ -72,7 +69,7 @@ export function extraCompte(
  * n'est PAS un repas à zéro, et l'écran doit pouvoir faire la différence plutôt
  * que d'afficher « 900 kcal aujourd'hui » à quelqu'un qui n'a rien coché.
  */
-export function bilanDuJour(cases: CaseConsommee[], userId: string, j: string, aujourdhui: string = jour(maintenant())) {
+export function bilanDuJour(cases: CaseConsommee[], userId: string, j: string) {
   const duJour = cases.filter(c => c.day === j && c.user_profile_id === userId)
 
   /*
@@ -86,9 +83,9 @@ export function bilanDuJour(cases: CaseConsommee[], userId: string, j: string, a
    *    barquette. C'est précisément ce que D26 dit de ne pas faire : sans eux,
    *    le tableau de bord ment de ~900 kcal par jour. MAIS un extra que la
    *    feuille de choix a seulement PLANIFIÉ (« autre chose ») ne compte que
-   *    quand sa case est mangée ou que son jour est passé (`extraCompte`).
+   *    quand sa case est mangée (`extraCompte`).
    */
-  const comptes = (c: CaseConsommee) => c.extras.filter(e => extraCompte(e, c, aujourdhui))
+  const comptes = (c: CaseConsommee) => c.extras.filter(e => extraCompte(e, c))
   const somme = (barquette: (c: CaseConsommee) => number,
                  extra: (e: CaseConsommee['extras'][number]) => number) =>
     duJour.reduce((s, c) =>

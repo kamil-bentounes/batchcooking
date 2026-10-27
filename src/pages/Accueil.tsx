@@ -13,6 +13,8 @@ import { useMemo } from 'react'
 import { Chiffre, Ecran, Erreur, Principal, Secondaire, Vide, dateLongue, duree, Marque } from '../ui/coque.tsx'
 import { CeSoir } from '../ui/frigo/CeSoir.tsx'
 import { PetitFrigo } from '../ui/frigo/PetitFrigo.tsx'
+import { mesRepasManges, rendLeFocusALaCarteDuJour, useNoteRecente } from '../lib/annuler-mange.ts'
+import { MangeAujourdhui } from '../ui/semaine/MangeAujourdhui.tsx'
 import { Appareil, PlatImage } from '../ui/frigo/PlatImage.tsx'
 import { GESTE, useChangeEtat, useCycle, useCycleInterrompu, useOuvreCycle } from '../lib/donnees/cycle.ts'
 import { enFrancais } from '../lib/reseau.ts'
@@ -20,7 +22,7 @@ import { useFoyer, initialeDe, prenomDe } from '../lib/donnees/foyer.ts'
 import { usePrevus, useRecettesDesPlats, useSortDuCongelo } from '../lib/donnees/frigo.ts'
 import { magnet, nomCourt, pourQui, pressesGroupees, repasDuJour } from '../lib/frigo.ts'
 import {
-  bilanDuJour, jour, useBarquettes, useMange, useSemaine,
+  bilanDuJour, jour, useAnnuleMange, useBarquettes, useMange, useSemaine,
 } from '../lib/donnees/barquettes.ts'
 import type { Case } from '../lib/donnees/barquettes.ts'
 import { usePlanEnregistre } from '../lib/donnees/session.ts'
@@ -39,6 +41,9 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   const { data: barquettes = [] } = useBarquettes()
   const { data: plan = [] } = usePlanEnregistre(cycle?.id, cycle?.state === 'en_cuisine')
   const mange = useMange()
+  /* Annuler « Je l'ai mangé » (0129) : le bandeau de 6 secondes, puis le lien, sous la carte du repas. */
+  const annule = useAnnuleMange()
+  const { notee, note, clos } = useNoteRecente()
   const ouvre = useOuvreCycle()
   const reprend = useChangeEtat()
   const { data: interrompu, isLoading: chargeInterrompu } = useCycleInterrompu(!chargeCycle && !cycle)
@@ -57,7 +62,8 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   }, [aujourdhui])
   const demain = cases.filter(c => c.user_profile_id === userId && c.day === demainDit
     && c.state === 'prevu' && c.portion)
-  const idsRecettes = [...new Set([prochain, ...demain].map(c => c?.portion?.recipe_id)
+  const dejaMange = mesRepasManges(cases, userId, jourDit)
+  const idsRecettes = [...new Set([prochain, ...demain, ...dejaMange].map(c => c?.portion?.recipe_id)
     .filter((x): x is string => !!x))]
   const { data: recettes } = useRecettesDesPlats(idsRecettes)
   const photoDe = (c: Case | undefined) =>
@@ -66,7 +72,7 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   const auFroid = barquettes.filter(b => b.location === 'congelateur').length
   const aimant = magnet(barquettes, prevus, aujourdhui)
   const membres = (foyer?.membres ?? []).map(m => ({ id: m.id, prenom: prenomDe(m.display_name) }))
-  const consomme = bilanDuJour(cases, userId, jourDit, jourDit)
+  const consomme = bilanDuJour(cases, userId, jourDit)
 
   /* Une session interrompue est LA chose du moment : le hub le dit (« Session interrompue »), l'accueil disait
      « Rien de prévu » et ne la proposait qu'en second, sous « Choisir les recettes » (revue du 25/10). */
@@ -88,12 +94,21 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
               cases.filter(c => c.day === jourDit && c.meal === prochain.meal && c.state === 'prevu'
                 && c.portion?.label === prochain.portion?.label).map(c => c.user_profile_id),
               membres, userId)}
-            surMange={() => mange.mutate(prochain)}
+            surMange={() => { annule.reset(); mange.mutate(prochain, { onSuccess: () => note(prochain.id) }) }}
             nbASortir={aSortir.length}
             surSort={() => sortDuCongelo.mutate(aSortir)}
             surChange={() => va(`/semaine?jour=${jourDit}&repas=${prochain.meal}`)}
             /* Le titre de la page : le plat de ce soir quand il EST la page, le geste du cycle sinon. */
             titreDePage={enSemaine} />
+  )
+
+  /* Ce que j'ai déjà mangé aujourd'hui : le bandeau « Noté : mangé. » et le lien d'annulation (0129) vivent ici. */
+  const mangeDuJour = (
+    <>
+      <MangeAujourdhui cases={dejaMange} photoDe={photoDe} notee={notee} surFerme={clos}
+                       surAnnule={id => annule.mutate(id, { onSuccess: () => { clos(); setTimeout(rendLeFocusALaCarteDuJour, 0) } })} enCours={annule.isPending} />
+      <Erreur de={dejaMange.length > 0 ? annule.error : null} />
+    </>
   )
 
   if (chargeCycle || chargeInterrompu) {
@@ -191,6 +206,7 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
         */}
       {enSemaine && carteDuSoir}
       {enSemaine && <Erreur de={mange.error ?? sortDuCongelo.error} />}
+      {enSemaine && mangeDuJour}
 
       {/* LA chose du moment, quand le repas ne la dit pas déjà. Rien ne lui dispute la place. */}
       {!enSemaine && <LeGeste etat={etat} plan={plan} titre={geste.titre} />}
@@ -227,6 +243,7 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
 
       {!enSemaine && carteDuSoir}
       {!enSemaine && <Erreur de={mange.error ?? sortDuCongelo.error} />}
+      {!enSemaine && mangeDuJour}
 
       {/* Demain : « La semaine » mène où tout se choisit. Pendant la semaine, on le dit même vide : c'est
           aussi la porte vers elle, que « Voir toute la semaine » tenait avant. */}

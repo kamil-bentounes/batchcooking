@@ -22,7 +22,7 @@ import { useMemo } from 'react'
 import { Erreur, Marque, dateLongue } from '../ui/coque.tsx'
 import { GESTE, useChangeEtat, useCycle, useCycleInterrompu, useOuvreCycle } from '../lib/donnees/cycle.ts'
 import type { Etat } from '../lib/donnees/cycle.ts'
-import { jour, useBarquettes, useMange, useSemaine } from '../lib/donnees/barquettes.ts'
+import { jour, useAnnuleMange, useBarquettes, useMange, useSemaine } from '../lib/donnees/barquettes.ts'
 import { usePrevus, useRecettesDesPlats, useSortDuCongelo } from '../lib/donnees/frigo.ts'
 import { aDesObjectifs, bandeauDuProfil, useFoyer, initialeDe, prenomDe } from '../lib/donnees/foyer.ts'
 import { useClotures, useMois, useRevenus, useSaisies, moisDe, eurosRonds } from '../lib/donnees/budget.ts'
@@ -41,6 +41,8 @@ import { jourDeParis, maintenant } from '../lib/horloge.ts'
 import { BoutonAide } from '../ui/Aide.tsx'
 import { useMoisType } from '../ui/budget/MoisType.tsx'
 import { CeSoir } from '../ui/frigo/CeSoir.tsx'
+import { mesRepasManges, rendLeFocusALaCarteDuJour, useNoteRecente } from '../lib/annuler-mange.ts'
+import { MangeAujourdhui } from '../ui/semaine/MangeAujourdhui.tsx'
 import { CarteGeste } from '../ui/hub/CarteGeste.tsx'
 import { CeQuiVient } from '../ui/hub/CeQuiVient.tsx'
 import { PorteCuisine } from '../ui/hub/PorteCuisine.tsx'
@@ -62,6 +64,9 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
   const semaine = useSemaine(aujourdhui, 7)
   const lesPrevus = usePrevus()
   const mange = useMange()
+  /* Annuler « Je l'ai mangé » (0129) : le bandeau de 6 secondes, puis le lien, sous la carte sombre. */
+  const annule = useAnnuleMange()
+  const { notee, note: noteLeMange, clos } = useNoteRecente()
   const sortDuCongelo = useSortDuCongelo()
   const ouvre = useOuvreCycle()
   const reprend = useChangeEtat()
@@ -157,8 +162,9 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
 
   const aVenir = ceQuiVient(cases ?? [], userId, aujourdhui,
     { exclus: enSemaine ? casesDeLaCarte : undefined, max: 3 })
+  const dejaMange = mesRepasManges(cases ?? [], userId, jourDit)
   const idsRecettes = [...new Set([...(enSemaine ? [prochain?.portion?.recipe_id] : []),
-    ...aVenir.map(l => l.recipeId)].filter((x): x is string => !!x))]
+    ...aVenir.map(l => l.recipeId), ...dejaMange.map(c => c.portion?.recipe_id)].filter((x): x is string => !!x))]
   const { data: recettes } = useRecettesDesPlats(idsRecettes)
   const photoDe = (id: string | null | undefined) => (id ? recettes?.get(id)?.image_url ?? null : null)
 
@@ -340,7 +346,7 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
                           (cases ?? []).filter(c => c.day === jourDit && c.meal === prochain.meal
                             && c.state === 'prevu' && memePlat(c, prochain)).map(c => c.user_profile_id),
                           membres, userId)}
-                        surMange={() => mange.mutate(prochain)}
+                        surMange={() => { annule.reset(); mange.mutate(prochain, { onSuccess: () => noteLeMange(prochain.id) }) }}
                         nbASortir={aSortir.length}
                         surSort={() => sortDuCongelo.mutate(aSortir)}
                         surChange={() => va(`/semaine?jour=${jourDit}&repas=${prochain.meal}`)}
@@ -356,6 +362,11 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
                               <Erreur de={panneDeLaSemaine} />
                             </>} />
               )}
+              <MangeAujourdhui cases={dejaMange} photoDe={c => photoDe(c.portion?.recipe_id)} notee={notee}
+                               surFerme={clos} enCours={annule.isPending}
+                               surAnnule={id => annule.mutate(id, { onSuccess: () => { clos(); setTimeout(rendLeFocusALaCarteDuJour, 0) } })} />
+              {/* L'erreur se dit tant que la ligne est là ; elle s'efface au geste suivant. */}
+              <Erreur de={dejaMange.length > 0 ? annule.error : null} />
             </div>
             <CeQuiVient lignes={aVenir} photoDe={photoDe} va={va}
                         chargement={cases === undefined && !panneDeLaSemaine}

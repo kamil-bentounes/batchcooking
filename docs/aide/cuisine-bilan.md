@@ -24,7 +24,7 @@ sources:
   - supabase/migrations/0013_cycle.sql
   - src/pages/Choisir.tsx
   - src/lib/donnees/catalogue.ts
-verifie_sur: 02a9f37
+verifie_sur: 9b03c3e
 ---
 ## Ce que fait l’appli
 

@@ -111,6 +111,8 @@ export type CaseLue = {
   day: string
   meal: string
   state: string
+  /** L'heure à laquelle le repas a été noté mangé. */
+  eaten_at?: string | null
   portion: (Part & { recipe_id: string | null }) | null
   extras: { label: string; kcal?: number | string; protein_g?: number | string }[]
 }

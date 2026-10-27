@@ -27,7 +27,7 @@ sources:
   - supabase/migrations/0092_la_photo_et_les_gestes.sql
   - supabase/migrations/0117_cuisine_corrections.sql
   - supabase/migrations/0121_photo_des_plats.sql
-verifie_sur: 99e3953
+verifie_sur: 9b03c3e
 ---
 ## Ce que fait l’appli
 

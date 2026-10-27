@@ -24,7 +24,7 @@ sources:
   - supabase/migrations/0125_semaine_corrections.sql
   - supabase/migrations/0128_semaine_hier.sql
   - src/lib/peremption.ts
-verifie_sur: e52e2c5
+verifie_sur: 9b03c3e
 ---
 ## Ce que fait l’appli
 
@@ -46,6 +46,6 @@ Pour changer un repas ou le manger, voir « cuisine-semaine-changer ».
 
 - « On saute ce repas » est une réponse : le jour est renseigné, sans rien compter. **Un repas jamais choisi n’est pas un repas à zéro** : c’est un trou, hors des moyennes du bilan.
 - Choisir autre chose pour un repas remplace le plat : ses en-plus s’en vont avec lui.
-- Un repas « Autre chose » (restaurant, sandwich) ne compte dans tes calories qu’une fois « Je l’ai mangé » touché, ou son jour passé.
+- Un repas « Autre chose » (restaurant, sandwich) ne compte dans tes calories qu’une fois « Je l’ai mangé » touché (ou noté sur un jour passé), et plus du tout si tu l’annules.
 - Le petit déjeuner, la collation et ce qu’on mange en plus d’un plat se notent à part : voir « cuisine-semaine-en-plus ».
 - La péremption et la part de chacun sont dites sur la carte : voir « cuisine-semaine-peremption ».

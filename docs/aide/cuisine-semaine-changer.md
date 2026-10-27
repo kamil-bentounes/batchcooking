@@ -25,7 +25,7 @@ sources:
   - supabase/migrations/0125_semaine_corrections.sql
   - supabase/migrations/0128_semaine_hier.sql
   - src/lib/peremption.ts
-verifie_sur: e52e2c5
+verifie_sur: 9b03c3e
 ---
 ## Changer
 
@@ -36,6 +36,10 @@ Quand tu changes, l’ancienne barquette est lâchée, et l’appli le dit : « 
 ## Manger
 
 **« Je l’ai mangé »** apparaît aujourd’hui, et sur un jour passé (voir « cuisine-semaine-hier »), sur ta carte, pour un plat comme pour « Autre chose » : la barquette est marquée mangée et quitte le frigo. Un repas que quelqu’un a mangé ne se change plus pour cette personne.
+
+## Annuler « Je l’ai mangé »
+
+Un faux appui se rattrape : bandeau « Noté : mangé. » pendant 6 secondes, puis le lien « Pas mangé ? Annuler » (voir « cuisine-semaine-annuler »).
 
 ## Un plat congelé
 

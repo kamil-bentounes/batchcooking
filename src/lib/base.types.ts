@@ -1784,6 +1784,7 @@ export type Database = {
           cost_eur: number | null
           created_at: string
           cycle_id: string | null
+          etat_avant_mangee: string | null
           expires_at: string
           fat_g: number
           fiber_g: number
@@ -1808,6 +1809,7 @@ export type Database = {
           cost_eur?: number | null
           created_at?: string
           cycle_id?: string | null
+          etat_avant_mangee?: string | null
           expires_at: string
           fat_g: number
           fiber_g: number
@@ -1832,6 +1834,7 @@ export type Database = {
           cost_eur?: number | null
           created_at?: string
           cycle_id?: string | null
+          etat_avant_mangee?: string | null
           expires_at?: string
           fat_g?: number
           fiber_g?: number
@@ -3526,6 +3529,7 @@ export type Database = {
     }
     Functions: {
       accepter_amitie: { Args: { p_jeton: string }; Returns: string }
+      annule_mange: { Args: { p_case: string }; Returns: Json }
       annees_a_solder: {
         Args: { foyer: string; le_mois: string }
         Returns: {
