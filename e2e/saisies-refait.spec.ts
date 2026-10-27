@@ -318,7 +318,7 @@ test.describe('peser', () => {
     await page.getByLabel('Pèsent, en grammes').fill('110')
     await expect(page.getByText(/contre \d+ g attendus/)).toHaveCount(0)
 
-    await page.getByRole('button', { name: /^Enregistrer · encore 2 après$/ }).dblclick()
+    await page.getByRole('button', { name: /^Enregistrer · encore 3 après$/ }).dblclick()
     await expect(page.getByText('1 pour 110 g')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText('1 sur 3').first()).toBeVisible()
     const { data } = await db.from('weighing').select('grams').eq('household_id', foyer.householdId)

@@ -149,7 +149,7 @@ export function Photo({ retour, va }: { retour: () => void; va: (v: string) => v
                             onClick={() => setLieu(l)} onKeyDown={e => flecheSurLieu(e, i)}
                             className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-1 text-[14.5px]
                                         font-semibold leading-[1.15] max-[360px]:text-[13.5px]
-                                        ${lieu === l ? 'bg-surface text-encre shadow-[0_1px_3px_rgba(28,43,35,.12)]' : 'text-doux'}`}>
+                                        ${lieu === l ? 'bg-surface text-encre shadow-[0_1px_3px_rgba(28,43,35,.12)]' : 'font-medium text-encre'}`}>
                       <span className="max-[360px]:hidden">{ICONE[l]()}</span>
                       {NOM_LIEU[l]}
                     </button>
