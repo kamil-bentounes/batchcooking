@@ -25,7 +25,7 @@ sources:
   - src/pages/Settings.tsx
   - supabase/functions/etiquette/index.ts
   - supabase/migrations/0124_nos_aliments.sql
-verifie_sur: 545fd1b
+verifie_sur: b730eb1
 ---
 ## Ce que fait l’appli
 

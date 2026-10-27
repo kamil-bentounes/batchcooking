@@ -21,7 +21,7 @@ sources:
   - src/lib/donnees/barquettes.ts
   - src/lib/semaine.ts
   - supabase/migrations/0125_semaine_corrections.sql
-verifie_sur: ff3539b
+verifie_sur: b730eb1
 ---
 ## Ce que fait l’appli
 

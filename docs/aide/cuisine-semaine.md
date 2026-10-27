@@ -24,7 +24,7 @@ sources:
   - supabase/migrations/0125_semaine_corrections.sql
   - supabase/migrations/0128_semaine_hier.sql
   - src/lib/peremption.ts
-verifie_sur: 545fd1b
+verifie_sur: b730eb1
 ---
 ## Ce que fait l’appli
 

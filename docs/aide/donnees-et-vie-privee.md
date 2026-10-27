@@ -39,7 +39,7 @@ sources:
   - supabase/migrations/0112_budget_depart.sql
   - supabase/migrations/0126_rappels.sql
   - supabase/migrations/0127_export_des_rappels.sql
-verifie_sur: 545fd1b
+verifie_sur: b730eb1
 ---
 ## Ce que le foyer voit de l’autre
 
