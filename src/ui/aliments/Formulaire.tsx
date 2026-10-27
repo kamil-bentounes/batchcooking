@@ -26,6 +26,7 @@ import {
 import type { Brouillon, Champ, Erreurs, Source } from '../../lib/aliments/brouillon.ts'
 import { DELAI_ETIQUETTE_MS, champsDeLEtiquette, phraseDeLaPanne } from '../../lib/aliments/etiquette.ts'
 import type { ChampsLus, LectureEtiquette } from '../../lib/aliments/etiquette.ts'
+import { CONSIGNE_MAX, corpsDeLaLecture } from '../../lib/aliments/consigne.ts'
 import { cherche as chercheOpenFoodFacts, notesDuProduit } from '../../lib/aliments/openfoodfacts.ts'
 import { ecrit, pourUneUnite } from '../../lib/aliments/calcul.ts'
 import { repereProposePour } from '../../lib/aliments/ordre.ts'
@@ -191,6 +192,8 @@ export function Formulaire({ aliment, surRetour, surFini }: {
       }
       n[c] = lu[c] ?? ''
     }
+    /* L'unité lue (« pot », « barre ») : seulement quand elle est dite, et jamais par-dessus ce que la personne a tapé. */
+    if (lu.unite && (force || !tapes.current.has('unite'))) n.unite = lu.unite
     if (force) tapes.current.clear()
     if (!remplaceChoisi.current) n.remplaceRepere = repereProposePour(n.label, REPERES)?.label ?? ''
     bActuel.current = n
@@ -207,6 +210,10 @@ export function Formulaire({ aliment, surRetour, surFini }: {
   const [photos, setPhotos] = useState<string[]>([])
   const [etiquette, setEtiquette] = useState<Dit>({ etat: 'rien' })
   const lectures = useRef(0)
+  /* « Dis-moi ce que c'est » : un indice facultatif (le nom, l'unité, le poids que l'emballage ne dit pas), envoyé avec les photos. */
+  const [consigne, setConsigne] = useState('')
+  const consigneActuelle = useRef('')
+  useEffect(() => { consigneActuelle.current = consigne })
 
   async function lisLesPhotos(lot: string[]) {
     const moi = ++lectures.current
@@ -215,7 +222,7 @@ export function Formulaire({ aliment, surRetour, surFini }: {
     setPhotos(lot)
     setEtiquette({ etat: 'en-cours', texte: 'Je lis l’étiquette…' })
     try {
-      const r = await callFunction<LectureEtiquette>('etiquette', { images: lot }, DELAI_ETIQUETTE_MS)
+      const r = await callFunction<LectureEtiquette>('etiquette', corpsDeLaLecture(lot, consigneActuelle.current), DELAI_ETIQUETTE_MS)
       if (moi !== lectures.current) return
       if (r.erreur) throw new Error(r.erreur)
       const { champs, notes, calculDuPoids } = champsDeLEtiquette(r)
@@ -428,6 +435,18 @@ export function Formulaire({ aliment, surRetour, surFini }: {
                 <BoutonPhoto texte="Reprendre la photo" onFichier={f => surPhoto(f, false)} className={LIEN_PHOTO} />
               </>)}
             </div>
+          </div>
+        )}
+        {mode === 'etiquette' && (
+          <div className="mt-2.5">
+            <label htmlFor="aliment-consigne" className="block text-[13px] font-semibold">Dis-moi ce que c’est (facultatif)</label>
+            <textarea id="aliment-consigne" value={consigne} onChange={e => setConsigne(e.target.value)} rows={2} maxLength={CONSIGNE_MAX}
+                      placeholder="Skyr vanille, pot de 150 g."
+                      className="mt-1 w-full resize-none rounded-[14px] bg-surface px-3.5 py-2.5 text-[16px] leading-[1.4] text-encre placeholder:text-doux/70"
+                      style={CADRE} />
+            {photos.length > 0 && etiquette.etat !== 'en-cours' && (
+              <button type="button" onClick={() => lisLesPhotos(photos)} className={LIEN}>Relire avec cette consigne</button>
+            )}
           </div>
         )}
         {mode === 'etiquette' && etiquette.etat === 'fait' && etiquette.notes.length > 0 && (

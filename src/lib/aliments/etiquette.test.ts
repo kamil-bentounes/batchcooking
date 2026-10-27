@@ -147,3 +147,15 @@ describe('une lecture trop longue', () => {
     expect(phraseDeLaPanne(new Error('{"erreur":"Quota atteint : 40 étiquettes par mois."}'), 31_000)).toBe('Quota atteint : 40 étiquettes par mois.')
   })
 })
+
+describe('l’unité, quand la consigne ou l’emballage la dit', () => {
+  it('un mot au singulier, en minuscules : « Pot » devient « pot »', () => {
+    expect(champsDeLEtiquette(lue({ unite: ' Pot ' })).champs.unite).toBe('pot')
+  })
+  it('absente, vide, trop longue ou avec un chiffre : jamais remplie (le champ garde son « pot » par défaut)', () => {
+    expect(champsDeLEtiquette(lue()).champs).not.toHaveProperty('unite')
+    for (const unite of [null, '', '   ', 'x'.repeat(21), '4 pots']) {
+      expect(champsDeLEtiquette(lue({ unite })).champs, String(unite)).not.toHaveProperty('unite')
+    }
+  })
+})

@@ -16,6 +16,7 @@ import type { Repas } from '../semaine.ts'
 import type { BarquetteRangee, LignePrise } from '../ranger.ts'
 import type { Json } from '../base.types.ts'
 import { maintenant } from '../horloge.ts'
+import { quantitesRecentes } from '../aliments/en-plus.ts'
 
 export { NOM_REPAS, REPAS, bilanDuJour, jour } from '../semaine.ts'
 export type { Repas } from '../semaine.ts'
@@ -189,6 +190,8 @@ export type Choix =
   | {
     type: 'repere'; label: string; kcal: number; protein_g: number
     grams?: number | null; fiber_g?: number; carb_g?: number; fat_g?: number; food_id?: string | null
+    /** L'aliment à nous dont c'est une copie (0128) : ses quantités récentes, jamais ses valeurs. */
+    aliment_id?: string | null
   }
   | { type: 'saute' }
 
@@ -324,6 +327,27 @@ async function caseOuCree(
   return deja.id
 }
 
+/**
+ * Les quantités qu'une personne a déjà mangées d'un de nos aliments (`meal_extra.aliment_id`, 0128), de la plus récente à
+ * la plus ancienne : de quoi proposer « 30 g, 60 g » au prochain appui. Lue quand le panneau de quantité s'ouvre
+ * (`actif`), et relue après chaque ajout (toutes les lectures le sont).
+ */
+export function useQuantitesRecentes(alimentId: string | null, userId: string, actif = true) {
+  return useQuery({
+    queryKey: ['quantites-recentes', alimentId, userId],
+    enabled: actif && !!alimentId,
+    queryFn: async (): Promise<number[]> => {
+      const lignes = ou(await supabase.from('meal_extra')
+        .select('grams, created_at, meal_slot!inner(user_profile_id)')
+        .eq('aliment_id', alimentId!).eq('meal_slot.user_profile_id', userId)
+        .not('grams', 'is', null)
+        .order('created_at', { ascending: false }).limit(20))
+      return quantitesRecentes(lignes.map(l => l.grams))
+    },
+    staleTime: 0,
+  })
+}
+
 export function useAjouteExtra({ onSuccess }: { onSuccess?: () => void } = {}) {
   const qc = useQueryClient()
   return useMutation({
@@ -333,6 +357,8 @@ export function useAjouteExtra({ onSuccess }: { onSuccess?: () => void } = {}) {
       label: string; grammes?: number | null
       kcal: number; proteinG: number; fiberG?: number; carbG?: number; fatG?: number
       foodId?: string | null; memoriser?: boolean
+      /** L'aliment à nous dont c'est une COPIE (0128) : ça ne sert qu'à retrouver les quantités récentes. */
+      alimentId?: string | null
     }) => {
       const foyer = ou(await supabase.rpc('current_household'))
       if (!foyer) throw new Error('Aucun foyer.')
@@ -342,6 +368,7 @@ export function useAjouteExtra({ onSuccess }: { onSuccess?: () => void } = {}) {
         meal_slot_id: caseId,
         label: e.label.trim(),
         food_id: e.foodId ?? null,
+        aliment_id: e.alimentId ?? null,
         grams: e.grammes ?? null,
         kcal: e.kcal,
         protein_g: e.proteinG,

@@ -41,7 +41,7 @@ const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 
 export type JourDuBandeau = {
   /** « 2026-10-26 », en heure locale. */
   jour: string
-  /** « auj. » pour aujourd'hui, sinon « mar. ». */
+  /** « auj. » pour aujourd'hui, « hier » pour hier, sinon « mar. ». */
   court: string
   num: number
   /** « Lundi 26 octobre » ; « Dimanche 1er novembre ». */
@@ -49,6 +49,9 @@ export type JourDuBandeau = {
   /** « Lundi » : le début du titre de la feuille. */
   semaine: string
   aujourdhui: boolean
+  /** Avant aujourd'hui : un jour qu'on note, au lieu de le choisir. */
+  passe: boolean
+  hier: boolean
 }
 
 const majuscule = (t: string) => `${t[0].toUpperCase()}${t.slice(1)}`
@@ -57,17 +60,30 @@ export function dateEnToutesLettres(d: Date): string {
   return `${majuscule(JOUR_ENTIER[d.getDay()])} ${d.getDate() === 1 ? '1er' : d.getDate()} ${MOIS[d.getMonth()]}`
 }
 
-/** Sept jours à partir d'aujourd'hui. */
-export function joursDuBandeau(debut: Date, nombre = 7): JourDuBandeau[] {
-  return Array.from({ length: nombre }, (_, i) => {
+/** Les jours qu'on peut encore noter, avant aujourd'hui : une semaine (la base le borne de même, 0128). */
+export const JOURS_PASSES = 7
+/** Les jours qu'on peut déjà choisir, après aujourd'hui. */
+export const JOURS_A_VENIR = 6
+
+/**
+ * Le bandeau : sept jours passés, aujourd'hui, puis les six suivants. Le premier est le plus ancien ; aujourd'hui est à
+ * l'indice `avant` (`indexDAujourdhui`). Un jour passé s'écrit « hier » pour hier, et par son jour de la semaine
+ * ensuite : on y note ce qu'on a mangé.
+ */
+export function joursDuBandeau(debut: Date, apres = JOURS_A_VENIR, avant = JOURS_PASSES): JourDuBandeau[] {
+  return Array.from({ length: avant + 1 + apres }, (_, k) => {
+    const i = k - avant
     const d = new Date(debut.getFullYear(), debut.getMonth(), debut.getDate() + i)
     return {
-      jour: jour(d), num: d.getDate(), aujourdhui: i === 0,
-      court: i === 0 ? 'auj.' : COURT[d.getDay()],
+      jour: jour(d), num: d.getDate(), aujourdhui: i === 0, passe: i < 0, hier: i === -1,
+      court: i === 0 ? 'auj.' : i === -1 ? 'hier' : COURT[d.getDay()],
       long: dateEnToutesLettres(d), semaine: majuscule(JOUR_ENTIER[d.getDay()]),
     }
   })
 }
+
+/** Où est aujourd'hui dans le bandeau : c'est le jour qui s'ouvre. */
+export const indexDAujourdhui = (jours: JourDuBandeau[]): number => Math.max(0, jours.findIndex(j => j.aujourdhui))
 
 /** « Lundi midi » : le titre de la feuille de choix. */
 export function titreDeLaFeuille(j: JourDuBandeau, repas: RepasChoisi): string {
@@ -83,7 +99,7 @@ export function lisLAdresse(recherche: string, jours: JourDuBandeau[]): { index:
   const q = new URLSearchParams(recherche)
   const index = jours.findIndex(j => j.jour === q.get('jour'))
   const repas = q.get('repas')
-  return { index: Math.max(0, index), repas: index >= 0 && estUnRepasChoisi(repas) ? repas : null }
+  return { index: index >= 0 ? index : indexDAujourdhui(jours), repas: index >= 0 && estUnRepasChoisi(repas) ? repas : null }
 }
 
 // ── Ce que porte une case ───────────────────────────────────────────────────
@@ -180,17 +196,51 @@ export function pourDit(ids: string[], membres: Membre[]): string {
   return uniques.map(nom).join(' et ')
 }
 
-/** La ligne sous le nom : « Du frigo, pour vous deux », « Du congélateur, pour Kamil », « Pour vous deux ». */
-export function ligneDeLaCarte(carte: Carte, membres: Membre[]): string {
+/**
+ * La ligne sous le nom : « Du frigo, pour vous deux », « Du congélateur, pour Kamil », « Pour vous deux ». Sur un jour
+ * PASSÉ (`passe`), un repas qui n'est pas marqué mangé le dit : « … · pas encore noté », et « … · Kamil l'a mangé, pas
+ * encore noté pour Thauba » quand une partie seulement l'est.
+ */
+export function ligneDeLaCarte(carte: Carte, membres: Membre[], passe = false): string {
   const pour = pourDit(carte.personnes, membres)
   const c = carte.contenu
   const base = c.genre === 'plat'
     ? `${c.lieu === 'congelateur' ? 'Du congélateur' : 'Du frigo'}, pour ${pour}`
     : `Pour ${pour}`
-  if (carte.mangePar.length === 0) return base
-  const tous = carte.mangePar.length === carte.personnes.length
   const nom = (id: string) => membres.find(m => m.id === id)?.prenom ?? 'quelqu’un'
-  return `${base} · ${tous ? 'mangé' : `${carte.mangePar.map(nom).join(' et ')} ${carte.mangePar.length > 1 ? 'l’ont' : 'l’a'} mangé`}`
+  if (carte.mangePar.length === 0) return passe && c.genre !== 'saute' ? `${base} · pas encore noté` : base
+  const tous = carte.mangePar.length === carte.personnes.length
+  if (tous) return `${base} · mangé`
+  const mangeurs = `${carte.mangePar.map(nom).join(' et ')} ${carte.mangePar.length > 1 ? 'l’ont' : 'l’a'} mangé`
+  const restent = carte.personnes.filter(id => !carte.mangePar.includes(id))
+  return passe ? `${base} · ${mangeurs}, pas encore noté pour ${restent.map(nom).join(' et ')}` : `${base} · ${mangeurs}`
+}
+
+/** Un repas passé que personne n'a mangé : qu'il reste à noter. */
+export const aNoter = (carte: Carte): boolean => carte.contenu.genre !== 'saute' && carte.mangePar.length < carte.personnes.length
+
+/**
+ * Le texte de la carte vide : « + Choisir le midi » (à venir), « + Noter ce que j'ai mangé ce midi » (un jour passé).
+ * `pour` : les personnes sans choix quand une autre carte existe déjà (« + Choisir le midi pour Thauba », « + Noter ce
+ * que Thauba a mangé ce midi » ; moi seul : « j'ai ») ; absent : tout le monde.
+ */
+export function texteDeLaCarteVide(repas: RepasChoisi, passe: boolean, pour?: { ids: string[]; membres: Membre[]; moi: string }): string {
+  const mot = MOT_DU_REPAS[repas].minuscule
+  const ce = repas === 'dejeuner' ? 'ce midi' : 'ce soir'
+  if (!passe) return `+ Choisir le ${mot}${pour ? ` pour ${pourDit(pour.ids, pour.membres)}` : ''}`
+  if (!pour) return `+ Noter ce que j’ai mangé ${ce}`
+  const ids = [...new Set(pour.ids)]
+  if (ids.length === 1 && ids[0] === pour.moi) return `+ Noter ce que j’ai mangé ${ce}`
+  const eux = pourDit(ids, pour.membres)
+  return `+ Noter ce que ${eux} ${ids.length > 1 ? 'ont' : 'a'} mangé ${ce}`
+}
+
+/** « au soir », « du soir » : le moment, dit comme les boutons de « en plus ». */
+export const MOT_DU_MOMENT: Record<string, { au: string; du: string }> = {
+  petit_dejeuner: { au: 'au petit déjeuner', du: 'du petit déjeuner' },
+  dejeuner: { au: 'au midi', du: 'du midi' },
+  diner: { au: 'au soir', du: 'du soir' },
+  collation: { au: 'à la collation', du: 'de la collation' },
 }
 
 /** Le nom de la carte : le plat (nom court), ce qu'on mange à la place, ou « On saute ce repas ». */
@@ -225,6 +275,8 @@ export function detailDeLaPart(carte: Carte, membres: Membre[], moi: string): st
  */
 export function peremptionDeLaCarte(carte: Carte, jour: string, repas: string, maintenant: Date): Quand | null {
   if (carte.contenu.genre !== 'plat') return null
+  /* Un repas passé n'a plus à « périmer avant » : il a eu lieu. */
+  if (ecartEnJours(jour, maintenant) < 0) return null
   const restantes = carte.cases.filter(c => c.state !== 'mange' && c.portion)
   if (restantes.length === 0) return null
   const premiere = restantes.map(c => c.portion!).sort((a, b) => a.expires_at.localeCompare(b.expires_at))[0]
@@ -353,6 +405,8 @@ export function detailDuFrigo(
   libres: Part[], cible: Cible, maintenant: Date,
 ): { texte: string; urgent: boolean } {
   if (libres.length === 0) return { texte: 'déjà choisi pour d’autres repas', urgent: false }
+  /* Un repas passé : la barquette sort du frigo, il n'y a plus de délai à tenir. */
+  if (ecartEnJours(cible.jour, maintenant) < 0) return { texte: 'sort du frigo', urgent: false }
   const premiere = [...libres].sort((a, b) => a.expires_at.localeCompare(b.expires_at))[0]
   const fin = new Date(premiere.expires_at)
   if (fin.getTime() < momentDuRepas(cible.jour, cible.repas).getTime()) {
@@ -364,6 +418,7 @@ export function detailDuFrigo(
 
 /** Ce que dit la ligne d'un plat congelé : la même heure que le frigo (vingt-quatre heures avant le repas). */
 export function detailDuCongele(cible: Cible, maintenant: Date): string {
+  if (ecartEnJours(cible.jour, maintenant) < 0) return 'sort du congélateur'
   const des = sortableDes(cible.jour, cible.repas)
   return des.getTime() <= maintenant.getTime() ? 'à sortir maintenant' : `à sortir la veille, dès ${des.getHours()} h`
 }

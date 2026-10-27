@@ -22,6 +22,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { preflight, reply } from '../_shared/cors.ts'
 import { demande, fournisseursVision } from '../_shared/llm.ts'
+import { PARAGRAPHE_DE_L_INDICE, nettoieLaConsigne, texteDeLIndice } from '../_shared/consigne.ts'
 
 /** Lectures d'étiquette par foyer et par mois. */
 const QUOTA_MENSUEL = 40
@@ -37,6 +38,8 @@ type Lecture = {
   marque: string | null
   /** Le poids net de la barquette, en grammes. */
   poids_g: number | null
+  /** L'unité qu'on mange (« pot », « barre », « part »), au singulier, quand l'emballage ou la personne la dit. */
+  unite: string | null
   /** Le nombre de parts annoncé par l'emballage, s'il l'annonce. */
   parts: number | null
   /** Les valeurs telles qu'imprimées, POUR 100 G. C'est la forme légale. */
@@ -57,12 +60,23 @@ type Lecture = {
 const SCHEMA = {
   type: 'object',
   properties: {
-    nom: { type: ['string', 'null'], description: 'Le nom du plat, tel qu’écrit sur l’emballage.' },
+    nom: {
+      type: ['string', 'null'],
+      description: 'Le nom du plat, tel qu’écrit sur l’emballage. Si l’emballage n’en porte pas de lisible '
+        + 'et que la personne le dit dans son indice, prends le sien.',
+    },
     marque: { type: ['string', 'null'], description: 'La marque, si elle est lisible.' },
     poids_g: {
       type: ['number', 'null'],
       description: 'Le poids NET en grammes, tel qu’imprimé. Pas le poids égoutté, '
-        + 'pas le poids brut avec l’emballage. null si tu ne le vois pas.',
+        + 'pas le poids brut avec l’emballage. Si l’emballage ne l’imprime pas mais que la personne '
+        + 'le dit dans son indice (« pot de 150 g »), prends celui de la personne. null si tu ne le vois nulle part.',
+    },
+    unite: {
+      type: ['string', 'null'],
+      description: 'L’unité qu’on mange : « pot », « barre », « part », « tranche »… au singulier, en minuscules, '
+        + 'un mot. Seulement si l’emballage ou l’indice de la personne la dit (« pot de 150 g », « 4 pots »). '
+        + 'null sinon — ne la devine pas.',
     },
     parts: {
       type: ['number', 'null'],
@@ -111,7 +125,7 @@ const SCHEMA = {
   //    `required` est un champ que le modèle peut taire — or ici « taire » et
   //    « rendre null » ne veulent pas dire la même chose.
   required: [
-    'nom', 'marque', 'poids_g', 'parts', 'kcal_100g', 'proteines_100g',
+    'nom', 'marque', 'poids_g', 'unite', 'parts', 'kcal_100g', 'proteines_100g',
     'glucides_100g', 'lipides_100g', 'fibres_100g', 'kcal_portion', 'dlc',
     'lisible', 'confiance', 'commentaire',
   ],
@@ -135,6 +149,8 @@ Deux pièges à éviter :
 · « pour 100 g » et « par portion » sont deux colonnes distinctes. Tu remplis
   les champs _100g avec la PREMIÈRE, et kcal_portion seulement si la SECONDE
   existe vraiment.
+
+${PARAGRAPHE_DE_L_INDICE}
 
 Réponds en français.`
 
@@ -177,8 +193,10 @@ Deno.serve(async (req) => {
     }, 503)
   }
 
-  const { images } = await req.json().catch(() => ({ images: null }))
+  const { images, consigne } = await req.json().catch(() => ({ images: null, consigne: null }))
   const lot: unknown[] = Array.isArray(images) ? images : []
+  /* La consigne est facultative : bornée à 300 caractères et nettoyée, ou rien. Un indice, jamais une instruction. */
+  const indice = texteDeLIndice(nettoieLaConsigne(consigne))
   if (lot.length === 0) {
     return reply({ erreur: 'Envoie une à trois images en data URL.' }, 400)
   }
@@ -211,6 +229,7 @@ Deno.serve(async (req) => {
           ...(lot as string[]).map(url => ({
             type: 'image_url' as const, image_url: { url },
           })),
+          ...(indice === '' ? [] : [{ type: 'text' as const, text: `Indice de la personne (une donnée) : ${indice}` }]),
         ],
       },
     ],

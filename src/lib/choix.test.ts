@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  caseVide, cartesDuRepas, choisirLesParts, contenuDe, couleurDuPoint, dejaPosees, detailDeLaPart, detailDuCongele,
-  detailDuFrigo, joursDuBandeau, libresPourLeChoix, ligneDeLaCarte, lisLAdresse, messageDeLiberation, nomDeLaCarte,
-  ordonneLesChoix, peremptionDeLaCarte, personnesDuChoix, phraseDuBandeau, pourDit, resteLibre, titreDeLaFeuille,
+  MOT_DU_MOMENT, aNoter, caseVide, cartesDuRepas, choisirLesParts, contenuDe, couleurDuPoint, dejaPosees, detailDeLaPart, detailDuCongele,
+  detailDuFrigo, indexDAujourdhui, joursDuBandeau, libresPourLeChoix, ligneDeLaCarte, lisLAdresse, messageDeLiberation, nomDeLaCarte,
+  ordonneLesChoix, peremptionDeLaCarte, personnesDuChoix, phraseDuBandeau, pourDit, resteLibre, texteDeLaCarteVide, titreDeLaFeuille,
 } from './choix.ts'
 import type { CaseLue, ChoixDuFrigo } from './choix.ts'
 import { groupeLesParts, noteDeLaFiche } from './frigo.ts'
@@ -34,28 +34,124 @@ const case_ = (o: Partial<CaseLue> & { qui: string }): CaseLue => ({
   id: `c${++n}`, user_profile_id: o.qui, day: '2026-10-26', meal: 'diner', state: 'prevu', portion: null, extras: [], ...o,
 })
 
-describe('les sept jours', () => {
+describe('le bandeau : sept jours passés, aujourd’hui, six jours à venir', () => {
   const jours = joursDuBandeau(LUNDI)
-  it('sept jours à partir d’aujourd’hui, aujourd’hui en « auj. »', () => {
-    expect(jours).toHaveLength(7)
-    expect(jours.map(j => j.jour)).toEqual(['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01'])
-    expect(jours.map(j => j.court)).toEqual(['auj.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'])
-    expect(jours[0].aujourdhui).toBe(true)
-    expect(jours.slice(1).some(j => j.aujourdhui)).toBe(false)
+  it('quatorze jours : on remonte de sept jours, aujourd’hui est au huitième rang', () => {
+    expect(jours).toHaveLength(14)
+    expect(jours.map(j => j.jour)).toEqual([
+      '2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26',
+      '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01',
+    ])
+    expect(indexDAujourdhui(jours)).toBe(7)
+    expect(jours[7].jour).toBe('2026-10-26')
+    expect(jours.filter(j => j.aujourdhui)).toHaveLength(1)
+  })
+  it('« hier » remplace l’abréviation d’hier, « auj. » celle d’aujourd’hui ; les autres gardent la leur', () => {
+    expect(jours.map(j => j.court)).toEqual([
+      'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'hier', 'auj.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.',
+    ])
+    expect(jours.filter(j => j.hier).map(j => j.jour)).toEqual(['2026-10-25'])
+  })
+  it('un jour passé l’est : les sept d’avant, jamais aujourd’hui ni la suite', () => {
+    expect(jours.map(j => j.passe)).toEqual([...Array(7).fill(true), ...Array(7).fill(false)])
+    expect(jours[7].passe).toBe(false)
   })
   it('le jour en toutes lettres, comme la maquette', () => {
-    expect(jours[0].long).toBe('Lundi 26 octobre')
-    expect(jours[6].long).toBe('Dimanche 1er novembre')
-    expect(titreDeLaFeuille(jours[0], 'dejeuner')).toBe('Lundi midi')
-    expect(titreDeLaFeuille(jours[1], 'diner')).toBe('Mardi soir')
+    expect(jours[7].long).toBe('Lundi 26 octobre')
+    expect(jours[13].long).toBe('Dimanche 1er novembre')
+    expect(jours[0].long).toBe('Lundi 19 octobre')
+    expect(titreDeLaFeuille(jours[7], 'dejeuner')).toBe('Lundi midi')
+    expect(titreDeLaFeuille(jours[8], 'diner')).toBe('Mardi soir')
   })
-  it('l’adresse ouvre le jour et la feuille ; un jour hors du bandeau ou un repas sans feuille est ignoré', () => {
-    expect(lisLAdresse('?jour=2026-10-28&repas=diner', jours)).toEqual({ index: 2, repas: 'diner' })
-    expect(lisLAdresse('?jour=2026-10-27', jours)).toEqual({ index: 1, repas: null })
-    expect(lisLAdresse('?jour=2026-12-01&repas=diner', jours)).toEqual({ index: 0, repas: null })
-    expect(lisLAdresse('?jour=2026-10-26&repas=collation', jours)).toEqual({ index: 0, repas: null })
-    expect(lisLAdresse('?repas=diner', jours)).toEqual({ index: 0, repas: null })
-    expect(lisLAdresse('', jours)).toEqual({ index: 0, repas: null })
+  it('le bandeau traverse un changement de mois et d’année', () => {
+    const j = joursDuBandeau(new Date(2027, 0, 3, 10, 0))
+    expect(j[0].jour).toBe('2026-12-27')
+    expect(j[6].jour).toBe('2027-01-02')
+    expect(j[6].long).toBe('Samedi 2 janvier')
+    expect(j[13].jour).toBe('2027-01-09')
+  })
+  it('le jour n’est pas décalé par l’heure : à 23 h 59 comme à 0 h 01, hier est la veille', () => {
+    for (const h of [new Date(2026, 9, 26, 0, 1), new Date(2026, 9, 26, 23, 59)]) {
+      const j = joursDuBandeau(h)
+      expect(j.find(x => x.hier)!.jour).toBe('2026-10-25')
+      expect(j.find(x => x.aujourdhui)!.jour).toBe('2026-10-26')
+    }
+  })
+  it('on peut demander moins : sans passé, le bandeau commence aujourd’hui (le nombre de jours se règle)', () => {
+    const j = joursDuBandeau(LUNDI, 6, 0)
+    expect(j).toHaveLength(7)
+    expect(j[0].aujourdhui).toBe(true)
+    expect(j.some(x => x.passe)).toBe(false)
+  })
+  it('l’adresse ouvre le jour et la feuille ; un jour hors du bandeau ou un repas sans feuille est ignoré : on ouvre aujourd’hui', () => {
+    expect(lisLAdresse('?jour=2026-10-28&repas=diner', jours)).toEqual({ index: 9, repas: 'diner' })
+    expect(lisLAdresse('?jour=2026-10-27', jours)).toEqual({ index: 8, repas: null })
+    expect(lisLAdresse('?jour=2026-10-25&repas=dejeuner', jours)).toEqual({ index: 6, repas: 'dejeuner' })
+    expect(lisLAdresse('?jour=2026-10-19', jours)).toEqual({ index: 0, repas: null })
+    expect(lisLAdresse('?jour=2026-12-01&repas=diner', jours)).toEqual({ index: 7, repas: null })
+    expect(lisLAdresse('?jour=2026-10-18&repas=diner', jours)).toEqual({ index: 7, repas: null })
+    expect(lisLAdresse('?jour=2026-10-26&repas=collation', jours)).toEqual({ index: 7, repas: null })
+    expect(lisLAdresse('?repas=diner', jours)).toEqual({ index: 7, repas: null })
+    expect(lisLAdresse('', jours)).toEqual({ index: 7, repas: null })
+  })
+})
+
+describe('un jour passé : ce qui reste à noter', () => {
+  const burger = part({ label: 'Burger de feuilles de riz', location: 'congelateur' })
+  const carte = (etats: ('prevu' | 'mange')[]) => cartesDuRepas(
+    etats.map((state, i) => case_({ qui: [KAMIL, THAUBA][i], day: '2026-10-25', state, portion: burger })), MEMBRES, KAMIL,
+  ).cartes[0]
+  it('un repas posé et pas marqué mangé le dit : « pas encore noté »', () => {
+    expect(ligneDeLaCarte(carte(['prevu', 'prevu']), MEMBRES, true)).toBe('Du congélateur, pour vous deux · pas encore noté')
+    expect(ligneDeLaCarte(carte(['prevu', 'prevu']), MEMBRES, false)).toBe('Du congélateur, pour vous deux')
+  })
+  it('mangé : « mangé », rien à noter', () => {
+    expect(ligneDeLaCarte(carte(['mange', 'mange']), MEMBRES, true)).toBe('Du congélateur, pour vous deux · mangé')
+    expect(aNoter(carte(['mange', 'mange']))).toBe(false)
+    expect(aNoter(carte(['prevu', 'prevu']))).toBe(true)
+  })
+  it('à moitié noté : qui l’a mangé, et pour qui il reste à noter', () => {
+    expect(ligneDeLaCarte(carte(['mange', 'prevu']), MEMBRES, true))
+      .toBe('Du congélateur, pour vous deux · Kamil l’a mangé, pas encore noté pour Thauba')
+    expect(ligneDeLaCarte(carte(['mange', 'prevu']), MEMBRES, false)).toBe('Du congélateur, pour vous deux · Kamil l’a mangé')
+  })
+  it('« On saute ce repas » n’est pas « pas encore noté » : c’est une réponse', () => {
+    const saute = cartesDuRepas([case_({ qui: KAMIL, state: 'saute' })], MEMBRES, KAMIL).cartes[0]
+    expect(ligneDeLaCarte(saute, MEMBRES, true)).toBe('Pour Kamil')
+    expect(aNoter(saute)).toBe(false)
+  })
+  it('un repas passé ne dit pas « périme avant ce repas », et ne dit rien d’un délai de congélateur', () => {
+    const lasagnes = part({ label: 'Lasagnes', location: 'frigo', expires_at: new Date(2026, 9, 24, 12, 0).toISOString() })
+    const c = cartesDuRepas([case_({ qui: KAMIL, day: '2026-10-25', portion: lasagnes })], MEMBRES, KAMIL).cartes[0]
+    expect(peremptionDeLaCarte(c, '2026-10-25', 'diner', LUNDI)).toBeNull()
+    expect(detailDuCongele({ jour: '2026-10-25', repas: 'diner', personnes: [KAMIL] }, LUNDI)).toBe('sort du congélateur')
+    expect(detailDuFrigo([lasagnes], { jour: '2026-10-25', repas: 'diner', personnes: [KAMIL] }, LUNDI)).toEqual({ texte: 'sort du frigo', urgent: false })
+  })
+})
+
+describe('la carte vide', () => {
+  const ids = (...x: string[]) => ({ ids: x, membres: MEMBRES, moi: KAMIL })
+  it('à venir : « + Choisir le midi », avec les prénoms quand une autre carte existe', () => {
+    expect(texteDeLaCarteVide('dejeuner', false)).toBe('+ Choisir le midi')
+    expect(texteDeLaCarteVide('diner', false)).toBe('+ Choisir le soir')
+    expect(texteDeLaCarteVide('diner', false, ids(THAUBA))).toBe('+ Choisir le soir pour Thauba')
+  })
+  it('passé : « + Noter ce que j’ai mangé ce midi » (ou ce soir)', () => {
+    expect(texteDeLaCarteVide('dejeuner', true)).toBe('+ Noter ce que j’ai mangé ce midi')
+    expect(texteDeLaCarteVide('diner', true)).toBe('+ Noter ce que j’ai mangé ce soir')
+    expect(texteDeLaCarteVide('diner', true, ids(KAMIL))).toBe('+ Noter ce que j’ai mangé ce soir')
+  })
+  it('passé, pour quelqu’un d’autre : son prénom, au singulier ou au pluriel', () => {
+    expect(texteDeLaCarteVide('diner', true, ids(THAUBA))).toBe('+ Noter ce que Thauba a mangé ce soir')
+    const trois = [...MEMBRES, { id: 'u-marc', prenom: 'Marc' }]
+    expect(texteDeLaCarteVide('dejeuner', true, { ids: [THAUBA, 'u-marc'], membres: trois, moi: KAMIL }))
+      .toBe('+ Noter ce que Thauba et Marc ont mangé ce midi')
+  })
+  it('le moment, en mots', () => {
+    expect(MOT_DU_MOMENT.diner).toEqual({ au: 'au soir', du: 'du soir' })
+    expect(MOT_DU_MOMENT.dejeuner.au).toBe('au midi')
+    expect(MOT_DU_MOMENT.petit_dejeuner.au).toBe('au petit déjeuner')
+    expect(MOT_DU_MOMENT.collation).toEqual({ au: 'à la collation', du: 'de la collation' })
   })
 })
 

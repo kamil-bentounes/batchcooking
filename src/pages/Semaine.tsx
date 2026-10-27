@@ -2,10 +2,13 @@
  * La semaine qu'on choisit (maquette `Semaine.dc.html`, hors dépôt : `~/PERSO/sauvegardes-popote/maquettes-2026-10-26-frigo/`).
  *
  * « Pour les repas de la semaine, je veux que ce soit moi qui choisisse ce que je souhaite manger tous les jours. »
- * Sept jours en bandeau, avec deux points (midi, soir) qui disent d'où vient le repas ; le jour choisi a deux
- * cartes, vides (« + Choisir le midi ») ou pleines (le plat, pour qui, « Changer », « Je l'ai mangé ») ; un plat
- * congelé porte un bandeau bleu qui dit quand le sortir ; la feuille de choix propose le frigo (le plus pressé
- * d'abord), le congélateur, puis autre chose. On peut changer le repas le jour même.
+ * Le bandeau remonte de sept jours : sept jours passés, aujourd'hui, les six suivants, avec deux points (midi, soir) qui
+ * disent d'où vient le repas ; le jour choisi a deux cartes, vides (« + Choisir le midi ») ou pleines (le plat, pour qui,
+ * « Changer », « Je l'ai mangé ») ; un plat congelé porte un bandeau bleu qui dit quand le sortir ; la feuille de choix
+ * propose le frigo (le plus pressé d'abord), le congélateur, puis autre chose. On peut changer le repas le jour même.
+ *
+ * Un jour PASSÉ se note : « + Noter ce que j'ai mangé ce midi » ouvre la même feuille, et ce qu'on y choisit est
+ * mangé (le repas a eu lieu : `choisir_un_repas`, 0128) ; un repas posé mais pas marqué mangé dit « pas encore noté ».
  *
  * Rien n'est distribué tout seul : après « On range », c'est cet écran qui remplit la semaine. Ce qui reste de
  * l'ancien écran : les extras (le petit déjeuner, la collation, « en plus »), et « sauté », qui est une réponse
@@ -29,11 +32,11 @@ import type { Case, Choix } from '../lib/donnees/barquettes.ts'
 import { usePrevus, useRecettesDesPlats } from '../lib/donnees/frigo.ts'
 import { useAliments } from '../lib/donnees/aliments.ts'
 import { useRappelActif } from '../lib/donnees/rappels.ts'
-import { choixDeLUnite, detailDeLUnite, ecrit, valeursDeLUnite } from '../lib/aliments/calcul.ts'
+import { detailDeLUnite, ecrit, valeursDeLUnite } from '../lib/aliments/calcul.ts'
 import { groupeLesParts, lisLeJour, nomCourt } from '../lib/frigo.ts'
 import {
   MOMENTS_EN_PLUS, REPAS_CHOISIS, MOT_DU_REPAS, caseVide, cartesDuRepas, contenuDe, couleurDuPoint, joursDuBandeau,
-  lisLAdresse, messageDeLiberation, pourDit, titreDeLaFeuille,
+  lisLAdresse, messageDeLiberation, titreDeLaFeuille,
 } from '../lib/choix.ts'
 import type { CaseLue, Carte, PointDuJour, RepasChoisi } from '../lib/choix.ts'
 import { maintenant } from '../lib/horloge.ts'
@@ -53,7 +56,8 @@ export function Semaine({ userId, va, remplace }: {
   const demande = useMemo(() => lisLAdresse(window.location.search, jours), [jours])
 
   const { data: foyer, isPending: foyerEnCours, error: erreurFoyer } = useFoyer()
-  const { data: cases, isPending, error: erreurCases } = useSemaine(debut, 7)
+  /* Le bandeau remonte : la semaine se lit depuis son premier jour (sept jours avant aujourd'hui). */
+  const { data: cases, isPending, error: erreurCases } = useSemaine(lisLeJour(jours[0].jour), jours.length)
   const { data: lesPrevus, error: erreurPrevus } = usePrevus()
   const lectureBarquettes = useBarquettes()
   const lectureFrequents = useFrequents()
@@ -163,9 +167,9 @@ export function Semaine({ userId, va, remplace }: {
     saute.mutate({ jour: jourChoisi.jour, repas: moment, personnes: [userId], choix: { type: 'saute' } })
   }
 
-  /* Une unité de chacun de nos aliments : un geste, avec ses vraies valeurs. */
+  /* Nos aliments : une ligne chacun, avec les valeurs d'UNE unité ; un appui demande « combien ? ». */
   const nosAliments: NotreAliment[] = aliments.map(a => ({
-    id: a.id, label: a.label, remplace_repere: a.remplace_repere, detail: detailDeLUnite(a), reste: `${ecrit(valeursDeLUnite(a).kcal)} kcal`, choix: choixDeLUnite(a),
+    id: a.id, label: a.label, remplace_repere: a.remplace_repere, detail: detailDeLUnite(a), reste: `${ecrit(valeursDeLUnite(a).kcal)} kcal`, aliment: a,
   }))
 
   const dejaMange = feuille
@@ -187,7 +191,13 @@ export function Semaine({ userId, va, remplace }: {
         <div className="flex items-baseline gap-2.5">
           <h2 className="titre text-[24px] font-semibold">{jourChoisi.long}</h2>
           {jourChoisi.aujourdhui && <span className="text-[13px] font-bold text-herbe">aujourd’hui</span>}
+          {jourChoisi.hier && <span data-hier="" className="text-[13px] font-bold text-ocre">hier</span>}
         </div>
+        {jourChoisi.passe && (
+          <p data-jour-passe="" className="mt-1 text-[15px] leading-[1.45] text-doux">
+            Un jour passé : tu notes ce que tu as mangé. Les barquettes que tu coches sortent du frigo ou du congélateur.
+          </p>
+        )}
 
         <div role="status" aria-live="polite">
           {message && (
@@ -221,14 +231,14 @@ export function Semaine({ userId, va, remplace }: {
                                     photo={c.genre === 'plat' ? photoDe(c.recipeId) : null}
                                     maintenant={now} rappelActif={rappelActif}
                                     surChange={() => ouvre(m, pourDeLaCarte(carte, sansChoix, membres.length), carte.cle)}
-                                    surMange={surMange} enCours={mange.isPending}
+                                    surMange={surMange} enCours={mange.isPending} passe={jourChoisi.passe}
                                     enPlus={mienne && c.genre === 'plat'
-                                      ? <EnPlus cas={laMienne!} frequents={frequents} nosAliments={aliments} /> : null} />
+                                      ? <EnPlus cas={laMienne!} frequents={frequents} nosAliments={aliments} userId={userId} /> : null} />
                     )
                   })}
                   {(cartes.length === 0 || sansChoix.length > 0) && (
-                    <CarteVide repas={m}
-                               pour={cartes.length > 0 ? pourDit(sansChoix, membres) : undefined}
+                    <CarteVide repas={m} passe={jourChoisi.passe}
+                               pour={cartes.length > 0 ? { ids: sansChoix, membres, moi: userId } : undefined}
                                surOuvre={() => ouvre(m, pourDeLaCarte(undefined, sansChoix, membres.length), 'vide')} />
                   )}
                 </div>
@@ -256,7 +266,7 @@ export function Semaine({ userId, va, remplace }: {
                     </button>
                   )}
                 </div>
-                <EnPlus cas={c} frequents={frequents} nosAliments={aliments} />
+                <EnPlus cas={c} frequents={frequents} nosAliments={aliments} userId={userId} />
               </div>
             )
           })}
@@ -271,7 +281,7 @@ export function Semaine({ userId, va, remplace }: {
         fermer={ferme}
         titre={feuille ? titreDeLaFeuille(jourChoisi, feuille.repas) : 'Choisir un repas'}
         repas={feuille?.repas ?? 'diner'} jour={jourChoisi.jour} membres={membres}
-        pourInitial={feuille?.pour ?? 'tous'} dejaMange={dejaMange}
+        pourInitial={feuille?.pour ?? 'tous'} dejaMange={dejaMange} moi={userId}
         groupes={groupes} prevus={lesPrevus ?? null} maintenant={now} photoDe={photoDe} frequents={frequents}
         lectures={{
           barquettes: { enCours: lectureBarquettes.isPending, erreur: lectureBarquettes.error },
