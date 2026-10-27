@@ -36,10 +36,10 @@ Le calcul s’affiche (« 114 kcal · 3 g de protéines »), puis **« Ajouter a
 
 Sous la saisie à la main, après « ou », **« Photographier l’étiquette »** ouvre une feuille « L’étiquette, en plus du soir » et lance la lecture :
 - la photo, jusqu’à trois (« Reprendre la photo », « Ajouter l’autre face ») ;
-- **« Dis-moi ce que c’est (facultatif) »**, 300 caractères au plus (« Skyr vanille, pot de 150 g. J’ai mangé le pot entier. »), puis **« Relire avec cette consigne »**. C’est un indice pour le nom, l’unité et le poids : les valeurs nutritionnelles se recopient toujours de l’étiquette ;
+- **« Dis-moi ce que c’est (facultatif) »**, 300 caractères au plus (« Skyr vanille, pot de 150 g. J’ai mangé le pot entier. »), puis **« Relire avec cette consigne »**. C’est un indice pour le nom, l’unité et le poids : les valeurs nutritionnelles se recopient toujours de l’étiquette. Ce que tu as corrigé à la main reste ;
 - « Lu sur l’étiquette, pour 100 g », avec **« Corriger »** pour retaper un chiffre ;
 - **« J’en ai mangé, en grammes »**, déjà rempli du poids lu, et le calcul (« 96 kcal · 14,3 g prot. ») ;
-- la case **« Le garder dans nos aliments, sous « Skyr vanille » »**, cochée d’office. Il garde ses valeurs pour 100 g et, si l’étiquette ou la consigne la donne, son unité (« pot ») et son poids ; sinon c’est un aliment au gramme. Décochée, rien n’est gardé ;
+- la case **« Le garder dans nos aliments, sous « Skyr vanille » »**, cochée d’office. Il garde ses valeurs pour 100 g et, si l’étiquette ou la consigne la donne, son unité (« pot ») et son poids ; sinon c’est un aliment au gramme. Si ce nom existe déjà dans nos aliments, c’est lui qui sert. Décochée, rien n’est gardé ;
 - **« Ajouter au soir »**.
 
 Calories et protéines sont exigées (« Il manque les calories. »). Le délai, les pannes et le quota (40 étiquettes par mois et par foyer, chaque lecture compte) sont ceux de la lecture dans « cuisine-nos-aliments-creer ».
