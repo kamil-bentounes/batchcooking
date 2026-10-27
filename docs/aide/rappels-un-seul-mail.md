@@ -12,11 +12,11 @@ sources:
   - supabase/migrations/0126_rappels.sql
   - supabase/functions/_shared/rappels/mails.ts
   - supabase/functions/_shared/rappels/texte.ts
-verifie_sur: 0021cf9
+verifie_sur: 8748fad
 ---
 ## Un mail perdu vaut mieux qu’un doublon
 
-Popote n’envoie jamais deux fois le même mail. Quand un rappel est parti pour un jour, une semaine ou un mois, il ne repart pas, même si la situation change après coup.
+Popote n’envoie jamais deux fois le même mail. Quand un rappel est parti pour un jour, une semaine ou un mois, il ne repart pas, même si la situation change après coup. Un rappel coupé juste avant son heure ne part pas : Popote revérifie l’interrupteur au moment d’envoyer.
 
 ## Après le mail de 19 h
 

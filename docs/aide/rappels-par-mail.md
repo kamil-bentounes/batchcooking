@@ -17,7 +17,7 @@ sources:
   - supabase/functions/rappels/index.ts
   - supabase/functions/_shared/rappels/mails.ts
   - supabase/functions/_shared/rappels/service.ts
-verifie_sur: 0021cf9
+verifie_sur: 8748fad
 ---
 ## Ce que fait l’appli
 
@@ -33,7 +33,7 @@ Tes réglages sont à toi seul. L’autre personne du foyer ne voit pas les tien
 
 ## Tester
 
-« M’envoyer un exemple » envoie UN mail d’exemple, avec « [Exemple] » devant le sujet, à ton adresse seulement. Les données sont inventées ; il ne compte pour rien et n’empêche aucun vrai rappel de partir. Un seul exemple par rappel et par heure : un second, dans la même heure, répond « Tu as déjà demandé cet exemple pendant cette heure ».
+« M’envoyer un exemple » envoie UN mail d’exemple, avec « [Exemple] » devant le sujet, à ton adresse seulement. Il faut que ton adresse soit confirmée, sinon l’écran répond « Confirme d’abord ton adresse e-mail. ». Les données sont inventées ; il ne compte pour rien et n’empêche aucun vrai rappel de partir. Un seul exemple par rappel et par heure : un second, dans la même heure, répond « Tu as déjà demandé cet exemple pendant cette heure ».
 
 ## Si rien n’arrive
 

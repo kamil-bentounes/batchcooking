@@ -15,7 +15,7 @@ sources:
   - supabase/migrations/0126_rappels.sql
   - supabase/functions/_shared/rappels/mails.ts
   - supabase/functions/_shared/rappels/texte.ts
-verifie_sur: 0021cf9
+verifie_sur: 8748fad
 ---
 ## Les sept rappels (heure de Paris)
 
