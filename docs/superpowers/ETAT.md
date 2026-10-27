@@ -1,6 +1,6 @@
 # Finaliser Popote : où on en est
 
-Mis à jour le 22/10/2026. Le chantier 2 (Recettes) est EN LIGNE depuis le 21/10 (migration 0092,
+Mis à jour le 27/10/2026 (livraison 1 en ligne, voir plus bas). Avant : Le chantier 2 (Recettes) est EN LIGNE depuis le 21/10 (migration 0092,
 fonction `importer`, recalcule, site, 1 426 photos relues). Le chantier 3 (Budget) est CODÉ sur
 `feat/budget-refait` ; le chantier 4 (le grand test) est en cours. Kamil a donné son « go » le 21/10 : finir seul, tout tester en local
 (front et base, tous les parcours), tout corriger, puis tout pousser en prod.
@@ -26,6 +26,16 @@ vrais tests au navigateur.
 
 Les tests unitaires seuls ne suffisent pas. Les agents tournent en **Sonnet 5.5, effort
 high** : c'est sa demande, notée en mémoire sous `agents-en-sonnet-high`.
+
+## En ligne le 27/10/2026 (livraison 1)
+
+- **Migrations 0120 à 0127 en prod**, après une sauvegarde (`~/PERSO/sauvegardes-popote/2026-10-27-livraison-1/`) et une répétition à blanc. La tâche `rappels-par-mail` tourne (5 de chaque heure) ; pg_cron, pg_net et Vault sont là. 31 repas et 35 barquettes intacts.
+- **Fonctions** `rappels` (v1, verify_jwt=false) et `aide` (v4, manuel regénéré).
+- **Site** publié (bundle `index-BBktHjsA.js`) ; `main` et `feat/budget-refait` poussés à e9354ff.
+- **Ce qui part** : la porte du frigo (connexion), le hub « ma journée », le frigo et la semaine en cours, Nos aliments, les rappels par mail, les réglages refaits, les corrections de revue.
+- **Tests** : `npm test` 3 921 verts (le seul rouge, « un repas d'hier ne se choisit plus », vient de 0128 posée sur la base locale par la branche suivante) ; les 29 specs e2e vertes, les liens de réinitialisation et d'invitation sur le port 4173 avec `supabase functions serve`.
+- **Reste à faire par Kamil** : `python3 ~/PERSO/sauvegardes-popote/outils-prod/secrets_rappels.py` (le classifieur m'interdit d'écrire des secrets). Sans lui, les rappels ne partent pas (`sans_secret` dans `rappel_passe`), sans autre dégât. Ensuite, un mail d'essai avec « M'envoyer un exemple ».
+- **Livraison 2** : `feat/semaine-hier` (worktree `~/PERSO/popote-wt/hier`), hier et le dessert, migration 0128, fonction `etiquette`. La revue adverse a trouvé 8 défauts, dont le principal : un jour passé était noté pour tout le foyer. Les corrections sont en cours, puis viendront la fusion, les tests et le déploiement (0128 AVANT le site : le front envoie `aliment_id`).
 
 ## Reprendre ici
 
