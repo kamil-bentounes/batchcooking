@@ -10,7 +10,9 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'node:crypto'
 import { admin, type Actor } from './helpers/db'
-import { foyerSolo, membre, ou, poseCharge, type Foyer } from './helpers/budget'
+import { clos, foyerSolo, membre, ou, poseCharge, type Foyer } from './helpers/budget'
+import { connexion, URL_PG_ADMIN } from './helpers/pg'
+import { readFileSync } from 'node:fs'
 
 const db = admin()
 
@@ -272,9 +274,9 @@ describe('sortir_du_congelateur : la veille à 19 h', () => {
   })
 })
 
-describe('barquette_perime : à 8 h, ce qui périme avant demain soir et n’est prévu nulle part', () => {
+describe('barquette_perime : à 8 h, UN mail par membre et par jour pour ce qui périme et n’est prévu nulle part', () => {
   const MARDI_8H = '2030-06-11T06:00:00Z'
-  it('regroupe les barquettes d’un plat, une clé par barquette', async () => {
+  it('regroupe tout dans un seul mail, par plat ; la clé est la date, chaque barquette est réservée avec', async () => {
     const d = await duo()
     const f = d.k.householdId
     // Trois lasagnes qui périment demain 21 h (Paris), non prévues.
@@ -287,35 +289,70 @@ describe('barquette_perime : à 8 h, ce qui périme avant demain soir et n’est
     expect(dus).toHaveLength(1)
     const x = dus[0]
     expect(x.type).toBe('barquette_perime')
-    expect([...x.cles].sort()).toEqual(trois.map(t => t.id).sort())
-    expect(trois.map(t => t.id)).toContain(x.cle)
-    expect(x.donnees.label).toBe('Lasagnes saumon')
+    expect(x.cle, 'la clé est la date du jour').toBe('2030-06-11')
+    expect(x.cles[0]).toBe('2030-06-11')
+    expect([...x.cles.slice(1)].sort()).toEqual(trois.map(t => t.id).sort())
     expect(x.donnees.n).toBe(3)
-    expect(new Date(x.donnees.expire).toISOString()).toBe('2030-06-12T19:00:00.000Z')
-    expect(x.donnees.frigo).toEqual([{ label: 'Lasagnes saumon', n: 3, libres: 3 }])
+    const plats = x.donnees.plats as any[]
+    expect(plats).toHaveLength(1)
+    expect(plats[0].label).toBe('Lasagnes saumon')
+    expect(plats[0].n).toBe(3)
+    expect([...plats[0].portion_ids].sort()).toEqual(trois.map(t => t.id).sort())
+    expect(new Date(plats[0].expire).toISOString()).toBe('2030-06-12T19:00:00.000Z')
+    expect(plats[0].tardives).toEqual([])
     expect(await du('2030-06-11T21:59:00Z', ids), '23 h 59 : encore dû').toHaveLength(1)
 
-    // Réservées, elles ne reviennent pas ; une quatrième barquette fait un nouveau mail pour elle seule.
+    // Réservé (la date et les trois barquettes), il ne revient pas ; une quatrième barquette attend le lendemain.
     expect((await db.rpc('reserve_rappel', { p_user: d.k.userId, p_type: 'barquette_perime', p_cles: x.cles })).data).toBe(true)
     expect(await du(MARDI_8H, ids)).toEqual([])
-    const quatre = await portion(f, { label: 'Lasagnes saumon', expire: '2030-06-12T19:00:00Z' })
-    const encore = await du(MARDI_8H, ids)
-    expect(encore).toHaveLength(1)
-    expect(encore[0].cles).toEqual([quatre.id])
-    expect(encore[0].donnees.n).toBe(1)
+    await portion(f, { label: 'Lasagnes saumon', expire: '2030-06-12T19:00:00Z' })
+    expect(await du(MARDI_8H, ids), 'un mail par jour : la quatrième barquette attend demain').toEqual([])
+    const demain = await du('2030-06-12T06:00:00Z', ids)
+    expect(demain).toHaveLength(1)
+    expect(demain[0].cle).toBe('2030-06-12')
+    expect(demain[0].donnees.n, 'les trois déjà annoncées ne le sont pas deux fois').toBe(1)
   })
 
-  it('ne compte pas ce qui est prévu, ce qui périme plus tard, ce qui est déjà périmé, ni le congélateur', async () => {
+  it('quatre plats, un seul rang : UN mail, les quatre plats dedans', async () => {
+    const d = await duo()
+    const f = d.k.householdId
+    await portion(f, { label: 'Lasagnes', expire: '2030-06-12T19:00:00Z' })
+    await portion(f, { label: 'Lasagnes', expire: '2030-06-12T19:00:00Z' })
+    await portion(f, { label: 'Soupe', expire: '2030-06-12T07:00:00Z' })
+    await portion(f, { label: 'Pizza', expire: '2030-06-12T10:00:00Z' })
+    await portion(f, { label: 'Wrap', expire: '2030-06-11T20:00:00Z' })
+    await active(d.k.userId, 'barquette_perime')
+    await active(d.t.userId, 'barquette_perime')
+    const dus = await du(MARDI_8H, [d.k.userId, d.t.userId])
+    // Un mail par MEMBRE (deux ont activé), un seul chacun, pas un par plat.
+    expect(dus.map(x => x.user_id).sort()).toEqual([d.k.userId, d.t.userId].sort())
+    for (const x of dus) {
+      expect(x.donnees.n).toBe(5)
+      expect((x.donnees.plats as any[]).map(p => p.label)).toEqual(['Wrap', 'Soupe', 'Pizza', 'Lasagnes'])   // du plus pressé au moins pressé
+    }
+    const seul = await du(MARDI_8H, [d.k.userId])
+    expect(seul, '4 plats : 1 ligne').toHaveLength(1)
+  })
+
+  it('ne compte pas ce qui est prévu à temps, ce qui périme plus tard, ce qui a péri il y a plus de 24 h, ni le congélateur', async () => {
     const d = await duo()
     const f = d.k.householdId
     const prevue = await portion(f, { label: 'Prévue', expire: '2030-06-12T19:00:00Z' })
     await repas(f, d.k.userId, '2030-06-12', 'diner', prevue.id)
     await portion(f, { label: 'Plus tard', expire: '2030-06-12T22:30:00Z' }) // 00 h 30 le 13 : après demain soir
-    await portion(f, { label: 'Déjà périmée', expire: '2030-06-10T10:00:00Z' })
+    await portion(f, { label: 'Périmée depuis longtemps', expire: '2030-06-10T05:00:00Z' }) // il y a 25 h
     await portion(f, { label: 'Congelée', lieu: 'congelateur', expire: '2030-06-12T19:00:00Z' })
     await portion(f, { label: 'Mangée', etat: 'mangee', expire: '2030-06-12T19:00:00Z' })
     await active(d.k.userId, 'barquette_perime')
     expect(await du(MARDI_8H, [d.k.userId])).toEqual([])
+  })
+
+  it('une barquette périmée depuis moins de 24 h est dans le mail (il dira « à jeter »)', async () => {
+    const d = await duo()
+    await portion(d.k.householdId, { label: 'Soupe', expire: '2030-06-10T07:00:00Z' })   // il y a 23 h
+    await active(d.k.userId, 'barquette_perime')
+    const [x] = await du(MARDI_8H, [d.k.userId])
+    expect(new Date((x.donnees.plats as any[])[0].expire).getTime()).toBeLessThan(new Date(MARDI_8H).getTime())
   })
 
   it('une réclamation d’un jour passé ne la retient pas ; avant demain soir, jusqu’à 23 h 59 demain', async () => {
@@ -325,6 +362,22 @@ describe('barquette_perime : à 8 h, ce qui périme avant demain soir et n’est
     await repas(f, d.k.userId, '2030-06-09', 'diner', vieille.id) // un repas passé, jamais noté
     await active(d.k.userId, 'barquette_perime')
     expect(await du(MARDI_8H, [d.k.userId])).toHaveLength(1)
+  })
+
+  it('prévue pour un repas APRÈS sa péremption : elle compte comme non prévue, avec le jour du repas', async () => {
+    const d = await duo()
+    const f = d.k.householdId
+    const tard = await portion(f, { label: 'Soupe', expire: '2030-06-12T19:00:00Z' })           // périme mercredi 12, 21 h
+    await repas(f, d.k.userId, '2030-06-15', 'dejeuner', tard.id)                                // prévue samedi 15
+    const aTemps = await portion(f, { label: 'Riz', expire: '2030-06-12T19:00:00Z' })
+    await repas(f, d.k.userId, '2030-06-12', 'diner', aTemps.id)                                 // prévue mercredi soir : à temps
+    const memeJour = await portion(f, { label: 'Pâtes', expire: '2030-06-12T19:00:00Z' })
+    await repas(f, d.k.userId, '2030-06-12', 'dejeuner', memeJour.id)                            // le jour même : à temps
+    await active(d.k.userId, 'barquette_perime')
+    const [x] = await du(MARDI_8H, [d.k.userId])
+    const plats = x.donnees.plats as any[]
+    expect(plats.map(p => p.label), 'seule la soupe : le riz et les pâtes sont prévus à temps').toEqual(['Soupe'])
+    expect(plats[0].tardives).toEqual(['2030-06-15'])
   })
 
   it('à l’heure de Paris, 8 h d’hiver est 7 h UTC', async () => {
@@ -573,9 +626,12 @@ describe('facture_annuelle : 15 jours avant le mois où la charge se paie', () =
     expect(await du('2030-08-17T06:59:00Z', ids), '8 h 59').toEqual([])
     const dus = await du('2030-08-17T07:00:00Z', ids)
     expect(dus.map(x => x.user_id), 'seuls les participants de la charge').toEqual([d.k.userId])
-    expect(dus[0].cle).toBe(`${charge}:2030`)
-    expect(dus[0].donnees.mois).toBe('2030-09-01')
-    expect(dus[0].donnees.derniere_montant_cents).toBe(142_000)
+    expect(dus[0].cle, 'la clé est la date').toBe('2030-08-17')
+    expect(dus[0].cles).toEqual(['2030-08-17', `${charge}:2030`])
+    expect(dus[0].donnees.n).toBe(1)
+    const c = (dus[0].donnees.charges as any[])[0]
+    expect(c.mois).toBe('2030-09-01')
+    expect(c.derniere_montant_cents).toBe(142_000)
     expect(await du('2030-08-16T07:00:00Z', ids), 'la veille').toEqual([])
     expect(await du('2030-08-18T07:00:00Z', ids), 'le lendemain').toEqual([])
   })
@@ -603,8 +659,23 @@ describe('facture_annuelle : 15 jours avant le mois où la charge se paie', () =
     await active(d.k.userId, 'facture_annuelle')
     const dus = await du('2030-12-17T08:00:00Z', [d.k.userId])   // 9 h CET
     expect(dus).toHaveLength(1)
-    expect(dus[0].cle).toBe(`${charge}:2031`)
-    expect(dus[0].donnees.mois).toBe('2031-01-01')
+    expect(dus[0].cles).toEqual(['2030-12-17', `${charge}:2031`])
+    expect((dus[0].donnees.charges as any[])[0].mois).toBe('2031-01-01')
+  })
+
+  it('deux charges le même jour : UN mail par membre, les deux listées, les deux réservées avec la date', async () => {
+    const d = await duo()
+    const a = await chargeAnnuelle(d, '2029-09-14')
+    const b = await chargeAnnuelle(d, '2029-09-20')
+    await chargeAnnuelle(d, '2029-10-02')   // un autre mois : pas ce jour-là
+    await active(d.k.userId, 'facture_annuelle')
+    const dus = await du('2030-08-17T07:00:00Z', [d.k.userId])
+    expect(dus).toHaveLength(1)
+    expect(dus[0].donnees.n).toBe(2)
+    expect((dus[0].donnees.charges as any[]).map(c => c.charge_id).sort()).toEqual([a, b].sort())
+    expect(dus[0].cles).toHaveLength(3)
+    expect((await db.rpc('reserve_rappel', { p_user: d.k.userId, p_type: 'facture_annuelle', p_cles: dus[0].cles })).data).toBe(true)
+    expect(await du('2030-08-17T07:00:00Z', [d.k.userId]), 'réservé : plus rien').toEqual([])
   })
 
   it('une charge retirée n’est plus annoncée', async () => {
@@ -671,5 +742,327 @@ describe('jamais deux fois', () => {
     for (const t of TYPES) await active(d.k.userId, t)
     const lus = ou(await d.k.client.from('rappel_reglage').select('type').order('type')) as { type: string }[]
     expect(lus.map(l => l.type).sort()).toEqual([...TYPES].sort())
+  })
+})
+
+
+// ═══ La revue du chantier 5 ═══════════════════════════════════════════════════════════════════════════════
+
+/** Les lignes de budget d'un foyer, tous mois confondus. */
+async function lignesDuFoyer(foyer: string, mois?: string) {
+  let q = db.from('depense').select('id, mois, libelle, facon').eq('household_id', foyer)
+  if (mois) q = q.eq('mois', mois)
+  return ou(await q) as { id: string; mois: string; libelle: string; facon: string }[]
+}
+async function prepare(iso: string) {
+  const r = await db.rpc('prepare_les_rappels', { p_maintenant: iso })
+  expect(r.error, r.error?.message).toBeNull()
+  return r.data as { purges: number; foyers: number; lignes_nees: number; erreurs: number }
+}
+
+describe('M1 : les rappels du budget voient un mois que personne n’a ouvert', () => {
+  const PREMIER_9H = '2030-07-01T07:00:00Z'
+  const DIM_20H = '2030-06-09T18:00:00Z'
+  const FIN_19H = '2030-06-30T17:00:00Z'
+
+  it('confirmer_les_charges : sans préparation rien ; après, la facture du mois fini est là (lignes NON posées à la main)', async () => {
+    const d = await duo()
+    await poseCharge(d.k, { libelle: 'Électricité', cents: 10_000, mode: 'facture', participants: [d.k.userId] })
+    await poseCharge(d.k, { libelle: 'Loyer', cents: 90_000, mode: 'fixe', participants: [d.k.userId] })
+    await active(d.k.userId, 'confirmer_les_charges')
+    expect(await lignesDuFoyer(d.k.householdId), 'aucune ligne : personne n’a ouvert le mois').toEqual([])
+    expect(await du(PREMIER_9H, [d.k.userId]), 'le mois n’est pas ouvert : le rappel ne voit rien').toEqual([])
+
+    const r = await prepare(PREMIER_9H)
+    expect(r.foyers).toBeGreaterThan(0)
+    expect(r.erreurs).toBe(0)
+    expect((await lignesDuFoyer(d.k.householdId, '2030-06-01')).map(l => l.libelle).sort()).toEqual(['Loyer', 'Électricité'].sort())
+    expect((await lignesDuFoyer(d.k.householdId, '2030-07-01')).length, 'le mois en cours aussi').toBe(2)
+
+    const [x] = await du(PREMIER_9H, [d.k.userId])
+    expect(x.type).toBe('confirmer_les_charges')
+    expect(x.donnees.n).toBe(1)
+    expect((x.donnees.lignes as any[]).map(l => l.libelle)).toEqual(['Électricité'])
+  })
+
+  it('l’ouverture est idempotente : une seconde passe ne crée rien', async () => {
+    const d = await duo()
+    await poseCharge(d.k, { libelle: 'Électricité', cents: 10_000, mode: 'facture' })
+    await active(d.k.userId, 'confirmer_les_charges')
+    await prepare(PREMIER_9H)
+    const avant = await lignesDuFoyer(d.k.householdId)
+    await prepare(PREMIER_9H)
+    expect((await lignesDuFoyer(d.k.householdId)).map(l => l.id).sort()).toEqual(avant.map(l => l.id).sort())
+  })
+
+  it('noter_les_depenses : la ligne « au fil » du mois en cours naît, le dimanche à 20 h', async () => {
+    const d = await duo()
+    await poseCharge(d.k, { libelle: 'Courses', cents: 50_000, mode: 'au_fil', participants: [d.k.userId] })
+    await active(d.k.userId, 'noter_les_depenses')
+    expect(await du(DIM_20H, [d.k.userId])).toEqual([])
+    await prepare(DIM_20H)
+    const [x] = await du(DIM_20H, [d.k.userId])
+    expect(x.type).toBe('noter_les_depenses')
+    expect(x.donnees.lignes).toBe(1)
+  })
+
+  it('cloturer_le_mois : le dernier jour, le mois jamais ouvert est ouvert, puis annoncé', async () => {
+    const d = await duo()
+    await poseCharge(d.k, { libelle: 'Loyer', cents: 90_000, mode: 'fixe', participants: [d.k.userId] })
+    await active(d.k.userId, 'cloturer_le_mois')
+    expect(await du(FIN_19H, [d.k.userId])).toEqual([])
+    await prepare(FIN_19H)
+    const [x] = await du(FIN_19H, [d.k.userId])
+    expect(x.cle).toBe('2030-06')
+    expect(x.donnees.lignes).toBe(1)
+  })
+
+  it('un foyer où personne n’a activé de rappel du budget n’est PAS touché', async () => {
+    const d = await duo()
+    await poseCharge(d.k, { libelle: 'Électricité', cents: 10_000, mode: 'facture' })
+    await active(d.k.userId, 'sortir_du_congelateur')   // un rappel de cuisine : ne justifie pas d'ouvrir un mois
+    await prepare(PREMIER_9H)
+    expect(await lignesDuFoyer(d.k.householdId)).toEqual([])
+  })
+
+  it('un mois clôturé ne gagne aucune ligne', async () => {
+    const d = await duo()
+    await poseCharge(d.k, { libelle: 'Électricité', cents: 10_000, mode: 'facture' })
+    await clos(d.k, '2030-06-01')
+    await active(d.k.userId, 'confirmer_les_charges')
+    await prepare(PREMIER_9H)
+    expect(await lignesDuFoyer(d.k.householdId, '2030-06-01')).toEqual([])
+    expect((await lignesDuFoyer(d.k.householdId, '2030-07-01')).length).toBe(1)
+  })
+
+  it('un membre sans adresse confirmée n’ouvre rien (il n’est pas joignable)', async () => {
+    const d = await duo()
+    await poseCharge(d.k, { libelle: 'Électricité', cents: 10_000, mode: 'facture' })
+    await active(d.k.userId, 'confirmer_les_charges')
+    const c = await connexion(URL_PG_ADMIN)
+    try { await c.query('update auth.users set email_confirmed_at = null where id = $1', [d.k.userId]) } finally { await c.end() }
+    await prepare(PREMIER_9H)
+    expect(await lignesDuFoyer(d.k.householdId)).toEqual([])
+  })
+
+  it('réservée au rôle de service', async () => {
+    const d = await duo()
+    expect((await d.k.client.rpc('prepare_les_rappels', { p_maintenant: PREMIER_9H })).error).not.toBeNull()
+    expect((await d.k.client.rpc('note_la_passe', { p_statut: 'ok', p_dus: 0, p_envoyes: 0, p_echecs: 0 })).error).not.toBeNull()
+    expect((await d.k.client.rpc('rappel_prenom', { p_nom: 'x', p_repli: 'y' })).error).not.toBeNull()
+  })
+})
+
+describe('M4 : une panne se voit', () => {
+  it('note_la_passe écrit une ligne sans adresse ni contenu ; le statut est contrôlé ; le client ne la lit pas', async () => {
+    const d = await duo()
+    const avant = ou(await db.from('rappel_passe').select('id').eq('origine', 'fonction')).length
+    ou(await db.rpc('note_la_passe', { p_statut: 'echecs', p_dus: 3, p_envoyes: 2, p_echecs: 1 }))
+    const lues = ou(await db.from('rappel_passe').select('*').eq('origine', 'fonction').order('id', { ascending: false }).limit(1)) as any[]
+    expect(ou(await db.from('rappel_passe').select('id').eq('origine', 'fonction')).length).toBe(avant + 1)
+    expect(lues[0]).toMatchObject({ origine: 'fonction', statut: 'echecs', dus: 3, envoyes: 2, echecs: 1 })
+    expect(Object.keys(lues[0]).sort()).toEqual(['dus', 'echecs', 'envoyes', 'id', 'le', 'origine', 'statut'])
+    expect((await db.rpc('note_la_passe', { p_statut: 'n’importe quoi', p_dus: 0, p_envoyes: 0, p_echecs: 0 })).error).not.toBeNull()
+    const lu = await d.k.client.from('rappel_passe').select('*')
+    expect(lu.error || lu.data!.length === 0, 'un membre lit le journal').toBeTruthy()
+  })
+
+  it('appelle_les_rappels laisse une ligne : sans secret, « sans_secret » ; avec, « appelee », délai de 60 s', async () => {
+    const c = await connexion()
+    try {
+      await c.query('begin')
+      await c.query('delete from public.rappel_passe where origine = $1', ['cron'])
+      await c.query('select public.appelle_les_rappels()')
+      let l = (await c.query(`select statut, dus from public.rappel_passe where origine = 'cron' order by id desc limit 1`)).rows[0]
+      expect(l.statut).toBe('sans_secret')
+      expect(l.dus).toBeNull()
+
+      await c.query(`select vault.create_secret('http://127.0.0.1:9/rappels', 'rappels_url')`)
+      await c.query(`select vault.create_secret('un-secret-de-test', 'rappels_secret')`)
+      await c.query('select public.appelle_les_rappels()')
+      l = (await c.query(`select statut from public.rappel_passe where origine = 'cron' order by id desc limit 1`)).rows[0]
+      expect(l.statut).toBe('appelee')
+      const file = (await c.query(`select timeout_milliseconds from net.http_request_queue order by id desc limit 1`)).rows[0]
+      expect(file.timeout_milliseconds, 'le délai de pg_net est de 60 s').toBe(60_000)
+      // Aucune adresse ni secret dans le journal.
+      const colonnes = (await c.query(`select * from public.rappel_passe where origine = 'cron' limit 1`)).rows[0]
+      expect(JSON.stringify(colonnes)).not.toMatch(/127\.0\.0\.1|un-secret/)
+    } finally {
+      await c.query('rollback').catch(() => {})
+      await c.end()
+    }
+  })
+
+  it('le job existe dans cron.job ; la migration le contrôle en fin de fichier (avertissement explicite s’il manque)', async () => {
+    const c = await connexion()
+    try {
+      const r = await c.query(`select schedule from cron.job where jobname = 'rappels-par-mail'`)
+      expect(r.rows).toEqual([{ schedule: '5 * * * *' }])
+    } finally { await c.end() }
+    const sql = readFileSync(new URL('../supabase/migrations/0126_rappels.sql', import.meta.url), 'utf8')
+    expect(sql).toMatch(/raise warning\s+'LES RAPPELS NE SONT PAS PLANIFIÉS/)
+    expect(sql).toContain("jobname = 'rappels-par-mail'")
+  })
+
+  it('la passe purge ce qui a plus de 120 jours (et rien de plus récent)', async () => {
+    const d = await duo()
+    ou(await db.from('rappel_envoye').insert([
+      { user_id: d.k.userId, type: 'sortir_du_congelateur', cle: 'vieux', envoye_le: '2030-01-01T10:00:00Z' },
+      { user_id: d.k.userId, type: 'sortir_du_congelateur', cle: 'recent', envoye_le: '2030-06-01T10:00:00Z' },
+    ]).select())
+    ou(await db.from('rappel_passe').insert([
+      { origine: 'cron', statut: 'appelee', le: '2030-01-01T10:00:00Z' }, { origine: 'cron', statut: 'appelee', le: '2030-06-10T10:00:00Z' },
+    ]).select())
+    const r = await prepare('2030-06-11T06:00:00Z')
+    expect(r.purges).toBeGreaterThanOrEqual(1)
+    const reste = (ou(await db.from('rappel_envoye').select('cle').eq('user_id', d.k.userId)) as { cle: string }[]).map(x => x.cle)
+    expect(reste).toEqual(['recent'])
+    const passes = ou(await db.from('rappel_passe').select('le').lt('le', '2030-06-11T00:00:00Z').gt('le', '2029-12-31T00:00:00Z')) as { le: string }[]
+    expect(passes.map(x => x.le.slice(0, 10)), 'les vieilles lignes du journal sont parties').not.toContain('2030-01-01')
+    expect(passes.map(x => x.le.slice(0, 10))).toContain('2030-06-10')
+  })
+})
+
+describe('L6 : les droits de table', () => {
+  it('ni truncate, ni references, ni trigger pour anon et authenticated sur les trois tables', async () => {
+    const c = await connexion()
+    try {
+      for (const t of ['rappel_reglage', 'rappel_envoye', 'rappel_passe']) {
+        for (const role of ['anon', 'authenticated']) {
+          for (const droit of ['TRUNCATE', 'REFERENCES', 'TRIGGER']) {
+            const r = await c.query('select has_table_privilege($1, $2, $3) as ok', [role, `public.${t}`, droit])
+            expect(r.rows[0].ok, `${role} ${droit} ${t}`).toBe(false)
+          }
+        }
+      }
+      // Ce que la RLS borne reste permis à authenticated sur les réglages ; rien sur le reste.
+      for (const droit of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) {
+        expect((await c.query(`select has_table_privilege('authenticated', 'public.rappel_reglage', $1) as ok`, [droit])).rows[0].ok, droit).toBe(true)
+        expect((await c.query(`select has_table_privilege('authenticated', 'public.rappel_envoye', $1) as ok`, [droit])).rows[0].ok, droit).toBe(false)
+        expect((await c.query(`select has_table_privilege('authenticated', 'public.rappel_passe', $1) as ok`, [droit])).rows[0].ok, droit).toBe(false)
+      }
+    } finally { await c.end() }
+  })
+})
+
+describe('L7 : les prénoms, normalisés partout', () => {
+  async function demain() {
+    const d = await duo()
+    const f = d.k.householdId
+    const w1 = await portion(f, { label: 'Wrap', lieu: 'congelateur' })
+    const w2 = await portion(f, { label: 'Wrap', lieu: 'congelateur' })
+    await repas(f, d.k.userId, '2030-06-12', 'diner', w1.id)
+    await repas(f, d.t.userId, '2030-06-12', 'diner', w2.id)
+    await active(d.k.userId, 'sortir_du_congelateur')
+    return d
+  }
+  const nom = async (id: string, display_name: string) => ou(await db.from('user_profile').update({ display_name }).eq('id', id).select())
+
+  it('le destinataire : premier mot, blancs retirés ; vide → « toi »', async () => {
+    const d = await demain()
+    await nom(d.k.userId, '  Kamil   Bentounes ')
+    expect((await du(MARDI_19H, [d.k.userId]))[0].prenom).toBe('Kamil')
+    await nom(d.k.userId, '   ')
+    const [x] = await du(MARDI_19H, [d.k.userId])
+    expect(x.prenom).toBe('toi')
+    // Lui-même, dans « pour qui », porte le prénom que le mail lui donne.
+    const pour = ((x.donnees.plats as any[])[0].repas as any[])[0].pour as string[]
+    expect(pour.sort()).toEqual(['Thauba', 'toi'].sort())
+  })
+
+  it('l’AUTRE membre : un nom piégé arrive tel quel (premier mot), vide → « Quelqu’un » — l’échappement est celui du gabarit', async () => {
+    const d = await demain()
+    await nom(d.t.userId, '<img src=x onerror=alert(1)> Dupont')
+    let [x] = await du(MARDI_19H, [d.k.userId])
+    let pour = ((x.donnees.plats as any[])[0].repas as any[])[0].pour as string[]
+    expect(pour.sort()).toEqual(['<img', 'Kamil'].sort())
+    await nom(d.t.userId, '  ')
+    ;[x] = await du(MARDI_19H, [d.k.userId])
+    pour = ((x.donnees.plats as any[])[0].repas as any[])[0].pour as string[]
+    expect(pour.sort()).toEqual(['Kamil', 'Quelqu’un'].sort())
+    // Et le mail, bâti avec ces données EXACTES, échappe le nom de l'autre.
+    await nom(d.t.userId, '<img src=x onerror=alert(1)> Dupont')
+    ;[x] = await du(MARDI_19H, [d.k.userId])
+    const { construis } = await import('../supabase/functions/_shared/rappels/mails.ts')
+    const m = construis(x.type, x.donnees, { base: 'https://exemple.test/app', maintenant: new Date(MARDI_19H), prenom: 'Léa' })
+    expect(m.html).not.toContain('<img src=x')
+    expect(m.html).toContain('&lt;img')
+  })
+})
+
+describe('L8 : clôturer — le revenu d’un autre membre', () => {
+  const FIN_19H = '2030-06-30T17:00:00Z'
+  async function leMois(o: { revenuThauba?: boolean; arriveeThauba?: string } = {}) {
+    const d = await duo()
+    await ligneDuMois(d, { libelle: 'Loyer', mois: '2030-06-01', facon: 'fixe', parts: [d.k, d.t] })
+    await active(d.k.userId, 'cloturer_le_mois')
+    if (o.revenuThauba) {
+      ou(await db.from('revenu').insert({
+        household_id: d.k.householdId, user_profile_id: d.t.userId, net_mensuel_cents: 250_000, valid_from: '2030-01-01',
+      }).select())
+    }
+    if (o.arriveeThauba) ou(await db.from('user_profile').update({ entre_le: o.arriveeThauba }).eq('id', d.t.userId).select())
+    return d
+  }
+
+  it('Thauba n’a pas posé son revenu : le mail le sait (« absent »), comme la clôture le refusera', async () => {
+    const d = await leMois()
+    const [x] = await du(FIN_19H, [d.k.userId])
+    expect(x.donnees.absent).toBe('Thauba')
+    // C'est la garde de `cloture_le_mois` (0108) : « Thauba n'a pas encore posé son revenu : juin attend. »
+    const garde = readFileSync(new URL('../supabase/migrations/0108_budget_cloture.sql', import.meta.url), 'utf8')
+    expect(garde).toContain("n''a pas encore posé son revenu")
+  })
+
+  it('son revenu posé, plus d’absent', async () => {
+    const d = await leMois({ revenuThauba: true })
+    const [x] = await du(FIN_19H, [d.k.userId])
+    expect(x.donnees.absent).toBeNull()
+  })
+
+  it('arrivée après la fin du mois : elle ne compte pas', async () => {
+    // Un mois fini avant l'arrivée de Thauba (la base borne les arrivées à l'avenir proche : on joue en septembre 2026).
+    const d = await duo()
+    await ligneDuMois(d, { libelle: 'Loyer', mois: '2026-09-01', facon: 'fixe', parts: [d.k] })
+    await active(d.k.userId, 'cloturer_le_mois')
+    const fin = '2026-09-30T17:00:00Z'
+    expect((await du(fin, [d.k.userId]))[0].donnees.absent, 'elle est là en septembre').toBe('Thauba')
+    ou(await db.from('user_profile').update({ entre_le: '2026-10-15' }).eq('id', d.t.userId).select())
+    expect((await du(fin, [d.k.userId]))[0].donnees.absent, 'elle arrive en octobre').toBeNull()
+  })
+})
+
+describe('L9 : qui est joignable', () => {
+  async function unDu() {
+    const d = await duo()
+    const wrap = await portion(d.k.householdId, { label: 'Wraps', lieu: 'congelateur' })
+    await repas(d.k.householdId, d.k.userId, '2030-06-12', 'diner', wrap.id)
+    await active(d.k.userId, 'sortir_du_congelateur')
+    expect(await du(MARDI_19H, [d.k.userId])).toHaveLength(1)
+    return d
+  }
+  const sql = async (requete: string, params: unknown[]) => {
+    const c = await connexion(URL_PG_ADMIN)
+    try { await c.query(requete, params) } finally { await c.end() }
+  }
+
+  it('un compte banni (dans le futur) ne reçoit rien ; un ban échu, si', async () => {
+    const d = await unDu()
+    await sql(`update auth.users set banned_until = now() + interval '1 day' where id = $1`, [d.k.userId])
+    expect(await du(MARDI_19H, [d.k.userId])).toEqual([])
+    await sql(`update auth.users set banned_until = now() - interval '1 day' where id = $1`, [d.k.userId])
+    expect(await du(MARDI_19H, [d.k.userId])).toHaveLength(1)
+  })
+
+  it('un compte supprimé ne reçoit rien', async () => {
+    const d = await unDu()
+    await sql('update auth.users set deleted_at = now() where id = $1', [d.k.userId])
+    expect(await du(MARDI_19H, [d.k.userId])).toEqual([])
+  })
+
+  it('une adresse non confirmée ne reçoit rien', async () => {
+    const d = await unDu()
+    await sql('update auth.users set email_confirmed_at = null where id = $1', [d.k.userId])
+    expect(await du(MARDI_19H, [d.k.userId])).toEqual([])
   })
 })

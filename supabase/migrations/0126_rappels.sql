@@ -9,16 +9,21 @@
 --  2. COUPÉ PAR DÉFAUT. Pas de ligne, pas de mail. On n'envoie rien à qui ne l'a pas demandé : Thauba ne reçoit
 --     rien tant qu'elle n'a rien activé.
 --  3. JAMAIS DEUX FOIS. `rappel_envoye` garde (membre, type, clé), unique. La fonction `rappels` réserve la ligne
---     AVANT d'envoyer : l'insertion unique fait office de verrou, et un envoi qui échoue rend sa réservation pour
---     que l'heure suivante réessaie.
+--     AVANT d'envoyer : l'insertion unique fait office de verrou. Elle ne la rend que si l'échec est sûrement
+--     arrivé AVANT l'envoi des données (connexion, authentification) ; après, ou dans le doute, le mail est peut-être
+--     parti, et la réservation reste : un mail perdu vaut mieux qu'un doublon.
 --
 -- `rappels_a_envoyer(p_maintenant)` dit ce qui est DÛ à cet instant, à l'heure de Paris. Un rappel est dû à partir
 -- de son heure et jusqu'à la fin du jour : un passage manqué se rattrape dans la journée. Elle est réservée au rôle
 -- de service (une adresse mail se lit dans `auth.users`), comme `reserve_rappel` et `libere_rappel`.
 --
+-- Un mail par membre et par jour pour ce qui se regroupe (les barquettes qui périment, les factures annuelles) :
+-- la clé est la date, et les barquettes ou les charges qu'il couvre sont réservées avec elle (`cles`).
+--
 -- Chaque heure, à la minute 5, `pg_cron` appelle (par `pg_net`) la fonction edge `rappels`. L'adresse de la fonction
 -- et son secret se lisent dans Vault (`rappels_url`, `rappels_secret`), jamais ici : sans l'un ou l'autre, le job
--- ne fait rien. Ils se posent à la main, en production (voir la fin du fichier).
+-- ne fait rien. Ils se posent à la main, en production (voir la fin du fichier). Chaque appel laisse une ligne dans
+-- `rappel_passe` (sans adresse ni contenu) : `select * from rappel_passe order by le desc` dit que ça tourne.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1. Les réglages : un par membre et par type ─────────────────────────────
@@ -50,6 +55,9 @@ create policy rappel_reglage_delete on public.rappel_reglage for delete to authe
   using (user_id = auth.uid());
 
 revoke all on public.rappel_reglage from anon;
+/* `truncate` vide la table en ignorant la RLS ; `references` et `trigger` n'ont rien à faire entre les mains d'un
+   membre. Il garde select, insert, update, delete : la RLS les borne à ses propres lignes. */
+revoke truncate, references, trigger on public.rappel_reglage from anon, authenticated;
 
 /* « Ça ne change pas » ne s'écrit pas en policy : une policy ne voit jamais l'ancienne et la nouvelle ligne
    ensemble. Le membre et le type d'une ligne ne se déplacent donc jamais (un `update … set user_id` qui passerait
@@ -82,20 +90,51 @@ comment on table public.rappel_envoye is
 /* Aucune policy : ni lecture ni écriture côté client. Le rôle de service contourne la RLS. */
 alter table public.rappel_envoye enable row level security;
 revoke all on public.rappel_envoye from anon, authenticated;
+revoke truncate, references, trigger on public.rappel_envoye from anon, authenticated;
 
--- ── 3. Les membres qui ont activé un type ───────────────────────────────────
--- Un membre sans adresse n'est pas joignable : il n'y a rien à lui envoyer.
+-- ── 2 bis. Le journal des passages : ça tourne, ou ça ne tourne pas ───────────
+-- Une ligne par appel du réveil horaire (`origine = 'cron'` : appelée, ou pas de secret, ou erreur) et une par
+-- résultat de la fonction (`origine = 'fonction'` : combien dus, envoyés, en échec). Aucune adresse, aucun contenu.
+create table if not exists public.rappel_passe (
+  id       bigint generated always as identity primary key,
+  le       timestamptz not null default now(),
+  origine  text not null check (origine in ('cron', 'fonction')),
+  statut   text not null,
+  dus      integer,
+  envoyes  integer,
+  echecs   integer
+);
+comment on table public.rappel_passe is
+  'Le journal des passages des rappels : moment, statut, nombre dus, envoyés, échecs. Ni adresse ni contenu. Service seul.';
+create index if not exists rappel_passe_le on public.rappel_passe (le desc);
+alter table public.rappel_passe enable row level security;
+revoke all on public.rappel_passe from anon, authenticated;
+revoke truncate, references, trigger on public.rappel_passe from anon, authenticated;
+
+-- ── 3. Les prénoms, et les membres qui ont activé un type ────────────────────
+/* Un prénom, normalisé PARTOUT de la même façon (le destinataire, « pour qui », « qui doit poser son revenu ») :
+   les blancs de bout retirés, le premier mot seulement (comme `prenom_de`, que la clôture emploie), 40 signes au
+   plus, et un repli sûr quand il est vide : « toi » pour le destinataire, « Quelqu’un » pour un autre. */
+create or replace function public.rappel_prenom(p_nom text, p_repli text)
+returns text language sql immutable set search_path = public, pg_temp as $$
+  select coalesce(nullif(left(split_part(btrim(coalesce(p_nom, '')), ' ', 1), 40), ''), p_repli)
+$$;
+
+-- Un membre sans adresse, banni, supprimé, ou dont l'adresse n'est pas confirmée n'est pas joignable : rien à lui envoyer.
 create or replace function public.rappel_actifs(p_type text)
 returns table (uid uuid, foyer uuid, prenom text, email text)
 language sql stable security definer set search_path = public, pg_temp as $$
   select p.id, p.household_id,
-         coalesce(nullif(btrim(p.display_name), ''), 'toi'),
+         public.rappel_prenom(p.display_name, 'toi'),
          u.email::text
   from public.rappel_reglage r
   join public.user_profile p on p.id = r.user_id
   join auth.users u on u.id = p.id
   where r.type = p_type and r.actif
     and u.email is not null and btrim(u.email) <> ''
+    and u.email_confirmed_at is not null
+    and u.deleted_at is null
+    and (u.banned_until is null or u.banned_until <= now())
 $$;
 
 /* Le point d'un repas dans la semaine : `congelateur`, `frigo`, `autre` (sauté, ou autre chose qu'une barquette),
@@ -134,7 +173,6 @@ declare
   v_mois_prec date := (date_trunc('month', (p_maintenant at time zone 'Europe/Paris')) - interval '1 month')::date;
   v_dernier_jour date := (date_trunc('month', (p_maintenant at time zone 'Europe/Paris')) + interval '1 month - 1 day')::date;
   v_semaine   text := to_char((p_maintenant at time zone 'Europe/Paris')::date, 'IYYY"-W"IW');
-  v_debut_aujourdhui timestamptz := ((p_maintenant at time zone 'Europe/Paris')::date)::timestamp at time zone 'Europe/Paris';
   v_debut_apres_demain timestamptz := (((p_maintenant at time zone 'Europe/Paris')::date + 2))::timestamp at time zone 'Europe/Paris';
 begin
   if not public.is_service_role() then
@@ -146,7 +184,8 @@ begin
     return query
     with a as (select * from public.rappel_actifs('sortir_du_congelateur')),
     sl as (
-      select s.household_id as foyer, s.meal, s.portion_id, po.label, po.recipe_id, pr.display_name as qui
+      select s.household_id as foyer, s.meal, s.portion_id, po.label, po.recipe_id, pr.display_name as qui,
+             s.user_profile_id as qid
       from public.meal_slot s
       join public.portion po on po.id = s.portion_id
       join public.user_profile pr on pr.id = s.user_profile_id
@@ -174,7 +213,11 @@ begin
                                and q.id not in (select portion_id from sl where foyer = a.foyer)),
                  'repas', (select jsonb_agg(jsonb_build_object('meal', y.meal, 'pour', y.pour)
                                             order by array_position(array['petit_dejeuner', 'dejeuner', 'collation', 'diner'], y.meal))
-                           from (select sl2.meal, jsonb_agg(distinct sl2.qui) as pour
+                           /* « pour qui », vu du destinataire : lui-même sous le prénom que le mail lui donne (`a.prenom`),
+                                       les autres sous leur prénom normalisé. */
+                           from (select sl2.meal,
+                                        jsonb_agg(distinct case when sl2.qid = a.uid then a.prenom
+                                                                else public.rappel_prenom(sl2.qui, 'Quelqu’un') end) as pour
                                  from sl sl2
                                  where sl2.foyer = a.foyer and sl2.label = x.label
                                    and sl2.recipe_id is not distinct from x.recipe_id
@@ -191,48 +234,57 @@ begin
                       where e.user_id = a.uid and e.type = 'sortir_du_congelateur' and e.cle = v_demain::text);
   end if;
 
-  -- ── barquette_perime : à 8 h, une barquette du frigo qui périme avant demain soir et n'est prévue nulle part ──
+  -- ── barquette_perime : à 8 h, UN mail par membre et par jour pour ce qui périme avant demain soir ──
+  -- Dans la fenêtre : une barquette du frigo qui périme avant la fin de demain, ou qui a péri il y a moins de 24 h
+  -- (le mail dit alors « périmée : à jeter »). « Prévue nulle part » : aucun repas à venir ne la réclame À TEMPS ;
+  -- une barquette prévue pour un repas APRÈS sa péremption compte comme non prévue, et le mail le dit
+  -- (`tardives` : le jour du repas de chacune de ces barquettes). Une réclamation d'un jour PASSÉ est un repas que personne n'a noté, pas
+  -- une vraie réservation (comme 0122).
+  -- La clé du mail est la DATE : un seul par jour et par membre. Chaque barquette qu'il couvre est réservée avec
+  -- (`cles`), donc une barquette déjà annoncée ne l'est jamais deux fois, et une barquette qui arrive après le
+  -- passage de 8 h attend le lendemain (un mail perdu vaut mieux qu'un doublon).
   if v_heure >= time '08:00' then
     return query
-    with a as (select * from public.rappel_actifs('barquette_perime')),
+    with a as (
+      select x.* from public.rappel_actifs('barquette_perime') x
+      where not exists (select 1 from public.rappel_envoye e
+                        where e.user_id = x.uid and e.type = 'barquette_perime' and e.cle = v_aujourdhui::text)
+    ),
     pe as (
-      select a.uid, a.foyer, po.id as pid, po.label, po.recipe_id, po.expires_at
+      select a.uid, a.foyer, po.id as pid, po.label, po.recipe_id, po.expires_at,
+             (select min(s.day) from public.meal_slot s
+              where s.portion_id = po.id and s.state = 'prevu' and s.day >= v_aujourdhui
+                and s.day > (po.expires_at at time zone 'Europe/Paris')::date) as tardive
       from a
       join public.portion po on po.household_id = a.foyer
       where po.location = 'frigo' and po.state in ('au_frais', 'decongelee')
-        and po.expires_at >= v_debut_aujourdhui and po.expires_at < v_debut_apres_demain
-        /* « prévue nulle part » : aucun repas à venir ne la réclame. Une réclamation d'un jour PASSÉ est un repas
-           que personne n'a noté, pas une vraie réservation (comme 0122). */
+        and po.expires_at >= p_maintenant - interval '24 hours' and po.expires_at < v_debut_apres_demain
         and not exists (select 1 from public.meal_slot s
-                        where s.portion_id = po.id and s.state = 'prevu' and s.day >= v_aujourdhui)
+                        where s.portion_id = po.id and s.state = 'prevu' and s.day >= v_aujourdhui
+                          and s.day <= (po.expires_at at time zone 'Europe/Paris')::date)
         and not exists (select 1 from public.rappel_envoye e
                         where e.user_id = a.uid and e.type = 'barquette_perime' and e.cle = po.id::text)
+    ),
+    pl as (
+      select pe.uid, pe.label, pe.recipe_id, count(*) as n, min(pe.expires_at) as expire,
+             jsonb_agg(pe.pid order by pe.pid) as ids,
+             coalesce(jsonb_agg(pe.tardive order by pe.tardive) filter (where pe.tardive is not null), '[]'::jsonb) as tardives,
+             max(r.image_url) as image_url
+      from pe
+      left join public.recipe r on r.id = pe.recipe_id
+      group by pe.uid, pe.label, pe.recipe_id
     )
-    select a.uid, a.email, a.prenom, 'barquette_perime'::text,
-           min(pe.pid::text), array_agg(pe.pid::text order by pe.pid::text),
+    select a.uid, a.email, a.prenom, 'barquette_perime'::text, v_aujourdhui::text,
+           array[v_aujourdhui::text] || (select array_agg(pe.pid::text order by pe.pid::text) from pe where pe.uid = a.uid),
            jsonb_build_object(
-             'label', pe.label,
-             'recipe_id', pe.recipe_id,
-             'image_url', max(r.image_url),
-             'n', count(*),
-             'portion_ids', jsonb_agg(pe.pid order by pe.pid),
-             'expire', min(pe.expires_at),
-             'frigo', (select coalesce(jsonb_agg(f.obj order by f.tri), '[]'::jsonb) from (
-                         select min(q.expires_at) as tri,
-                                jsonb_build_object(
-                                  'label', q.label, 'n', count(*),
-                                  'libres', count(*) filter (where not exists (
-                                    select 1 from public.meal_slot s
-                                    where s.portion_id = q.id and s.state = 'prevu' and s.day >= v_aujourdhui))
-                                ) as obj
-                         from public.portion q
-                         where q.household_id = a.foyer and q.location = 'frigo' and q.state in ('au_frais', 'decongelee')
-                         group by q.label, q.recipe_id
-                         order by min(q.expires_at) limit 4) f))
-    from pe
-    join a on a.uid = pe.uid
-    left join public.recipe r on r.id = pe.recipe_id
-    group by a.uid, a.foyer, a.email, a.prenom, pe.label, pe.recipe_id;
+             'n', (select count(*) from pe where pe.uid = a.uid),
+             'plats', (select jsonb_agg(jsonb_build_object(
+                                 'label', pl.label, 'recipe_id', pl.recipe_id, 'image_url', pl.image_url,
+                                 'n', pl.n, 'portion_ids', pl.ids, 'expire', pl.expire, 'tardives', pl.tardives)
+                               order by pl.expire, pl.label)
+                       from pl where pl.uid = a.uid))
+    from a
+    where exists (select 1 from pe where pe.uid = a.uid);
   end if;
 
   -- ── choisir_les_repas : le dimanche à 18 h, s'il reste des dîners vides dans les 7 jours suivants ──
@@ -322,11 +374,22 @@ begin
              'a_confirmer', (select count(*) from public.depense d
                              join public.depense_part dp on dp.depense_id = d.id and dp.user_profile_id = a.uid
                              where d.household_id = a.foyer and d.mois = v_mois
-                               and d.facon = 'facture' and d.confirme_le is null))
+                               and d.facon = 'facture' and d.confirme_le is null),
+             /* Les gardes de `cloture_le_mois` (0108) : chaque AUTRE membre présent ce mois-là doit avoir posé son
+                revenu, sinon le partage basculerait à moitié-moitié et la clôture le figerait. Le mail le dit
+                au lieu de promettre une clôture qui sera refusée. */
+             'absent', (select public.rappel_prenom(o.display_name, 'Quelqu’un')
+                        from public.user_profile o
+                        where o.household_id = a.foyer and o.id <> a.uid and o.entre_le <= v_dernier_jour
+                          and not exists (select 1 from public.revenu v
+                                          where v.user_profile_id = o.id and v.household_id = a.foyer
+                                            and v.valid_from <= v_dernier_jour)
+                        order by o.created_at limit 1))
     from public.rappel_actifs('cloturer_le_mois') a
     join public.user_profile up on up.id = a.uid
     where up.entre_le <= v_dernier_jour
-      and exists (select 1 from public.revenu rv where rv.user_profile_id = a.uid and rv.valid_from <= v_dernier_jour)
+      and exists (select 1 from public.revenu rv
+                  where rv.user_profile_id = a.uid and rv.household_id = a.foyer and rv.valid_from <= v_dernier_jour)
       and exists (select 1 from public.depense d
                   join public.depense_part dp on dp.depense_id = d.id and dp.user_profile_id = a.uid
                   where d.household_id = a.foyer and d.mois = v_mois)
@@ -335,36 +398,45 @@ begin
                       where e.user_id = a.uid and e.type = 'cloturer_le_mois' and e.cle = to_char(v_mois, 'YYYY-MM'));
   end if;
 
-  -- ── facture_annuelle : 15 jours avant le mois où une charge annuelle se paie ──
+  -- ── facture_annuelle : 15 jours avant le mois où une charge annuelle se paie, UN mail par membre et par jour ──
   -- Une charge annuelle (« mise de côté ») ne porte pas de date d'échéance : la seule trace du mois où elle se
   -- paie est la dernière facture saisie (`facture.paye_le`). Sans facture passée, rien à annoncer. Le jour du
   -- rappel : le 1er de ce mois-là, moins 15 jours, cette année ou la prochaine (un mois de janvier se prévient
-  -- en décembre). Pas de rappel si la facture de l'année est déjà saisie.
+  -- en décembre). Pas de rappel si la facture de l'année est déjà saisie. Deux charges le même jour : un seul
+  -- mail, qui les liste. La clé est la date ; chaque charge (« charge:année ») est réservée avec.
   if v_heure >= time '09:00' then
     return query
-    select a.uid, a.email, a.prenom, 'facture_annuelle'::text, c.id::text || ':' || y.annee::text,
-           array[c.id::text || ':' || y.annee::text],
+    with due as (
+      select a.uid, a.email, a.prenom, c.id as charge_id, c.libelle, y.annee, f.paye_le, f.montant_cents,
+             make_date(y.annee, extract(month from f.paye_le)::int, 1) as mois
+      from public.rappel_actifs('facture_annuelle') a
+      join public.charge_participant cp on cp.user_profile_id = a.uid
+      join public.charge c on c.id = cp.charge_id
+      cross join lateral (
+        select fa.paye_le, fa.montant_cents from public.facture fa
+        where fa.charge_id = c.id and fa.origine = 'saisie'
+        order by fa.paye_le desc limit 1) f
+      cross join lateral (
+        select yy as annee from unnest(array[extract(year from v_aujourdhui)::int,
+                                             extract(year from v_aujourdhui)::int + 1]) yy) y
+      where c.periodicite = 'annuel' and c.archive_le is null and (c.fin is null or c.fin >= v_aujourdhui)
+        and make_date(y.annee, extract(month from f.paye_le)::int, 1) - 15 = v_aujourdhui
+        and not exists (select 1 from public.facture fa
+                        where fa.charge_id = c.id and fa.origine = 'saisie' and fa.annee = y.annee)
+        and not exists (select 1 from public.rappel_envoye e
+                        where e.user_id = a.uid and e.type = 'facture_annuelle'
+                          and e.cle in (v_aujourdhui::text, c.id::text || ':' || y.annee::text))
+    )
+    select d.uid, d.email, d.prenom, 'facture_annuelle'::text, v_aujourdhui::text,
+           array[v_aujourdhui::text] || array_agg(d.charge_id::text || ':' || d.annee::text order by d.libelle, d.charge_id),
            jsonb_build_object(
-             'charge_id', c.id, 'libelle', c.libelle, 'annee', y.annee,
-             'mois', make_date(y.annee, extract(month from f.paye_le)::int, 1),
-             'derniere_paye_le', f.paye_le, 'derniere_montant_cents', f.montant_cents)
-    from public.rappel_actifs('facture_annuelle') a
-    join public.charge_participant cp on cp.user_profile_id = a.uid
-    join public.charge c on c.id = cp.charge_id
-    cross join lateral (
-      select fa.paye_le, fa.montant_cents from public.facture fa
-      where fa.charge_id = c.id and fa.origine = 'saisie'
-      order by fa.paye_le desc limit 1) f
-    cross join lateral (
-      select yy as annee from unnest(array[extract(year from v_aujourdhui)::int,
-                                           extract(year from v_aujourdhui)::int + 1]) yy) y
-    where c.periodicite = 'annuel' and c.archive_le is null and (c.fin is null or c.fin >= v_aujourdhui)
-      and make_date(y.annee, extract(month from f.paye_le)::int, 1) - 15 = v_aujourdhui
-      and not exists (select 1 from public.facture fa
-                      where fa.charge_id = c.id and fa.origine = 'saisie' and fa.annee = y.annee)
-      and not exists (select 1 from public.rappel_envoye e
-                      where e.user_id = a.uid and e.type = 'facture_annuelle'
-                        and e.cle = c.id::text || ':' || y.annee::text);
+             'n', count(*),
+             'charges', jsonb_agg(jsonb_build_object(
+                          'charge_id', d.charge_id, 'libelle', d.libelle, 'annee', d.annee, 'mois', d.mois,
+                          'derniere_paye_le', d.paye_le, 'derniere_montant_cents', d.montant_cents)
+                        order by d.libelle, d.charge_id))
+    from due d
+    group by d.uid, d.email, d.prenom;
   end if;
 end $$;
 
@@ -401,47 +473,133 @@ begin
   delete from public.rappel_envoye where user_id = p_user and type = p_type and cle = any (p_cles);
 end $$;
 
+-- ── 5 bis. Préparer la passe : ouvrir les mois, purger ──────────────────────
+-- L'ouverture d'un mois du budget est PARESSEUSE : c'est la première lecture de l'écran qui crée ses lignes
+-- (`ouvre_le_mois`). Un mois que personne n'a ouvert n'a donc ni facture à confirmer, ni ligne « au fil » : les
+-- rappels du budget ne le verraient pas. Avant de lire quoi que ce soit, la fonction edge appelle donc celle-ci :
+-- pour chaque foyer où un membre a activé un rappel du budget, elle ouvre le mois fini et le mois en cours
+-- (idempotent, comme l'écran ; un mois clôturé ne gagne aucune ligne). Elle ne rattrape que ces deux mois : ce
+-- sont les seuls que les rappels lisent.
+-- Elle purge aussi : les lignes de `rappel_envoye` et de `rappel_passe` de plus de 120 jours.
+-- `ouvre_le_mois` ne laisse passer un foyer explicite que pour le rôle de service, et le lit dans les revendications
+-- de la requête (`is_service_role`) : sous `security definer`, `current_user` n'est plus le rôle appelant. Elles sont
+-- donc posées pour la durée de la transaction, puis rendues.
+create or replace function public.prepare_les_rappels(p_maintenant timestamptz)
+returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_mois      date := date_trunc('month', (p_maintenant at time zone 'Europe/Paris'))::date;
+  v_mois_prec date := (date_trunc('month', (p_maintenant at time zone 'Europe/Paris')) - interval '1 month')::date;
+  v_avant     text := current_setting('request.jwt.claims', true);
+  v_purges    integer := 0;
+  v_lignes    integer := 0;
+  v_erreurs   integer := 0;
+  v_foyers    integer := 0;
+  v_foyer     uuid;
+  v_m         date;
+begin
+  if not public.is_service_role() then
+    raise exception 'Réservé au rôle de service.' using errcode = 'insufficient_privilege';
+  end if;
+
+  delete from public.rappel_envoye where envoye_le < p_maintenant - interval '120 days';
+  get diagnostics v_purges = row_count;
+  delete from public.rappel_passe where le < p_maintenant - interval '120 days';
+
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  for v_foyer in
+    select distinct x.foyer from (
+      select foyer from public.rappel_actifs('noter_les_depenses')
+      union all select foyer from public.rappel_actifs('confirmer_les_charges')
+      union all select foyer from public.rappel_actifs('cloturer_le_mois')) x
+  loop
+    v_foyers := v_foyers + 1;
+    foreach v_m in array array[v_mois_prec, v_mois] loop
+      begin
+        v_lignes := v_lignes + coalesce(public.ouvre_le_mois(v_m, v_foyer), 0);
+      exception when others then
+        /* Un foyer qui échoue ne bloque ni les autres ni les rappels de la cuisine. */
+        v_erreurs := v_erreurs + 1;
+        raise warning 'rappels : le mois % d''un foyer n''a pas pu être ouvert (%)', v_m, sqlerrm;
+      end;
+    end loop;
+  end loop;
+  perform set_config('request.jwt.claims', coalesce(v_avant, ''), true);
+
+  return jsonb_build_object('purges', v_purges, 'foyers', v_foyers, 'lignes_nees', v_lignes, 'erreurs', v_erreurs);
+end $$;
+
+-- Le résultat d'une passe, écrit par la fonction edge : combien dus, envoyés, en échec. Aucune adresse.
+create or replace function public.note_la_passe(p_statut text, p_dus integer, p_envoyes integer, p_echecs integer)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_service_role() then
+    raise exception 'Réservé au rôle de service.' using errcode = 'insufficient_privilege';
+  end if;
+  if p_statut not in ('ok', 'echecs', 'erreur') then
+    raise exception 'Statut de passe inconnu.' using errcode = 'check_violation';
+  end if;
+  insert into public.rappel_passe (origine, statut, dus, envoyes, echecs)
+  values ('fonction', p_statut, p_dus, p_envoyes, p_echecs);
+end $$;
+
 -- ── 6. Le réveil horaire : pg_cron appelle la fonction edge, par pg_net ─────
 -- L'adresse et le secret viennent de Vault ; l'un des deux manque, on ne fait rien (c'est l'état d'une base
--- locale, et celui d'une production où personne n'a encore posé les secrets).
+-- locale, et celui d'une production où personne n'a encore posé les secrets) — mais on le DIT, dans
+-- `rappel_passe` : une panne se voit. Statuts : `sans_extension` (pg_net ou Vault absent), `sans_secret`,
+-- `appelee`, `erreur`. `pg_net` répond de façon asynchrone : le résultat de la passe est écrit par la fonction
+-- (`note_la_passe`). Son délai est de 60 s : une passe qui envoie plusieurs mails dépasse les 25 s d'avant.
 create or replace function public.appelle_les_rappels()
 returns void language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_url text;
   v_secret text;
 begin
+  delete from public.rappel_passe where le < now() - interval '120 days';
   if to_regclass('vault.decrypted_secrets') is null or to_regnamespace('net') is null then
+    insert into public.rappel_passe (origine, statut) values ('cron', 'sans_extension');
     return;
   end if;
   execute $q$select decrypted_secret from vault.decrypted_secrets where name = 'rappels_url' limit 1$q$ into v_url;
   execute $q$select decrypted_secret from vault.decrypted_secrets where name = 'rappels_secret' limit 1$q$ into v_secret;
   if coalesce(btrim(v_url), '') = '' or coalesce(btrim(v_secret), '') = '' then
+    insert into public.rappel_passe (origine, statut) values ('cron', 'sans_secret');
     return;
   end if;
-  perform net.http_post(
-    url := v_url,
-    headers := jsonb_build_object('Content-Type', 'application/json', 'x-rappels-secret', v_secret),
-    body := '{}'::jsonb,
-    timeout_milliseconds := 25000);
+  begin
+    perform net.http_post(
+      url := v_url,
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-rappels-secret', v_secret),
+      body := '{}'::jsonb,
+      timeout_milliseconds := 60000);
+    insert into public.rappel_passe (origine, statut) values ('cron', 'appelee');
+  exception when others then
+    insert into public.rappel_passe (origine, statut) values ('cron', 'erreur');
+  end;
 end $$;
 
 /* Rien de tout ceci n'est appelable du dehors. `rappel_actifs` et `rappel_point` lisent `auth.users` ou le
    repas de n'importe qui : elles ne servent qu'à `rappels_a_envoyer`. */
+revoke all on function public.rappel_prenom(text, text) from public, anon, authenticated;
 revoke all on function public.rappel_actifs(text) from public, anon, authenticated;
 revoke all on function public.rappel_point(uuid, date, text) from public, anon, authenticated;
 revoke all on function public.rappels_a_envoyer(timestamptz) from public, anon, authenticated;
+revoke all on function public.prepare_les_rappels(timestamptz) from public, anon, authenticated;
+revoke all on function public.note_la_passe(text, integer, integer, integer) from public, anon, authenticated;
 revoke all on function public.reserve_rappel(uuid, text, text[]) from public, anon, authenticated;
 revoke all on function public.libere_rappel(uuid, text, text[]) from public, anon, authenticated;
 revoke all on function public.appelle_les_rappels() from public, anon, authenticated;
+grant execute on function public.rappel_prenom(text, text) to service_role;
 grant execute on function public.rappel_actifs(text) to service_role;
 grant execute on function public.rappel_point(uuid, date, text) to service_role;
 grant execute on function public.rappels_a_envoyer(timestamptz) to service_role;
+grant execute on function public.prepare_les_rappels(timestamptz) to service_role;
+grant execute on function public.note_la_passe(text, integer, integer, integer) to service_role;
 grant execute on function public.reserve_rappel(uuid, text, text[]) to service_role;
 grant execute on function public.libere_rappel(uuid, text, text[]) to service_role;
 
 /* Les extensions et la planification, tolérantes : une base locale sans `pg_cron` ou sans `pg_net` ne doit pas
    empêcher la migration. Sans elles, les rappels ne partent simplement pas (le réglage et l'écran existent quand
-   même). */
+   même). EN PRODUCTION, en revanche, un job absent est une panne : le contrôle de la fin la dit. */
 do $$
 begin
   begin
@@ -460,6 +618,23 @@ begin
     exception when others then
       raise notice 'Planification des rappels impossible (%).', sqlerrm;
     end;
+  end if;
+end $$;
+
+/* Le contrôle de la fin : le job existe-t-il vraiment ? Sinon, un AVERTISSEMENT explicite (pas une erreur : la
+   migration doit passer en local, où les extensions peuvent manquer), que la sortie de `supabase db push` montre. */
+do $$
+declare
+  v_present boolean := false;
+begin
+  if to_regclass('cron.job') is not null then
+    execute $q$select exists (select 1 from cron.job where jobname = 'rappels-par-mail')$q$ into v_present;
+  end if;
+  if not v_present then
+    raise warning 'LES RAPPELS NE SONT PAS PLANIFIÉS : le job « rappels-par-mail » n''existe pas dans cron.job. '
+      'Active les extensions pg_cron et pg_net (Database > Extensions), puis rejoue la planification '
+      '(select cron.schedule(''rappels-par-mail'', ''5 * * * *'', ''select public.appelle_les_rappels()'')). '
+      'Sans elle, aucun mail ne part, et rien d''autre ne le dit.';
   end if;
 end $$;
 
