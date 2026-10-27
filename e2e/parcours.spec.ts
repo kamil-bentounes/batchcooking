@@ -459,10 +459,11 @@ test.describe('le budget, du vide jusqu’au chiffre', () => {
        interroge donc la charge qu'on vient de poser, elle seule : c'est elle
        que le défaut d'origine laissait sans compte. */
     await page.goto('/charges')
-    const ligne = ligneDeCharge(page, 'Internet')
-    await expect(ligne).toBeVisible({ timeout: 15_000 })
-    await expect(ligne, 'une charge posée par l’écran ne porte pas de compte')
-      .not.toContainText('sans compte')
+    /* L'amorce en sème déjà un « Internet » : on regarde les deux, et aucun ne doit être « sans compte ». */
+    const lignes = ligneDeCharge(page, 'Internet')
+    await expect(lignes).toHaveCount(2, { timeout: 15_000 })
+    await expect(lignes.filter({ hasText: 'sans compte' }),
+      'une charge posée par l’écran ne porte pas de compte').toHaveCount(0)
 
     expect(erreurs.filter(e => !BRUIT.test(e))).toEqual([])
   })
