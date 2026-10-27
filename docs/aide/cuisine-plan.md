@@ -19,7 +19,7 @@ sources:
   - src/lib/plan/ordonnance.ts
   - src/lib/plan/duree.ts
   - supabase/migrations/0005_policies.sql
-verifie_sur: 9504cf2
+verifie_sur: d0d3e29
 ---
 ## Ce que fait l’appli
 

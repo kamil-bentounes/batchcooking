@@ -17,7 +17,7 @@ sources:
   - src/lib/peremption.ts
   - supabase/migrations/0047_peremption_donnee.sql
   - supabase/migrations/0122_frigo_corrections.sql
-verifie_sur: 0021cf9
+verifie_sur: d0d3e29
 ---
 ## Ce que fait l’appli
 
