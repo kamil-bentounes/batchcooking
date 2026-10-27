@@ -26,11 +26,11 @@ sources:
   - supabase/migrations/0027_ecriture_croisee.sql
   - supabase/migrations/0035_amis.sql
   - supabase/migrations/0037_cuisiner_ensemble.sql
-verifie_sur: 545fd1b
+verifie_sur: 5f54c2b
 ---
 ## Où
 
-Accueil de Popote, carte « Cuisine », puis le rond avec ton initiale : « Réglages ». En haut de l’écran, un sélecteur « Objectifs | Réglages » passe de l’un à l’autre, et « Accueil » (en haut à gauche) ramène à l’accueil de la cuisine. Le budget a ses « Réglages du budget ».
+Accueil de Popote, « Cuisine » en haut de la carte sombre, puis le rond avec ton initiale : « Réglages ». En haut de l’écran, un sélecteur « Objectifs | Réglages » passe de l’un à l’autre, et « Accueil » (en haut à gauche) ramène à l’accueil de la cuisine. Le budget a ses « Réglages du budget ».
 
 ## Les cartes, de haut en bas
 

@@ -24,7 +24,7 @@ sources:
   - supabase/migrations/0123_choisir_un_repas.sql
   - supabase/migrations/0125_semaine_corrections.sql
   - src/lib/peremption.ts
-verifie_sur: 545fd1b
+verifie_sur: 5f54c2b
 ---
 ## Changer
 
