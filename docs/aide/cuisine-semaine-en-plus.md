@@ -41,7 +41,7 @@ verifie_sur: 264dd60
 
 ## Les règles
 
-- Une barquette ne compte dans les calories du jour que si le repas est **mangé**. Un en-plus noté après coup compte **toujours** ; un repère choisi dans la feuille d’un repas (« Autre chose ») ne compte qu’une fois « Je l’ai mangé » touché (ou noté sur un jour passé), et plus du tout si tu l’annules : un jour passé qu’on n’a pas noté reste « pas encore noté », il ne compte pas de lui-même.
+- Une barquette ne compte dans les calories du jour que si le repas est **mangé**. Un en-plus noté après coup compte **toujours** ; un repère choisi dans la feuille d’un repas (« Autre chose ») ne compte qu’une fois « Je l’ai mangé » touché (ou noté sur un jour passé), et plus du tout si tu l’annules.
 - **Un jour sans rien coché ni noté n’est pas un jour à zéro** : c’est un trou, hors des moyennes du bilan. Sur l’accueil : « N repas pas encore renseignés ».
 - « On saute ce repas » (dans la feuille d’un repas) est une réponse : le jour est renseigné, avec zéro pour ce repas.
 
