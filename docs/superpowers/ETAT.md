@@ -34,8 +34,15 @@ high** : c'est sa demande, notée en mémoire sous `agents-en-sonnet-high`.
 - **Site** publié (bundle `index-BBktHjsA.js`) ; `main` et `feat/budget-refait` poussés à e9354ff.
 - **Ce qui part** : la porte du frigo (connexion), le hub « ma journée », le frigo et la semaine en cours, Nos aliments, les rappels par mail, les réglages refaits, les corrections de revue.
 - **Tests** : `npm test` 3 921 verts (le seul rouge, « un repas d'hier ne se choisit plus », vient de 0128 posée sur la base locale par la branche suivante) ; les 29 specs e2e vertes, les liens de réinitialisation et d'invitation sur le port 4173 avec `supabase functions serve`.
-- **Reste à faire par Kamil** : `python3 ~/PERSO/sauvegardes-popote/outils-prod/secrets_rappels.py` (le classifieur m'interdit d'écrire des secrets). Sans lui, les rappels ne partent pas (`sans_secret` dans `rappel_passe`), sans autre dégât. Ensuite, un mail d'essai avec « M'envoyer un exemple ».
-- **Livraison 2** : `feat/semaine-hier` (worktree `~/PERSO/popote-wt/hier`), hier et le dessert, migration 0128, fonction `etiquette`. La revue adverse a trouvé 8 défauts, dont le principal : un jour passé était noté pour tout le foyer. Les corrections sont en cours, puis viendront la fusion, les tests et le déploiement (0128 AVANT le site : le front envoie `aliment_id`).
+- **Secrets des rappels** posés par Kamil (Vault : 2 entrées). La tournée de 12 h 05 est passée : cron, puis fonction, statut « ok », 0 mail dû.
+
+## En ligne le 27/10/2026 (livraison 2) : hier et le dessert
+
+- **0128 en prod** (sauvegarde `~/PERSO/sauvegardes-popote/2026-10-27-livraison-2/`, répétition à blanc) ; `meal_extra.aliment_id` ; 31 repas et 35 barquettes intacts.
+- **Fonctions** `etiquette` (v5, consigne) et `aide` (v6). **Site** : `index-Dv45DkLf.js`. `main` et `feat/budget-refait` poussés à 0e7cc4e.
+- **Revue adverse** : 8 défauts corrigés, dont un jour passé noté pour « vous deux » (il est désormais noté pour moi seul).
+- **Tests** : `npm test` 4 028 verts, les 30 specs e2e vertes sur le port 4173 avec `supabase functions serve`.
+- **Suite** : les maquettes de Dressage, Charges, Photo/Ticket/Peser et Épargne, et celle de l'annulation d'un « Je l'ai mangé » (Kamil est d'accord), en cours dans `~/PERSO/sauvegardes-popote/maquettes-4-ecrans-2026-10-27/`.
 
 ## Reprendre ici
 
