@@ -19,7 +19,7 @@ sources:
   - src/App.tsx
   - supabase/migrations/0047_peremption_donnee.sql
   - supabase/migrations/0120_la_session_prend_dans_le_stock.sql
-verifie_sur: 4f34c94
+verifie_sur: 7bb3825
 ---
 ## Ce que fait l’écran
 
@@ -31,7 +31,7 @@ Une carte par recette : sa photo quand elle en a une, le total, une barre frigo 
 
 - **La proposition de départ** remplit le frigo jusqu’à **4 jours de dîners pour le foyer** (4 × le nombre de personnes), recette par recette dans l’ordre retenu ; le reste va au congélateur.
 - **« Rangé le »** : maintenant par défaut. « Modifier » ouvre un champ date et heure : pas dans le futur, et au plus **4 jours** en arrière (sinon un message le dit et « Ranger » reste grisé). Cette heure devient celle de préparation de chaque barquette (et de congélation pour celles du congélateur).
-- **Le bilan** : « N barquettes au frigo », de quoi tenir tant de jours de dîners. Au-delà de 4 jours, il passe en ocre : « congèle-en quelques-unes … ».
+- **Le bilan** : « N barquettes au frigo », de quoi tenir tant de jours de dîners. Au-delà de 4 jours, l’encart passe sur fond sable : « congèle-en quelques-unes … ».
 - Une barquette se garde **4 jours** au frigo, **90 jours** au congélateur, **24 heures** décongelée.
 
 ## « La session a pris »

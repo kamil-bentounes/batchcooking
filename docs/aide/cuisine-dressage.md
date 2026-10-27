@@ -13,7 +13,7 @@ sources:
   - src/lib/dressage.ts
   - src/lib/nutrition/portions.ts
   - src/lib/donnees/barquettes.ts
-verifie_sur: 4f34c94
+verifie_sur: 7bb3825
 ---
 ## Ce que fait l’appli
 
