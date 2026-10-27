@@ -18,7 +18,7 @@ verifie_sur: 7bb3825
 ---
 **Ce que c'est.** Un petit assistant qui répond à tes questions sur l'appli : où cliquer, comment c'est calculé, ce qu'elle ne fait pas. Il répond d'après un manuel écrit à partir du code de l'appli, pas de mémoire. Si plusieurs pages parlent du sujet, il retient celle qui traite le cas décrit, et la cite.
 
-**Où le trouver.** Le bouton rond avec un « ? » est dans l'en-tête de l'accueil, du budget, de l'accueil de la cuisine et du dressage, à côté de ton initiale. Sur tous les autres écrans, il flotte en haut à droite. Il ouvre la feuille « Demande à Popote », sur l'écran où tu es : tu n'as pas à le quitter. Tu la fermes avec la croix, en touchant à côté, ou avec la touche Échap.
+**Où le trouver.** Le bouton rond avec un « ? » est dans l'en-tête de l'accueil, du budget, de l'accueil de la cuisine, du dressage, des charges et de « Toutes nos charges », à côté de ton initiale. Sur tous les autres écrans, il flotte en haut à droite. Il ouvre la feuille « Demande à Popote », sur l'écran où tu es : tu n'as pas à le quitter. Tu la fermes avec la croix, en touchant à côté, ou avec la touche Échap.
 
 **Poser une question.** Touche une des questions proposées (celles de l'écran, puis « Souvent demandé »), ou écris la tienne dans « Pose ta question sur l’appli… » : 500 caractères au plus. Il garde en tête ta dernière question, donc tu peux enchaîner par « et si… ? ».
 

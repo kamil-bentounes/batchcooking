@@ -23,6 +23,7 @@ import type { Page } from '@playwright/test'
 import { MOT_DE_PASSE, amorce, efface, sansFoyer, db } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
 import { releve } from './couverture.ts'
+import { ouvreLaLigne } from './aides-charges.ts'
 
 async function connecte(page: Page, email: string) {
   await page.goto('/')
@@ -198,6 +199,7 @@ test.describe('les états du foyer rempli', () => {
        banc ici : aucun geste de cet écran n'y mène sans passer par la garde. */
     await connecte(page, foyer.email)
     await page.goto('/charges')
+    await ouvreLaLigne(page, 'Internet')
     await page.getByRole('button', { name: 'Corriger Internet' }).click()
     await page.getByLabel('Montant de Internet').fill('2000000')
     /* ⚠️ `toBeVisible` ne dit pas « on le voit » : un message quatre écrans
@@ -262,7 +264,8 @@ test.describe('les états du foyer rempli', () => {
     await page.goto('/charges')
 
     /* ── Retirer quelqu'un d'une charge commune, puis le remettre ───────── */
-    await page.getByRole('button', { name: 'Changer qui participe' }).first().click()
+    await ouvreLaLigne(page, 'Internet')
+    await page.getByRole('button', { name: 'Changer qui participe' }).click()
     const thauba = page.getByRole('checkbox', { name: 'Thauba' }).first()
     await expect(thauba).toHaveAttribute('aria-checked', 'true')
     await thauba.click()
@@ -273,7 +276,8 @@ test.describe('les états du foyer rempli', () => {
     await page.getByRole('button', { name: 'Fermer' }).click()
 
     /* ── Rattacher une charge sans compte ──────────────────────────────── */
-    const rattacher = page.getByRole('button', { name: 'Rattacher' }).first()
+    await ouvreLaLigne(page, 'Charges de copropriété du bâtiment B')
+    const rattacher = page.getByRole('button', { name: 'Rattacher' })
     await expect(rattacher, 'l’amorce n’a plus de charge sans compte').toBeVisible()
     await rattacher.click()
     await expect(page.getByRole('button', { name: 'Rattacher' }),
@@ -295,6 +299,7 @@ test.describe('les états du foyer rempli', () => {
            septembre. La confirmation annonce désormais ce qui va se passer. ── */
     let annonce = ''
     page.on('dialog', d => { annonce = d.message(); d.accept() })
+    await ouvreLaLigne(page, 'Forfait mobile')
     await page.getByRole('button', { name: 'Retirer Forfait mobile' }).click()
     await expect(page.getByText(/« Forfait mobile » retirée/)).toBeVisible({ timeout: 15_000 })
     expect(annonce, 'la confirmation ne dit pas que la charge part de tous les mois')

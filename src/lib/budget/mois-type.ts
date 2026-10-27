@@ -14,7 +14,7 @@
  * de côté ; pour une facture annuelle, c'est ce qu'il faudrait mettre de côté.
  */
 import { CATEGORIES, infoCategorie, type Categorie, type Mode } from './categories.ts'
-import { enVigueur } from './charges.ts'
+import { pourquoiElleNeComptePas } from './charges.ts'
 import { revenuDuMois, type Revenu } from './mois.ts'
 
 export type Periodicite = 'mensuel' | 'trimestriel' | 'annuel'
@@ -83,7 +83,7 @@ export function moisType(o: {
       const cle = o.parts[c.cle ?? 'foyer']
       /* `parts_du_foyer` ne rend que ceux qui sont là ce mois-là : qui n'y est pas n'a pas de part. */
       const presents = c.participants.filter(q => q in o.parts.foyer)
-      const pourquoi = !enVigueur(c, o.mois) ? 'debut' as const : presents.length === 0 ? 'arrivee' as const : null
+      const pourquoi = pourquoiElleNeComptePas(c, o.mois, new Set(Object.keys(o.parts.foyer)))
       const parts = presents.length === 0 ? {} : repartis(mensuel, presents.map(q => [q, cle[q] ?? 0]))
       return {
         id: c.id, libelle: c.libelle, categorie: infoCategorie(c.categorie).cle, periodicite: c.periodicite,

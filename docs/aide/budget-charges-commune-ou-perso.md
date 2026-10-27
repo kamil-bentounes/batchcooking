@@ -10,6 +10,8 @@ questions:
   - Pourquoi ma charge dit « partagée dès que quelqu’un arrive » ?
 sources:
   - src/pages/Charges.tsx
+  - src/ui/charges/LigneDeCharge.tsx
+  - src/lib/budget/charges-liste.ts
   - src/lib/budget/charges.ts
   - src/lib/donnees/budget.ts
   - supabase/functions/accept-invite/index.ts
@@ -18,7 +20,7 @@ sources:
   - supabase/migrations/0066_se_retirer_dune_commune.sql
   - supabase/migrations/0100_budget_mois_gele.sql
   - supabase/migrations/0103_budget_arrivees.sql
-verifie_sur: 02a9f37
+verifie_sur: fa94f4a
 ---
 Il n’y a qu’une liste de charges. Chaque ligne dit qui y participe. « À moi » veut simplement dire : une seule personne participe.
 
@@ -46,7 +48,7 @@ Tant que tu es seul, la ligne indique ton prénom suivi de « seul » et « part
 
 ## Changer qui participe
 
-Le bouton « Changer qui participe » apparaît sur chaque ligne dès que le foyer a deux membres. Tu coches ou décoches un prénom, puis « Fermer ».
+Touche la ligne : « Changer qui participe » apparaît dès que le foyer a deux membres. Tu coches ou décoches un prénom, puis « Fermer ».
 - Le mois en cours est refait, sauf ce qui est déjà confirmé ou réglé.
 - Les mois passés ne changent pas. Les mois à venir naîtront avec les nouveaux participants.
 - Se retirer d’une charge commune est permis, sans l’accord de l’autre.

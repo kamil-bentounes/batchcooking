@@ -10,22 +10,24 @@ questions:
   - C’est quoi « Rattacher » ?
 sources:
   - src/pages/Charges.tsx
+  - src/ui/charges/LigneDeCharge.tsx
+  - src/ui/charges/gestes.ts
   - src/lib/budget/charges.ts
   - src/lib/donnees/budget.ts
   - supabase/migrations/0096_budget_facon.sql
   - supabase/migrations/0110_budget_corrige.sql
   - supabase/migrations/0111_budget_retire.sql
-verifie_sur: 02a9f37
+verifie_sur: fa94f4a
 ---
-Sur chaque ligne de la page « Les charges », sous le nom : « Corriger », « Retirer », et selon le cas « Rattacher » ou « Changer qui participe ».
+Sur la page « Les charges », touche une ligne : ses gestes s’ouvrent dessous. Ce sont « Corriger », « Retirer », et selon le cas « Rattacher » ou « Changer qui participe ». Un seul panneau est ouvert à la fois ; retouche la ligne pour le fermer. Si un geste échoue, le message s’affiche sur cette ligne, même si tu as refermé son panneau.
 
 ## Corriger
 
-« Corriger » ouvre un panneau : « Son nom », « Son montant », « Catégorie », « Comment elle se paie », et « Elle court depuis » pour une « Mise de côté ». Puis « Enregistrer ».
+« Corriger » déplie un panneau dans la ligne : « Son nom », « Son montant », « Catégorie », « Comment elle se paie », et « Elle court depuis » pour une « Mise de côté ». Puis « Enregistrer ».
 
 - « Les mois déjà confirmés gardent leur montant. Les autres se refont. » Un mois clôturé ne change pas, ni une année déjà soldée.
 - L’appli dit combien de mois elle a refaits : « « X » corrigée, 2 mois refaits. »
-- Changer seulement la catégorie ne touche aucun montant.
+- Changer seulement la catégorie ne touche aucun montant. La ligne passe dans sa nouvelle catégorie, qui se rouvre si elle était repliée.
 - Une charge « Mise de côté » qui a déjà une facture, un mois confirmé ou clôturé, ne devient plus mensuelle. Les trois autres façons sont grisées. Pour la payer chaque mois, retire-la et ajoute-en une nouvelle.
 - Si tu quittes « Plusieurs dépenses dans le mois » alors que des dépenses sont déclarées, l’appli refuse : « Des dépenses sont déclarées en octobre sur cette charge. Retire-les d'abord. »
 - La façon de partager (« Comme le foyer », « Au prorata », « Moitié-moitié ») se choisit à l’ajout : le panneau « Corriger » ne la propose pas.
@@ -45,4 +47,4 @@ Une charge « Mise de côté » retirée reste visible dans cette liste, avec «
 
 ## « Rattacher »
 
-Une charge « sans compte » montre « Rattacher » (s’il existe un compte). Il la relie au compte commun, sinon au premier compte de la liste.
+Une charge « sans compte » propose « Rattacher » (s’il existe un compte). Il la relie au compte commun, sinon au premier compte de la liste.

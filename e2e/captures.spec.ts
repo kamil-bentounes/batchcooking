@@ -113,13 +113,14 @@ test.describe('les captures de revue', () => {
     await prend(page, '24-charge-formulaire')
 
     await page.goto('/charges')
-    await page.getByRole('button', { name: /dicte tout/i }).click()
+    await page.getByRole('button', { name: /dicter mes charges/i }).click()
     await prend(page, '25-dictee')
 
     /* Corriger une charge : le seul recours contre une faute de frappe, et il
        s'ouvre SOUS la ligne concernée — c'est ce chevauchement-là qu'il faut
        regarder, aucune assertion ne le verrait. */
     await page.goto('/charges')
+    await page.locator('[data-ligne]').first().click()
     await page.getByRole('button', { name: /^Corriger / }).first().click()
     await prend(page, '27-corriger-charge')
 

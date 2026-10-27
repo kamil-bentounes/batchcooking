@@ -17,11 +17,15 @@ export const SANS_BOUTON_D_ENTETE = [
   '/reglages', '/motdepasse', '/mois-type', '/aliments', '/rappels',
 ]
 
+/** Les écrans refaits (27/10) dont l'en-tête porte le « ? » : ils restent classés plus haut — un test lit `App.tsx` —,
+    mais le bouton flottant s'y efface. */
+const AVEC_BOUTON_D_ENTETE = ['/charges']
+
 export function aLeBoutonDansSonEntete(ici: string): boolean {
+  if (AVEC_BOUTON_D_ENTETE.includes(ici)) return true
   if (SANS_BOUTON_D_ENTETE.includes(ici)) return false
   if (/^\/cloture\/\d{4}-(0[1-9]|1[0-2])$/.test(ici)) return false
   if (/^\/cuisine\/./.test(ici)) return false
-  if (/^\/toutes-les-charges(\/|$)/.test(ici)) return false
   return true
 }
 
