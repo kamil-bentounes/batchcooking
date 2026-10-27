@@ -27,6 +27,18 @@ export function departDeLaCharge(c: { debut: string }, mois: string): string | n
 }
 
 /**
+ * « 3 978,57 € par mois pour le foyer, une fois tout ramené au mois. » Null tant que les charges ne sont
+ * pas lues : un total qu'on n'a pas lu n'est pas zéro. Avant, l'écran affirmait « 0,00 € par mois » le temps
+ * du chargement, puis changeait de chiffre sous les yeux de qui venait de le lire.
+ * `total` et `avance` sont déjà écrits en euros ; `avance` est null quand rien n'est payé de son propre compte.
+ */
+export function phraseDuTotal(o: { lu: boolean; total: string; avance: string | null; pourToi: boolean }): string | null {
+  if (!o.lu) return null
+  const base = `${o.total} par mois ${o.pourToi ? 'pour toi' : 'pour le foyer'}, une fois tout ramené au mois.`
+  return o.avance ? `${base} Dont ${o.avance} que tu paies depuis ton propre compte.` : base
+}
+
+/**
  * Que faire de la réponse de « Retirer » (0111). Une saisie ne part pas sans
  * qu'on l'ait vue : la base refuse d'abord avec le total, on le demande, puis on
  * rappelle. Un refus de l'utilisateur ne rappelle JAMAIS — sinon les dépenses

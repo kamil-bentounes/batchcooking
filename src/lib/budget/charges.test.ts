@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { departDeLaCharge, enVigueur, ceQuiChange, communeDeLaCharge, debutDuChamp, ditLaCorrection, lisLeDebut, peutCorriger, peutPoser,
-         periodiciteDeLaFacon, plancherDuDebut, retireesEncoreAReg, sousTitreDeLaFacon,
+         periodiciteDeLaFacon, phraseDuTotal, plancherDuDebut, retireesEncoreAReg, sousTitreDeLaFacon,
          suiteDuRetrait, texteDeLaRetiree } from './charges.ts'
 import { montant } from './mois.ts'
 
@@ -261,5 +261,23 @@ describe('communeDeLaCharge : une charge n’est commune que si elle se partage'
   it('seul dans le foyer, la case « Elle se partagera avec le foyer » dit l’intention', () => {
     expect(communeDeLaCharge({ qui: 1, membres: 1, intention: true })).toBe(true)
     expect(communeDeLaCharge({ qui: 1, membres: 1, intention: false })).toBe(false)
+  })
+})
+
+describe('phraseDuTotal : un total qu’on n’a pas lu n’est pas zéro', () => {
+  it('se tait tant que les charges ne sont pas lues', () => {
+    expect(phraseDuTotal({ lu: false, total: '0,00 €', avance: null, pourToi: false })).toBeNull()
+  })
+
+  it('dit le total du foyer, ou le sien', () => {
+    expect(phraseDuTotal({ lu: true, total: '3 978,57 €', avance: null, pourToi: false }))
+      .toBe('3 978,57 € par mois pour le foyer, une fois tout ramené au mois.')
+    expect(phraseDuTotal({ lu: true, total: '1 200,00 €', avance: null, pourToi: true }))
+      .toBe('1 200,00 € par mois pour toi, une fois tout ramené au mois.')
+  })
+
+  it('ajoute ce qu’on paie de son propre compte, seulement s’il y en a', () => {
+    expect(phraseDuTotal({ lu: true, total: '2 964,00 €', avance: '86,00 €', pourToi: false }))
+      .toBe('2 964,00 € par mois pour le foyer, une fois tout ramené au mois. Dont 86,00 € que tu paies depuis ton propre compte.')
   })
 })

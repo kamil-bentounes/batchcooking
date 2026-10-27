@@ -25,7 +25,7 @@ import {
 } from '../lib/donnees/budget.ts'
 import { CATEGORIES, NOM_DU_MODE, categorieDeLArticle, infoCategorie, modeDeLArticle,
          type Categorie, type Mode } from '../lib/budget/categories.ts'
-import { ceQuiChange, communeDeLaCharge, departDeLaCharge, enVigueur, debutDuChamp, ditLaCorrection, peutCorriger, peutPoser, periodiciteDeLaFacon,
+import { ceQuiChange, communeDeLaCharge, departDeLaCharge, enVigueur, phraseDuTotal, debutDuChamp, ditLaCorrection, peutCorriger, peutPoser, periodiciteDeLaFacon,
          plancherDuDebut, retireesEncoreAReg, sousTitreDeLaFacon, suiteDuRetrait, texteDeLaRetiree,
          type Rythme } from '../lib/budget/charges.ts'
 import { moisDeDepart } from '../lib/budget/mois.ts'
@@ -527,6 +527,11 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                  && c.participants.length === 1 && c.participants[0] === userId)
     .reduce((s, c) => s + parMois(c), 0)
 
+  /* Rien ne s'affirme avant la lecture : « 0,00 € par mois » le temps du chargement n'était pas un total. */
+  const phrase = phraseDuTotal({
+    lu: !charges.isPending, total: euros(total), avance: avance > 0 ? euros(avance) : null, pourToi: filtre === 'moi',
+  })
+
   /* « Retirer » (0111). Une saisie ne part pas sans qu'on l'ait vue : la base
      refuse d'abord avec le total, l'écran le demande, puis rappelle. */
   const retirer = (c: Charge, avecLesSaisies = false) => retire.mutate({ id: c.id, avecLesSaisies }, {
@@ -586,15 +591,7 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
           ))}
         </div>
 
-        <p className="mt-4 text-[15px] text-doux">
-          {euros(total)} par mois {filtre === 'moi' ? 'pour toi' : 'pour le foyer'},
-          {' '}une fois tout ramené au mois.
-          {avance > 0 && (
-            <>
-              {' '}Dont {euros(avance)} que tu paies depuis ton propre compte.
-            </>
-          )}
-        </p>
+        {phrase && <p className="mt-4 text-[15px] text-doux">{phrase}</p>}
 
         {/* La relecture est UNE PORTE, pas un écran : elle se lance d'ici, au
             pied de la liste qu'elle relit, et rend ses constats au même endroit.
