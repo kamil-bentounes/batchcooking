@@ -18,7 +18,7 @@ sources:
   - supabase/migrations/0021_cocher_remplit.sql
   - supabase/migrations/0117_cuisine_corrections.sql
   - seed/conversions.json
-verifie_sur: ff3539b
+verifie_sur: 02a9f37
 ---
 ## Ce que fait l’appli
 

@@ -24,7 +24,7 @@ sources:
   - src/lib/donnees/cycle.ts
   - src/pages/Inventer.tsx
   - supabase/migrations/0003_class_b.sql
-verifie_sur: ff3539b
+verifie_sur: 02a9f37
 ---
 ## Ce que fait l’appli
 
