@@ -21,7 +21,7 @@ sources:
   - supabase/migrations/0097_budget_tables.sql
   - supabase/migrations/0099_budget_garde_des_saisies.sql
   - supabase/migrations/0104_budget_confirmer.sql
-verifie_sur: 02dd873
+verifie_sur: 9504cf2
 ---
 ## Déclarer une dépense
 

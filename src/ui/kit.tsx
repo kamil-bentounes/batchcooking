@@ -16,10 +16,10 @@ import { Marque } from './coque.tsx'
  */
 function Nav() {
   const { ici, va } = useRoute()
-  const lien = (vers: string, texte: string) => (
+  const lien = (vers: string, texte: ReactNode) => (
     <button type="button" onClick={() => va(vers)}
             aria-current={ici === vers ? 'page' : undefined}
-            className={`py-2 min-h-11 transition-colors
+            className={`py-2 min-h-11 transition-colors inline-flex items-center gap-2
                         ${ici === vers ? 'text-encre' : 'text-doux hover:text-encre'}`}>
       {texte}
     </button>
@@ -28,7 +28,13 @@ function Nav() {
     <nav className="mx-auto w-full max-w-lg flex gap-6 text-[15px] mb-8">
       {/* L'accueil de la CUISINE : on arrive ici depuis elle, pas depuis le
           choix entre univers. Le hub se rejoint par sa marque. */}
-      {lien('/cuisine-accueil', '← Accueil')}
+      {lien('/cuisine-accueil', <>
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"
+             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+          <path d="M10 3.5 5.5 8 10 12.5" />
+        </svg>
+        Accueil
+      </>)}
       {lien('/objectifs', 'Objectifs')}
       {lien('/reglages', 'Réglages')}
     </nav>

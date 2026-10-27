@@ -98,7 +98,7 @@ export function FicheRecette({ recette: r, fermer, parts, retenue, ajoute, enCou
 
           <div className="px-4 py-[18px]">
             {provenance && (
-              <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-doux
+              <p className="text-[14px] font-semibold text-doux
                             [overflow-wrap:anywhere]">
                 {provenance}
               </p>

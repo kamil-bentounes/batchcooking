@@ -261,7 +261,7 @@ export function Dictee({ retour, surRetenues }: {
 
           {reponse.questions.length > 0 && (
             <>
-              <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+              <h2 className="mt-8 text-[14px] font-semibold text-doux">
                 Il me manque ça
               </h2>
               <Surface className="mt-3">
@@ -277,7 +277,7 @@ export function Dictee({ retour, surRetenues }: {
 
           {reponse.oublis.length > 0 && (
             <>
-              <h2 className="mt-8 text-[13px] font-semibold uppercase tracking-[0.06em] text-doux">
+              <h2 className="mt-8 text-[14px] font-semibold text-doux">
                 Tu n’en as pas parlé — tu en as ?
               </h2>
               <p className="mt-2 text-[15px] text-doux">

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Page, Bouton, Champ, Message } from '../ui/kit'
+import { Passage } from '../ui/coque'
 
 /**
  * Poser ou CHANGER son mot de passe.
@@ -42,6 +43,31 @@ export function Password({ userId, onDone, retour }: {
     onDone()
   }
 
+  const formulaire = (
+    <>
+      <div className="space-y-5">
+        <Champ label="Mot de passe" type="password" value={mdp} autoComplete="new-password"
+               placeholder="8 caractères au moins"
+               onChange={e => setMdp(e.target.value)} />
+        <Bouton onClick={enregistrer} disabled={mdp.length < 8}>Enregistrer</Bouton>
+      </div>
+      <Message texte={trop_court ? 'Il en faut au moins 8.' : msg} erreur />
+    </>
+  )
+  const CHAPEAU = 'Choisis-le : c’est lui qui te fera entrer ensuite, sur tous tes appareils.'
+
+  /* Depuis les réglages : le retour est en HAUT À GAUCHE, comme sur tous les écrans de Popote
+     (`Passage`). Il était posé sous le titre et le sous-titre, entre le texte et le champ. */
+  if (retour) {
+    return (
+      <Passage retour={retour} retourTexte="Réglages">
+        <h1 className="titre text-4xl sm:text-5xl text-herbe">Ton mot de passe</h1>
+        <p className="mt-3 text-doux text-[17px] max-w-[46ch]">{CHAPEAU}</p>
+        <div className="mt-10">{formulaire}</div>
+      </Passage>
+    )
+  }
+
   return (
     /*
      * ⚠️ JAMAIS de navigation ici.
@@ -50,22 +76,8 @@ export function Password({ userId, onDone, retour }: {
      *    afficher revenait à offrir trois moyens de sauter l'étape, juste
      *    au-dessus de la phrase qui dit qu'on ne peut pas la sauter.
      */
-    <Page centre marque titre="Ton mot de passe"
-          chapeau="Choisis-le : c’est lui qui te fera entrer ensuite, sur tous tes appareils.">
-      {retour && (
-        <button onClick={retour}
-                className="mb-5 inline-flex items-center gap-2 min-h-11 text-[15px] text-doux
-                           hover:text-encre transition-colors">
-          <span aria-hidden="true">‹</span> Réglages
-        </button>
-      )}
-      <div className="space-y-5">
-        <Champ label="Mot de passe" type="password" value={mdp} autoComplete="new-password"
-               placeholder="8 caractères au moins"
-               onChange={e => setMdp(e.target.value)} />
-        <Bouton onClick={enregistrer} disabled={mdp.length < 8}>Enregistrer</Bouton>
-      </div>
-      <Message texte={trop_court ? 'Il en faut au moins 8.' : msg} erreur />
+    <Page centre marque titre="Ton mot de passe" chapeau={CHAPEAU}>
+      {formulaire}
     </Page>
   )
 }

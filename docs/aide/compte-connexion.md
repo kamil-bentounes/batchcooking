@@ -33,7 +33,7 @@ Un lien trop vieux ou déjà utilisé affiche « Ce lien a expiré ou a déjà s
 
 ## Choisir ou changer son mot de passe
 
-Il faut **8 caractères au moins**. Pour le changer : accueil de la cuisine, rond avec ton initiale (« Réglages »), section « Ton mot de passe », « Changer mon mot de passe ». Écris-le dans « Mot de passe », puis « Enregistrer ». Refus possibles : « C’est déjà ton mot de passe : choisis-en un autre. » ou « Ce mot de passe est trop facile à deviner : allonge-le, ou mélange lettres et chiffres. »
+Il faut **8 caractères au moins**. Pour le changer (« Réglages », en haut à gauche, ramène en arrière) : accueil de la cuisine, rond avec ton initiale (« Réglages »), section « Ton mot de passe », « Changer mon mot de passe ». Écris-le dans « Mot de passe », puis « Enregistrer ». Refus possibles : « C’est déjà ton mot de passe : choisis-en un autre. » ou « Ce mot de passe est trop facile à deviner : allonge-le, ou mélange lettres et chiffres. »
 
 ## Se déconnecter
 

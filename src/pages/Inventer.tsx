@@ -153,7 +153,7 @@ function Invente({ userId, retour, va }: {
       </div>
 
       {/* Le seul réglage qui compte vraiment. Par défaut, on reste au frigo. */}
-      <h2 className="mt-9 text-[13px] text-doux uppercase tracking-[0.04em]">Avec quoi</h2>
+      <h2 className="mt-9 text-[14px] text-doux">Avec quoi</h2>
       <div className="mt-3 flex gap-1.5 p-1.5 rounded-[15px] bg-brume/60" role="radiogroup">
         {([['frigo', 'Ce qu’on a'], ['courses', '+ 3 courses'], ['libre', 'Libre']] as const)
           .map(([v, texte]) => (
@@ -174,7 +174,7 @@ function Invente({ userId, retour, va }: {
         </p>
       )}
 
-      <h2 className="mt-9 text-[13px] text-doux uppercase tracking-[0.04em]">Sans négocier</h2>
+      <h2 className="mt-9 text-[14px] text-doux">Sans négocier</h2>
       <div className="mt-3.5 space-y-3.5">
         <Reglage label="Au moins" valeur={proteines} unite="g de protéines"
                  min={0} max={90} pas={5} surChange={setProteines} />
@@ -295,7 +295,7 @@ function Resultat({ r, restantes, retour, garde, surGardee }: {
         </p>
       </Surface>
 
-      <h2 className="mt-8 text-[13px] text-doux uppercase tracking-[0.04em]">
+      <h2 className="mt-8 text-[14px] text-doux">
         La marche à suivre
       </h2>
       <ol className="mt-4 space-y-4">

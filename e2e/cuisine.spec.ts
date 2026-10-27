@@ -44,7 +44,7 @@ test.describe('la cuisine, jouée au clic', () => {
     await page.goto('/choisir')
     await expect(page.getByRole('article').first()).toBeVisible({ timeout: 20_000 })
     const retenues = page.getByRole('region', { name: /ce qu’on cuisine/i })
-    const titres = () => retenues.locator('li span.grow').allInnerTexts()
+    const titres = () => retenues.getByRole('listitem').locator('p').allInnerTexts()
     const avant = await titres()
     expect(avant.length).toBeGreaterThanOrEqual(2)
     const champ = retenues.getByRole('textbox').first()
@@ -52,6 +52,9 @@ test.describe('la cuisine, jouée au clic', () => {
     await champ.blur()
     await expect(champ).toHaveValue('7')
     expect(await titres(), 'la ligne réglée a changé de place').toEqual(avant)
+    // Le « 7 » doit être écrit avant le refus : sa réussite effaçait le message du refus d'après.
+    await expect.poll(async () => (await db.from('cycle_recipe').select('servings')
+      .eq('cycle_id', foyer.cycleId)).data?.some(r => r.servings === 7), { timeout: 10_000 }).toBe(true)
     await champ.fill('0')
     const alerte = page.getByRole('alert').filter({ hasText: 'Il faut au moins 1 part.' })
     await expect(alerte).toBeVisible()
@@ -91,7 +94,7 @@ test.describe('la cuisine, jouée au clic', () => {
     await expect(page.getByRole('alert')).toContainText('Un prix payé va de 0 à 10')
 
     // Un article à la main prend son rayon du libellé, pas « Fruits et légumes ».
-    await page.getByRole('button', { name: '+ Ajouter' }).click()
+    await page.getByRole('button', { name: 'Ajouter un article' }).click()
     await page.getByPlaceholder('Ce qu’il faut prendre').fill('Sel fin')
     await expect(page.getByRole('combobox', { name: 'Rayon' })).toHaveValue('Autre')
   })
@@ -142,11 +145,12 @@ test.describe('la cuisine, jouée au clic', () => {
     await page.goto('/plan')
     const frise = page.getByRole('region', { name: 'Déroulé de la session' })
     await expect(frise).toBeVisible({ timeout: 20_000 })
-    const gestes = await frise.locator('.right-0 > div').evaluateAll(l => l.map(e => {
+    // Une ligne par geste (depuis la refonte du 26/10 : titre, durée et barre dans une même ligne).
+    const gestes = await frise.getByRole('listitem').evaluateAll(l => l.map(e => {
       const r = e.getBoundingClientRect(); return [r.top, r.bottom] }))
     expect(gestes.length).toBeGreaterThan(1)
     for (let i = 1; i < gestes.length; i++) {
-      expect(gestes[i][0], 'deux gestes se recouvrent').toBeGreaterThanOrEqual(gestes[i - 1][0] + 40)
+      expect(gestes[i][0], 'deux gestes se recouvrent').toBeGreaterThanOrEqual(gestes[i - 1][1] - 1)
     }
   })
 

@@ -36,7 +36,7 @@ Il n’existe pas aujourd’hui de source de prix automatique (j’ai cherché) 
 
 ## Les règles
 
-- Une ligne est cochée d’avance si la confiance du modèle est d’au moins 0,5. Une ligne **absente de la liste** reste possible : « pas sur la liste — le prix s’apprend quand même ».
+- Une ligne est cochée d’avance si la confiance du modèle est d’au moins 0,5. Une ligne rattachée à un article dit « sur la liste : » et son nom. Une ligne **absente de la liste** reste possible : « pas sur la liste — le prix s’apprend quand même ».
 - Le rapprochement compare les mots du libellé de caisse (« PDT CHARLOTTE 2.5KG ») à ceux de ta liste. Score d’au moins 0,72 : sûr. Entre 0,4 et 0,72 : proposé, « deviné, à vérifier ». En dessous : sans article. Un rapprochement deviné que tu ne changes pas est enregistré : vérifie-le.
 - **L’écart** compare la somme des lignes lues au total imprimé : « écart de X € avec le total imprimé ».
 - Une remise listée mais non soustraite est déduite, seulement si le compte tombe juste au centime : « remises déduites ».

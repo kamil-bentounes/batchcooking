@@ -16,7 +16,7 @@ sources:
   - src/lib/donnees/pesee.ts
   - src/lib/donnees/courses.ts
   - supabase/migrations/0025_pesee.sql
-verifie_sur: 78ffdc2
+verifie_sur: 9504cf2
 ---
 ## Ce que fait l’appli
 
@@ -39,7 +39,7 @@ verifie_sur: 78ffdc2
 
 ## Corriger
 
-Sous un aliment ouvert, chaque pesée est listée (« 2 → 236 g (118 g l’unité) ») avec « effacer ». Efface la fausse plutôt que d’en refaire trois autres.
+Sous un aliment ouvert, chaque pesée est listée (« 2 pour 236 g (118 g l’unité) ») avec « effacer ». Efface la fausse plutôt que d’en refaire trois autres.
 
 ## Effet sur les courses
 

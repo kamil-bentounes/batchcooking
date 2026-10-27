@@ -242,7 +242,7 @@ export function Cloture({ userId, mois, va, retour }: {
         <button onClick={retour} className="inline-flex items-center gap-2 min-h-11 text-[15px] text-doux">
           <span aria-hidden="true">‹</span> Budget
         </button>
-        <p className="mt-4 text-[13px] font-semibold uppercase tracking-[0.08em] text-doux">
+        <p className="mt-4 text-[14px] font-semibold text-doux">
           {dateLongue(maintenant())}
         </p>
         <h1 ref={titre} tabIndex={-1} className="titre text-[40px] leading-tight mt-1 focus:outline-none">

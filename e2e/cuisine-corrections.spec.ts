@@ -103,7 +103,7 @@ test.describe('la liste de courses', () => {
     await expect(ligne(/^Lentille corail/)).toHaveCount(1)
     await expect(page.getByText('Lentille corail, sèche')).toHaveCount(0)
 
-    const rayonDe = async (nom: RegExp) => page.locator('div.mt-6', { has: ligne(nom) })
+    const rayonDe = async (nom: RegExp) => page.locator('section[aria-label^="Courses chez"] > div', { has: ligne(nom) })
       .locator('h3').first().innerText()
     expect((await rayonDe(/^Carotte, crue/)).toLowerCase()).toBe('fruits et légumes')
     expect((await rayonDe(/^Carotte, surgelée, crue/)).toLowerCase()).toBe('surgelés')

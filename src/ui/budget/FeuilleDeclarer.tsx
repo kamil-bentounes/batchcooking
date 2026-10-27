@@ -130,7 +130,7 @@ export function VueDeclarer({
 
       {siennes.length > 0 && (
         <>
-          <h3 className="mt-6 text-[13px] font-semibold uppercase tracking-[0.08em] text-doux">
+          <h3 className="mt-6 text-[14px] font-semibold text-doux">
             Déjà ce mois-ci
           </h3>
           <ul className="mt-2 rounded-[22px] bg-surface shadow-carte px-4 divide-y divide-brume">

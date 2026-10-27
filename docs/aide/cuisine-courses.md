@@ -14,10 +14,11 @@ sources:
   - src/lib/donnees/courses.ts
   - src/lib/liste.ts
   - src/lib/rayons.ts
+  - src/ui/rayons.tsx
   - supabase/migrations/0021_cocher_remplit.sql
   - supabase/migrations/0117_cuisine_corrections.sql
   - seed/conversions.json
-verifie_sur: 73f1b27
+verifie_sur: 9504cf2
 ---
 ## Ce que fait l’appli
 
@@ -33,9 +34,11 @@ verifie_sur: 73f1b27
 
 ## Au magasin
 
-- Articles groupés par magasin, puis par rayon (au départ : Fruits et légumes, Boucherie, poissonnerie, Frais, Surgelés, Épicerie salée, Épicerie sucrée, Boissons, Entretien, Hygiène, Autre). L’ordre s’apprend ensuite de tes cochages, magasin par magasin.
+En haut, le total en gros (« 9,40 € estimés pour 3 articles à prendre », ou « payés ») et « 0 sur 3 dans le panier », avec une barre de segments.
+
+- Articles groupés par magasin, puis par rayon (Fruits et légumes, Boucherie, poissonnerie, Frais, Surgelés, Épicerie salée, Épicerie sucrée, Boissons, Entretien, Hygiène, Autre), chacun dans sa carte. L’ordre s’apprend ensuite de tes cochages, magasin par magasin.
 - Touche une ligne pour changer son magasin, noter le « Prix payé », ou « Supprimer ». Une ligne cochée ou payée ne se supprime pas : « Décoche-le pour le supprimer. » ou « Efface le prix pour le supprimer. »
-- « + Ajouter » : « Ce qu’il faut prendre », rayon, prix estimé, « Ajouter à la liste ».
+- Sous la liste : « Ajouter un article » (« Ce qu’il faut prendre », rayon, prix estimé, « Ajouter à la liste »), « Compléter ma liste », « Estimer les prix d’après mes tickets » (s’il reste des lignes sans prix) et « J’ai payé — photographier le ticket ».
 - « Compléter ma liste » : des catégories (Boissons, Entretien, Épicerie, Frais du quotidien, Hygiène, Maison) et « Ce que vous reprenez souvent ». Une suggestion va au rayon de sa catégorie : Boissons, Frais (« Frais du quotidien »), Épicerie salée (« Épicerie »), Entretien (« Maison » et « Entretien »), Hygiène. Une habitude : rayon deviné d’après son nom, sinon « Autre ».
 - « Où fais-tu tes courses ? » crée ton premier magasin.
 
@@ -45,7 +48,7 @@ L’article entre dans le frigo, le congélateur ou le placard, selon son rayon 
 
 ## Terminer
 
-« J’ai tout, rentrons » (ou « Rentrer sans N articles ») passe à « Tout est là » et ouvre le plan.
+Le bouton du bas, toujours visible, dit « J’ai tout, rentrons » (ou « Rentrer sans les N articles », « Rentrer sans cet article » s’il n’en reste qu’un) : il passe à « Tout est là » et ouvre le plan. « Continuer plus tard » revient en arrière.
 
 ## Refaire la liste
 

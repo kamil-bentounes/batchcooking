@@ -24,7 +24,7 @@ sources:
   - src/lib/donnees/cycle.ts
   - src/pages/Inventer.tsx
   - supabase/migrations/0003_class_b.sql
-verifie_sur: d61ae46
+verifie_sur: 9504cf2
 ---
 ## Ce que fait l’appli
 
@@ -32,8 +32,8 @@ Tu retiens les recettes de dimanche. L’écran compte les parts : « 6 / 10 par
 
 ## Comment faire
 
-1. Cherche ou filtre, puis touche le **+** d’une recette. Le **i** ouvre sa fiche ; une coche (« Retenue ») marque une recette retenue.
-2. Dans la carte sombre, chaque recette retenue a ses parts (de 1 à 20) et « Retirer ». Au-delà de trois, les plus anciennes se plient (« + N autres »).
+1. Cherche ou filtre, puis touche le **+** rond d’une recette (sur sa photo). Le **i**, en haut à droite de la photo, ouvre sa fiche ; une coche verte (« Retenue ») et un cadre vert marquent une recette retenue.
+2. En haut, la carte sombre montre une bande de photos qui défile de côté : une petite carte par recette retenue, toutes ensemble. Le **−** et le **+** changent ses parts d’une en une (de 1 à 20 ; tu peux aussi taper le nombre), et la croix (« Retirer ») la retire.
 3. « N repas à couvrir » règle les « Parts visées cette semaine » (jusqu’à 40 ; 10 par défaut).
 4. « Faire la liste » (dès une recette) mène aux courses.
 
@@ -43,13 +43,13 @@ La carte dit « Il manque N parts », « C’est couvert » ou « Au-delà du pr
 
 ## Ce qu’affiche une recette
 
-Temps actif (« Gestes non comptés » si inconnu), parts, « se congèle », protéines et calories **en fourchette** (« 28–34 g de protéines »), « il manque … » d’après ton stock. « Macros inconnues » : trop d’ingrédients non reconnus ; sous 90 % d’ingrédients connus, le pourcentage est indiqué.
+Sur la photo, le temps actif en pastille (« Gestes non comptés » si inconnu). Dessous : le nom, les parts et « se congèle », puis les protéines **en gros** et les calories, **en fourchette** (« 28–34 g de protéines par part »), et « il manque … » d’après ton stock. « Macros inconnues » : trop d’ingrédients non reconnus ; sous 90 % d’ingrédients connus, le pourcentage est indiqué.
 
 Le **temps actif** est celui de tes gestes : le four ne compte pas, enfourner oui. Tri : le plus rapide d’abord, temps inconnus à la fin.
 
 ## Les filtres
 
-Puces : « ≤ 20 min actives », « ≥ 30 g de protéines », « Se congèle », « Avec ce que j’ai ». Le bouton à droite de la recherche (« Appareils et filtres ») ouvre : « Temps les mains prises », « Protéines au moins », « Calories au plus », « Avec seulement » (appareils), « Jamais essayée ».
+Les puces passent à la ligne : « ≤ 20 min actives », « ≥ 30 g de protéines », « Se congèle », « Avec ce que j’ai ». Le bouton à droite de la recherche (« Appareils et filtres ») ouvre : « Temps les mains prises », « Protéines au moins », « Calories au plus », « Avec seulement » (appareils), « Jamais essayée ».
 
 - Protéines et calories jouent la **borne défavorable** : « au moins 30 g » écarte une recette annoncée entre 28 et 34.
 - La recherche ne lit que le titre ; chaque mot doit s’y trouver, dans n’importe quel ordre.

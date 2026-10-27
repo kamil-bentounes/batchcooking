@@ -1226,10 +1226,15 @@ test.describe.serial('les recettes, de bout en bout', () => {
       })
       const ANNEAU_CLAIR = { couleur: 'rgb(242, 244, 239)', style: 'solid', largeur: '2px' }
       const retirer = encre(page).getByRole('button', { name: 'Retirer' })
-      await champ.press('Tab') // au clavier : c'est ce qui allume `:focus-visible`
+      /* Dans la bande : « ✕ » (Retirer), « − », le champ, « + ». Au clavier, c'est ce qui allume
+         `:focus-visible`. */
+      await champ.press('Shift+Tab')
+      await expect(encre(page).getByRole('button', { name: /^Une part de moins/ })).toBeFocused()
+      await page.keyboard.press('Shift+Tab')
       await expect(retirer).toBeFocused()
       expect(await anneau(retirer), '« Retirer » : anneau invisible sur l’encre').toEqual(ANNEAU_CLAIR)
-      await retirer.press('Shift+Tab')
+      await retirer.press('Tab')
+      await page.keyboard.press('Tab')
       await expect(champ).toBeFocused()
       expect(await anneau(champ), 'le champ des parts : anneau invisible sur l’encre').toEqual(ANNEAU_CLAIR)
       const pastille = encre(page).getByRole('button', { name: /repas à couvrir/ })
@@ -1300,6 +1305,10 @@ test.describe.serial('les recettes, de bout en bout', () => {
       await photo(page, 'mot-long-liste', 'Un titre de 200 caractères sans espace : la liste ne déborde pas')
 
       // ── 5 · Sept pictos d'appareil : la rangée passe à la ligne, elle ne sort pas de la colonne ──
+      /* La carte est large : sept pictos de 32 px tiennent sur une ligne à 412 px. À 320 px, la rangée passe
+         à la ligne, et c'est là qu'elle ne doit pas sortir de la carte. */
+      const tailleDOrigine = page.viewportSize()!
+      await page.setViewportSize({ width: 320, height: 700 })
       const colonne = await c.getByRole('heading').boundingBox()
       const pictos = c.locator('span[role="img"][title]')
       await expect(pictos).toHaveCount(CODES.length)
@@ -1312,6 +1321,7 @@ test.describe.serial('les recettes, de bout en bout', () => {
         (l: HTMLElement[]) => l.map(e => Math.round(e.getBoundingClientRect().top))))
       expect(lignesDePictos.size, 'sept pictos tiennent sur une ligne : la rangée ne passe donc pas à la ligne')
         .toBeGreaterThan(1)
+      await page.setViewportSize(tailleDOrigine)
 
       // ── 6 · Petits défauts d'écran ──────────────────────────────────────────
       // (a) Une fourchette ne se coupe pas au tiret : « 385–425 kcal » et « 22–26 g » tiennent sur une ligne.

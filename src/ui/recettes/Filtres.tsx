@@ -21,9 +21,9 @@ export function Recherche({ texte, surTexte, ouvert, basculer, actifs }: {
 }) {
   return (
     <div className="mt-[18px] flex gap-2">
-      <label className="grow min-w-0 h-[50px] rounded-[18px] bg-surface shadow-carte flex items-center
-                        gap-2.5 px-3.5 text-doux focus-within:ring-2 focus-within:ring-herbe">
-        <Icone nom="loupe" taille={20} />
+      <label className="grow min-w-0 h-[52px] rounded-[18px] bg-surface shadow-[inset_0_0_0_1.5px_var(--color-brume)]
+                        flex items-center gap-2.5 px-4 text-doux focus-within:ring-2 focus-within:ring-herbe">
+        <Icone nom="loupe" taille={22} />
         <input type="search" inputMode="search" enterKeyHint="search"
                value={texte} onChange={e => surTexte(e.target.value)}
                placeholder="Chercher une recette" aria-label="Chercher une recette"
@@ -32,9 +32,9 @@ export function Recherche({ texte, surTexte, ouvert, basculer, actifs }: {
       </label>
       <button type="button" onClick={basculer} aria-expanded={ouvert}
               aria-label={actifs > 0 ? `Appareils et filtres, ${actifs} posés` : 'Appareils et filtres'}
-              className="relative size-[50px] shrink-0 grid place-items-center rounded-[18px]
-                         bg-piste text-herbe">
-        <Icone nom="reglages" taille={20} />
+              className="relative size-[52px] shrink-0 grid place-items-center rounded-[18px] bg-surface
+                         shadow-[inset_0_0_0_1.5px_var(--color-brume)] text-encre">
+        <Icone nom="reglages" taille={24} />
         {actifs > 0 && (
           <span aria-hidden="true"
                 className="absolute -top-1 -right-1 min-w-5 h-5 px-1 grid place-items-center
@@ -47,23 +47,30 @@ export function Recherche({ texte, surTexte, ouvert, basculer, actifs }: {
   )
 }
 
-/** Les quatre raccourcis : chacun est l'une des valeurs du panneau. */
+/**
+ * Les quatre raccourcis : chacun est l'une des valeurs du panneau.
+ *
+ * Ils passent à la LIGNE plutôt que de défiler : la rangée coupée à droite
+ * (« Se congè… ») ne disait pas qu'elle défilait, et le geste de balayer se
+ * perdait sous un doigt qui descend la liste.
+ */
 export function Puces({ filtres: f, modifie }: { filtres: Filtres; modifie: Modifie }) {
   return (
-    <div className="mt-2.5 -mx-6 px-6 flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
-      <Puce actif={f.tempsActifMax === 20}
+    <div role="group" aria-label="Filtres rapides" className="mt-3 flex flex-wrap gap-2">
+      <Puce actif={f.tempsActifMax === 20} icone="horloge"
             surClic={() => modifie({ tempsActifMax: f.tempsActifMax === 20 ? null : 20 })}>
         ≤ 20 min actives
       </Puce>
-      <Puce actif={f.proteinesMin === 30}
+      <Puce actif={f.proteinesMin === 30} icone="feuille"
             surClic={() => modifie({ proteinesMin: f.proteinesMin === 30 ? null : 30 })}>
         ≥ 30 g de protéines
       </Puce>
-      <Puce actif={f.congelable === true}
+      <Puce actif={f.congelable === true} icone="flocon"
             surClic={() => modifie({ congelable: f.congelable === true ? null : true })}>
         Se congèle
       </Puce>
-      <Puce actif={f.avecCeQuOnA} surClic={() => modifie({ avecCeQuOnA: !f.avecCeQuOnA })}>
+      <Puce actif={f.avecCeQuOnA} icone="placard"
+            surClic={() => modifie({ avecCeQuOnA: !f.avecCeQuOnA })}>
         Avec ce que j’ai
       </Puce>
     </div>
@@ -127,13 +134,14 @@ export function PanneauFiltres({ filtres: f, modifie }: { filtres: Filtres; modi
   )
 }
 
-function Puce({ actif, surClic, children }:
-  { actif: boolean; surClic: () => void; children: ReactNode }) {
+function Puce({ actif, surClic, icone, children }:
+  { actif: boolean; surClic: () => void; icone?: Parameters<typeof Icone>[0]['nom']; children: ReactNode }) {
   return (
     <button type="button" onClick={surClic} aria-pressed={actif}
-            className={`shrink-0 min-h-11 px-3.5 rounded-full text-[13.5px] font-medium
-                        whitespace-nowrap transition-colors
+            className={`shrink-0 min-h-11 px-4 rounded-full text-[14.5px] font-medium
+                        whitespace-nowrap transition-colors inline-flex items-center gap-2
                         ${actif ? 'bg-encre text-fond' : 'bg-piste text-encre'}`}>
+      {icone && <Icone nom={icone} taille={18} />}
       {children}
     </button>
   )

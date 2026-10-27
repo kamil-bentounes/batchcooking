@@ -20,6 +20,7 @@ import { useFoyer, aDesObjectifs, objectifDe, phraseSansObjectifs, prenomDe } fr
 import { useRecettesMesurees } from '../lib/donnees/recettes.ts'
 import type { RecetteMesuree } from '../lib/donnees/recettes.ts'
 import { PART_DU_JOUR, repartit } from '../lib/nutrition/portions.ts'
+import { nb } from '../lib/nombre.ts'
 import type { Repartition } from '../lib/nutrition/portions.ts'
 import { Ranger } from './Ranger.tsx'
 
@@ -145,7 +146,7 @@ function Lot({ recette, repartition, nomDe }: {
               pour {nomDe(p.userId)}{p.sansObjectifs ? ' · parts égales' : ''}
             </span>
             <span className="shrink-0 whitespace-nowrap text-[14px] opacity-80 tabular-nums">
-              {p.kcal} kcal · {p.proteinG} g
+              {p.kcal} kcal · {nb(p.proteinG)} g
             </span>
           </div>
         ))}

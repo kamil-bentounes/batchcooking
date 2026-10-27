@@ -175,7 +175,7 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
             « Septembre » en Fraunces 46 px et deux pastilles ne tiennent pas
             ensemble dans 390 px. */}
         <div className="mt-3 flex items-center justify-between gap-2">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-doux">Budget</p>
+          <p className="text-[14px] font-semibold text-doux">Budget</p>
           <div className="flex gap-1.5">
             <button onClick={() => setMois(precedent)}
                     aria-label={`Mois précédent : ${nomDuMois(precedent)}`}
@@ -232,13 +232,15 @@ export function Budget({ userId, va, remplace, mois: depart, ouverteAuDepart = n
                 (`videDuMois`). */}
             {vide.porte === 'revenus' && (
               <button onClick={() => va('/budget-reglages')}
-                      className="w-full h-[58px] rounded-[18px] bg-herbe text-fond text-[17px] font-medium">
+                      className="w-full min-h-[58px] px-6 py-3 rounded-[18px] bg-herbe text-fond text-[16px] font-medium
+                             leading-snug text-center">
                 Commencer par les revenus et les comptes
               </button>
             )}
             {vide.porte === 'charges' && (
               <button onClick={() => va('/charges')}
-                      className="w-full h-[58px] rounded-[18px] bg-herbe text-fond text-[17px] font-medium">
+                      className="w-full min-h-[58px] px-6 py-3 rounded-[18px] bg-herbe text-fond text-[16px] font-medium
+                             leading-snug text-center">
                 Poser les charges
               </button>
             )}
