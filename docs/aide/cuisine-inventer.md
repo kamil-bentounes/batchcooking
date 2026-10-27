@@ -17,7 +17,7 @@ sources:
   - src/lib/donnees/catalogue.ts
   - src/pages/Accueil.tsx
   - src/pages/Choisir.tsx
-verifie_sur: fc7f6dc
+verifie_sur: a1cd902
 ---
 ## Ce que fait l’appli
 

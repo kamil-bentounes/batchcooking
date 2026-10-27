@@ -24,7 +24,7 @@ sources:
   - supabase/migrations/0027_ecriture_croisee.sql
   - supabase/migrations/0035_amis.sql
   - supabase/migrations/0037_cuisiner_ensemble.sql
-verifie_sur: fc7f6dc
+verifie_sur: a1cd902
 ---
 ## Où
 

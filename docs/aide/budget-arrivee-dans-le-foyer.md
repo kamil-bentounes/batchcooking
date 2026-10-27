@@ -25,7 +25,7 @@ sources:
   - supabase/migrations/0098_budget_lignes_nees.sql
   - supabase/migrations/0102_budget_mois_suivis.sql
   - supabase/migrations/0103_budget_arrivees.sql
-verifie_sur: 9504cf2
+verifie_sur: a1cd902
 ---
 ## La date d'arrivée
 
@@ -40,7 +40,7 @@ Un mois compte pour toi si ton arrivée n'est pas après son dernier jour : arri
 Avant ton arrivée :
 
 - tu ne portes aucune part et on ne te demande aucun revenu ;
-- la tuile « Budget » de l'accueil dit ton **mois type** (« Ton mois type, chaque mois : 420 € pour toi », charges 1 850 €) et compte les jours : « 5 jours avant ton premier mois, le 1er novembre » (« Dans 5 jours » sur téléphone). Sans charges posées, elle dit **« Commence en novembre »** et « Tu entres dans le foyer à cette date : rien n’est à poser avant. » ;
+- la tuile « Budget » de l'accueil dit ton **mois type** (« 420 € pour toi ») et compte les jours : « 5 jours avant ton premier mois, le 1er novembre ». Sans charges posées : **« Commence en novembre »** ;
 - l'écran du mois dit « Tu n’es pas encore dans le foyer : tu y entres en novembre. Ce mois-là ne te compte aucune part. » (« Tu n’étais pas encore… » sur un mois passé). Sur un mois vide, il montre le **mois type** de ton arrivée (« budget-mois-type ») ; tant qu’aucune charge n’est posée, il dit « Pas encore » ;
 - aucun bandeau « … est fini : on le clôture ? » ne paraît pour ces mois.
 

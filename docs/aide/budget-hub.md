@@ -18,7 +18,7 @@ sources:
   - src/ui/budget/MoisType.tsx
   - src/lib/budget/mois-type.ts
   - src/lib/donnees/cycle.ts
-verifie_sur: 7409ab5
+verifie_sur: a1cd902
 ---
 La tuile « Budget » de l'accueil (« Le budget », à côté du frigo) donne l'état du mois en cours. Un toucher dessus ouvre l'écran du mois. Ouvrir l'accueil ouvre aussi le mois en cours : Popote crée ses lignes.
 
@@ -28,14 +28,14 @@ Dans cet ordre :
 
 1. **« … »** : Popote lit encore ses données.
 2. **« Je n’ai pas pu lire le budget : tu n’as plus de connexion. »** (ou la raison de la panne) : aucun chiffre tant que tout n'est pas lu.
-3. **Avant ton arrivée** (elle tombe après le mois en cours) : si des charges sont posées pour ton arrivée, **« Ton mois type, chaque mois »** et ton reste (**« 420 € pour toi »**, ou « Il te manque 90 € » ; sans revenu posé, tes charges seules), une barre charges et reste, puis le compte à rebours : **« 5 jours avant ton premier mois, le 1er novembre »** (« Dans 5 jours » sur téléphone). C’est ta part, ramenée au mois (« budget-mois-type »). Sans charge posée : **« Commence en novembre »** (sans l’année) et « Tu entres dans le foyer à cette date : rien n’est à poser avant. »
+3. **Avant ton arrivée** : ton mois type (« budget-mois-type ») — **« 420 € pour toi »** ou « Il te manque 90 € », tes charges, une barre — et le compte à rebours **« 5 jours avant ton premier mois, le 1er novembre »** (« Dans 5 jours » sur téléphone). Sans charge posée : **« Commence en novembre »** et « Tu entres dans le foyer à cette date : rien n’est à poser avant. »
 4. **« Rien de posé »**, avec « Les charges du foyer, et ce que chacun verse. » : aucune ligne ce mois-ci.
 5. **« Ajoute ton revenu »** : le mois a des lignes, pas ton revenu.
-6. **« Il te reste 560 € en octobre »** ou **« Il te manque 40 € en octobre »** : même calcul que sur l'écran du mois. Une barre met tes charges face à ce qui reste (sans barre si le revenu manque, ou s'il ne reste rien).
+6. **« Il te reste 560 € en octobre »** ou **« Il te manque 40 € en octobre »** : même calcul que sur l'écran du mois.
 
 ## La ligne sous le chiffre
 
-Sous le chiffre (cas 5 et 6), une seule phrase, la première qui s'applique (sur téléphone, une pastille la dit en deux mots : « Septembre à clôturer », « 2 à dire », « À jour ») :
+Sous le chiffre (cas 5 et 6), une seule phrase, la première qui s'applique (une pastille la résume sur téléphone) :
 
 - **« Septembre est à clôturer »** : le mois précédent n'est pas clôturé, tu y avais un revenu et tu étais déjà dans le foyer.
 - **« 2 montants à dire : Courses et Essence »** : des lignes « Plusieurs dépenses dans le mois » n'ont encore aucune dépense déclarée. Trois lignes nommées au plus, puis « et 2 autres ».

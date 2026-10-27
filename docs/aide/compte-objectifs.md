@@ -21,7 +21,7 @@ sources:
   - src/lib/nutrition/portions.ts
   - src/pages/Accueil.tsx
   - supabase/migrations/0005_policies.sql
-verifie_sur: fc7f6dc
+verifie_sur: a1cd902
 ---
 ## Ce que fait l’écran
 
