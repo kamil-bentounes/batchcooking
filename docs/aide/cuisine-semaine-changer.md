@@ -37,6 +37,10 @@ Quand tu changes, l’ancienne barquette est lâchée, et l’appli le dit : « 
 
 **« Je l’ai mangé »** apparaît aujourd’hui, et sur un jour passé (voir « cuisine-semaine-hier »), sur ta carte, pour un plat comme pour « Autre chose » : la barquette est marquée mangée et quitte le frigo. Un repas que quelqu’un a mangé ne se change plus pour cette personne.
 
+## Annuler « Je l’ai mangé »
+
+Un faux appui se rattrape : bandeau « Noté : mangé. » pendant 6 secondes, puis le lien « Pas mangé ? Annuler » (voir « cuisine-semaine-annuler »).
+
 ## Un plat congelé
 
 Un plat **congelé** a un bandeau bleu :

@@ -119,7 +119,7 @@ export function LienAnnuler({ avecBarquette, surConfirme, enCours, nom }: {
   return (
     <div ref={boite} tabIndex={-1} role="group" aria-labelledby={titre} data-annule="confirme"
          className="grid gap-3 rounded-[18px] bg-sable p-3.5 outline-none">
-      <b id={titre} className="titre text-[18px] font-semibold leading-[1.25]">Remettre ce repas à « prévu » ?</b>
+      <b id={titre} className="titre text-[18px] font-semibold leading-[1.25]">Remettre ce repas à « prévu » ?</b>
       <p className="text-[14.5px] leading-[1.4]">
         {avecBarquette
           ? 'Ta part redevient prévue et la barquette revient au frigo. Si elle venait du congélateur, elle y retourne.'
