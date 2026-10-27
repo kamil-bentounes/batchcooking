@@ -14,7 +14,7 @@ sources:
   - supabase/functions/aide/index.ts
   - supabase/functions/aide/prompt.ts
   - supabase/migrations/0118_aide_signalement.sql
-verifie_sur: 7bb3825
+verifie_sur: cc8b190
 ---
 **Ce que c'est.** Un petit assistant qui répond à tes questions sur l'appli : où cliquer, comment c'est calculé, ce qu'elle ne fait pas. Il répond d'après un manuel écrit à partir du code de l'appli, pas de mémoire. Si plusieurs pages parlent du sujet, il retient celle qui traite le cas décrit, et la cite.
 
