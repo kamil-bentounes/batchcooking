@@ -50,7 +50,9 @@ export function CartePoche({ poche, userId, foyerId, membres }: {
 
   return (
     <section aria-label={poche.libelle} className="overflow-hidden rounded-[24px] bg-surface shadow-carte">
-      <div className="relative h-[136px] min-[900px]:h-[176px] bg-piste">
+      {/* Le fond du bandeau est sombre : tant que la photo n'est pas là (ou si elle ne vient pas), le titre blanc
+          se lit quand même. */}
+      <div className="relative h-[136px] min-[900px]:h-[176px] bg-encre">
         <img src={`${import.meta.env.BASE_URL}budget/${photoDeLaPoche(poche.genre)}.jpg`} alt=""
              loading="lazy" className="h-full w-full object-cover" />
         <div aria-hidden="true" className="absolute inset-0" style={{ background: VOILE }} />

@@ -32,7 +32,7 @@ export function OuvrirUnePoche({ foyerId, pose }: {
           <button key={v} type="button" role="radio" aria-checked={genre === v} onClick={() => setGenre(v)}
                   className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-2
                               text-[14.5px] font-semibold leading-[1.15] transition-colors
-                    ${genre === v ? 'bg-surface text-encre shadow-carte' : 'text-doux'}`}>
+                    ${genre === v ? 'bg-surface text-encre shadow-carte' : 'text-encre'}`}>
             {v === 'urgence' ? <Tirelire taille={18} /> : <Valise taille={18} />}
             {t}
           </button>
