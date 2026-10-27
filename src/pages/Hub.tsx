@@ -22,9 +22,9 @@ import { useMemo } from 'react'
 import { Erreur, Marque, dateLongue } from '../ui/coque.tsx'
 import { GESTE, useChangeEtat, useCycle, useCycleInterrompu, useOuvreCycle } from '../lib/donnees/cycle.ts'
 import type { Etat } from '../lib/donnees/cycle.ts'
-import { jour, useAnnuleMange, useBarquettes, useMange, useSemaine } from '../lib/donnees/barquettes.ts'
+import { bilanDuJour, jour, useAnnuleMange, useBarquettes, useMange, useSemaine } from '../lib/donnees/barquettes.ts'
 import { usePrevus, useRecettesDesPlats, useSortDuCongelo } from '../lib/donnees/frigo.ts'
-import { aDesObjectifs, bandeauDuProfil, useFoyer, initialeDe, prenomDe } from '../lib/donnees/foyer.ts'
+import { aDesObjectifs, bandeauDuProfil, objectifDe, useFoyer, initialeDe, prenomDe } from '../lib/donnees/foyer.ts'
 import { useClotures, useMois, useRevenus, useSaisies, moisDe, eurosRonds } from '../lib/donnees/budget.ts'
 import {
   aDire, estADire, estLaCeMois, ligneDuHub, moisVoisin, montant, nomDuMois, resteDuMois, revenuDuMois,
@@ -49,6 +49,7 @@ import { PorteCuisine } from '../ui/hub/PorteCuisine.tsx'
 import { Raccourcis } from '../ui/hub/Raccourcis.tsx'
 import { TuileBudget, type VueBudget } from '../ui/hub/TuileBudget.tsx'
 import { TuileFrigo } from '../ui/hub/TuileFrigo.tsx'
+import { TuileJournee } from '../ui/hub/TuileJournee.tsx'
 
 export function Hub({ userId, va }: { userId: string; va: (v: string) => void }) {
   const aujourdhui = useMemo(() => maintenant(), [])
@@ -163,6 +164,8 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
   const aVenir = ceQuiVient(cases ?? [], userId, aujourdhui,
     { exclus: enSemaine ? casesDeLaCarte : undefined, max: 3 })
   const dejaMange = mesRepasManges(cases ?? [], userId, jourDit)
+  /* « Ta journée » : le calcul de l'accueil de la cuisine et du bilan, sur mes cases d'aujourd'hui. */
+  const maJournee = bilanDuJour(cases ?? [], userId, jourDit)
   const idsRecettes = [...new Set([...(enSemaine ? [prochain?.portion?.recipe_id] : []),
     ...aVenir.map(l => l.recipeId), ...dejaMange.map(c => c.portion?.recipe_id)].filter((x): x is string => !!x))]
   const { data: recettes } = useRecettesDesPlats(idsRecettes)
@@ -367,6 +370,12 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
                                surAnnule={id => annule.mutate(id, { onSuccess: () => { clos(); setTimeout(rendLeFocusALaCarteDuJour, 0) } })} />
               {/* L'erreur se dit tant que la ligne est là ; elle s'efface au geste suivant. */}
               <Erreur de={dejaMange.length > 0 ? annule.error : null} />
+              {!panneDeLaSemaine && (
+                <TuileJournee kcal={maJournee.kcal} proteinG={maJournee.proteinG}
+                              objectif={moi && aDesObjectifs(moi) ? objectifDe(moi) : null}
+                              manquent={maJournee.prevus - maJournee.renseignes}
+                              chargement={cases === undefined || foyer === undefined} va={va} />
+              )}
             </div>
             <CeQuiVient lignes={aVenir} photoDe={photoDe} va={va}
                         chargement={cases === undefined && !panneDeLaSemaine}

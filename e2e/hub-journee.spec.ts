@@ -271,7 +271,16 @@ test('« Je l’ai mangé » est ÉCRIT en base, et la carte passe au repas suiv
   await connecte(page, foyer.email)
   const carte = page.locator('[data-carte="repas"]')
   await expect(carte).toContainText('Ce midi et ce soir')
+  /* « Ta journée » : rien de mangé, deux repas pas encore notés, contre les objectifs du jour (2 200 kcal, 150 g). */
+  const journee = page.locator('[data-tuile="journee"]')
+  await expect(journee).toContainText('0kcal, sur 2 200')
+  await expect(journee).toContainText('0g de protéines, sur 150')
+  await expect(journee).toContainText('2 repas pas encore notés aujourd’hui.')
   await carte.getByRole('button', { name: 'Je l’ai mangé' }).click()
+  /* La barquette du midi (600 kcal, 50 g) compte tout de suite. */
+  await expect(journee).toContainText('600kcal, sur 2 200', { timeout: 15_000 })
+  await expect(journee).toContainText('50g de protéines, sur 150')
+  await expect(journee).toContainText('1 repas pas encore noté aujourd’hui.')
   /* Le repas du midi est mangé ; reste le soir, pour vous deux. */
   await expect(carte).toContainText('Ce soir, pour vous deux', { timeout: 15_000 })
   await expect(carte).not.toContainText('Ce midi')
