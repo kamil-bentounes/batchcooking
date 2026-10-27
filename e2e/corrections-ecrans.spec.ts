@@ -19,7 +19,7 @@ async function connecte(page: Page, foyer: Foyer, ouvre = '/') {
   await page.goto(ouvre)
   await page.getByLabel(/e-?mail/i).fill(foyer.email)
   await page.getByLabel(/mot de passe/i).fill(MOT_DE_PASSE)
-  await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+  await page.getByRole('button', { name: 'Entrer', exact: true }).click()
 }
 async function connecteEtAttend(page: Page, foyer: Foyer) {
   await connecte(page, foyer)
