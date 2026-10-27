@@ -15,7 +15,7 @@
  *  · l'écart entre la somme des lignes et le total imprimé est affiché en
  *    clair — c'est la façon la plus rapide de repérer une ligne manquée.
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { BoutonPhoto, Chiffre, Erreur, Principal } from '../ui/coque.tsx'
 import { callFunction } from '../lib/supabase.ts'
@@ -104,18 +104,26 @@ export function Ticket({ retour, va }: { retour: () => void; va: (v: string) => 
     enregistre.reset()
   }
 
+  /* `isPending` ne se met à jour qu'au rendu suivant : un double appui rapide passait entre les deux. */
+  const enCours = useRef(false)
   async function valide() {
-    if (enregistre.isPending) return
-    await enregistre.mutateAsync({
-      cycleId: cycle?.id ?? null,
-      storeId: magasinId,
-      date: lu?.date ?? null,
-      total,
-      brut: lu,
-      rapprochements: lignes,
-      retenus,
-    })
-    va('/magasin')
+    if (enCours.current || enregistre.isPending) return
+    enCours.current = true
+    try {
+      await enregistre.mutateAsync({
+        cycleId: cycle?.id ?? null,
+        storeId: magasinId,
+        date: lu?.date ?? null,
+        total,
+        brut: lu,
+        rapprochements: lignes,
+        retenus,
+      })
+      va('/magasin')
+    } catch {
+      // L'erreur s'affiche sous le bouton ; on peut réessayer.
+      enCours.current = false
+    }
   }
 
   const illisible = lu !== null && !lu.lisible

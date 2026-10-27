@@ -16,7 +16,7 @@
  *    est une faute de frappe : l'annoncer au moment du geste vaut mieux que de
  *    la laisser disparaître en silence dans un filtre.
  */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Attente, Erreur, Principal } from '../ui/coque.tsx'
 import { useCycle } from '../lib/donnees/cycle.ts'
 import { useAPeser, useOubliePesee, usePese, usePesees } from '../lib/donnees/pesee.ts'
@@ -152,13 +152,21 @@ function Aliment({ a, cycleId, ouvert, surOuvre }: {
   const restantes = a.progres ? a.progres.seuil - a.progres.faites : SEUIL_PAR_DEFAUT
   const idNote = `aberrante-${a.food_id}`
 
+  /* `isPending` ne se met à jour qu'au rendu suivant : un double appui rapide passait entre les deux. Le verrou est
+     une référence, lue à l'instant du second appui. */
+  const enCours = useRef(false)
   async function enregistre() {
-    if (pese.isPending) return
-    await pese.mutateAsync({
-      foodId: a.food_id, quantite: q, grammes: g, cycleId,
-    })
-    setGrammes('')
-    setQuantite('1')
+    if (enCours.current || pese.isPending) return
+    enCours.current = true
+    try {
+      await pese.mutateAsync({
+        foodId: a.food_id, quantite: q, grammes: g, cycleId,
+      })
+      setGrammes('')
+      setQuantite('1')
+    } finally {
+      enCours.current = false
+    }
   }
 
   return (

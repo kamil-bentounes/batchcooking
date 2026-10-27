@@ -266,8 +266,12 @@ test.describe('le ticket', () => {
 
     await page.getByRole('checkbox', { name: 'XZ4 PROMO' }).click()
     await expect(page.getByRole('button', { name: 'Enregistrer 5 lignes · 16,04 €' })).toBeVisible()
-    await page.getByRole('button', { name: /^Enregistrer 5 lignes/ }).click()
+    await page.getByRole('button', { name: /^Enregistrer 5 lignes/ }).dblclick()
     await expect(page).toHaveURL(/\/magasin/, { timeout: 15_000 })
+    const { data: tickets } = await db.from('receipt').select('id, total_eur, receipt_line(label)').eq('household_id', foyer.householdId)
+    expect(tickets, 'un double appui n’enregistre pas deux tickets').toHaveLength(1)
+    expect(tickets![0].receipt_line).toHaveLength(5)
+    expect(Number(tickets![0].total_eur)).toBe(17.24)
   })
 
   test('un ticket sans écart ni total ne parle pas d’écart', async ({ page }) => {
