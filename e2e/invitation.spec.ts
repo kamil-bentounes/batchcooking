@@ -59,7 +59,7 @@ async function connecte(page: Page, email: string, motDePasse: string) {
   await page.goto('/')
   await page.getByLabel(/e-?mail/i).fill(email)
   await page.getByLabel(/mot de passe/i).fill(motDePasse)
-  await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+  await page.getByRole('button', { name: 'Entrer', exact: true }).click()
 }
 
 async function prend(page: Page, nom: string) {
@@ -389,14 +389,14 @@ test.describe('un lien expiré ne condamne pas les suivants', () => {
     await page.getByLabel(/e-?mail/i).fill(foyer.email)
     await page.getByLabel(/mot de passe/i).fill(MOT_DE_PASSE)
     const jeton_ = page.waitForResponse(r => r.url().includes('/auth/v1/token'))
-    await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+    await page.getByRole('button', { name: 'Entrer', exact: true }).click()
     // L'aller-retour ralenti commence APRÈS la connexion : c'est de là qu'on observe.
     await jeton_
     /* ⚠️ On OBSERVE pendant l'aller-retour, on n'attend pas la fin.
        `toHaveCount(0)` réessaie jusqu'à ce que le compte tombe à zéro : il
        passait donc dès que le bouton disparaissait, c'est-à-dire toujours.
        Deux choses ne doivent JAMAIS apparaître dans cette fenêtre : le bouton
-       « Rejoindre », et « Se connecter » réactivé — un second clic ouvrait
+       « Rejoindre », et « Entrer » réactivé — un second clic ouvrait
        une seconde session, ou, pris par la limite de débit, disait « mot de
        passe incorrect » à quelqu'un qui venait d'entrer. Un seul échantillon
        ne suffisait pas : la réactivation suit la réponse de quelques
@@ -405,13 +405,13 @@ test.describe('un lien expiré ne condamne pas les suivants', () => {
     let reactive = false
     for (let i = 0; i < 15 && !rejoindreVu && !reactive; i++) {
       rejoindreVu = await page.getByRole('button', { name: /rejoindre le foyer/i }).count() > 0
-      const seConnecter = page.getByRole('button', { name: 'Se connecter', exact: true })
+      const seConnecter = page.getByRole('button', { name: 'Entrer', exact: true })
       reactive = await seConnecter.count() > 0 && await seConnecter.isEnabled()
       await page.waitForTimeout(100)
     }
     expect(rejoindreVu, 'un membre s’est vu offrir de rejoindre le foyer, le temps d’un aller-retour')
       .toBe(false)
-    expect(reactive, '« Se connecter » s’est réactivé alors que la connexion avait réussi')
+    expect(reactive, '« Entrer » s’est réactivé alors que la connexion avait réussi')
       .toBe(false)
     await expect(page.getByRole('heading', { name: /tu es déjà dans un foyer/i }))
       .toBeVisible({ timeout: 15_000 })

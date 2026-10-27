@@ -4,7 +4,7 @@
  *
  *   1. mode avion : une écriture échoue tout de suite (« Pas de réseau »), ne part pas à la
  *      reconnexion, et n'est pas écrite deux fois ; les lectures disent aussi la coupure ;
- *   2. jeton expiré + réseau coupé : « Hors ligne », pas « Se connecter » ;
+ *   2. jeton expiré + réseau coupé : « Hors ligne », pas « Entrer » ;
  *   3. `current_household` en 503 : « Ça ne répond pas », jamais « aucun foyer » ; en cours
  *      d'usage, une relecture ratée garde l'écran (et ce qu'on y a tapé) ;
  *   4. courses : la quantité qui manque d'une ligne déjà prise revient à la régénération ;
@@ -48,7 +48,7 @@ async function connecte(page: Page, f: Foyer, email = f.email) {
   await page.goto('/')
   await page.getByLabel(/e-?mail/i).fill(email)
   await page.getByLabel(/mot de passe/i).fill(MOT_DE_PASSE)
-  await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+  await page.getByRole('button', { name: 'Entrer', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Popote' })).toBeVisible({ timeout: 15_000 })
 }
 
@@ -111,7 +111,7 @@ test('mode avion : une lecture dit la coupure au lieu d’« Un instant… » sa
 
 /* ── 2 et 3 · Le jeton expiré, la base qui ne répond pas ───────────────────────────────────── */
 
-test('jeton expiré et réseau coupé : « Hors ligne », jamais « Se connecter »', async ({ page }) => {
+test('jeton expiré et réseau coupé : « Hors ligne », jamais « Entrer »', async ({ page }) => {
   test.setTimeout(90_000)
   await avecFoyer({}, async f => {
     await connecte(page, f)
@@ -125,7 +125,7 @@ test('jeton expiré et réseau coupé : « Hors ligne », jamais « Se connecter
     await page.route('**/127.0.0.1:54321/**', r => r.abort('internetdisconnected'))
     await page.reload()
     await expect(page.getByRole('heading', { name: 'Hors ligne' })).toBeVisible({ timeout: 45_000 })
-    await expect(page.getByRole('button', { name: 'Se connecter', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Entrer', exact: true })).toHaveCount(0)
     await expect(page.getByText('Ta session a expiré')).toHaveCount(0)
 
     // Le réseau revient, l'appli se rouvre : le jeton se rafraîchit, et elle s'ouvre. (Pas par
@@ -169,7 +169,7 @@ test('une relecture ratée en cours d’usage garde l’écran et ce qu’on y a
     await expect(page.getByRole('alert').filter({ hasText: 'La base ne répond pas' })).toBeVisible({ timeout: 10_000 })
     await expect(quoi, 'l’écran a été remplacé : la saisie est perdue').toHaveValue('Assurance du vélo')
     await expect(page.getByRole('heading', { name: 'Hors ligne' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Se connecter', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Entrer', exact: true })).toHaveCount(0)
 
     await page.unroute('**/rest/v1/rpc/current_household')
     await page.getByRole('button', { name: 'Réessayer' }).click()

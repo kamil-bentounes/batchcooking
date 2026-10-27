@@ -20,7 +20,7 @@ async function connecte(page: Page, email = foyer.email) {
   await page.goto('/')
   await page.getByLabel(/e-?mail/i).fill(email)
   await page.getByLabel(/mot de passe/i).fill(MOT_DE_PASSE)
-  await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+  await page.getByRole('button', { name: 'Entrer', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Popote' })).toBeVisible({ timeout: 15_000 })
   await releve(page)
 }

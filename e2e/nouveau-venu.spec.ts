@@ -32,7 +32,7 @@ async function connecte(page: Page, email: string) {
   await page.goto('/')
   await page.getByLabel('Ton e-mail').fill(email)
   await page.getByLabel('Mot de passe').fill(MOT_DE_PASSE)
-  await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+  await page.getByRole('button', { name: 'Entrer', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Popote' })).toBeVisible({ timeout: 15_000 })
 }
 
@@ -69,7 +69,7 @@ test('profil : un revenu hors de la base est refusé par le champ, avec une phra
     await p.goto('/')
     await p.getByLabel('Ton e-mail').fill(u.user!.email!)
     await p.getByLabel('Mot de passe').fill(MOT_DE_PASSE)
-    await p.getByRole('button', { name: 'Se connecter', exact: true }).click()
+    await p.getByRole('button', { name: 'Entrer', exact: true }).click()
     await expect(p.getByRole('heading', { name: /Deux choses/ })).toBeVisible({ timeout: 15_000 })
     await p.getByLabel('Ton prénom').fill('Test')
     await p.getByLabel(/Ton revenu net/).fill('999999999')
@@ -111,7 +111,7 @@ test('réseau coupé : la connexion et l’oubli le disent, au lieu de mentir', 
   await page.goto('/')
   await page.getByLabel('Ton e-mail').fill(foyer.email)
   await page.getByLabel('Mot de passe').fill(MOT_DE_PASSE)
-  await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+  await page.getByRole('button', { name: 'Entrer', exact: true }).click()
   await expect(page.getByText(/Pas de réseau/)).toBeVisible()
   await expect(page.getByText('E-mail ou mot de passe incorrect.')).toHaveCount(0)
 

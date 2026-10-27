@@ -43,7 +43,7 @@ async function connecte(page: Page) {
   await page.goto('/')
   await page.getByLabel(/e-?mail/i).fill(foyer.email)
   await page.getByLabel(/mot de passe/i).fill(MOT_DE_PASSE)
-  await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+  await page.getByRole('button', { name: 'Entrer', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Popote' })).toBeVisible({ timeout: 15_000 })
 }
 
@@ -885,7 +885,7 @@ test('M9 · hors semaine, le geste du cycle vient avant la carte de ce soir, et 
       await page.goto('/')
       await page.getByLabel(/e-?mail/i).fill(f2.email)
       await page.getByLabel(/mot de passe/i).fill(MOT_DE_PASSE)
-      await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+      await page.getByRole('button', { name: 'Entrer', exact: true }).click()
       await expect(page.getByRole('heading', { name: 'Popote' })).toBeVisible({ timeout: 15_000 })
       await page.goto('/cuisine-accueil')
       const carte = page.getByRole('region', { name: 'Le prochain repas' })

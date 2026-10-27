@@ -173,7 +173,7 @@ async function connecte(page: Page, email: string, motDePasse: string) {
   await page.goto('/')
   await page.getByLabel('Ton e-mail').fill(email)
   await page.getByLabel('Mot de passe').fill(motDePasse)
-  await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+  await page.getByRole('button', { name: 'Entrer', exact: true }).click()
 }
 
 /** Du hub aux réglages, au clic : la carte « Cuisine », puis la roue. */
@@ -184,7 +184,7 @@ async function versLesReglages(page: Page) {
 }
 
 const HUB = (page: Page) => page.getByRole('heading', { name: 'Popote' })
-const ENTREE = (page: Page) => page.getByRole('heading', { name: 'On s’y met ?' })
+const ENTREE = (page: Page) => page.getByRole('heading', { name: 'Connexion', exact: true })
 
 test.describe.serial('l’inscription, de bout en bout', () => {
   /* Une action qui ne trouve pas son bouton échoue en vingt secondes, en le
@@ -329,12 +329,12 @@ test.describe.serial('l’inscription, de bout en bout', () => {
 
     await page.getByLabel('Ton e-mail').fill(KAMIL)
     await page.getByLabel('Mot de passe').fill('pas-le-bon-1')
-    await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+    await page.getByRole('button', { name: 'Entrer', exact: true }).click()
     await expect(page.getByText('E-mail ou mot de passe incorrect.')).toBeVisible({ timeout: 10_000 })
     await photo(page, 'mauvais-mot-de-passe', 'Un mauvais mot de passe : l’écran le dit')
 
     await page.getByLabel('Mot de passe').fill(MDP_KAMIL)
-    await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+    await page.getByRole('button', { name: 'Entrer', exact: true }).click()
     await expect(HUB(page), 'le bon mot de passe ne fait pas entrer').toBeVisible({ timeout: 15_000 })
     await photo(page, 'reconnecte', 'Avec le bon, il retrouve son foyer')
     expect(erreurs, 'des erreurs sont tombées dans la console').toEqual([])
@@ -437,7 +437,7 @@ test.describe.serial('l’inscription, de bout en bout', () => {
     await page.getByLabel('Ton e-mail').fill(THAUBA)
     await page.getByLabel('Mot de passe').fill(MDP_THAUBA)
     await photo(page, 'elle-revient', 'Autre appareil : son e-mail et son mot de passe')
-    await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+    await page.getByRole('button', { name: 'Entrer', exact: true }).click()
     await expect(HUB(page), 'son mot de passe ne la fait pas entrer').toBeVisible({ timeout: 15_000 })
     await expect(page.getByRole('button', { name: 'Mon profil' })).toHaveText('T')
     await photo(page, 'elle-est-reconnue', 'Son mot de passe marche')
@@ -482,7 +482,7 @@ test.describe.serial('l’inscription, de bout en bout', () => {
     await expect(p.getByText('E-mail ou mot de passe incorrect.'),
       'l’ancien mot de passe marche encore').toBeVisible({ timeout: 10_000 })
     await p.getByLabel('Mot de passe').fill(MDP_THAUBA_NOUVEAU)
-    await p.getByRole('button', { name: 'Se connecter', exact: true }).click()
+    await p.getByRole('button', { name: 'Entrer', exact: true }).click()
     await expect(HUB(p), 'le nouveau mot de passe ne fait pas entrer').toBeVisible({ timeout: 15_000 })
     await ailleurs.close()
     constate('En base, après le nouveau mot de passe', await compte(THAUBA))
@@ -553,7 +553,7 @@ test.describe.serial('l’inscription, de bout en bout', () => {
     await page.getByRole('button', { name: 'Me connecter' }).click()
     await page.getByLabel('Ton e-mail').fill(sam)
     await page.getByLabel('Mot de passe').fill('sam-a-son-compte-1')
-    await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+    await page.getByRole('button', { name: 'Entrer', exact: true }).click()
     await expect(page.getByRole('heading', { name: /tu es déjà dans un foyer/i }))
       .toBeVisible({ timeout: 15_000 })
     await photo(page, 'deja-dans-un-foyer', 'Connecté : il est déjà dans un autre foyer, l’écran le dit')
@@ -582,7 +582,7 @@ test.describe.serial('l’inscription, de bout en bout', () => {
 
     await page.getByLabel('Ton e-mail').fill(THAUBA)
     await page.getByLabel('Mot de passe').fill(MDP_THAUBA_NOUVEAU)
-    await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
+    await page.getByRole('button', { name: 'Entrer', exact: true }).click()
     await expect(page.getByText('E-mail ou mot de passe incorrect.'),
       'un compte supprimé ouvre encore une session').toBeVisible({ timeout: 10_000 })
     expect(erreurs, 'des erreurs sont tombées dans la console').toEqual([])
