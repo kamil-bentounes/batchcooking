@@ -11,6 +11,7 @@
  */
 import { useMemo } from 'react'
 import { Chiffre, Ecran, Erreur, Principal, Secondaire, Vide, dateLongue, duree, Marque } from '../ui/coque.tsx'
+import { CeSoir } from '../ui/frigo/CeSoir.tsx'
 import { PetitFrigo } from '../ui/frigo/PetitFrigo.tsx'
 import { Appareil, PlatImage } from '../ui/frigo/PlatImage.tsx'
 import { GESTE, useChangeEtat, useCycle, useCycleInterrompu, useOuvreCycle } from '../lib/donnees/cycle.ts'
@@ -19,7 +20,7 @@ import { useFoyer, initialeDe, prenomDe } from '../lib/donnees/foyer.ts'
 import { usePrevus, useRecettesDesPlats, useSortDuCongelo } from '../lib/donnees/frigo.ts'
 import { magnet, nomCourt, pourQui, pressesGroupees, repasDuJour } from '../lib/frigo.ts'
 import {
-  NOM_REPAS, bilanDuJour, jour, useBarquettes, useMange, useSemaine,
+  bilanDuJour, jour, useBarquettes, useMange, useSemaine,
 } from '../lib/donnees/barquettes.ts'
 import type { Case } from '../lib/donnees/barquettes.ts'
 import { usePlanEnregistre } from '../lib/donnees/session.ts'
@@ -292,60 +293,6 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
         </svg>
       </button>
     </Ecran>
-  )
-}
-
-/** Le repas du jour, en carte sombre : le plat, pour qui, et — s'il dort au congélateur — ce qu'il faut faire. */
-function CeSoir({ cas, photo, pour, enCours, nbASortir, surMange, surSort, surChange, titreDePage }: {
-  cas: Case; photo: string | null; pour: string; enCours: boolean
-  /** Vrai quand la carte est le geste de la page : son titre en est alors le `<h1>` (il n'y en a qu'un). */
-  titreDePage: boolean
-  /** Combien de barquettes « Je les sors » sort : le texte et le bouton s'accordent avec ce nombre. */
-  nbASortir: number
-  surMange: () => void; surSort: () => void; surChange: () => void
-}) {
-  const p = cas.portion!
-  const auFroid = p.location === 'congelateur'
-  const meal = cas.meal as keyof typeof NOM_REPAS
-  const Titre = titreDePage ? 'h1' : 'h2'
-  const quand = meal === 'diner' ? 'Ce soir' : meal === 'dejeuner' ? 'Ce midi' : `Ce ${NOM_REPAS[meal].toLowerCase()}`
-  return (
-    <section aria-label="Le prochain repas" data-carte="repas"
-             className={`sur-encre rounded-3xl bg-encre p-4 text-fond ${titreDePage ? 'mt-[18px]' : 'mt-10'}`}>
-      <div className="flex items-center gap-3.5">
-        <div className="relative size-[72px] shrink-0 overflow-hidden rounded-2xl bg-[#3A4A41] text-[#B9C7BD]">
-          {photo ? <PlatImage url={photo} texte={false} /> : <span className="absolute inset-0 grid place-items-center"><Appareil taille={26} /></span>}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[13px] text-[#B9C7BD]">{quand}, pour {pour}</p>
-          <Titre className="titre mt-[3px] text-[22px] font-semibold leading-[1.15] [overflow-wrap:anywhere]">{nomCourt(p.label)}</Titre>
-        </div>
-      </div>
-      {auFroid && (
-        <p className="mt-3.5 rounded-[14px] px-3 py-2.5 text-[14px] leading-[1.4] text-[#E3EEF3]"
-           style={{ background: 'rgba(220, 232, 238, 0.14)' }}>
-          Il est au congélateur : sors-{nbASortir > 1 ? 'les' : 'le'} maintenant, ou micro-ondes avant de manger.
-        </p>
-      )}
-      <div className="mt-3.5 flex gap-2.5">
-        {auFroid ? (
-          <button type="button" onClick={surSort} disabled={enCours}
-                  className="h-[50px] flex-1 rounded-[15px] bg-safran text-[15px] font-bold text-encre disabled:opacity-60">
-            {nbASortir > 1 ? 'Je les sors' : 'Je le sors'}
-          </button>
-        ) : (
-          <button type="button" onClick={surMange} disabled={enCours}
-                  className="h-[50px] flex-1 rounded-[15px] bg-safran text-[15px] font-bold text-encre disabled:opacity-60">
-            Je l’ai mangé
-          </button>
-        )}
-        <button type="button" onClick={surChange}
-                className="h-[50px] flex-1 rounded-[15px] text-[15px] font-semibold text-fond"
-                style={{ background: 'rgba(242, 244, 239, 0.12)' }}>
-          Changer
-        </button>
-      </div>
-    </section>
   )
 }
 
