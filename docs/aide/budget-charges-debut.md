@@ -22,7 +22,7 @@ sources:
   - supabase/migrations/0102_budget_mois_suivis.sql
   - supabase/migrations/0105_budget_cible.sql
   - supabase/migrations/0110_budget_corrige.sql
-verifie_sur: 81ce416
+verifie_sur: fa94f4a
 ---
 « Elle court depuis » est le mois où la charge commence à compter : rien n’est mis de côté avant.
 
@@ -31,7 +31,7 @@ verifie_sur: 81ce416
 - Par défaut : le mois en cours. Si ton arrivée dans le foyer est à venir, c’est ton mois d’arrivée, et une date plus ancienne y est ramenée.
 - Tu peux remonter dans le passé, mais pas avant janvier de l’année précédente. Plus tôt, l’appli répond « Pas avant janvier » suivi de l’année.
 - Dès l’ajout, chaque mois écoulé depuis cette date reçoit sa ligne, dès qu’un participant est arrivé. Un mois clôturé n’en reçoit pas.
-- Une charge qui commence plus tard apparaît dans la liste avec « commence en » et son mois. Elle n’est comptée ni dans le total « par mois » ni dans l’écran du mois. Avant ton arrivée, la liste se cale sur ton mois d’arrivée : une charge qui court depuis lors y montre son montant, sans « commence en ».
+- Une charge qui commence plus tard apparaît dans la liste avec « commence en » et son mois. Elle n’est comptée ni dans le total « par mois » ni dans l’écran du mois. Une charge dont aucun participant n’est encore dans le foyer ce mois-là est grisée aussi (« pas encore dans le foyer »). Avant ton arrivée, la liste se cale sur ton mois d’arrivée : une charge qui court depuis lors y montre son montant, sans « commence en ».
 
 ## Pourquoi remonter la date d’une charge annuelle
 
@@ -49,4 +49,4 @@ Le prévu de l’année ne compte que les mois « suivis » : ceux à partir du 
 
 ## Changer la date après coup
 
-Touche la ligne de la charge, puis « Corriger ». Le champ « Elle court depuis » n’apparaît que pour une « Mise de côté » : « C’est elle qui décide sur combien de mois le montant se répartit. » Les mois déjà confirmés gardent leur montant, les autres se refont. Reculer la date fait naître les mois manquants.
+Touche la ligne de la charge, puis « Corriger ». Le champ « Elle court depuis » n’apparaît que pour une « Mise de côté » : « C’est elle qui décide sur combien de mois le montant se répartit. » Les mois déjà confirmés gardent leur montant, les autres se refont. Reculer la date fait naître les mois manquants, mais pas avant ton arrivée dans le foyer : « Pas avant ton arrivée, en novembre 2026. »

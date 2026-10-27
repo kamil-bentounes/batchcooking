@@ -20,7 +20,7 @@ sources:
   - supabase/migrations/0085_ce_quon_reconnait.sql
   - supabase/migrations/0096_budget_facon.sql
   - supabase/migrations/0098_budget_lignes_nees.sql
-verifie_sur: 81ce416
+verifie_sur: fa94f4a
 ---
 Une charge est une dépense qui revient (loyer, assurance, taxe foncière). Le bouton « Mes charges » de l’écran du mois ouvre la page « Les charges » : tu y poses toutes tes charges.
 
@@ -51,5 +51,5 @@ Le catalogue est rangé par rubrique : la première est ouverte, les autres se d
 
 - Il n’y a que trois rythmes : par mois, par trimestre, par an. Rien pour « tous les deux ans ».
 - Dès l’ajout, les mois écoulés depuis la date « Elle court depuis » reçoivent leur ligne, sauf les mois clôturés et ceux d’avant l’arrivée des participants.
-- Le total en haut de la page ramène tout au mois et ne compte que les charges déjà en vigueur ce mois-là. Les charges sont rangées par catégorie, avec le total de chacune.
+- Le total en haut de la page ramène tout au mois et ne compte que les charges déjà en vigueur ce mois-là et dont au moins un participant est déjà dans le foyer. Les charges sont rangées par catégorie, avec le total de chacune ; touche l’en-tête d’une catégorie pour la replier ou la rouvrir (l’appareil s’en souvient).
 - Avant ton arrivée dans le foyer, la page se cale sur ton mois d’arrivée : elle le dit en haut, et les montants sont ceux de ce mois-là.

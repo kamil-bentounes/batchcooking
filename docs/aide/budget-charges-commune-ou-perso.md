@@ -20,7 +20,7 @@ sources:
   - supabase/migrations/0066_se_retirer_dune_commune.sql
   - supabase/migrations/0100_budget_mois_gele.sql
   - supabase/migrations/0103_budget_arrivees.sql
-verifie_sur: 81ce416
+verifie_sur: fa94f4a
 ---
 Il n’y a qu’une liste de charges. Chaque ligne dit qui y participe. « À moi » veut simplement dire : une seule personne participe.
 

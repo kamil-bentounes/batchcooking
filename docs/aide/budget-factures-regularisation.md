@@ -20,7 +20,7 @@ sources:
   - supabase/migrations/0107_budget_solde.sql
   - supabase/migrations/0108_budget_cloture.sql
   - supabase/migrations/0114_budget_donnees.sql
-verifie_sur: 81ce416
+verifie_sur: fa94f4a
 ---
 Une charge « Mise de côté » met de côté un douzième (ou un tiers) par mois ; à la vraie facture, l’appli ne pose que l’écart avec le prévu : c’est la régularisation.
 

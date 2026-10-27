@@ -17,9 +17,9 @@ sources:
   - supabase/migrations/0096_budget_facon.sql
   - supabase/migrations/0110_budget_corrige.sql
   - supabase/migrations/0111_budget_retire.sql
-verifie_sur: 81ce416
+verifie_sur: fa94f4a
 ---
-Sur la page « Les charges », touche une ligne : ses gestes s’ouvrent dessous. Ce sont « Corriger », « Retirer », et selon le cas « Rattacher » ou « Changer qui participe ». Un seul panneau est ouvert à la fois ; retouche la ligne pour le fermer. Si un geste échoue, le message s’affiche sur cette ligne.
+Sur la page « Les charges », touche une ligne : ses gestes s’ouvrent dessous. Ce sont « Corriger », « Retirer », et selon le cas « Rattacher » ou « Changer qui participe ». Un seul panneau est ouvert à la fois ; retouche la ligne pour le fermer. Si un geste échoue, le message s’affiche sur cette ligne, même si tu as refermé son panneau.
 
 ## Corriger
 
@@ -27,7 +27,7 @@ Sur la page « Les charges », touche une ligne : ses gestes s’ouvrent dessous
 
 - « Les mois déjà confirmés gardent leur montant. Les autres se refont. » Un mois clôturé ne change pas, ni une année déjà soldée.
 - L’appli dit combien de mois elle a refaits : « « X » corrigée, 2 mois refaits. »
-- Changer seulement la catégorie ne touche aucun montant.
+- Changer seulement la catégorie ne touche aucun montant. La ligne passe dans sa nouvelle catégorie, qui se rouvre si elle était repliée.
 - Une charge « Mise de côté » qui a déjà une facture, un mois confirmé ou clôturé, ne devient plus mensuelle. Les trois autres façons sont grisées. Pour la payer chaque mois, retire-la et ajoute-en une nouvelle.
 - Si tu quittes « Plusieurs dépenses dans le mois » alors que des dépenses sont déclarées, l’appli refuse : « Des dépenses sont déclarées en octobre sur cette charge. Retire-les d'abord. »
 - La façon de partager (« Comme le foyer », « Au prorata », « Moitié-moitié ») se choisit à l’ajout : le panneau « Corriger » ne la propose pas.
