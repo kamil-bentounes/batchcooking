@@ -39,24 +39,57 @@ function ecran(solde: 'absent' | 'panne' | { userId: string; cents: number }[]) 
 describe('Épargne — le solde pas encore lu', () => {
   /* Le geste (« Je retire » éteint tant que le solde n'est pas lu) se joue en navigateur : il faut
      un montant TAPÉ, que le rendu statique ne sait pas faire — `e2e/budget-grand-test.spec.ts`. */
-  it('pas encore revenu : la poche ne dit pas « 0,00 € », elle dit « … »', () => {
+  it('pas encore revenu : la poche ne dit pas « 0 € », elle dit « … »', () => {
     const h = ecran('absent')
     expect(texte(h)).toContain('Urgence')
-    expect(texte(h)).not.toMatch(/(^|\s)0,00 €(\s|$)/)
+    expect(texte(h)).not.toMatch(/(^|\s)0 €(\s|$)/)
     expect(texte(h)).toContain('…')
   })
 
   it('en panne : la panne se dit, et ce n’est pas zéro', () => {
     const h = ecran('panne')
     expect(texte(h)).toContain('boom')
-    expect(texte(h)).not.toMatch(/(^|\s)0,00 €(\s|$)/)
+    expect(texte(h)).not.toMatch(/(^|\s)0 €(\s|$)/)
   })
 
   it('lu : le solde s’affiche, chiffré', () => {
-    expect(texte(ecran([{ userId: 'u1', cents: 380_00 }]))).toContain('380,00 €')
+    expect(texte(ecran([{ userId: 'u1', cents: 380_00 }]))).toContain('380 €')
   })
 
-  it('lu et vraiment vide : « 0,00 € » se dit', () => {
-    expect(texte(ecran([]))).toMatch(/(^|\s)0,00 €(\s|$)/)
+  it('lu et vraiment vide : « 0 € » se dit', () => {
+    expect(texte(ecran([]))).toMatch(/(^|\s)0 €(\s|$)/)
+  })
+})
+
+describe('Épargne — la carte d’une poche', () => {
+  it('une poche vide le dit, sans registre', () => {
+    const t = texte(ecran([]))
+    expect(t).toContain('Rien n’y est encore versé.')
+    expect(t).not.toContain('Qui a versé quoi')
+  })
+
+  it('les chiffres en valeur : le versé, l’objectif, le pourcentage, la date', () => {
+    const h = ecran([{ userId: 'u1', cents: 250_00 }])
+    expect(texte(h)).toContain('250 € sur 1\u202f000 €')
+    expect(texte(h)).toContain('25 %')
+    expect(texte(h)).toContain('pas de date')
+    expect(h).toContain('role="meter"')
+    expect(h).toContain('aria-label="250 € sur 1\u202f000 €"')
+    expect(h).toContain('aria-label="Qui a versé quoi"')
+    expect(texte(h)).toContain('Kamil')
+    expect(texte(h)).not.toContain('Rien n’y est encore versé.')
+  })
+
+  it('le titre est posé sur la photo, et la photo est celle de l’épargne', () => {
+    const h = ecran([])
+    expect(h).toContain('budget/epargne.jpg')
+    expect(h).toContain('aria-label="Urgence"')
+  })
+
+  it('« Verser (€) », « Je verse » et « Je retire »', () => {
+    const t = texte(ecran([{ userId: 'u1', cents: 10_00 }]))
+    for (const mot of ['Verser (€)', 'Je verse', 'Je retire', 'Ouvrir une poche', 'Son nom', 'Objectif (€)']) {
+      expect(t).toContain(mot)
+    }
   })
 })

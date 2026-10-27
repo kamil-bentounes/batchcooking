@@ -1,324 +1,60 @@
 /**
  * L'épargne, et les projets.
  *
- * Une chose à ne jamais perdre de vue : une épargne PERSISTE, donc elle
- * appartient à quelqu'un. Le solde affiché n'est jamais « 4 000 € » tout court
- * mais « 4 000 €, dont 2 480 toi et 1 520 elle » — un livret joint est présumé
- * moitié-moitié alors que les versements, eux, ne l'étaient pas (D64).
- *
- * Et deux poches, pas une : l'urgence et les voyages dans le même pot, ce sont
- * les voyages qui gagnent, toujours.
+ * Une chose à ne jamais perdre de vue : une épargne PERSISTE, donc elle appartient à quelqu'un. Le registre
+ * dit qui a versé quoi (D64), et deux poches, pas une : l'urgence et les voyages dans le même pot, ce sont
+ * les voyages qui gagnent, toujours. La carte d'une poche est dans `ui/epargne/CartePoche.tsx`.
  */
-import { useState } from 'react'
-import { Surface, Vide, Attente, Erreur } from '../ui/coque.tsx'
-import { Champ } from '../ui/kit.tsx'
-import { refusDuRetrait } from '../lib/budget/feuilles.ts'
+import { Vide, Attente, Erreur } from '../ui/coque.tsx'
+import { CartePoche } from '../ui/epargne/CartePoche.tsx'
+import { OuvrirUnePoche } from '../ui/epargne/OuvrirUnePoche.tsx'
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
-import {
-  usePoches, useSolde, usePosePoche, useVerse, usePostes, usePosePoste,
-  useRetirePoste, useMajPoche, effortMensuel, euros, enCentimes, type Poche,
-} from '../lib/donnees/budget.ts'
-
-/**
- * Les postes d'un projet, et son échéance.
- *
- * Ce qui fait qu'un projet est un projet et non une tirelire : une date, et le
- * détail de ce qu'on va payer. L'étalement, lui, n'est pas une mécanique de
- * plus — c'est l'engendrement mensuel de D61 avec une fin.
- */
-function Projet({ poche, foyerId, deja }: {
-  /** `null` : le solde n'est pas lu — on ne dit rien de chiffré sur ce qu'il y a dessus. */
-  poche: Poche; foyerId: string; deja: number | null
-}) {
-  const postes = usePostes(poche.id)
-  const pose = usePosePoste()
-  const retire = useRetirePoste()
-  const maj = useMajPoche()
-  const [libelle, setLibelle] = useState('')
-  const [montant, setMontant] = useState('')
-  const [echeance, setEcheance] = useState(poche.echeance ?? '')
-
-  const cents = enCentimes(montant)
-  const somme = (postes.data ?? []).reduce((s, p) => s + p.montant_cents, 0)
-  const effort = effortMensuel(poche.objectif_cents, poche.echeance, deja ?? 0)
-
-  return (
-    <div className="mt-4 pt-4 border-t border-brume">
-      <span className="text-[14px] font-semibold text-doux">
-        Le projet
-      </span>
-
-      <div className="mt-3">
-        <Champ label="Pour quand" type="date" value={echeance}
-               onChange={e => {
-                 setEcheance(e.target.value)
-                 maj.mutate({ id: poche.id, echeance: e.target.value || null })
-               }} />
-      </div>
-
-      {effort && (
-        <p className="mt-2.5 text-[15px] text-doux">
-          {effort.mois === 0
-            ? 'C’est pour ce mois-ci.'
-            : <>
-                {euros(effort.parMois)} par mois pendant {effort.mois} mois pour tenir
-                la date. {/* ⚠️ Une CONDITION déguisée en constat.
-                     « Vous êtes à l'heure tant que vous versez ça » s'affichait
-                     sur une poche où rien n'avait encore été versé, et c'est la
-                     seule chose que l'œil retient. On dit où on en est. */}
-                {deja === null
-                  ? ''
-                  : deja >= (poche.objectif_cents ?? 0)
-                    ? 'C’est déjà atteint.'
-                    : deja === 0
-                      ? 'Rien n’y est encore versé.'
-                      : `Il y a ${euros(deja)} dessus pour l’instant.`}
-              </>}
-        </p>
-      )}
-
-      {(postes.data ?? []).length > 0 && (
-        <div className="mt-3">
-          {(postes.data ?? []).map(p => (
-            <div key={p.id} className="py-2.5 flex items-baseline gap-3 border-b border-brume last:border-0">
-              <span className="grow text-[15px]">{p.libelle}</span>
-              <span className="chiffre text-[16px]">{euros(p.montant_cents)}</span>
-              <button onClick={() => retire.mutate({ id: p.id, pocheId: poche.id })}
-                      aria-label={`Retirer ${p.libelle}`}
-                      className="text-doux min-h-11 px-2 text-[14px]">Retirer</button>
-            </div>
-          ))}
-          {/* Les postes chiffrent le projet ; l'objectif reste ce qu'on a décidé
-              de mettre de côté. Les deux peuvent diverger, et le dire vaut mieux
-              que de corriger l'un des deux en silence. */}
-          {poche.objectif_cents !== null && somme !== poche.objectif_cents && (
-            <p className="mt-2.5 text-[14px]" style={{ color: 'var(--color-ocre)' }}>
-              Les postes font {euros(somme)}, l’objectif {euros(poche.objectif_cents)}.
-              <button onClick={() => maj.mutate({ id: poche.id, objectifCents: somme })}
-                      className="ml-2 underline underline-offset-2">
-                Aligner l’objectif
-              </button>
-            </p>
-          )}
-        </div>
-      )}
-
-      <div className="mt-3 flex gap-2 items-end">
-        <div className="grow">
-          <Champ label="Un poste" value={libelle} onChange={e => setLibelle(e.target.value)} />
-        </div>
-        <div className="w-28">
-          <Champ label="€" type="text" inputMode="decimal" value={montant}
-                 onChange={e => setMontant(e.target.value)} />
-        </div>
-        <button disabled={libelle.trim() === '' || !cents || pose.isPending} aria-label="Ajouter ce poste"
-                onClick={() => pose.mutate({
-                  foyerId, pocheId: poche.id, libelle: libelle.trim(), cents: cents!,
-                  ordre: (postes.data ?? []).length,
-                }, { onSuccess: () => { setLibelle(''); setMontant('') } })}
-                className="min-h-11 px-4 rounded-[14px] bg-brume/60 text-[15px] shrink-0
-                           disabled:opacity-60">
-          +
-        </button>
-      </div>
-      <Erreur de={postes.error ?? pose.error ?? maj.error ?? retire.error} />
-    </div>
-  )
-}
-
-function Poche_({ poche, userId, foyerId, prenoms }: {
-  poche: Poche; userId: string; foyerId: string; prenoms: Map<string, string>
-}) {
-  const solde = useSolde(poche.id)
-  const verse = useVerse()
-  const [montant, setMontant] = useState('')
-  /* Le refus d'un retrait trop gros : dit sous les boutons, effacé dès qu'on retape. */
-  const [refus, setRefus] = useState<string | null>(null)
-
-  const cumul = solde.data ?? []
-  const total = cumul.reduce((s, c) => s + c.cents, 0)
-  const cents = enCentimes(montant)
-  const monSolde = cumul.find(c => c.userId === userId)?.cents ?? 0
-  /* ⚠️ `solde.data` absent (pas encore revenu, ou en panne) n'est PAS zéro : `monSolde` valait 0,
-     et « Je retire » répondait « Tu n'as rien versé ici » à quelqu'un qui a 380 € dans la poche.
-     Pendant une relecture le chiffre est périmé aussi (une réponse perdue, puis un second retrait
-     qui passerait la garde) : le retrait attend le solde frais. */
-  const soldeLu = solde.data !== undefined
-  const soldeFrais = soldeLu && !solde.isFetching
-  const part = soldeLu && poche.objectif_cents ? Math.min(1, total / poche.objectif_cents) : null
-
-  return (
-    <Surface className="mt-4">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[16px] font-semibold">{poche.libelle}</span>
-        {poche.echeance && (
-          <span className="text-[14px] text-doux">
-            {new Date(poche.echeance).toLocaleDateString('fr-FR',
-              { month: 'long', year: 'numeric' })}
-          </span>
-        )}
-      </div>
-
-      <p className="mt-3 flex items-baseline gap-2.5">
-        <span className="chiffre text-[32px] text-herbe">{soldeLu ? euros(total) : '…'}</span>
-        {poche.objectif_cents && (
-          <span className="text-[15px] text-doux">sur {euros(poche.objectif_cents)}</span>
-        )}
-      </p>
-
-      {part !== null && (
-        <div className="mt-3 h-[7px] rounded-full bg-brume overflow-hidden">
-          <div className="h-[7px] rounded-full bg-herbe" style={{ width: `${part * 100}%` }} />
-        </div>
-      )}
-
-      {/* Le cumul par personne, toujours affiché. C'est LUI la donnée, pas le
-          solde : sans lui, c'est la présomption de moitié-moitié qui gagne. */}
-      {cumul.length > 0 && (
-        <p className="mt-3 text-[15px] text-doux">
-          dont {cumul.map(c => `${euros(c.cents)} ${prenoms.get(c.userId) ?? '?'}`).join(' · ')}
-        </p>
-      )}
-
-      <div className="mt-4 flex gap-2">
-        <div className="grow">
-          <Champ label="Verser (€)" type="text" inputMode="decimal" value={montant}
-                 onChange={e => { setMontant(e.target.value); setRefus(null) }} />
-        </div>
-      </div>
-      <div className="mt-2 flex gap-2">
-        <button disabled={!cents || verse.isPending}
-                onClick={() => verse.mutate(
-                  { foyerId, pocheId: poche.id, userId, cents: cents! },
-                  { onSuccess: () => setMontant('') })}
-                /* Désactivé, il gardait un fond plein qui le faisait passer pour
-                   actif. La bordure et le fond effacé disent mieux « pas
-                   encore » qu'un aplat plus pâle. */
-                className="flex-1 min-h-11 rounded-[14px] bg-herbe text-fond text-[15px]
-                           font-medium disabled:bg-transparent disabled:text-doux
-                           disabled:border disabled:border-brume">
-          Je verse
-        </button>
-        <button disabled={!cents || verse.isPending || !soldeFrais}
-                onClick={() => {
-                  /* Jamais plus que ce qu'on a versé : la table n'a aucun plancher. */
-                  const non = refusDuRetrait(cents!, monSolde)
-                  if (non) { setRefus(non); return }
-                  if (!confirm(`Retirer ${euros(cents!)} de « ${poche.libelle} » ?`)) return
-                  verse.mutate({ foyerId, pocheId: poche.id, userId, cents: -cents!,
-                                 motif: 'retrait' },
-                               { onSuccess: () => setMontant('') })
-                }}
-                /* `opacity-60` sur du `doux` tombait à 2,42:1 : un bouton
-                   désactivé doit se lire, sinon on ne sait pas ce qu'on ne peut
-                   pas faire. Il reste distinct par sa couleur, pas par un voile. */
-                className="min-h-11 px-4 rounded-[14px] border border-brume text-[15px]
-                           text-encre disabled:text-doux">
-          Je retire
-        </button>
-      </div>
-      {refus && <p role="alert" className="mt-2 text-[14px]" style={{ color: 'var(--color-ocre)' }}>{refus}</p>}
-      <Erreur de={verse.error ?? solde.error} />
-
-      {poche.genre === 'projet' && (
-        <Projet poche={poche} foyerId={foyerId} deja={soldeLu ? total : null} />
-      )}
-    </Surface>
-  )
-}
+import { usePoches, usePosePoche } from '../lib/donnees/budget.ts'
 
 export function Epargne({ userId, retour }: { userId: string; retour: () => void }) {
   const { data: foyer } = useFoyer()
   const poches = usePoches()
   const pose = usePosePoche()
-  const [nom, setNom] = useState('')
-  const [objectif, setObjectif] = useState('')
-  const [genre, setGenre] = useState<'urgence' | 'projet'>('projet')
-  const [quand, setQuand] = useState('')
-  const [cle, setCle] = useState<'defaut' | 'moitie' | 'prorata'>('defaut')
 
   const foyerId = foyer?.id ?? ''
-  const prenoms = new Map((foyer?.membres ?? []).map(m => [m.id, prenomDe(m.display_name)]))
-  const cObjectif = enCentimes(objectif)
+  const membres = (foyer?.membres ?? []).map(m => ({ id: m.id, prenom: prenomDe(m.display_name) }))
 
   return (
-    <main className="min-h-dvh px-6 pt-14 pb-16">
-      <div className="mx-auto w-full max-w-lg">
-        <button onClick={retour}
-                className="inline-flex items-center gap-2 min-h-11 -mt-3 text-[15px] text-doux">
-          <span aria-hidden="true">‹</span> Le mois
-        </button>
-        <h1 className="titre text-[34px] mt-6">L’épargne</h1>
-        <p className="mt-2 text-[15px] leading-[23px] text-doux">
-          Ce qui est versé appartient à qui l’a versé. Le registre le suit, parce
-          qu’un livret joint est présumé moitié-moitié — et vos versements, non.
+    <main className="min-h-dvh px-4 pt-4 pb-16 min-[900px]:px-8">
+      <div className="mx-auto w-full max-w-[1180px]">
+        <header className="flex h-14 items-center">
+          <button type="button" onClick={retour}
+                  className="-ml-2 inline-flex min-h-11 items-center gap-1.5 rounded-full pl-2 pr-3.5
+                             text-[15px] font-semibold text-doux hover:text-encre">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M14.5 5.5 8 12l6.5 6.5" />
+            </svg>
+            Le mois
+          </button>
+        </header>
+        <h1 className="titre mt-3.5 text-[34px] font-semibold max-[360px]:text-[30px] min-[900px]:mt-5 min-[900px]:text-[46px]">
+          L’épargne
+        </h1>
+        <p className="mt-2 max-w-[46ch] text-[15.5px] leading-[1.45] text-doux">
+          Ce qui est versé appartient à qui l’a versé. Le registre le suit, parce qu’un livret joint est
+          présumé moitié-moitié, et vos versements, non.
         </p>
 
         <Erreur de={poches.error ?? pose.error} />
-        {poches.isPending ? <Attente /> : (poches.data ?? []).length === 0 ? (
-          <Vide titre="Rien encore"
-                texte="Commence par un fonds d’urgence : quatre mois de ce qui est nécessaire, et intouchable pour le reste." />
-        ) : (
-          (poches.data ?? []).map(p => (
-            <Poche_ key={p.id} poche={p} userId={userId} foyerId={foyerId} prenoms={prenoms} />
-          ))
-        )}
-
-        <h2 className="mt-10 text-[14px] font-semibold text-doux">
-          Ouvrir une poche
-        </h2>
-        <div className="mt-3 space-y-3">
-          <div role="radiogroup" aria-label="Genre de poche" className="flex gap-2">
-            {([['urgence', 'Fonds d’urgence'], ['projet', 'Un projet']] as const).map(([v, t]) => (
-              <button key={v} role="radio" aria-checked={genre === v} onClick={() => setGenre(v)}
-                      className={`flex-1 min-h-11 rounded-[12px] text-[14px] transition-colors
-                        ${genre === v ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
-                {t}
-              </button>
-            ))}
+        <div className="mt-[18px] grid items-start gap-3 min-[900px]:mt-[26px] min-[900px]:grid-cols-[7fr_5fr]
+                        min-[900px]:gap-5">
+          <div className="grid min-w-0 gap-3 min-[900px]:gap-5">
+            {poches.isPending ? <Attente /> : (poches.data ?? []).length === 0 ? (
+              <Vide titre="Rien encore"
+                    texte="Commence par un fonds d’urgence : quatre mois de ce qui est nécessaire, et intouchable pour le reste." />
+            ) : (
+              (poches.data ?? []).map(p => (
+                <CartePoche key={p.id} poche={p} userId={userId} foyerId={foyerId} membres={membres} />
+              ))
+            )}
           </div>
-          <Champ label="Son nom" value={nom} onChange={e => setNom(e.target.value)} />
-          <Champ label="Objectif (€)" type="text" inputMode="decimal" value={objectif}
-                 onChange={e => setObjectif(e.target.value)} />
-          {genre === 'projet' && (
-            <>
-              <Champ label="Pour quand (facultatif)" type="date" value={quand}
-                     onChange={e => setQuand(e.target.value)} />
-              <div>
-                <span className="block text-[15px] font-semibold">Comment le financer</span>
-                <div role="radiogroup" aria-label="Clé du projet" className="mt-2 flex gap-2">
-                  {([['defaut', 'Comme le foyer'], ['prorata', 'Au prorata'],
-                     ['moitie', 'Moitié-moitié']] as const).map(([v, nom]) => (
-                    <button key={v} role="radio" aria-checked={cle === v} onClick={() => setCle(v)}
-                            className={`flex-1 min-h-11 rounded-[12px] text-[13px] transition-colors
-                              ${cle === v ? 'bg-encre text-fond' : 'bg-brume/50 text-encre'}`}>
-                      {nom}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-2 text-[14px] text-doux">
-                  Un voyage peut être à moitié-moitié même si tout le reste est au prorata.
-                </p>
-              </div>
-            </>
-          )}
-          {genre === 'urgence' && (
-            <p className="text-[14px] text-doux">
-              La règle habituelle : quatre mois de ce qui est nécessaire — le toit
-              et les courses, pas le restaurant.
-            </p>
-          )}
-          <button disabled={nom.trim() === '' || pose.isPending}
-                  onClick={() => pose.mutate({
-                    foyerId, libelle: nom.trim(), genre,
-                    objectifCents: cObjectif,
-                    echeance: genre === 'projet' && quand ? quand : null,
-                    cle: genre === 'projet' && cle !== 'defaut' ? cle : null,
-                  }, { onSuccess: () => { setNom(''); setObjectif(''); setQuand('') } })}
-                  className="w-full min-h-11 rounded-[14px] bg-herbe text-fond text-[15px]
-                             font-medium disabled:bg-brume disabled:text-encre">
-            Ouvrir
-          </button>
+          <OuvrirUnePoche foyerId={foyerId} pose={pose} />
         </div>
       </div>
     </main>
