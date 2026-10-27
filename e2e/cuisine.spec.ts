@@ -52,6 +52,9 @@ test.describe('la cuisine, jouée au clic', () => {
     await champ.blur()
     await expect(champ).toHaveValue('7')
     expect(await titres(), 'la ligne réglée a changé de place').toEqual(avant)
+    // Le « 7 » doit être écrit avant le refus : sa réussite effaçait le message du refus d'après.
+    await expect.poll(async () => (await db.from('cycle_recipe').select('servings')
+      .eq('cycle_id', foyer.cycleId)).data?.some(r => r.servings === 7), { timeout: 10_000 }).toBe(true)
     await champ.fill('0')
     const alerte = page.getByRole('alert').filter({ hasText: 'Il faut au moins 1 part.' })
     await expect(alerte).toBeVisible()
