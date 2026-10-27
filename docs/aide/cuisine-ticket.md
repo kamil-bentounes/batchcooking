@@ -20,7 +20,7 @@ sources:
   - supabase/functions/ticket/lignes.ts
   - supabase/migrations/0024_prix.sql
   - supabase/migrations/0031_apprentissage.sql
-verifie_sur: 6f8d030
+verifie_sur: 4e9b6f4
 ---
 ## Ce que fait l’appli
 
@@ -31,7 +31,7 @@ Ton ticket est la seule source de prix : l’appli n’en devine aucun. Tu le ph
 1. Sur la liste : « J’ai payé — photographier le ticket ». Choisis l’« Enseigne » (sinon le magasin par défaut).
 2. « Photographier le ticket » : à plat, bien éclairé, de haut (environ vingt secondes). Ticket long : photographie-le en deux fois.
 3. Relis « Le ticket lu » : l’enseigne, la date, le total, puis « N lignes lues », « N rattachées à la liste » et, s’il y en a un, l’écart.
-4. Décoche une ligne fausse. Touche une ligne pour la rattacher ailleurs (« Rattacher à : » un article, ou « rien »).
+4. Touche le ticket photographié pour le lire en grand (Échap le referme). Décoche une ligne fausse. Touche une ligne pour la rattacher ailleurs (« Rattacher à : » un article, ou « rien »).
 5. « Enregistrer N lignes · X € » (somme des lignes cochées) te ramène à la liste. « Reprendre une photo » recommence.
 
 ## Les règles

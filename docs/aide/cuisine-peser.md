@@ -16,7 +16,7 @@ sources:
   - src/lib/donnees/pesee.ts
   - src/lib/donnees/courses.ts
   - supabase/migrations/0025_pesee.sql
-verifie_sur: 6f8d030
+verifie_sur: 4e9b6f4
 ---
 ## Ce que fait l’appli
 
@@ -31,7 +31,7 @@ verifie_sur: 6f8d030
 
 ## Les règles
 
-- Il faut **3 pesées retenues** pour qu’un poids prime sur la référence, ou **5 si l’aliment n’a pas de référence**. Les points disent l’avancement : « 0 sur 3 » avant la première, « 2 sur 3 » après deux.
+- Il faut **3 pesées retenues** pour qu’un poids prime sur la référence, ou **5 si l’aliment n’a pas de référence**. Les points disent l’avancement : « 0 sur 3 » avant la première (« 0 sur 5 » sans référence), « 2 sur 3 » après deux. Avant la première pesée, la ligne dit aussi « 2 recettes » : c’est ce qui classe les aliments. L’en-tête de « À peser » dit « trois pesées par aliment », et « cinq sans poids de référence » quand les deux cas se mêlent.
 - Le poids retenu est la **médiane** des pesées retenues.
 - Une pesée est **écartée** si le poids d’une unité est sous 0,4 fois ou au-dessus de 2,5 fois la référence. Le champ passe au rouge et l’écran te prévient avant d’enregistrer : « … cette pesée ne sera pas retenue. » Exemple : référence 110 g, accepté de 44 à 275 g ; 1 200 g pour un oignon, non. Une pesée écartée reste listée, mais ne compte pas.
 - Sans référence, rien n’est écarté.
