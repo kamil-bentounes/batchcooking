@@ -218,8 +218,13 @@ test.describe('le cycle, d’un bout à l’autre', () => {
        une ligne de repas, donc rien à ouvrir, donc la moitié de l'écran jamais
        rendue. On place une barquette libre sur aujourd'hui, ce que fait le
        dressage. */
+    /* ⚠️ L'état d'une barquette se dit « mangee » ; « mange » est celui d'une CASE de repas. Avec l'ancien
+       `neq('state', 'mange')`, le filtre n'écartait rien : `limit(1)` sans ordre tombait parfois sur la barquette
+       déjà mangée plus haut, la semaine ne dessine pas de carte pour elle, et « Changer » n'existait pas. */
     const { data: libre } = await db.from('portion').select('id')
-      .eq('cycle_id', foyer.cycleId).neq('state', 'mange').limit(1).maybeSingle()
+      .eq('cycle_id', foyer.cycleId).in('state', ['au_frais', 'decongelee']).order('created_at').order('id')
+      .limit(1).maybeSingle()
+    expect(libre, 'il doit rester une barquette à placer : le dressage en a fait').not.toBeNull()
     if (libre) {
       const d = new Date()
       const aujourdhui = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
