@@ -292,10 +292,10 @@ const SEMAINE = () => {
 }
 const PREVUS = (): Prevu[] => SEMAINE().map(c => ({
   id: c.id, day: c.day, meal: c.meal, user_profile_id: c.user_profile_id, portion_id: c.portion!.id }))
-const photos = () => new Map([['r-las', { image_url: 'https://exemple.fr/lasagnes.webp' }]])
 const journee = (p: Lectures = {}): Lectures => tout({
   foyer: AVEC_ELLE(), cycle: cycle('semaine'), barquettes: barquettes(), cases: SEMAINE(), prevus: PREVUS(),
-  recettes: new Map([['r-las', photos().get('r-las')!], ['r-piz', { image_url: null }], ['r-wrap', { image_url: null }]]),
+  recettes: new Map<string, { image_url: string | null }>([
+    ['r-las', { image_url: 'https://exemple.fr/lasagnes.webp' }], ['r-piz', { image_url: null }], ['r-wrap', { image_url: null }]]),
   ...p,
 })
 const boutons = (h: string) => [...h.matchAll(/<button\b[^>]*>(.*?)<\/button>/gs)].map(m => texte(m[1]))
