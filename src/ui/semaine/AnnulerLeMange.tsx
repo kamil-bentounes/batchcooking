@@ -10,7 +10,7 @@
  * La case qu'on vient de cocher, l'heure dite et le délai : `lib/annuler-mange.ts`.
  */
 import { useEffect, useId, useRef, useState } from 'react'
-import { DELAI_DU_BANDEAU } from '../../lib/annuler-mange.ts'
+import { DELAI_DU_BANDEAU, Minuteur } from '../../lib/annuler-mange.ts'
 
 function Retour() {
   return (
@@ -33,6 +33,9 @@ export function BandeauNote({ surAnnule, surFerme, enCours }: {
   surFerme: () => void
   enCours: boolean
 }) {
+  /* Le pointeur : seul un VRAI mouvement dessus suspend le délai. Un bandeau qui apparaît sous un pointeur immobile
+     reçoit un « pointerenter » synthétique du navigateur : le prendre pour un survol le laisserait en pause pour
+     toujours. Le focus, lui, suspend (clavier, lecteur d'écran). */
   const [survol, setSurvol] = useState(false)
   const [focus, setFocus] = useState(false)
   /* La région annoncée existe vide d'abord, puis reçoit son texte : un texte déjà là à l'insertion n'est pas
@@ -42,19 +45,24 @@ export function BandeauNote({ surAnnule, surFerme, enCours }: {
 
   /* Le délai, en pause tant que le pointeur ou le focus est dessus, ou que l'annulation est en vol. */
   const enPause = survol || focus || enCours
-  const reste = useRef(DELAI_DU_BANDEAU)
   const ferme = useRef(surFerme)
   useEffect(() => { ferme.current = surFerme }, [surFerme])
+  const minuteur = useRef<Minuteur | null>(null)
   useEffect(() => {
-    if (enPause) return
-    const depuis = Date.now()
-    const t = setTimeout(() => ferme.current(), reste.current)
-    return () => { clearTimeout(t); reste.current = Math.max(0, reste.current - (Date.now() - depuis)) }
+    const m = new Minuteur(DELAI_DU_BANDEAU, () => ferme.current())
+    minuteur.current = m
+    m.demarre()
+    return () => m.arrete()
+  }, [])
+  useEffect(() => {
+    if (enPause) minuteur.current?.pause()
+    else minuteur.current?.demarre()
   }, [enPause])
 
   return (
     <div data-bandeau-annule="" className="sur-encre relative flex min-h-14 items-center justify-between gap-2.5 overflow-hidden rounded-[18px] bg-encre pl-4 pr-1.5 text-surface"
-         onPointerEnter={() => setSurvol(true)} onPointerLeave={() => setSurvol(false)}
+         onPointerMove={e => { if (e.movementX !== 0 || e.movementY !== 0) setSurvol(true) }}
+         onPointerLeave={() => setSurvol(false)}
          onFocus={() => setFocus(true)}
          onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocus(false) }}>
       <style>{STYLE_DU_TRAIT}</style>
@@ -69,15 +77,15 @@ export function BandeauNote({ surAnnule, surFerme, enCours }: {
   )
 }
 
-/** « ✓ Mangé » (le temps du bandeau), puis « ✓ Mangé à 12 h 40 ». */
-export function PuceMange({ heure }: { heure: string | null }) {
+/** « ✓ Mangé » (le temps du bandeau), puis « ✓ Mangé à 12 h 40 » (`puceDuMange`). Le texte passe à la ligne : à 320 px il est long. */
+export function PuceMange({ texte }: { texte: string }) {
   return (
-    <span data-mange-puce="" className="inline-flex items-center gap-1.5 rounded-full bg-frais-fond px-[11px] py-[5px] text-[13px] font-bold text-frais-encre">
+    <span data-mange-puce="" className="inline-flex items-start gap-1.5 rounded-[14px] bg-frais-fond px-[11px] py-[5px] text-[13px] font-bold leading-[1.3] text-frais-encre">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"
-           strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+           strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-px shrink-0">
         <path d="M5 12.5l4.5 4.5L19 7.5" />
       </svg>
-      {heure ? `Mangé à ${heure}` : 'Mangé'}
+      {texte}
     </span>
   )
 }

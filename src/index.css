@@ -121,6 +121,8 @@ body {
  * `:focus-visible` ci-dessus.
  */
 :is(h1, h2)[tabindex="-1"]:focus-visible { outline: none; }
+/* La carte du jour qui reçoit le focus après « Pas mangé ? Annuler » (hub, accueil) : une région, pas un contrôle. */
+[data-carte][tabindex="-1"]:focus-visible { outline: none; }
 
 /*
  * Sur la carte encre, l'anneau `herbe` ne fait que 1,9:1 : il disparaît (il en faut 3).

@@ -8,7 +8,7 @@ import type { Case } from '../../lib/donnees/barquettes.ts'
 import { estUnRepasChoisi, MOT_DU_REPAS } from '../../lib/choix.ts'
 import { nomCourt } from '../../lib/frigo.ts'
 import { PlatImage } from '../frigo/PlatImage.tsx'
-import { heureDite } from '../../lib/annuler-mange.ts'
+import { puceDuMange } from '../../lib/annuler-mange.ts'
 import { BandeauNote, LienAnnuler, PuceMange } from './AnnulerLeMange.tsx'
 
 export function MangeAujourdhui({ cases, photoDe, notee, surFerme, surAnnule, enCours }: {
@@ -37,7 +37,7 @@ export function MangeAujourdhui({ cases, photoDe, notee, surFerme, surAnnule, en
               <div className="min-w-0 flex-1">
                 <div className="text-[13px] text-doux">{repas}</div>
                 <div className="text-[15px] font-semibold leading-[1.25] [overflow-wrap:anywhere]">{nom}</div>
-                <div className="mt-2"><PuceMange heure={notee === c.id ? null : heureDite(c.eaten_at)} /></div>
+                <div className="mt-2"><PuceMange texte={notee === c.id ? 'Mangé' : puceDuMange(c.eaten_at, c.day)} /></div>
               </div>
             </div>
             {notee === c.id

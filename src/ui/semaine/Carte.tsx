@@ -14,6 +14,7 @@ import {
 } from '../../lib/choix.ts'
 import type { Carte, Membre, RepasChoisi } from '../../lib/choix.ts'
 import { MOT_DU_REPAS } from '../../lib/choix.ts'
+import { puceDuMange } from '../../lib/annuler-mange.ts'
 import { BandeauNote, LienAnnuler, PuceMange } from './AnnulerLeMange.tsx'
 
 /** Le fond d'une pastille sans photo : le plat a sa teinte, le congelé son givre, « autre chose » le sable. */
@@ -59,7 +60,7 @@ export function CarteDuRepas({
    * « Noté : mangé. » (`notee`), ensuite le lien « Pas mangé ? Annuler ». `surAnnule` remet MA case à « prévu ».
    * `undefined` : pas ma case, ou pas mangée.
    */
-  mange?: { heure: string | null; notee: boolean; surFerme: () => void; surAnnule: () => void; enCours: boolean }
+  mange?: { eatenAt: string | null; notee: boolean; surFerme: () => void; surAnnule: () => void; enCours: boolean }
 }) {
   const c = carte.contenu
   /* Une fois annulé, le bouton « Je l'ai mangé » revient : le focus y retourne (celui de « Oui, remettre » a disparu). */
@@ -95,7 +96,7 @@ export function CarteDuRepas({
               {peremption.texte}
             </div>
           )}
-          {mange && <div className="mt-2"><PuceMange heure={mange.notee ? null : mange.heure} /></div>}
+          {mange && <div className="mt-2"><PuceMange texte={mange.notee ? 'Mangé' : puceDuMange(mange.eatenAt, jour)} /></div>}
         </div>
         {!tousMange && (
           <button type="button" onClick={surChange} data-ouvre={carte.cle}

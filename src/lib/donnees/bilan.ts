@@ -18,8 +18,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
 import type { Ligne } from '../supabase.ts'
 import { budget, iso, joursEntre, serie } from '../suivi.ts'
-import { extraCompte, jour } from '../semaine.ts'
-import { maintenant } from '../horloge.ts'
+import { extraCompte } from '../semaine.ts'
 import type { Budget, Repas, Serie } from '../suivi.ts'
 
 export type Personne = {
@@ -132,11 +131,10 @@ export function useBilan(depuis: Date, jusqu: Date) {
           .in('meal_slot_id', lot)))
       const enPlus = new Map<string, { kcal: number; protein: number }>()
       const caseDe = new Map(c.map(x => [x.id, x]))
-      const aujourdhui = jour(maintenant())
       for (const e of extras) {
-        /* Un repère que la feuille de choix a seulement PLANIFIÉ ne compte que le repas mangé, ou son jour passé. */
+        /* Un repère que la feuille de choix a seulement PLANIFIÉ ne compte que si le repas est mangé (`extraCompte`). */
         const laCase = caseDe.get(e.meal_slot_id)
-        if (laCase && !extraCompte(e, laCase, aujourdhui)) continue
+        if (laCase && !extraCompte(e, laCase)) continue
         const v = enPlus.get(e.meal_slot_id) ?? { kcal: 0, protein: 0 }
         v.kcal += Number(e.kcal)
         v.protein += Number(e.protein_g)

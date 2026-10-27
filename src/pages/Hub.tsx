@@ -41,7 +41,7 @@ import { jourDeParis, maintenant } from '../lib/horloge.ts'
 import { BoutonAide } from '../ui/Aide.tsx'
 import { useMoisType } from '../ui/budget/MoisType.tsx'
 import { CeSoir } from '../ui/frigo/CeSoir.tsx'
-import { mesRepasManges, useNoteRecente } from '../lib/annuler-mange.ts'
+import { mesRepasManges, rendLeFocusALaCarteDuJour, useNoteRecente } from '../lib/annuler-mange.ts'
 import { MangeAujourdhui } from '../ui/semaine/MangeAujourdhui.tsx'
 import { CarteGeste } from '../ui/hub/CarteGeste.tsx'
 import { CeQuiVient } from '../ui/hub/CeQuiVient.tsx'
@@ -346,7 +346,7 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
                           (cases ?? []).filter(c => c.day === jourDit && c.meal === prochain.meal
                             && c.state === 'prevu' && memePlat(c, prochain)).map(c => c.user_profile_id),
                           membres, userId)}
-                        surMange={() => mange.mutate(prochain, { onSuccess: () => noteLeMange(prochain.id) })}
+                        surMange={() => { annule.reset(); mange.mutate(prochain, { onSuccess: () => noteLeMange(prochain.id) }) }}
                         nbASortir={aSortir.length}
                         surSort={() => sortDuCongelo.mutate(aSortir)}
                         surChange={() => va(`/semaine?jour=${jourDit}&repas=${prochain.meal}`)}
@@ -364,8 +364,9 @@ export function Hub({ userId, va }: { userId: string; va: (v: string) => void })
               )}
               <MangeAujourdhui cases={dejaMange} photoDe={c => photoDe(c.portion?.recipe_id)} notee={notee}
                                surFerme={clos} enCours={annule.isPending}
-                               surAnnule={id => annule.mutate(id, { onSuccess: clos })} />
-              <Erreur de={annule.error} />
+                               surAnnule={id => annule.mutate(id, { onSuccess: () => { clos(); setTimeout(rendLeFocusALaCarteDuJour, 0) } })} />
+              {/* L'erreur se dit tant que la ligne est là ; elle s'efface au geste suivant. */}
+              <Erreur de={dejaMange.length > 0 ? annule.error : null} />
             </div>
             <CeQuiVient lignes={aVenir} photoDe={photoDe} va={va}
                         chargement={cases === undefined && !panneDeLaSemaine}

@@ -41,7 +41,7 @@ import {
 import type { CaseLue, Carte, JourDuBandeau, PointDuJour, RepasChoisi } from '../lib/choix.ts'
 import { maintenant } from '../lib/horloge.ts'
 import { useJourLocal } from '../lib/jour-local.ts'
-import { heureDite, useNoteRecente } from '../lib/annuler-mange.ts'
+import { useNoteRecente } from '../lib/annuler-mange.ts'
 
 export function Semaine({ userId, va, remplace }: {
   userId: string
@@ -235,9 +235,9 @@ export function Semaine({ userId, va, remplace }: {
                     const laMienne = mienne ? lesCases.find(x => x.id === mienne.id) : undefined
                     const surMange = laMienne && mienne!.state === 'prevu' && (c.genre === 'plat' || c.genre === 'autre')
                       && jourChoisi.jour <= jour(now)
-                      ? () => mange.mutate(laMienne, { onSuccess: () => note(laMienne.id) }) : undefined
+                      ? () => { annule.reset(); mange.mutate(laMienne, { onSuccess: () => note(laMienne.id) }) } : undefined
                     const jeLaiMange = laMienne && mienne!.state === 'mange' && (c.genre === 'plat' || c.genre === 'autre')
-                      ? { heure: heureDite(laMienne.eaten_at), notee: notee === laMienne.id, surFerme: clos, enCours: annule.isPending,
+                      ? { eatenAt: laMienne.eaten_at, notee: notee === laMienne.id, surFerme: clos, enCours: annule.isPending,
                           surAnnule: () => annule.mutate(laMienne.id, { onSuccess: clos }) } : undefined
                     return (
                       <CarteDuRepas key={carte.cle} carte={carte} membres={membres} moi={userId} jour={jourChoisi.jour} repas={m}

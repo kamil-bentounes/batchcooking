@@ -313,7 +313,8 @@ test('« autre chose » sans barquette : le lien dit seulement « prévu », et 
   const ma = (await caseDe(foyer.userId, -1, 'dejeuner'))!
   expect(ma).toMatchObject({ state: 'prevu', eaten_at: null, portion_id: null })
   const { data: extras } = await db.from('meal_extra').select('*').eq('meal_slot_id', ma.id)
-  expect(extras!.map(e => e.label)).toEqual(['Sandwich du boulanger'])
+  /* Les extras SONT le repas : la ligne reste, mais elle redevient « planifiée » : le bilan ne la compte plus. */
+  expect(extras).toMatchObject([{ label: 'Sandwich du boulanger', kcal: 520, planifie: true }])
   /* La part de lasagnes ne bouge pas : il n'y avait pas de barquette à rendre. */
   expect(await auFrigo(LASAGNES)).toBe(6)
 })
@@ -370,7 +371,7 @@ test('l’accueil de la cuisine : le même bandeau et le même lien', async ({ p
   expect(await auFrigo(LASAGNES)).toBe(6)
 })
 
-test('le double appui : un seul « Oui, remettre » écrit, et un second appui venu d’ailleurs est dit sans rien rendre', async ({ page }) => {
+test('le double appui : la réponse « pas noté mangé » de la base est un succès, sans erreur, et la part n’est pas rendue deux fois', async ({ page }) => {
   test.setTimeout(120_000)
   await seme()
   await connecte(page)
@@ -380,13 +381,96 @@ test('le double appui : un seul « Oui, remettre » écrit, et un second appui v
   await carte.getByRole('button', { name: 'Je l’ai mangé' }).click()
   await expect(bandeau(page)).toHaveCount(0, { timeout: 15_000 })
   await carte.getByRole('button', { name: /Pas mangé \? Annuler/ }).click()
-  /* L'autre téléphone vient d'annuler : la case est déjà « prévu » en base. */
+  /* L'autre téléphone vient d'annuler : à l'instant où notre demande part, la case est déjà « prévu » en base. */
   const c = (await caseDe(foyer.userId, 0, 'diner'))!
-  await db.from('meal_slot').update({ state: 'prevu', eaten_at: null }).eq('id', c.id)
-  await db.from('portion').update({ state: 'au_frais' }).eq('id', c.portion_id!)
-  expect(await auFrigo(LASAGNES)).toBe(6)
+  await page.route('**/rest/v1/rpc/annule_mange', async route => {
+    await db.from('meal_slot').update({ state: 'prevu', eaten_at: null }).eq('id', c.id)
+    await db.from('portion').update({ state: 'au_frais' }).eq('id', c.portion_id!)
+    await route.continue()
+  })
   await carte.getByRole('button', { name: 'Oui, remettre' }).click()
-  await expect(page.getByRole('alert')).toContainText('n’est pas noté mangé', { timeout: 10_000 })
+  await expect(carte.getByRole('button', { name: 'Je l’ai mangé' })).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByRole('alert'), 'le but est atteint : pas d’erreur').toHaveCount(0)
   expect(await auFrigo(LASAGNES), 'rien n’est rendu une seconde fois').toBe(6)
-  await expect(carte.getByRole('button', { name: 'Je l’ai mangé' })).toBeVisible()
+})
+
+test('un bandeau qui apparaît sous un pointeur immobile ne reste pas en pause : il s’en va au bout de 6 secondes', async ({ page }) => {
+  test.setTimeout(120_000)
+  await seme()
+  await connecte(page)
+  await page.goto('/semaine')
+  const carte = repas(page, 'diner').getByRole('group', { name: `Soir : ${COURT}` })
+  await expect(carte).toBeVisible({ timeout: 20_000 })
+  const bouton = carte.getByRole('button', { name: 'Je l’ai mangé' })
+  const b = (await bouton.boundingBox())!
+  const x = b.x + b.width / 2, y = b.y + b.height - 4
+  await page.mouse.move(x, y)
+  await page.mouse.down(); await page.mouse.up()
+  await expect(bandeau(page)).toBeVisible({ timeout: 10_000 })
+  const sous = (await bandeau(page).boundingBox())!
+  expect(x >= sous.x && x <= sous.x + sous.width && y >= sous.y && y <= sous.y + sous.height,
+    'le pointeur est bien resté sous le bandeau').toBe(true)
+  await expect(bandeau(page)).toHaveCount(0, { timeout: 12_000 })
+})
+
+test('un repas noté un autre jour que le sien dit quand il a été noté, pas « Mangé à 9 h 12 »', async ({ page }) => {
+  test.setTimeout(120_000)
+  await seme()
+  /* Le dîner d'hier, noté ce matin à 9 h 12. */
+  await db.from('meal_slot').update({ eaten_at: aLHeure(0, 9, 12) }).eq('household_id', foyer.householdId)
+    .eq('user_profile_id', foyer.userId).eq('day', jourLocal(-1)).eq('meal', 'diner')
+  await connecte(page)
+  await page.goto('/semaine')
+  await page.locator(`[data-jour="${jourLocal(-1)}"]`).click()
+  const carte = repas(page, 'diner').getByRole('group', { name: `Soir : ${BURGER}` })
+  await expect(carte.locator('[data-mange-puce]')).toHaveText(/^Noté mangé le \S+ \d{1,2} \S+ à 9 h 12$/, { timeout: 20_000 })
+  await page.setViewportSize({ width: 320, height: 700 })
+  expect(await debordement(page)).toBeLessThanOrEqual(0)
+  await capture(page, 'jour-passe-saisie-320')
+})
+
+test('le hub : après l’annulation le focus revient à la carte du jour, et une erreur ne reste pas affichée', async ({ page }) => {
+  test.setTimeout(120_000)
+  await seme()
+  await connecte(page)
+  const sombre = page.locator('[data-carte="repas"]')
+  await expect(sombre).toContainText('Ce midi et ce soir', { timeout: 15_000 })
+  await sombre.getByRole('button', { name: 'Je l’ai mangé' }).click()
+  const lignes = page.getByRole('region', { name: 'Repas déjà notés' })
+  await expect(bandeau(page)).toBeVisible({ timeout: 10_000 })
+  await expect(bandeau(page)).toHaveCount(0, { timeout: 12_000 })
+  /* Une vraie panne : le réseau tombe sur l'annulation. L'erreur se dit tant que la ligne est là, puis le geste suivant l'efface. */
+  await page.route('**/rest/v1/rpc/annule_mange', route => route.abort())
+  await lignes.getByRole('button', { name: /Pas mangé \? Annuler/ }).click()
+  await lignes.getByRole('button', { name: 'Oui, remettre' }).click()
+  await expect(page.getByRole('alert')).toBeVisible({ timeout: 10_000 })
+  await page.unroute('**/rest/v1/rpc/annule_mange')
+  await lignes.getByRole('button', { name: 'Oui, remettre' }).click()
+  await expect(lignes).toHaveCount(0, { timeout: 10_000 })
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-carte]')), { timeout: 5_000 }).toBe(true)
+  expect((await caseDe(foyer.userId, 0, 'dejeuner'))!.state).toBe('prevu')
+})
+
+test('l’accueil de la cuisine : le focus revient aussi, et « déjà remis » est un succès', async ({ page }) => {
+  test.setTimeout(120_000)
+  await seme()
+  await connecte(page)
+  await page.goto('/cuisine-accueil')
+  const carte = page.locator('[data-carte="repas"]')
+  await expect(carte).toBeVisible({ timeout: 20_000 })
+  await carte.getByRole('button', { name: 'Je l’ai mangé' }).click()
+  await expect(bandeau(page)).toHaveCount(0, { timeout: 15_000 })
+  const lignes = page.getByRole('region', { name: 'Repas déjà notés' })
+  await lignes.getByRole('button', { name: /Pas mangé \? Annuler/ }).click()
+  const c = (await caseDe(foyer.userId, 0, 'dejeuner'))!
+  await page.route('**/rest/v1/rpc/annule_mange', async route => {
+    await db.from('meal_slot').update({ state: 'prevu', eaten_at: null }).eq('id', c.id)
+    await db.from('portion').update({ state: 'au_frais' }).eq('id', c.portion_id!)
+    await route.continue()
+  })
+  await lignes.getByRole('button', { name: 'Oui, remettre' }).click()
+  await expect(lignes).toHaveCount(0, { timeout: 10_000 })
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-carte], main')), { timeout: 5_000 }).toBe(true)
 })

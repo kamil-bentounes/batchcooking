@@ -13,7 +13,7 @@ import { useMemo } from 'react'
 import { Chiffre, Ecran, Erreur, Principal, Secondaire, Vide, dateLongue, duree, Marque } from '../ui/coque.tsx'
 import { CeSoir } from '../ui/frigo/CeSoir.tsx'
 import { PetitFrigo } from '../ui/frigo/PetitFrigo.tsx'
-import { mesRepasManges, useNoteRecente } from '../lib/annuler-mange.ts'
+import { mesRepasManges, rendLeFocusALaCarteDuJour, useNoteRecente } from '../lib/annuler-mange.ts'
 import { MangeAujourdhui } from '../ui/semaine/MangeAujourdhui.tsx'
 import { Appareil, PlatImage } from '../ui/frigo/PlatImage.tsx'
 import { GESTE, useChangeEtat, useCycle, useCycleInterrompu, useOuvreCycle } from '../lib/donnees/cycle.ts'
@@ -72,7 +72,7 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   const auFroid = barquettes.filter(b => b.location === 'congelateur').length
   const aimant = magnet(barquettes, prevus, aujourdhui)
   const membres = (foyer?.membres ?? []).map(m => ({ id: m.id, prenom: prenomDe(m.display_name) }))
-  const consomme = bilanDuJour(cases, userId, jourDit, jourDit)
+  const consomme = bilanDuJour(cases, userId, jourDit)
 
   /* Une session interrompue est LA chose du moment : le hub le dit (« Session interrompue »), l'accueil disait
      « Rien de prévu » et ne la proposait qu'en second, sous « Choisir les recettes » (revue du 25/10). */
@@ -94,7 +94,7 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
               cases.filter(c => c.day === jourDit && c.meal === prochain.meal && c.state === 'prevu'
                 && c.portion?.label === prochain.portion?.label).map(c => c.user_profile_id),
               membres, userId)}
-            surMange={() => mange.mutate(prochain, { onSuccess: () => note(prochain.id) })}
+            surMange={() => { annule.reset(); mange.mutate(prochain, { onSuccess: () => note(prochain.id) }) }}
             nbASortir={aSortir.length}
             surSort={() => sortDuCongelo.mutate(aSortir)}
             surChange={() => va(`/semaine?jour=${jourDit}&repas=${prochain.meal}`)}
@@ -106,8 +106,8 @@ export function Accueil({ userId, va }: { userId: string; va: (v: string) => voi
   const mangeDuJour = (
     <>
       <MangeAujourdhui cases={dejaMange} photoDe={photoDe} notee={notee} surFerme={clos}
-                       surAnnule={id => annule.mutate(id, { onSuccess: clos })} enCours={annule.isPending} />
-      <Erreur de={annule.error} />
+                       surAnnule={id => annule.mutate(id, { onSuccess: () => { clos(); setTimeout(rendLeFocusALaCarteDuJour, 0) } })} enCours={annule.isPending} />
+      <Erreur de={dejaMange.length > 0 ? annule.error : null} />
     </>
   )
 

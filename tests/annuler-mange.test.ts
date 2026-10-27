@@ -6,7 +6,9 @@
  */
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
-import { admin, makeActor, type Actor } from './helpers/db'
+import { readFileSync } from 'node:fs'
+import pg from 'pg'
+import { admin, makeActor, makeOrphan, type Actor } from './helpers/db'
 import { bilanDuJour } from '../src/lib/semaine.ts'
 
 let kamil: Actor
@@ -44,6 +46,24 @@ async function parts(label: string, n: number, o: { lieu?: 'frigo' | 'congelateu
     frozen_at: froid ? new Date().toISOString() : null,
     expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
   }))).select()
+  expect(error).toBeNull()
+  return data!
+}
+/** Une part DÉJÀ « mangee » à l'insertion : l'état d'avant n'est pas connu (c'est le cas des parts mangées avant 0129). */
+async function partDejaMangee(label: string, o: { lieu?: 'frigo' | 'congelateur' } = {}) {
+  const froid = o.lieu === 'congelateur'
+  const { data, error } = await db.from('portion').insert({
+    household_id: kamil.householdId, label, grams: 500, kcal: 600, protein_g: 40, fiber_g: 5, carb_g: 60, fat_g: 20,
+    location: o.lieu ?? 'frigo', state: 'mangee', frozen_at: froid ? new Date().toISOString() : null,
+    expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+  }).select().single()
+  expect(error).toBeNull()
+  return data!
+}
+const caseMangee = async (qui: string, jour: string, meal: string, portionId: string | null) => {
+  const { data, error } = await db.from('meal_slot').insert({
+    household_id: kamil.householdId, user_profile_id: qui, day: jour, meal, portion_id: portionId, state: 'mange', eaten_at: new Date().toISOString(),
+  }).select().single()
   expect(error).toBeNull()
   return data!
 }
@@ -104,27 +124,19 @@ describe('annuler « mangé »', () => {
     expect((await annule(kamil.client, c.id)).error).toBeNull()
     expect((await part(c.portion_id!)).state).toBe('decongelee')
     // Une part mangée « avant 0129 » : pas d'état d'avant. Congelée puis décongelée (événement au journal) : décongelée.
-    const autrePart = c.portion_id === p.id ? q : p
-    await db.from('portion_event').insert({ portion_id: autrePart.id, household_id: kamil.householdId, kind: 'decongelee' })
-    await db.from('portion').update({ state: 'mangee', etat_avant_mangee: null }).eq('id', autrePart.id)
-    const vieille = await db.from('meal_slot').insert({
-      household_id: kamil.householdId, user_profile_id: kamil.userId, day: jourDans(-2), meal: 'diner',
-      portion_id: autrePart.id, state: 'mange', eaten_at: new Date().toISOString(),
-    }).select().single()
-    expect(vieille.error).toBeNull()
-    expect((await annule(kamil.client, vieille.data!.id)).error).toBeNull()
-    expect((await part(autrePart.id)).state).toBe('decongelee')
+    const vieille = await partDejaMangee(label)
+    await db.from('portion_event').insert({ portion_id: vieille.id, household_id: kamil.householdId, kind: 'decongelee' })
+    expect(vieille.etat_avant_mangee).toBeNull()
+    const s = await caseMangee(kamil.userId, jourDans(-2), 'diner', vieille.id)
+    expect((await annule(kamil.client, s.id)).error).toBeNull()
+    expect((await part(vieille.id)).state).toBe('decongelee')
+    expect(p.id).not.toBe(q.id)
   })
 
   it('une part mangée au frigo, jamais congelée et sans état d’avant, revient « au frais »', async () => {
-    const label = nouveauPlat()
-    const [p] = await parts(label, 1)
-    await db.from('portion').update({ state: 'mangee', etat_avant_mangee: null }).eq('id', p.id)
-    const s = await db.from('meal_slot').insert({
-      household_id: kamil.householdId, user_profile_id: kamil.userId, day: aujourdhui(), meal: 'diner',
-      portion_id: p.id, state: 'mange', eaten_at: new Date().toISOString(),
-    }).select().single()
-    expect((await annule(kamil.client, s.data!.id)).error).toBeNull()
+    const p = await partDejaMangee(nouveauPlat())
+    const s = await caseMangee(kamil.userId, aujourdhui(), 'diner', p.id)
+    expect((await annule(kamil.client, s.id)).error).toBeNull()
     expect((await part(p.id)).state).toBe('au_frais')
   })
 
@@ -247,8 +259,9 @@ describe('annuler « mangé »', () => {
     expect(r.data).toMatchObject({ portion_id: null, rendue: false })
     const apres = (await caseDe(kamil.userId, aujourdhui(), 'dejeuner'))!
     expect(apres).toMatchObject({ state: 'prevu', eaten_at: null, portion_id: null })
-    const { data: extras } = await db.from('meal_extra').select('label').eq('meal_slot_id', c.id)
-    expect(extras).toHaveLength(1)
+    // Les extras SONT le repas : la ligne, ses kcal et son libellé restent, mais elle redevient « planifiée ».
+    const { data: extras } = await db.from('meal_extra').select('label, kcal, planifie').eq('meal_slot_id', c.id)
+    expect(extras).toMatchObject([{ label: 'Sandwich', kcal: 450, planifie: true }])
   })
 
   it('le bilan ne compte plus le repas jusqu’à ce qu’il soit de nouveau noté', async () => {
@@ -258,7 +271,7 @@ describe('annuler « mangé »', () => {
     const lire = async () => {
       const { data } = await db.from('meal_slot').select('*, portion:portion_id(kcal, protein_g), extras:meal_extra(kcal, protein_g, planifie)')
         .eq('user_profile_id', kamil.userId).eq('day', aujourdhui())
-      return bilanDuJour(data as never, kamil.userId, aujourdhui(), aujourdhui())
+      return bilanDuJour(data as never, kamil.userId, aujourdhui())
     }
     expect(await lire()).toMatchObject({ kcal: 600, proteinG: 40, renseignes: 1 })
     const c = (await caseDe(kamil.userId, aujourdhui(), 'dejeuner'))!
@@ -278,5 +291,177 @@ describe('annuler « mangé »', () => {
     expect(r.error).toBeNull()
     expect(r.data.portion_id).toBe(c.portion_id)
     expect((await part(c.portion_id!)).state).toBe('mangee')
+  })
+})
+
+describe('annuler « mangé » : ce que la base garde', () => {
+  it('une part mangée par DEUX cases : annuler la mienne ne rend rien, annuler la seconde la rend', async () => {
+    const label = nouveauPlat()
+    const [p] = await parts(label, 1)
+    const a = await caseMangee(kamil.userId, aujourdhui(), 'dejeuner', p.id)
+    const b = await caseMangee(thauba.userId, aujourdhui(), 'dejeuner', p.id)
+    await db.from('portion').update({ state: 'mangee' }).eq('id', p.id)
+    const r1 = await annule(kamil.client, a.id)
+    expect(r1.error).toBeNull()
+    expect(r1.data).toMatchObject({ rendue: false })
+    expect((await part(p.id)).state, 'l’autre personne l’a notée : elle reste mangée').toBe('mangee')
+    expect((await caseDe(kamil.userId, aujourdhui(), 'dejeuner'))!.state).toBe('prevu')
+    expect((await caseDe(thauba.userId, aujourdhui(), 'dejeuner'))!.state).toBe('mange')
+    const r2 = await annule(thauba.client, b.id)
+    expect(r2.data).toMatchObject({ rendue: true, state: 'au_frais' })
+    expect((await part(p.id)).state).toBe('au_frais')
+  })
+
+  it('une part déplacée entre-temps revient là où elle est maintenant, avec son état de ce lieu', async () => {
+    const label = nouveauPlat()
+    const [p] = await parts(label, 1, { etat: 'decongelee' })
+    expect((await mange(kamil.client, label, aujourdhui(), 'dejeuner', 'frigo', 'decongelee')).error).toBeNull()
+    expect((await part(p.id)).etat_avant_mangee).toBe('decongelee')
+    // Remise au congélateur depuis la fiche du frigo : une part du congélateur est toujours « au frais », jamais « décongelée ».
+    const { error } = await db.from('portion').update({ location: 'congelateur', frozen_at: new Date().toISOString() }).eq('id', p.id)
+    expect(error).toBeNull()
+    const c = (await caseDe(kamil.userId, aujourdhui(), 'dejeuner'))!
+    const r = await annule(kamil.client, c.id)
+    expect(r.error).toBeNull()
+    expect(r.data).toMatchObject({ rendue: true, location: 'congelateur', state: 'au_frais' })
+    expect(await part(p.id)).toMatchObject({ state: 'au_frais', location: 'congelateur' })
+  })
+
+  it('une part décongelée rendue garde sa date limite', async () => {
+    const label = nouveauPlat()
+    const [p] = await parts(label, 1, { etat: 'decongelee' })
+    const limite = (await part(p.id)).expires_at
+    expect((await mange(kamil.client, label, aujourdhui(), 'dejeuner', 'frigo', 'decongelee')).error).toBeNull()
+    const c = (await caseDe(kamil.userId, aujourdhui(), 'dejeuner'))!
+    expect((await annule(kamil.client, c.id)).error).toBeNull()
+    const apres = await part(p.id)
+    expect(apres.state).toBe('decongelee')
+    expect(new Date(apres.expires_at).getTime()).toBe(new Date(limite).getTime())
+  })
+
+  it('une part supprimée entre-temps : la case repasse à prévu, sans barquette, et rien n’est rendu', async () => {
+    const label = nouveauPlat()
+    await parts(label, 1)
+    expect((await mange(kamil.client, label, aujourdhui(), 'dejeuner')).error).toBeNull()
+    const c = (await caseDe(kamil.userId, aujourdhui(), 'dejeuner'))!
+    await db.from('portion').delete().eq('id', c.portion_id!)
+    const r = await annule(kamil.client, c.id)
+    expect(r.error).toBeNull()
+    expect(r.data).toMatchObject({ portion_id: null, rendue: false })
+    expect(await caseDe(kamil.userId, aujourdhui(), 'dejeuner')).toMatchObject({ state: 'prevu', eaten_at: null, portion_id: null })
+  })
+
+  it('sans session (anon) : refusé ; sans foyer : refusé', async () => {
+    const label = nouveauPlat()
+    await parts(label, 1)
+    expect((await mange(kamil.client, label, aujourdhui(), 'dejeuner')).error).toBeNull()
+    const c = (await caseDe(kamil.userId, aujourdhui(), 'dejeuner'))!
+    const anon = createClient(process.env.VITE_SUPABASE_URL!, process.env.VITE_SUPABASE_ANON_KEY!, { auth: { persistSession: false } })
+    const r = await annule(anon, c.id)
+    expect(r.error?.message).toMatch(/permission denied|not authorized|JWT/i)
+    const orphelin = await makeOrphan()
+    const r2 = await annule(orphelin.client as unknown as Actor['client'], c.id)
+    expect(r2.error?.message).toMatch(/Aucun foyer/)
+    expect((await caseDe(kamil.userId, aujourdhui(), 'dejeuner'))!.state).toBe('mange')
+  })
+
+  it('la colonne « état d’avant » n’est pas écrivable par un client : ni à l’insertion, ni à la mise à jour', async () => {
+    const label = nouveauPlat()
+    const base = {
+      household_id: kamil.householdId, label, grams: 500, kcal: 600, protein_g: 40, fiber_g: 5, carb_g: 60, fat_g: 20,
+      expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+    }
+    const ins = await kamil.client.from('portion').insert({ ...base, etat_avant_mangee: 'decongelee' }).select().single()
+    expect(ins.error).toBeNull()
+    expect(ins.data!.etat_avant_mangee, 'à l’insertion').toBeNull()
+    const maj = await kamil.client.from('portion').update({ etat_avant_mangee: 'decongelee' }).eq('id', ins.data!.id).select().single()
+    expect(maj.error).toBeNull()
+    expect(maj.data!.etat_avant_mangee, 'sur une part au frais').toBeNull()
+    // Sur une part mangée : la valeur posée par le passage à « mangee » ne bouge pas, et la rendre ne dépend pas d'un client.
+    expect((await mange(kamil.client, label, aujourdhui(), 'dejeuner')).error).toBeNull()
+    const c = (await caseDe(kamil.userId, aujourdhui(), 'dejeuner'))!
+    expect((await part(c.portion_id!)).etat_avant_mangee).toBe('au_frais')
+    const maj2 = await kamil.client.from('portion').update({ etat_avant_mangee: 'decongelee' }).eq('id', c.portion_id!).select().single()
+    expect(maj2.error).toBeNull()
+    expect(maj2.data!.etat_avant_mangee).toBe('au_frais')
+    expect((await annule(kamil.client, c.id)).error).toBeNull()
+    expect(await part(c.portion_id!)).toMatchObject({ state: 'au_frais', etat_avant_mangee: null })
+  })
+
+  it('la migration rejouée deux fois de suite ne produit aucune erreur', async () => {
+    const sql = readFileSync('supabase/migrations/0129_annuler_mange.sql', 'utf8')
+    const c = new pg.Client({
+      connectionString: process.env.SUPABASE_ADMIN_DB_URL ?? 'postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres',
+    })
+    await c.connect()
+    try {
+      await c.query(sql)
+      await c.query(sql)
+    } finally { await c.end() }
+    // Et elle marche toujours.
+    const label = nouveauPlat()
+    await parts(label, 1)
+    expect((await mange(kamil.client, label, aujourdhui(), 'dejeuner')).error).toBeNull()
+    const cs = (await caseDe(kamil.userId, aujourdhui(), 'dejeuner'))!
+    expect((await annule(kamil.client, cs.id)).error).toBeNull()
+  })
+})
+
+describe('annuler « autre chose » : le bilan ne compte plus le repas, aujourd’hui, sur un jour passé, ni le lendemain', () => {
+  const repere = { type: 'repere', label: 'Restaurant', kcal: 900, protein_g: 35, fiber_g: 3, carb_g: 90, fat_g: 40 }
+  const bilan = async (jour: string) => {
+    const { data } = await db.from('meal_slot').select('*, portion:portion_id(kcal, protein_g), extras:meal_extra(kcal, protein_g, planifie)')
+      .eq('user_profile_id', kamil.userId).eq('day', jour)
+    return bilanDuJour(data as never, kamil.userId, jour)
+  }
+
+  it('aujourd’hui : choisi (planifié), mangé, annulé : 0 ; de nouveau mangé : 900', async () => {
+    expect((await pose(kamil, aujourdhui(), 'dejeuner', repere)).error).toBeNull()
+    const c = (await caseDe(kamil.userId, aujourdhui(), 'dejeuner'))!
+    expect((await bilan(aujourdhui())).kcal, 'choisi, pas mangé').toBe(0)
+    await db.from('meal_slot').update({ state: 'mange', eaten_at: new Date().toISOString() }).eq('id', c.id)
+    expect((await bilan(aujourdhui())).kcal).toBe(900)
+    expect((await annule(kamil.client, c.id)).error).toBeNull()
+    expect(await bilan(aujourdhui())).toMatchObject({ kcal: 0, proteinG: 0, renseignes: 0 })
+    await db.from('meal_slot').update({ state: 'mange', eaten_at: new Date().toISOString() }).eq('id', c.id)
+    expect((await bilan(aujourdhui())).kcal).toBe(900)
+  })
+
+  it('un jour passé : noté par la feuille (mangé, extra « noté après coup »), annulé : le repas ne compte plus', async () => {
+    const hier = jourDans(-1)
+    expect((await pose(kamil, hier, 'diner', repere)).error).toBeNull()
+    const c = (await caseDe(kamil.userId, hier, 'diner'))!
+    expect(c.state).toBe('mange')
+    expect((await db.from('meal_extra').select('planifie').eq('meal_slot_id', c.id)).data).toEqual([{ planifie: false }])
+    expect((await bilan(hier)).kcal).toBe(900)
+    expect((await annule(kamil.client, c.id)).error).toBeNull()
+    expect((await db.from('meal_extra').select('planifie').eq('meal_slot_id', c.id)).data, 'redevenu planifié').toEqual([{ planifie: true }])
+    expect(await bilan(hier)).toMatchObject({ kcal: 0, proteinG: 0, renseignes: 0, prevus: 1 })
+    // « Je l'ai mangé » sur ce jour passé le compte de nouveau.
+    await db.from('meal_slot').update({ state: 'mange', eaten_at: new Date().toISOString() }).eq('id', c.id)
+    expect((await bilan(hier)).kcal).toBe(900)
+  })
+
+  it('le lendemain : une annulation d’hier ou d’aujourd’hui ne recompte pas, quel que soit le jour où on lit', async () => {
+    const hier = jourDans(-1)
+    expect((await pose(kamil, hier, 'dejeuner', repere)).error).toBeNull()
+    const c = (await caseDe(kamil.userId, hier, 'dejeuner'))!
+    expect((await annule(kamil.client, c.id)).error).toBeNull()
+    // Le bilan ne regarde plus l'heure qu'il est : la même case donne le même zéro, aujourd'hui comme dans une semaine.
+    const { data } = await db.from('meal_slot').select('*, portion:portion_id(kcal, protein_g), extras:meal_extra(kcal, protein_g, planifie)').eq('id', c.id)
+    for (const jourLu of [hier, aujourdhui(), jourDans(7)]) {
+      expect(bilanDuJour(data as never, kamil.userId, hier), `lu le ${jourLu}`).toMatchObject({ kcal: 0, proteinG: 0 })
+    }
+  })
+
+  it('un plat annulé garde ses « en plus » comptés : ce sont des notes après coup, pas le repas', async () => {
+    const label = nouveauPlat()
+    await parts(label, 1)
+    expect((await mange(kamil.client, label, aujourdhui(), 'dejeuner')).error).toBeNull()
+    const c = (await caseDe(kamil.userId, aujourdhui(), 'dejeuner'))!
+    await db.from('meal_extra').insert({ household_id: kamil.householdId, meal_slot_id: c.id, label: 'Chocolat', kcal: 55, protein_g: 1, planifie: false })
+    expect((await annule(kamil.client, c.id)).error).toBeNull()
+    expect((await db.from('meal_extra').select('planifie').eq('meal_slot_id', c.id)).data).toEqual([{ planifie: false }])
+    expect((await bilan(aujourdhui())).kcal).toBe(55)
   })
 })
