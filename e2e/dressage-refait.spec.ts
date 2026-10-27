@@ -53,6 +53,12 @@ async function foyerADresser(): Promise<Foyer> {
     { recipe_id: poulet, ordinal: 3, raw_text: '75 cl de lait', food_id: lait, qty: 750, unit: 'ml', grams_reference: 750 },
   ])
   await db.from('recipe').update({ image_url: PHOTO }).eq('id', dahl)
+  /* Ce que la session prend : les poireaux et les tortillas du Dahl, le lait du poulet. */
+  await db.from('stock_item').insert([
+    { household_id: f.householdId, label: 'Poireaux', food_id: poireau, quantity: 1500, unit: 'g', location: 'frigo' },
+    { household_id: f.householdId, label: 'Tortillas', food_id: tortilla, quantity: 20, unit: null, location: 'placard' },
+    { household_id: f.householdId, label: 'Lait écrémé', food_id: lait, quantity: 1000, unit: 'ml', location: 'frigo' },
+  ])
 
   /* Une recette dont presque rien n'est chiffré : des grammes, mais des lignes sans valeurs nutritives. */
   const { data: wrap } = await db.from('recipe').insert({

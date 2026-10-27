@@ -159,6 +159,7 @@ test('un refus de la fonction se dit, et la question revient dans le champ', asy
 })
 
 test('partout ailleurs le « ? » flotte dans la marge du haut, sans recouvrir rien', async ({ page }) => {
+  test.setTimeout(90_000) // une trentaine d'écrans, chacun attendu au repos : 30 s ne suffisaient plus
   foyer = await amorce()
   await connecte(page, foyer.email)
 
