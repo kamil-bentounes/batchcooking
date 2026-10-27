@@ -17,7 +17,7 @@ sources:
   - supabase/migrations/0096_budget_facon.sql
   - supabase/migrations/0110_budget_corrige.sql
   - supabase/migrations/0111_budget_retire.sql
-verifie_sur: fa94f4a
+verifie_sur: 7ccc089
 ---
 Sur la page « Les charges », touche une ligne : ses gestes s’ouvrent dessous. Ce sont « Corriger », « Retirer », et selon le cas « Rattacher » ou « Changer qui participe ». Un seul panneau est ouvert à la fois ; retouche la ligne pour le fermer. Si un geste échoue, le message s’affiche sur cette ligne, même si tu as refermé son panneau.
 
