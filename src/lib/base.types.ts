@@ -1953,6 +1953,36 @@ export type Database = {
           },
         ]
       }
+      rappel_passe: {
+        Row: {
+          dus: number | null
+          echecs: number | null
+          envoyes: number | null
+          id: number
+          le: string
+          origine: string
+          statut: string
+        }
+        Insert: {
+          dus?: number | null
+          echecs?: number | null
+          envoyes?: number | null
+          id?: never
+          le?: string
+          origine: string
+          statut: string
+        }
+        Update: {
+          dus?: number | null
+          echecs?: number | null
+          envoyes?: number | null
+          id?: never
+          le?: string
+          origine?: string
+          statut?: string
+        }
+        Relationships: []
+      }
       rappel_reglage: {
         Row: {
           actif: boolean
@@ -3495,6 +3525,7 @@ export type Database = {
         }[]
       }
       apercu_des_soldes: { Args: { le_mois: string }; Returns: Json }
+      appelle_les_rappels: { Args: never; Returns: undefined }
       arc_corrigible: {
         Args: { apres: string; avant: string }
         Returns: boolean
@@ -3619,6 +3650,10 @@ export type Database = {
         }[]
       }
       is_service_role: { Args: never; Returns: boolean }
+      libere_rappel: {
+        Args: { p_cles: string[]; p_type: string; p_user: string }
+        Returns: undefined
+      }
       lieu_du_rayon: { Args: { rayon: string }; Returns: string }
       llm_budget_remaining: { Args: never; Returns: number }
       llm_consomme: {
@@ -3641,7 +3676,17 @@ export type Database = {
       }
       mois_courant: { Args: never; Returns: string }
       mois_suivi: { Args: { foyer: string; le_mois: string }; Returns: boolean }
+      nom_comparable: { Args: { t: string }; Returns: string }
       nom_du_mois: { Args: { d: string }; Returns: string }
+      note_la_passe: {
+        Args: {
+          p_dus: number
+          p_echecs: number
+          p_envoyes: number
+          p_statut: string
+        }
+        Returns: undefined
+      }
       open_cycle: {
         Args: { p_servings?: number; p_week_of: string }
         Returns: string
@@ -3696,6 +3741,7 @@ export type Database = {
           id: string
         }[]
       }
+      prepare_les_rappels: { Args: { p_maintenant: string }; Returns: Json }
       provision_mensuelle: {
         Args: { montant_cents: number; periodicite: string }
         Returns: number
@@ -3730,6 +3776,35 @@ export type Database = {
         Args: { le_compte: string; ranger: boolean }
         Returns: undefined
       }
+      rappel_actifs: {
+        Args: { p_type: string }
+        Returns: {
+          email: string
+          foyer: string
+          prenom: string
+          uid: string
+        }[]
+      }
+      rappel_point: {
+        Args: { p_jour: string; p_repas: string; p_uid: string }
+        Returns: string
+      }
+      rappel_prenom: {
+        Args: { p_nom: string; p_repli: string }
+        Returns: string
+      }
+      rappels_a_envoyer: {
+        Args: { p_maintenant: string }
+        Returns: {
+          cle: string
+          cles: string[]
+          donnees: Json
+          email: string
+          prenom: string
+          type: string
+          user_id: string
+        }[]
+      }
       rattrape_les_mois: { Args: never; Returns: number }
       recale_l_annee: {
         Args: { annee: number; la_charge: string; mois_cible?: string }
@@ -3746,6 +3821,10 @@ export type Database = {
       repartit_les_lignes: {
         Args: { foyer: string; le_mois: string }
         Returns: undefined
+      }
+      reserve_rappel: {
+        Args: { p_cles: string[]; p_type: string; p_user: string }
+        Returns: boolean
       }
       reste_enveloppe: {
         Args: { le_mois: string }
