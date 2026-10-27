@@ -33,8 +33,8 @@ export function Projet({ poche, foyerId, deja }: {
   /* Une poche vide le dit déjà plus haut, dans sa carte (« Rien n'y est encore versé ») : on ne le répète pas ici.
      ⚠️ Une CONDITION déguisée en constat : « Vous êtes à l'heure tant que vous versez ça » s'affichait sur une
      poche où rien n'avait encore été versé, et c'est la seule chose que l'œil retient. On dit où on en est. */
-  const ouEnEst = deja === null ? ''
-    : deja >= (poche.objectif_cents ?? 0) ? 'C’est déjà atteint.'
+  const atteint = deja !== null && deja >= (poche.objectif_cents ?? 0)
+  const ouEnEst = deja === null || atteint ? ''
     : deja === 0 ? ''
     : `Il y a ${montant(deja)} dessus pour l’instant.`
 
@@ -51,7 +51,11 @@ export function Projet({ poche, foyerId, deja }: {
                     maj.mutate({ id: poche.id, echeance: e.target.value || null })
                   }} />
 
-      {effort && (
+      {/* Déjà atteint : plus rien à étaler, on ne montre pas « 0 € par mois pendant N mois ». */}
+      {effort && atteint && (
+        <p className="rounded-[18px] bg-sable px-3.5 py-3 text-[14.5px] leading-[1.35]">C’est déjà atteint.</p>
+      )}
+      {effort && !atteint && (
         effort.mois === 0
           ? <p className="rounded-[18px] bg-sable px-3.5 py-3 text-[14.5px] leading-[1.35]">
               C’est pour ce mois-ci.
@@ -94,8 +98,10 @@ export function Projet({ poche, foyerId, deja }: {
         </p>
       )}
 
-      <div className="grid grid-cols-[1fr_100px_48px] max-[360px]:grid-cols-[1fr_84px_48px] gap-2 items-end">
-        <ChampTexte label="Un poste" value={libelle} onChange={e => setLibelle(e.target.value)} />
+      <div className="grid grid-cols-[1fr_132px_48px] max-[360px]:grid-cols-[1fr_48px] gap-2 items-end">
+        <div className="max-[360px]:col-span-2 min-w-0">
+          <ChampTexte label="Un poste" value={libelle} onChange={e => setLibelle(e.target.value)} />
+        </div>
         <ChampMontant label="€" etiquette="Montant du poste (€)" unite={false}
                       value={saisi} onChange={e => setSaisi(e.target.value)} />
         <button type="button" disabled={libelle.trim() === '' || !cents || pose.isPending}

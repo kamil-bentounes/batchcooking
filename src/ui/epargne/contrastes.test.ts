@@ -6,7 +6,7 @@
 /// <reference types="node" />
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { VOILE_ARRETS, VOILE_RVB } from '../../lib/budget/epargne-lecture.ts'
+import { TITRE_LIGNES_MAX, VOILE_ARRETS, VOILE_RVB, alphaDuVoile } from '../../lib/budget/epargne-lecture.ts'
 
 const css = readFileSync(new URL('../../index.css', import.meta.url), 'utf8')
 type Rvb = [number, number, number]
@@ -28,15 +28,25 @@ const contraste = (a: Rvb, b: Rvb) => {
 const BLANC: Rvb = [255, 255, 255]
 
 describe('épargne : le titre sur la photo', () => {
-  it('à mi-hauteur de la photo, là où commence le titre, le voile tient le blanc à 4,5:1 même sur une photo toute blanche', () => {
-    const arret = VOILE_ARRETS.find(a => a.place === 50)!
-    const fond = melange([...VOILE_RVB] as Rvb, BLANC, arret.alpha)
-    expect(contraste(BLANC, fond)).toBeGreaterThanOrEqual(4.5)
+  const fondA = (place: number) => melange([...VOILE_RVB] as Rvb, BLANC, alphaDuVoile(place))
+
+  it('à 30 % de la hauteur, le voile tient déjà le blanc à 4,5:1, même sur une photo toute blanche', () => {
+    expect(contraste(BLANC, fondA(30))).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('un titre de trois lignes (320 px) commence vers 40 % : il se lit encore sur une photo blanche', () => {
+    const HAUTEUR = 136, BAS = 12, LIGNE = 22 * 1.05
+    const haut = ((HAUTEUR - BAS - TITRE_LIGNES_MAX * LIGNE) / HAUTEUR) * 100
+    expect(haut).toBeGreaterThan(30)
+    expect(haut).toBeLessThan(45)
+    expect(contraste(BLANC, fondA(haut))).toBeGreaterThanOrEqual(4.5)
   })
 
   it('le voile ne s’éclaircit jamais en descendant', () => {
     const alphas = VOILE_ARRETS.map(a => a.alpha)
     expect(alphas).toEqual([...alphas].sort((a, b) => a - b))
+    expect(alphaDuVoile(0)).toBe(0)
+    expect(alphaDuVoile(100)).toBeCloseTo(0.85)
   })
 })
 

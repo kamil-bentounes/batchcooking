@@ -23,19 +23,24 @@ export function ChampTexte({ label, petit, ...p }: {
 }
 
 /** Un montant : la saisie en Fraunces, et son « € ». `etiquette` remplace le nom lu quand le libellé visible est court. */
-export function ChampMontant({ label, grand = false, etiquette, unite = true, ...p }: {
+export function ChampMontant({ label, grand = false, etiquette, unite = true, refus, ...p }: {
   label: ReactNode; grand?: boolean; etiquette?: string; unite?: boolean
+  /** Ce qui ne va pas dans ce qui est tapé : dit sous la case, et lu avec elle. */
+  refus?: string | null
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'inputMode'>) {
   const id = useId()
+  const idRefus = `${id}-refus`
   return (
     <div className="grid gap-1.5 min-w-0">
       <label htmlFor={id} className="text-[14px] font-semibold">{label}</label>
       <span className="flex items-center gap-2.5">
-        <input id={id} type="text" inputMode="decimal" autoComplete="off" aria-label={etiquette} {...p}
+        <input id={id} type="text" inputMode="decimal" autoComplete="off" aria-label={etiquette}
+               aria-invalid={refus ? true : undefined} aria-describedby={refus ? idRefus : undefined} {...p}
                className={`${CADRE} titre max-w-[220px] font-semibold
                            ${grand ? 'min-h-14 text-[26px] px-4 rounded-[16px]' : 'text-[20px]'}`} />
         {unite && <span aria-hidden="true" className="titre text-[22px] font-semibold text-doux">€</span>}
       </span>
+      {refus && <p id={idRefus} className="text-[14px] font-semibold text-groseille">{refus}</p>}
     </div>
   )
 }

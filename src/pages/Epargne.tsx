@@ -9,7 +9,14 @@ import { Vide, Attente, Erreur } from '../ui/coque.tsx'
 import { CartePoche } from '../ui/epargne/CartePoche.tsx'
 import { OuvrirUnePoche } from '../ui/epargne/OuvrirUnePoche.tsx'
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
-import { usePoches, usePosePoche } from '../lib/donnees/budget.ts'
+import { usePoches, usePosePoche, type Poche } from '../lib/donnees/budget.ts'
+
+/** Deux poches du même nom restent distinctes pour un lecteur d'écran : « Voyage (2 sur 2) ». Le titre affiché ne change pas. */
+function nomLu(p: Poche, toutes: Poche[]): string {
+  const cle = (x: Poche) => x.libelle.trim().toLocaleLowerCase('fr')
+  const memes = toutes.filter(x => cle(x) === cle(p))
+  return memes.length > 1 ? `${p.libelle} (${memes.indexOf(p) + 1} sur ${memes.length})` : p.libelle
+}
 
 export function Epargne({ userId, retour }: { userId: string; retour: () => void }) {
   const { data: foyer } = useFoyer()
@@ -41,7 +48,7 @@ export function Epargne({ userId, retour }: { userId: string; retour: () => void
           présumé moitié-moitié, et vos versements, non.
         </p>
 
-        <Erreur de={poches.error ?? pose.error} />
+        <Erreur de={poches.error} />
         <div className="mt-[18px] grid items-start gap-3 min-[900px]:mt-[26px] min-[900px]:grid-cols-[7fr_5fr]
                         min-[900px]:gap-5">
           <div className="grid min-w-0 gap-3 min-[900px]:gap-5">
@@ -50,7 +57,8 @@ export function Epargne({ userId, retour }: { userId: string; retour: () => void
                     texte="Commence par un fonds d’urgence : quatre mois de ce qui est nécessaire, et intouchable pour le reste." />
             ) : (
               (poches.data ?? []).map(p => (
-                <CartePoche key={p.id} poche={p} userId={userId} foyerId={foyerId} membres={membres} />
+                <CartePoche key={p.id} poche={p} userId={userId} foyerId={foyerId} membres={membres}
+                            nom={nomLu(p, poches.data ?? [])} />
               ))
             )}
           </div>

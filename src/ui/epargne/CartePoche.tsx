@@ -10,17 +10,28 @@ import { Erreur } from '../coque.tsx'
 import { montant } from '../../lib/budget/mois.ts'
 import { refusDuRetrait } from '../../lib/budget/feuilles.ts'
 import {
-  VOILE, partDeLaBarre, pastilleDe, photoDeLaPoche, pourcentage, repereDeLaDate,
+  VOILE, partDeLaBarre, pastilleDe, photoDeLaPoche, pourcentage, repereDeLaDate, tailleDuTotal,
 } from '../../lib/budget/epargne-lecture.ts'
 import { useSolde, useVerse, enCentimes, type Poche } from '../../lib/donnees/budget.ts'
 import { ChampMontant } from './Champ.tsx'
 import { Information, Retirer, Tirelire, Valise, Verser } from './pictos.tsx'
 import { Projet } from './Projet.tsx'
 
+/** Le titre ne dépasse pas trois lignes : c'est la hauteur que le voile est calculé pour tenir (voir le test de contraste). */
+const TAILLES = {
+  grand: 'text-[44px] min-[361px]:text-[52px] min-[900px]:text-[64px]',
+  moyen: 'text-[36px] min-[361px]:text-[44px] min-[900px]:text-[56px]',
+  petit: 'text-[30px] min-[361px]:text-[36px] min-[900px]:text-[48px]',
+} as const
+
+const CLAMP = 'line-clamp-3' // = TITRE_LIGNES_MAX
+
 export type Membre = { id: string; prenom: string }
 
-export function CartePoche({ poche, userId, foyerId, membres }: {
+export function CartePoche({ poche, userId, foyerId, membres, nom }: {
   poche: Poche; userId: string; foyerId: string; membres: Membre[]
+  /** Le nom lu par un lecteur d'écran : celui de la poche, suivi de « (2 sur 2) » quand deux poches portent le même. */
+  nom?: string
 }) {
   const solde = useSolde(poche.id)
   const verse = useVerse()
@@ -47,9 +58,16 @@ export function CartePoche({ poche, userId, foyerId, membres }: {
     .sort((a, b) => (a.rang < 0 ? 99 : a.rang) - (b.rang < 0 ? 99 : b.rang))
   const dit = soldeLu && poche.objectif_cents
     ? `${montant(total)} sur ${montant(poche.objectif_cents)}` : null
+  const nomLu = nom ?? poche.libelle
+  const texteDuTotal = soldeLu ? montant(total) : '…'
+  const taille = tailleDuTotal(texteDuTotal)
+  /* Un montant à centimes ou à cinq chiffres ne tient pas dans la moitié d'une carte étroite : une tuile par ligne. */
+  const registreLarge = versements.some(v => montant(v.cents).length > 8)
+  /* Rien versé du tout, ou tout retiré : ce n'est pas la même phrase. */
+  const toutRetire = soldeLu && cumul.length > 0 && versements.length === 0
 
   return (
-    <section aria-label={poche.libelle} className="overflow-hidden rounded-[24px] bg-surface shadow-carte">
+    <section aria-label={nomLu} className="overflow-hidden rounded-[24px] bg-surface shadow-carte">
       {/* Le fond du bandeau est sombre : tant que la photo n'est pas là (ou si elle ne vient pas), le titre blanc
           se lit quand même. */}
       <div className="relative h-[136px] min-[900px]:h-[176px] bg-encre">
@@ -57,7 +75,7 @@ export function CartePoche({ poche, userId, foyerId, membres }: {
              loading="lazy" className="h-full w-full object-cover" />
         <div aria-hidden="true" className="absolute inset-0" style={{ background: VOILE }} />
         <div className="absolute inset-x-4 bottom-3 flex items-end justify-between gap-2.5">
-          <h2 className="titre text-[22px] font-semibold text-white min-w-0 break-words">{poche.libelle}</h2>
+          <h2 className={`titre text-[22px] font-semibold text-white min-w-0 break-words ${CLAMP}`}>{poche.libelle}</h2>
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-surface px-2.5 py-1
                            text-[13px] font-semibold text-herbe">
             {poche.genre === 'urgence' ? <Tirelire taille={15} /> : <Valise taille={15} />}
@@ -68,9 +86,8 @@ export function CartePoche({ poche, userId, foyerId, membres }: {
 
       <div className="grid gap-3.5 p-4 min-[900px]:p-[22px]">
         <p className="flex flex-wrap items-baseline gap-x-2.5">
-          <b className="titre text-[44px] min-[361px]:text-[52px] min-[900px]:text-[64px] font-semibold
-                        leading-none tracking-[-0.03em] text-herbe">
-            {soldeLu ? montant(total) : '…'}
+          <b className={`titre font-semibold leading-none tracking-[-0.03em] text-herbe whitespace-nowrap ${TAILLES[taille]}`}>
+            {texteDuTotal}
           </b>
           {poche.objectif_cents && (
             <span className="text-[16px] text-doux">sur {montant(poche.objectif_cents)}</span>
@@ -78,9 +95,10 @@ export function CartePoche({ poche, userId, foyerId, membres }: {
         </p>
 
         {part !== null && (
-          <div role="meter" aria-valuemin={0} aria-valuenow={Math.max(0, total)}
+          <div role="meter" aria-valuemin={0}
+               aria-valuenow={Math.min(Math.max(0, total), poche.objectif_cents ?? 0)}
                aria-valuemax={poche.objectif_cents ?? 0} aria-valuetext={dit ?? undefined}
-               aria-label={dit ?? poche.libelle}
+               aria-label={`Avancement de « ${nomLu} »`}
                className="h-3 rounded-[7px] bg-piste overflow-hidden">
             <div className="h-full rounded-[7px] bg-herbe motion-safe:transition-[width]"
                  style={{ width: `${part * 100}%` }} />
@@ -93,7 +111,7 @@ export function CartePoche({ poche, userId, foyerId, membres }: {
 
         {/* Le registre par personne, toujours affiché. C'est LUI la donnée, pas le solde : sans lui,
             c'est la présomption de moitié-moitié qui gagne. */}
-        {soldeLu && versements.length === 0 && (
+        {soldeLu && versements.length === 0 && !toutRetire && (
           <p className="flex items-start gap-3 rounded-2xl bg-sable px-3.5 py-3 text-[14.5px] leading-[1.4]">
             <span className="mt-px text-ocre"><Information /></span>
             <span>
@@ -102,8 +120,15 @@ export function CartePoche({ poche, userId, foyerId, membres }: {
             </span>
           </p>
         )}
+        {toutRetire && (
+          <p className="flex items-start gap-3 rounded-2xl bg-sable px-3.5 py-3 text-[14.5px] leading-[1.4]">
+            <span className="mt-px text-ocre"><Information /></span>
+            <span>Tout a été retiré : il n’y a plus rien dessus.</span>
+          </p>
+        )}
         {versements.length > 0 && (
-          <ul aria-label="Qui a versé quoi" className="grid grid-cols-2 max-[360px]:grid-cols-1 gap-2">
+          <ul aria-label="Qui a versé quoi"
+              className={`grid gap-2 ${registreLarge ? 'grid-cols-1' : 'grid-cols-2 max-[360px]:grid-cols-1'}`}>
             {versements.map(v => (
               <li key={v.userId} className="flex min-w-0 items-center gap-2.5 rounded-2xl bg-fond px-3 py-2.5 shadow-[inset_0_0_0_1px_var(--color-brume)]">
                 <span aria-hidden="true"
@@ -112,7 +137,7 @@ export function CartePoche({ poche, userId, foyerId, membres }: {
                   {v.prenom.slice(0, 1).toUpperCase()}
                 </span>
                 <span className="min-w-0">
-                  <b className="titre block text-[22px] font-semibold leading-none tracking-[-0.02em]">
+                  <b className="titre block whitespace-nowrap text-[22px] font-semibold leading-none tracking-[-0.02em]">
                     {montant(v.cents)}
                   </b>
                   <span className="mt-0.5 block truncate text-[13px] text-doux">{v.prenom}</span>

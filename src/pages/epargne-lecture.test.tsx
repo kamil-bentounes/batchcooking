@@ -20,17 +20,17 @@ const poche = (p: Partial<Poche> = {}): Poche =>
   ({ id: 'p1', libelle: 'Urgence', genre: 'urgence', objectif_cents: 1000_00,
      echeance: null, cle: null, ...p })
 
-function ecran(solde: 'absent' | 'panne' | { userId: string; cents: number }[]) {
+function ecran(solde: 'absent' | 'panne' | { userId: string; cents: number }[], poches: Poche[] = [poche()]) {
   const qc = new QueryClient({ defaultOptions: { queries: {
     retry: false, retryOnMount: false, staleTime: Infinity } } })
   qc.setQueryData(CLE_FOYER.foyer, { id: 'f1', nom: 'Chez nous', plafondLlmEur: 0,
     membres: [{ id: 'u1', display_name: 'Kamil' }] } as unknown as Foyer)
-  qc.setQueryData(CLE.poches, [poche()])
+  qc.setQueryData(CLE.poches, poches)
   if (solde === 'panne') {
     qc.getQueryCache().build(qc, { queryKey: CLE.soldes('p1') })
       .setState({ status: 'error', error: new Error('boom'), data: undefined, fetchStatus: 'idle' })
   } else if (solde !== 'absent') {
-    qc.setQueryData(CLE.soldes('p1'), solde)
+    for (const p of poches) qc.setQueryData(CLE.soldes(p.id), solde)
   }
   return renderToStaticMarkup(
     <QueryClientProvider client={qc}><Epargne userId="u1" retour={() => {}} /></QueryClientProvider>)
@@ -74,7 +74,9 @@ describe('Épargne — la carte d’une poche', () => {
     expect(texte(h)).toContain('25 %')
     expect(texte(h)).toContain('pas de date')
     expect(h).toContain('role="meter"')
-    expect(h).toContain('aria-label="250 € sur 1\u202f000 €"')
+    expect(h).toContain('aria-label="Avancement de « Urgence »"')
+    expect(h).toContain('aria-valuetext="250 € sur 1\u202f000 €"')
+    expect(h).toContain('aria-valuenow="25000"')
     expect(h).toContain('aria-label="Qui a versé quoi"')
     expect(texte(h)).toContain('Kamil')
     expect(texte(h)).not.toContain('Rien n’y est encore versé.')
@@ -91,5 +93,45 @@ describe('Épargne — la carte d’une poche', () => {
     for (const mot of ['Verser (€)', 'Je verse', 'Je retire', 'Ouvrir une poche', 'Son nom', 'Objectif (€)']) {
       expect(t).toContain(mot)
     }
+  })
+})
+
+describe('Épargne — les bornes et les homonymes', () => {
+  it('l’objectif franchi : la jauge ne dépasse pas son maximum, le pourcentage dit vrai', () => {
+    const h = ecran([{ userId: 'u1', cents: 1500_00 }])
+    expect(h).toContain('aria-valuenow="100000"')
+    expect(h).toContain('aria-valuemax="100000"')
+    expect(texte(h)).toContain('150 %')
+  })
+
+  it('99,5 % de l’objectif : « 99 % », pas « 100 % »', () => {
+    const h = ecran([{ userId: 'u1', cents: 995_00 }])
+    expect(texte(h)).toContain('99 %')
+    expect(texte(h)).not.toContain('100 %')
+  })
+
+  it('tout retiré : une autre phrase que « Rien n’y est encore versé »', () => {
+    const t = texte(ecran([{ userId: 'u1', cents: 0 }]))
+    expect(t).toContain('Tout a été retiré : il n’y a plus rien dessus.')
+    expect(t).not.toContain('Rien n’y est encore versé.')
+  })
+
+  it('une personne à 0 € n’a pas de pastille', () => {
+    const t = texte(ecran([{ userId: 'u1', cents: 100_00 }, { userId: 'u2', cents: 0 }]))
+    expect(t).toContain('Kamil')
+    expect(t).not.toContain('0 € ?')
+  })
+
+  it('un gros montant à centimes : une tuile par ligne, le total rétréci', () => {
+    const h = ecran([{ userId: 'u1', cents: 12_345_67 }])
+    expect(h).toContain('grid-cols-1')
+    expect(h).toContain('text-[30px]')
+  })
+
+  it('deux poches du même nom se distinguent pour un lecteur d’écran', () => {
+    const h = ecran([], [poche({ id: 'p1', libelle: 'Voyage' }), poche({ id: 'p2', libelle: 'voyage' })])
+    expect(h).toContain('aria-label="Voyage (1 sur 2)"')
+    expect(h).toContain('aria-label="voyage (2 sur 2)"')
+    expect(h).toContain('aria-label="Avancement de « voyage (2 sur 2) »"')
   })
 })

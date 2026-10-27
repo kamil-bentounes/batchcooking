@@ -134,7 +134,7 @@ test.describe('versements, retrait refusé, un projet', () => {
     const { data: v } = await db.from('versement_epargne').select('user_profile_id, motif')
       .eq('household_id', f.householdId).eq('montant_cents', 20_000).single()
     expect(v).toMatchObject({ user_profile_id: f.userId, motif: 'mensuel' })
-    await expect(carte.getByRole('meter')).toHaveAttribute('aria-label', /990 € sur 4 500 €/)
+    await expect(carte.getByRole('meter')).toHaveAttribute('aria-valuetext', /990 € sur 4 500 €/)
   })
 
   test('un retrait refusé : on ne retire pas plus que ce qu’on a versé, et rien n’est écrit', async ({ page }) => {
@@ -224,5 +224,151 @@ test.describe('versements, retrait refusé, un projet', () => {
     // L'anneau de focus se voit : un contour de 2 px.
     const contour = await carte.getByRole('button', { name: 'Je retire' }).evaluate(e => getComputedStyle(e).outlineWidth)
     expect(contour).toBe('2px')
+    // Au focus clavier, le bouton garde ses coins arrondis (la règle globale `:focus-visible` les rendait carrés).
+    const coin = await carte.getByRole('button', { name: 'Je retire' }).evaluate(e => getComputedStyle(e).borderTopLeftRadius)
+    expect(coin, 'les coins d’un bouton arrondi au focus clavier').toBe('16px')
+  })
+})
+
+/* ── 3 · Les montants longs, les bornes, les erreurs du formulaire ──────────────────────────────────────────────────── */
+
+test.describe('montants longs, bornes et erreurs', () => {
+  let f: Foyer
+  const ajoute = async (libelle: string, genre: 'urgence' | 'projet', objectif: number | null, extra: object = {}) =>
+    (await db.from('poche_epargne').insert({ household_id: f.householdId, libelle, genre, objectif_cents: objectif, ...extra })
+      .select('id').single()).data!.id as string
+  const verseA = (poche: string, user: string, cents: number) => db.from('versement_epargne').insert({
+    household_id: f.householdId, poche_id: poche, user_profile_id: user, montant_cents: cents,
+    motif: cents < 0 ? 'retrait' : 'mensuel' })
+
+  test.beforeAll(async () => {
+    f = await amorce({ budget: false })
+    // Une poche à gros montants et à centimes, un projet, deux poches du même nom, une poche vidée.
+    const grande = await ajoute('Épargne de sécurité pour un très long nom de poche', 'urgence', 5_000_000)
+    await verseA(grande, f.userId, 12_345_67)
+    await verseA(grande, f.elleId, 1_240_50)
+    const projet = await ajoute('Voyage', 'projet', 300_000, { echeance: `${new Date().getFullYear() + 2}-01-15` })
+    await verseA(projet, f.userId, 299_000)           // 99,67 % : « 99 % », pas « 100 % »
+    // La base interdit deux poches de même nom, à la casse près : « Voyage » et « voyage » sont deux poches pour elle.
+    await ajoute('voyage', 'projet', 100_000, { echeance: `${new Date().getFullYear() + 2}-02-15` })
+    const videe = await ajoute('Vidée', 'urgence', 100_000)
+    await verseA(videe, f.userId, 50_000)
+    await verseA(videe, f.userId, -50_000)
+  })
+  test.afterAll(async () => { if (f) await efface(f) })
+
+  /** Ce qui sort de sa carte : un montant qui déborde d'une tuile, un total qui dépasse la carte. */
+  const debordements = (page: Page) => page.evaluate(() => {
+    const sortis: string[] = []
+    for (const carte of document.querySelectorAll<HTMLElement>('main section[aria-label]')) {
+      const limite = carte.getBoundingClientRect().right
+      for (const e of carte.querySelectorAll<HTMLElement>('b, li, input, button, h2')) {
+        const r = e.getBoundingClientRect()
+        if (r.width > 0 && r.right > limite + 0.5) sortis.push(`${e.tagName} ${(e.textContent ?? '').trim().slice(0, 30)}`)
+        if (e.tagName === 'B' || e.tagName === 'INPUT') {
+          if (e.scrollWidth > e.clientWidth + 1) sortis.push(`rogné ${e.tagName} ${(e.textContent ?? '').trim().slice(0, 30)}`)
+        }
+      }
+      // Un montant de tuile ne sort pas de sa tuile.
+      for (const tuile of carte.querySelectorAll<HTMLElement>('ul[aria-label="Qui a versé quoi"] li')) {
+        const t = tuile.getBoundingClientRect()
+        for (const b of tuile.querySelectorAll<HTMLElement>('b')) {
+          if (b.getBoundingClientRect().right > t.right + 0.5) sortis.push(`tuile ${b.textContent}`)
+        }
+      }
+    }
+    return sortis
+  })
+
+  for (const largeur of [390, 320]) {
+    test(`à ${largeur} px, aucun montant ne sort de sa carte ni de sa tuile ; le titre tient en trois lignes`, async ({ page }) => {
+      await page.setViewportSize({ width: largeur, height: 800 })
+      await connecte(page, f)
+      await page.goto('/epargne')
+      const carte = poche(page, 'Épargne de sécurité pour un très long nom de poche')
+      const registre = carte.getByRole('list', { name: 'Qui a versé quoi' })
+      await expect(registre).toBeVisible({ timeout: 15_000 })
+      await expect(registre).toContainText('12 345,67 €')
+      await expect(registre).toContainText('1 240,50 €')
+      await expect(carte.getByText('13 586,17 €', { exact: true })).toBeVisible()
+      expect(await debordements(page), `débordements à ${largeur} px`).toEqual([])
+      expect(await debordement(page), 'défilement horizontal').toBeLessThanOrEqual(0)
+      // Le titre est limité à trois lignes.
+      const lignes = await carte.getByRole('heading', { level: 2 }).evaluate(h =>
+        Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)))
+      expect(lignes).toBeLessThanOrEqual(3)
+      await page.screenshot({ path: `${CAPTURES}/epargne-montants-longs-${largeur}.png`, fullPage: true })
+      await carte.screenshot({ path: `${CAPTURES}/epargne-montants-longs-carte-${largeur}.png` })
+    })
+  }
+
+  test('le pourcentage dit vrai, la jauge reste dans ses bornes, deux poches du même nom se distinguent', async ({ page }) => {
+    await connecte(page, f)
+    await page.goto('/epargne')
+    const un = page.getByRole('region', { name: /^voyage \(1 sur 2\)$/i }), deux = page.getByRole('region', { name: /^voyage \(2 sur 2\)$/i })
+    await expect(un).toBeVisible({ timeout: 15_000 })
+    await expect(deux).toBeVisible()
+    await expect(un.getByRole('meter')).toHaveAccessibleName(/^Avancement de « voyage \(1 sur 2\) »$/i)
+    await expect(deux.getByRole('meter')).toHaveAccessibleName(/^Avancement de « voyage \(2 sur 2\) »$/i)
+    // Un des deux Voyage est à 99,67 % : « 99 % ».
+    await expect(page.getByText('99 %', { exact: true })).toHaveCount(1)
+    await expect(page.getByText('100 %', { exact: true })).toHaveCount(0)
+    for (const e of await page.getByRole('meter').all()) {
+      const [n, max] = await Promise.all([e.getAttribute('aria-valuenow'), e.getAttribute('aria-valuemax')])
+      expect(Number(n)).toBeLessThanOrEqual(Number(max))
+    }
+  })
+
+  test('tout retiré : une autre phrase, et plus de pastille', async ({ page }) => {
+    await connecte(page, f)
+    await page.goto('/epargne')
+    const carte = poche(page, 'Vidée')
+    await expect(carte.getByText('Tout a été retiré : il n’y a plus rien dessus.')).toBeVisible({ timeout: 15_000 })
+    await expect(carte.getByText(/Rien n’y est encore versé/)).toHaveCount(0)
+    await expect(carte.getByRole('list', { name: 'Qui a versé quoi' })).toHaveCount(0)
+  })
+
+  test('le champ du montant d’un poste ne rogne pas « 12400,50 »', async ({ page }) => {
+    await connecte(page, f)
+    for (const largeur of [390, 320]) {
+      await page.setViewportSize({ width: largeur, height: 800 })
+      await page.goto('/epargne')
+      const carte = page.getByRole('region', { name: /^voyage \(1 sur 2\)$/i })
+      await expect(carte.getByLabel('Un poste')).toBeVisible({ timeout: 15_000 })
+      const champ = carte.getByLabel('Montant du poste (€)')
+      await champ.fill('12400,50')
+      const [sw, cw] = await champ.evaluate(e => [e.scrollWidth, e.clientWidth])
+      expect(sw, `« 12400,50 » rogné à ${largeur} px`).toBeLessThanOrEqual(cw)
+      expect(await debordement(page)).toBeLessThanOrEqual(0)
+      await carte.getByLabel('Un poste').scrollIntoViewIfNeeded()
+      await carte.screenshot({ path: `${CAPTURES}/epargne-poste-carte-${largeur}.png` })
+    }
+  })
+
+  test('« Ouvrir une poche » : un objectif illisible est refusé sous la case, et l’erreur de création se dit dans le formulaire', async ({ page }) => {
+    await connecte(page, f)
+    await page.goto('/epargne')
+    const form = page.getByRole('region', { name: 'Ouvrir une poche' })
+    await expect(form).toBeVisible({ timeout: 15_000 })
+    const nb = async () => (await db.from('poche_epargne').select('id').eq('household_id', f.householdId)).data!.length
+    const avant = await nb()
+
+    await form.getByLabel('Son nom').fill('Sans objectif ?')
+    await form.getByLabel('Objectif (€)').fill('abc')
+    await expect(form.getByText(/Un montant, au plus 1 000 000 €/)).toBeVisible()
+    await expect(form.getByLabel('Objectif (€)')).toHaveAttribute('aria-invalid', 'true')
+    await expect(form.getByRole('button', { name: 'Ouvrir', exact: true })).toBeDisabled()
+    expect(await nb()).toBe(avant)
+
+    // Un objectif vide reste permis (une poche sans objectif) ; la panne de la base se dit dans le formulaire.
+    await form.getByLabel('Objectif (€)').fill('')
+    await expect(form.getByRole('button', { name: 'Ouvrir', exact: true })).toBeEnabled()
+    await page.route('**/rest/v1/poche_epargne*', r => r.request().method() === 'POST'
+      ? r.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'la base a refusé' }) })
+      : r.continue())
+    await form.getByRole('button', { name: 'Ouvrir', exact: true }).click()
+    await expect(form.getByRole('alert')).toContainText('la base a refusé')
+    await expect(page.locator('main > div > p[role=alert]')).toHaveCount(0)
+    expect(await nb()).toBe(avant)
   })
 })

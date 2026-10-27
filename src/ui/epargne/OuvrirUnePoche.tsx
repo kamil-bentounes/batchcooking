@@ -1,6 +1,8 @@
 /** « Ouvrir une poche » : un fonds d'urgence ou un projet, son nom, son objectif, et pour un projet sa date et sa clé. */
 import { useState } from 'react'
-import { usePosePoche, enCentimes } from '../../lib/donnees/budget.ts'
+import { Erreur } from '../coque.tsx'
+import { lisLeMontant } from '../../lib/budget/feuilles.ts'
+import { usePosePoche } from '../../lib/donnees/budget.ts'
 import { ChampMontant, ChampTexte } from './Champ.tsx'
 import { Information, Tirelire, Valise } from './pictos.tsx'
 
@@ -20,6 +22,10 @@ export function OuvrirUnePoche({ foyerId, pose }: {
   const [genre, setGenre] = useState<Genre>('projet')
   const [quand, setQuand] = useState('')
   const [cle, setCle] = useState<Cle>('defaut')
+  /* Un objectif vide, c'est une poche sans objectif ; un objectif tapé qui ne se lit pas (« abc »), c'est un refus :
+     la poche ne se crée pas sans objectif en silence. */
+  const lu = lisLeMontant(objectif, { zeroOk: false })
+  const objectifIllisible = objectif.trim() !== '' && !lu.valide
 
   return (
     <section aria-labelledby="ouvrir-une-poche"
@@ -40,7 +46,8 @@ export function OuvrirUnePoche({ foyerId, pose }: {
       </div>
 
       <ChampTexte label="Son nom" value={nom} onChange={e => setNom(e.target.value)} />
-      <ChampMontant label="Objectif (€)" value={objectif} onChange={e => setObjectif(e.target.value)} />
+      <ChampMontant label="Objectif (€)" value={objectif} onChange={e => setObjectif(e.target.value)}
+                    refus={objectifIllisible ? lu.refus : null} />
 
       {genre === 'projet' && (
         <>
@@ -75,10 +82,12 @@ export function OuvrirUnePoche({ foyerId, pose }: {
         </p>
       )}
 
-      <button type="button" disabled={nom.trim() === '' || pose.isPending}
+      {/* L'erreur de création se dit ici, sous le formulaire qui l'a provoquée, pas en haut de la page. */}
+      <Erreur de={pose.error} />
+      <button type="button" disabled={nom.trim() === '' || pose.isPending || objectifIllisible}
               onClick={() => pose.mutate({
                 foyerId, libelle: nom.trim(), genre,
-                objectifCents: enCentimes(objectif),
+                objectifCents: lu.valide ? lu.cents : null,
                 echeance: genre === 'projet' && quand ? quand : null,
                 cle: genre === 'projet' && cle !== 'defaut' ? cle : null,
               }, { onSuccess: () => { setNom(''); setObjectif(''); setQuand('') } })}
