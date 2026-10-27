@@ -137,7 +137,7 @@ test.describe('la photo du frigo', () => {
     await donneLaPhoto(page)
 
     await expect(page.getByRole('heading', { name: 'Ce que j’ai vu' })).toBeVisible({ timeout: 20_000 })
-    await expect(page.getByText('articles vus · 7 retenus · 14 s')).toBeVisible()
+    await expect(page.getByText('articles vus · 7 retenus · 14 s', { exact: true })).toBeVisible()
     await expect(page.getByText('étagère du haut, à gauche')).toBeVisible()
     await expect(page.getByText('deviné, à vérifier')).toHaveCount(2)
     await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(7)
@@ -157,7 +157,7 @@ test.describe('la photo du frigo', () => {
 
     await page.getByRole('checkbox', { name: 'Citrons' }).click()
     await expect(page.getByRole('button', { name: 'Ajouter 6 articles' })).toBeVisible()
-    await expect(page.getByText('articles vus · 6 retenus · 14 s')).toBeVisible()
+    await expect(page.getByText('articles vus · 6 retenus · 14 s', { exact: true })).toBeVisible()
     await page.getByRole('checkbox', { name: 'Fromage râpé' }).click()
     await page.getByRole('button', { name: 'Ajouter 7 articles' }).dblclick()
     await expect(page).toHaveURL(/\/frigo/, { timeout: 15_000 })
@@ -169,7 +169,108 @@ test.describe('la photo du frigo', () => {
     expect(labels, 'le décoché n’entre pas').not.toContain('Citrons')
     expect(labels, 'le deviné décoché n’entre pas').not.toContain('Sauce blanche ?')
     expect(labels.filter(l => l === 'Yaourt nature'), 'un double appui n’ajoute pas deux fois').toHaveLength(1)
+    /* Ce qui est ÉCRIT : la quantité, l'unité telle que lue, et le lieu. */
+    const ligne = (nom: string) => data!.find(x => x.label === nom)!
+    expect([ligne('Yaourt nature').quantity, ligne('Yaourt nature').unit, ligne('Yaourt nature').location]).toEqual([4, 'pot', 'frigo'])
+    expect([ligne('Œufs').quantity, ligne('Œufs').unit, ligne('Œufs').location]).toEqual([6, 'u', 'frigo'])
+    expect([ligne('Lait demi-écrémé').quantity, ligne('Lait demi-écrémé').unit]).toEqual([1, 'bouteille'])
     await db.from('stock_item').delete().eq('household_id', foyer.householdId).not('label', 'in', '("yaourt nature","beurre")')
+  })
+
+  test('un lieu absent ou inconnu prend le lieu choisi : aucune ligne n’est invisible, et le lieu écrit est le bon', async ({ page }) => {
+    test.setTimeout(90_000)
+    await simule(page, 'frigo', {
+      ...VU, articles: [
+        art('Petits pois', null, 2, 'paquet', 'tiroir du haut', 0.95, 'cave'),
+        { ...art('Glace', 'vanille', 1, 'pot', 'tiroir du bas'), lieu: undefined },
+        art('Riz', null, 1, 'paquet', 'étagère', 0.95, 'placard'),
+      ],
+    })
+    await connecte(page)
+    await page.goto('/photo')
+    await page.getByRole('radio', { name: 'Congélateur' }).click()
+    await donneLaPhoto(page)
+    await expect(page.getByRole('heading', { name: 'Ce que j’ai vu' })).toBeVisible({ timeout: 20_000 })
+    /* Les trois lignes ont une carte : deux au congélateur, une au placard. */
+    await expect(page.getByRole('checkbox')).toHaveCount(3)
+    await expect(page.getByRole('region', { name: 'Congélateur' }).getByRole('checkbox')).toHaveCount(2)
+    await expect(page.getByRole('region', { name: 'Placard' }).getByRole('checkbox')).toHaveCount(1)
+    await page.getByRole('button', { name: 'Ajouter 3 articles' }).click()
+    await expect(page).toHaveURL(/\/frigo/, { timeout: 15_000 })
+    const { data } = await db.from('stock_item').select('label, quantity, unit, location').eq('household_id', foyer.householdId)
+    const lieu = (nom: string) => data!.find(x => x.label === nom)?.location
+    expect([lieu('Petits pois'), lieu('Glace vanille'), lieu('Riz')]).toEqual(['congelateur', 'congelateur', 'placard'])
+    await db.from('stock_item').delete().eq('household_id', foyer.householdId).not('label', 'in', '("yaourt nature","beurre")')
+  })
+
+  test('un ajout qui échoue en route décoche ce qui est déjà entré, et le second essai n’ajoute que le reste', async ({ page }) => {
+    test.setTimeout(90_000)
+    await simule(page, 'frigo', { ...VU, articles: VU.articles.slice(0, 4) })
+    let postes = 0
+    await page.route('**/rest/v1/stock_item*', async route => {
+      if (route.request().method() !== 'POST') return route.continue()
+      postes++
+      if (postes === 3) {
+        return route.fulfill({
+          status: 500, headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
+          body: JSON.stringify({ message: 'la base a refusé la troisième ligne' }),
+        })
+      }
+      return route.continue()
+    })
+    await connecte(page)
+    await page.goto('/photo')
+    await donneLaPhoto(page)
+    await expect(page.getByRole('button', { name: 'Ajouter 4 articles' })).toBeVisible({ timeout: 20_000 })
+    await page.getByRole('button', { name: 'Ajouter 4 articles' }).click()
+
+    await expect(page.getByText('la base a refusé la troisième ligne')).toBeVisible({ timeout: 15_000 })
+    await expect(page).toHaveURL(/\/photo/)
+    /* Les deux premières sont entrées et décochées ; les deux autres restent à ajouter. */
+    await expect(page.getByRole('checkbox', { name: 'Yaourt nature' })).toHaveAttribute('aria-checked', 'false')
+    await expect(page.getByRole('checkbox', { name: 'Skyr vanille' })).toHaveAttribute('aria-checked', 'false')
+    await expect(page.getByRole('checkbox', { name: 'Œufs' })).toHaveAttribute('aria-checked', 'true')
+    await expect(page.getByRole('button', { name: 'Ajouter 2 articles' })).toBeEnabled()
+
+    await page.getByRole('button', { name: 'Ajouter 2 articles' }).click()
+    await expect(page).toHaveURL(/\/frigo/, { timeout: 15_000 })
+    const { data } = await db.from('stock_item').select('label').eq('household_id', foyer.householdId)
+    const labels = (data ?? []).map(x => x.label)
+    for (const nom of ['Yaourt nature', 'Skyr vanille', 'Œufs', 'Lait demi-écrémé']) {
+      expect(labels.filter(l => l === nom), `« ${nom} » entre une fois, pas deux`).toHaveLength(1)
+    }
+    await db.from('stock_item').delete().eq('household_id', foyer.householdId).not('label', 'in', '("yaourt nature","beurre")')
+  })
+
+  test('pendant la lecture le lieu ne change plus, la lecture s’annonce une fois, la photo s’ouvre en grand', async ({ page }) => {
+    test.setTimeout(90_000)
+    await simule(page, 'frigo', VU, { delai: 2500 })
+    await connecte(page)
+    await page.goto('/photo')
+    await donneLaPhoto(page)
+    await expect(page.getByText('Je regarde… une quinzaine de secondes.')).toBeVisible()
+    for (const r of await page.getByRole('radio').all()) await expect(r).toBeDisabled()
+    await expect(page.getByRole('heading', { name: 'Ce que j’ai vu' })).toBeVisible({ timeout: 20_000 })
+
+    /* L'annonce de la lecture ne bouge pas quand on coche. */
+    const annonce = page.getByRole('status').filter({ hasText: 'Lecture terminée' })
+    await expect(annonce).toHaveText('Lecture terminée : 9 articles vus · 7 retenus · 14 s.')
+    await page.getByRole('checkbox', { name: 'Citrons' }).click()
+    await expect(annonce).toHaveText('Lecture terminée : 9 articles vus · 7 retenus · 14 s.')
+    await expect(page.locator('[aria-live]').filter({ hasText: 'articles vus' })).toHaveCount(0)
+
+    /* La photo s'ouvre en grand, défile, se ferme à Échap et rend le focus. */
+    const vignette = page.getByRole('button', { name: 'Agrandir : La photo envoyée' })
+    await vignette.click()
+    const dialogue = page.getByRole('dialog', { name: 'La photo envoyée' })
+    await expect(dialogue).toBeVisible()
+    await expect(dialogue.getByRole('button', { name: 'Fermer' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(dialogue).toBeHidden()
+    await expect(vignette).toBeFocused()
+    await vignette.click()
+    await page.getByRole('button', { name: 'Fermer' }).click()
+    await expect(dialogue).toBeHidden()
   })
 
   test('sans durée ni emplacement, l’écran n’invente rien', async ({ page }) => {
@@ -180,7 +281,7 @@ test.describe('la photo du frigo', () => {
     await connecte(page)
     await page.goto('/photo')
     await donneLaPhoto(page)
-    await expect(page.getByText('articles vus · 1 retenu')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText('articles vus · 1 retenu', { exact: true })).toBeVisible({ timeout: 20_000 })
     await expect(page.getByText(/ s$/)).toHaveCount(0)
     await expect(page.getByText('deviné, à vérifier')).toBeVisible()
     await expect(page.getByText(/^ ·|· $/)).toHaveCount(0)
@@ -272,6 +373,46 @@ test.describe('le ticket', () => {
     expect(tickets, 'un double appui n’enregistre pas deux tickets').toHaveLength(1)
     expect(tickets![0].receipt_line).toHaveLength(5)
     expect(Number(tickets![0].total_eur)).toBe(17.24)
+
+    /* Ce qui est ÉCRIT : l'enseigne, les prix, et le rattachement de chaque ligne à la liste. */
+    const { data: recu } = await db.from('receipt').select('store_id, bought_at').eq('id', tickets![0].id).single()
+    const { data: magasin } = await db.from('store').select('id').eq('household_id', foyer.householdId).eq('name', 'Super U').single()
+    expect(recu!.store_id).toBe(magasin!.id)
+    expect(recu!.bought_at).toBe('2026-10-26')
+    const { data: liste } = await db.from('shopping_item').select('id, label').eq('household_id', foyer.householdId)
+    const idListe = (l: string) => liste!.find(x => x.label === l)!.id
+    const { data: lignes } = await db.from('receipt_line').select('label, price_eur, shopping_item_id').eq('receipt_id', tickets![0].id)
+    const ecrit = (l: string) => lignes!.find(x => x.label === l)!
+    expect(Number(ecrit('POULET FERMIER 800G').price_eur)).toBe(7.1)
+    expect(ecrit('POULET FERMIER 800G').shopping_item_id).toBe(idListe('poulet'))
+    expect(Number(ecrit('LENTILLES CORAIL 500G').price_eur)).toBe(2.3)
+    expect(ecrit('LENTILLES CORAIL 500G').shopping_item_id).toBe(idListe('lentilles corail'))
+    expect(Number(ecrit('OIGNONS JAUNES 1KG').price_eur)).toBe(1.99)
+    expect(ecrit('OIGNONS JAUNES 1KG').shopping_item_id).toBe(idListe('oignon'))
+    expect(Number(ecrit('SAC POUBELLE 30L').price_eur)).toBe(3.45)
+    expect(ecrit('SAC POUBELLE 30L').shopping_item_id, 'rattaché à la main à « oignon »').toBe(idListe('oignon'))
+    expect(Number(ecrit('XZ4 PROMO').price_eur)).toBe(1.2)
+    expect(ecrit('XZ4 PROMO').shopping_item_id).toBeNull()
+  })
+
+  test('pendant la lecture les enseignes ne changent plus ; le ticket s’ouvre en grand et se ferme à Échap', async ({ page }) => {
+    test.setTimeout(90_000)
+    await simule(page, 'ticket', TICKET, { delai: 2500 })
+    await connecte(page)
+    await page.goto('/ticket')
+    await donneLaPhoto(page)
+    await expect(page.getByText('Je lis… une vingtaine de secondes.')).toBeVisible()
+    for (const b of await page.getByRole('group', { name: 'Enseigne' }).getByRole('button').all()) await expect(b).toBeDisabled()
+    await expect(page.getByRole('heading', { name: 'Le ticket lu' })).toBeVisible({ timeout: 20_000 })
+
+    const vignette = page.getByRole('button', { name: 'Agrandir : Le ticket photographié' })
+    await vignette.click()
+    const dialogue = page.getByRole('dialog', { name: 'Le ticket photographié' })
+    await expect(dialogue).toBeVisible()
+    await expect(dialogue.getByRole('region', { name: /défile pour la lire en entier/ })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(dialogue).toBeHidden()
+    await expect(vignette).toBeFocused()
   })
 
   test('un ticket sans écart ni total ne parle pas d’écart', async ({ page }) => {
@@ -309,8 +450,18 @@ test.describe('peser', () => {
     await expect(page.getByRole('heading', { name: 'Peser', exact: true })).toBeVisible()
     await expect(page.getByText('Ce que la semaine demande')).toBeVisible()
     await expect(page.getByText('aliments à connaître,')).toBeVisible()
-    await expect(page.getByText('trois pesées par aliment')).toBeVisible()
-    await expect(page.getByText('0 sur 3').first()).toBeVisible()
+    /* 3 pesées avec un poids de référence, 5 sans : l'en-tête, les points et « encore N après » le disent. */
+    await expect(page.getByText('trois pesées par aliment, cinq sans poids de référence')).toBeVisible()
+    const rangeeOignon = page.getByRole('button', { name: /2 oignons/ })
+    await expect(rangeeOignon).toContainText('2 recettes')
+    await expect(rangeeOignon).toContainText('on compte')
+    await expect(rangeeOignon).toContainText('0 sur 3')
+    const sansReference = page.getByRole('button', { name: /aucun poids de référence/ }).first()
+    await expect(sansReference).toContainText('0 sur 5')
+    await expect(sansReference).toContainText('1 recette')
+    await sansReference.click()
+    await expect(page.getByRole('button', { name: /^Enregistrer · encore 5 après$/ })).toBeVisible()
+    await sansReference.click()
 
     const oignon = page.getByRole('button', { name: /2 oignons/ })
     await oignon.click()
@@ -325,8 +476,9 @@ test.describe('peser', () => {
     await page.getByRole('button', { name: /^Enregistrer · encore 3 après$/ }).dblclick()
     await expect(page.getByText('1 pour 110 g')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText('1 sur 3').first()).toBeVisible()
-    const { data } = await db.from('weighing').select('grams').eq('household_id', foyer.householdId)
+    const { data } = await db.from('weighing').select('grams, qty_observed, unit_observed').eq('household_id', foyer.householdId)
     expect(data, 'un double appui n’enregistre pas deux fois').toHaveLength(1)
+    expect(data!.map(w => [Number(w.grams), Number(w.qty_observed), w.unit_observed])).toEqual([[110, 1, 'u']])
 
     await page.getByRole('button', { name: 'effacer' }).click()
     await expect(page.getByText('1 pour 110 g')).toHaveCount(0)
@@ -346,6 +498,10 @@ for (const [largeur, hauteur] of [[390, 844], [320, 700], [1440, 900]] as const)
     const prend = async (page: Page, nom: string) => {
       await page.waitForTimeout(350)
       expect(await pasDeDefilement(page), `défilement horizontal sur « ${nom} » à ${largeur} px`).toBe(true)
+      for (const c of await page.getByRole('checkbox').all()) {
+        const b = await c.boundingBox()
+        expect(b!.width, `une case de « ${nom} » fait moins de 44 px à ${largeur} px`).toBeGreaterThanOrEqual(43.5)
+      }
       await page.screenshot({ path: `${DOSSIER}/${nom}-${largeur}.png`, fullPage: true })
     }
 

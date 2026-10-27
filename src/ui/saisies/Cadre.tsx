@@ -7,6 +7,7 @@
  * serait une donnée inventée.
  */
 import type { ReactNode } from 'react'
+import { Agrandissable } from './Agrandissable.tsx'
 
 /* ───── Pictos ───── */
 
@@ -166,11 +167,12 @@ export function CaseACocher({ coche, nom, surBascule }:
 }
 
 /** Une pastille de choix : l'enseigne, un rattachement. */
-export function Pilule({ choisie, children, surAppui }:
-  { choisie: boolean; children: ReactNode; surAppui: () => void }) {
+export function Pilule({ choisie, children, surAppui, disabled = false }:
+  { choisie: boolean; children: ReactNode; surAppui: () => void; disabled?: boolean }) {
   return (
-    <button type="button" aria-pressed={choisie} onClick={surAppui}
+    <button type="button" aria-pressed={choisie} onClick={surAppui} disabled={disabled}
             className={`inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-[15px] font-medium
+                        disabled:opacity-60
                         ${choisie ? 'bg-herbe text-fond' : 'bg-piste text-encre hover:bg-brume'}`}>
       {choisie && <IcoCoche taille={16} />}
       {children}
@@ -211,7 +213,7 @@ export function Viseur({ photo, alt, etiquette, coins = true, children }:
   return (
     <div className={`relative overflow-hidden rounded-[26px] bg-[#26302B] shadow-carte ${photo ? '' : 'aspect-[4/3]'}`}>
       {photo
-        ? <img src={photo} alt={alt ?? ''} className="block max-h-[min(560px,75dvh)] w-full object-contain" />
+        ? <Agrandissable src={photo} alt={alt ?? ''} className="block max-h-[min(560px,75dvh)] w-full object-contain" />
         : children}
       {coins && (
         <>
@@ -305,8 +307,11 @@ export function TicketDessine() {
 export function TicketPhotographie({ src }: { src: string }) {
   return (
     <div className="py-1.5">
-      <img src={src} alt="Le ticket photographié"
-           className="mx-auto block h-auto max-h-[560px] w-full max-w-[330px] rounded-md bg-[#FAFAF6] object-contain shadow-[0_14px_34px_rgba(28,43,35,.2)]" />
+      <div className="mx-auto max-w-[330px]">
+        <Agrandissable src={src} alt="Le ticket photographié"
+                       className="block h-auto max-h-[560px] w-full rounded-md bg-[#FAFAF6] object-contain shadow-[0_14px_34px_rgba(28,43,35,.2)]" />
+        <p className="mt-2 text-center text-[13px] text-doux">Touche le ticket pour le lire en grand.</p>
+      </div>
     </div>
   )
 }

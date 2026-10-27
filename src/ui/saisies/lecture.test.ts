@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  cocheesDAvance, dateFr, ecartDit, euros, quotaDit, regroupeParLieu, resumeDeLaPhoto, tempsDeLecture, uniteAffichee,
+  cocheesDAvance, dateFr, lieuConnu, normaliseLieux, ecartDit, euros, quotaDit, regroupeParLieu, resumeDeLaPhoto, tempsDeLecture, uniteAffichee,
   type Vu,
 } from './lecture.ts'
 
@@ -81,5 +81,27 @@ describe('le ticket', () => {
     expect(quotaDit(3, 'ticket')).toBe('3 tickets restants ce mois-ci.')
     expect(quotaDit(0, 'photo')).toBe('0 photo restante ce mois-ci.')
     expect(quotaDit(undefined, 'photo')).toBeNull()
+  })
+})
+
+describe('le lieu rendu par le modèle', () => {
+  it('un lieu connu reste, un lieu absent ou inconnu prend le lieu choisi', () => {
+    expect(lieuConnu('placard', 'frigo')).toBe('placard')
+    expect(lieuConnu('cave', 'congelateur')).toBe('congelateur')
+    expect(lieuConnu(undefined, 'placard')).toBe('placard')
+    expect(lieuConnu(null, 'frigo')).toBe('frigo')
+    expect(lieuConnu('Frigo', 'frigo')).toBe('frigo')
+  })
+  it('chaque article est regroupé, aucun ne disparaît', () => {
+    const l = normaliseLieux({
+      articles: [vu({ nom: 'A', lieu: 'cave' as never }), vu({ nom: 'B', lieu: undefined as never }), vu({ nom: 'C', lieu: 'placard' })],
+    }, 'congelateur')
+    expect(l.articles.map(a => a.lieu)).toEqual(['congelateur', 'congelateur', 'placard'])
+    const groupes = regroupeParLieu(l.articles)
+    expect(groupes.flatMap(g => g.items).length).toBe(3)
+  })
+  it('le reste de la lecture est intact', () => {
+    const l = normaliseLieux({ articles: [], lisible: true, ms: 12 }, 'frigo')
+    expect(l).toEqual({ articles: [], lisible: true, ms: 12 })
   })
 })

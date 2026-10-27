@@ -25,10 +25,7 @@ import { seraRetenue } from '../lib/pesee.ts'
 import {
   Astuce, BalanceDessinee, BoutonContour, Carte, Colonne, Deux, EnteteDeCarte, IcoAlerte, IcoBalance, PassageLarge,
 } from '../ui/saisies/Cadre.tsx'
-
-/** Le nombre de pesées qui font connaître un aliment, tant que la base n'a pas dit autre chose. */
-const SEUIL_PAR_DEFAUT = 3
-const EN_TOUTES_LETTRES: Record<number, string> = { 1: 'une', 2: 'deux', 3: 'trois', 4: 'quatre', 5: 'cinq' }
+import { phraseDesSeuils, recettesDit, restantesApres, seuilDe } from '../ui/saisies/pesee.ts'
 
 export function Peser({ retour }: { retour: () => void }) {
   const { data: cycle, isPending: cycleEnCours, error: panneCycle } = useCycle()
@@ -39,9 +36,8 @@ export function Peser({ retour }: { retour: () => void }) {
   const [ouvert, setOuvert] = useState<string | null>(null)
   const rien = !attend && !panne && aPeser.length === 0
 
-  // Un seuil commun se dit en toutes lettres ; des seuils différents ne se résument pas.
-  const seuils = new Set(aPeser.map(a => a.progres?.seuil ?? SEUIL_PAR_DEFAUT))
-  const seuilCommun = seuils.size === 1 ? [...seuils][0] : null
+  // 3 pesées avec un poids de référence, 5 sans (migration 0025) : l'en-tête dit les deux quand les deux existent.
+  const phraseSeuils = phraseDesSeuils(aPeser.map(seuilDe))
 
   return (
     <PassageLarge retour={retour}>
@@ -91,11 +87,7 @@ export function Peser({ retour }: { retour: () => void }) {
           {!rien && (
             <Carte className="max-[899px]:order-2">
               <EnteteDeCarte titre="À peser"
-                             droite={seuilCommun !== null && aPeser.length > 0 && (
-                               <span className="text-[13.5px] text-doux">
-                                 {EN_TOUTES_LETTRES[seuilCommun] ?? seuilCommun} pesées par aliment
-                               </span>
-                             )} />
+                             droite={phraseSeuils && <span className="text-[13.5px] text-doux">{phraseSeuils}</span>} />
               {attend ? <Attente /> : panne ? <Erreur de={panne} /> : (
                 <ul className="grid">
                   {aPeser.map(a => (
@@ -147,9 +139,9 @@ function Aliment({ a, cycleId, ouvert, surOuvre }: {
   // n'avance pas.
   const aberrante = saisi && !seraRetenue(g, q, a.reference)
 
-  const seuil = a.progres?.seuil ?? SEUIL_PAR_DEFAUT
+  const seuil = seuilDe(a)
   const faites = Math.min(a.progres?.faites ?? 0, seuil)
-  const restantes = a.progres ? a.progres.seuil - a.progres.faites : SEUIL_PAR_DEFAUT
+  const restantes = restantesApres(a)
   const idNote = `aberrante-${a.food_id}`
 
   /* `isPending` ne se met à jour qu'au rendu suivant : un double appui rapide passait entre les deux. Le verrou est
@@ -164,6 +156,8 @@ function Aliment({ a, cycleId, ouvert, surOuvre }: {
       })
       setGrammes('')
       setQuantite('1')
+    } catch {
+      // L'erreur s'affiche sous le bouton, la saisie reste : on peut réessayer.
     } finally {
       enCours.current = false
     }
@@ -181,6 +175,7 @@ function Aliment({ a, cycleId, ouvert, surOuvre }: {
           <b className="block text-[17px] font-semibold">{a.nom}</b>
           <span className="mt-0.5 block text-[13px] leading-[1.35] text-doux">
             {a.exemple}
+            {recettesDit(a) && ` · ${recettesDit(a)}`}
             {a.reference !== null
               ? ` · on compte ${a.reference} g en attendant`
               : ' · aucun poids de référence'}

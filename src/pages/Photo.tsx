@@ -28,7 +28,7 @@ import {
   IcoPlacard, Lecture, PassageLarge, Puce, SceneFrigo, Titre, Viseur,
 } from '../ui/saisies/Cadre.tsx'
 import {
-  LIEUX, NOM_LIEU, cocheesDAvance, estDevine, libelle, pluriel, quotaDit, regroupeParLieu, resumeDeLaPhoto,
+  LIEUX, NOM_LIEU, cocheesDAvance, estDevine, libelle, normaliseLieux, pluriel, quotaDit, regroupeParLieu, resumeDeLaPhoto,
   uniteAffichee,
 } from '../ui/saisies/lecture.ts'
 import type { Lieu, Vu } from '../ui/saisies/lecture.ts'
@@ -56,10 +56,12 @@ export function Photo({ retour, va }: { retour: () => void; va: (v: string) => v
   const choix = useRef<(HTMLButtonElement | null)[]>([])
 
   const lit = useMutation({
-    mutationFn: async (fichier: File) => {
+    mutationFn: async ({ fichier, lieu: choisi }: { fichier: File; lieu: Lieu }) => {
       const p = await prepare(fichier)
       setApercu(p.dataUrl)
-      return callFunction('frigo', { image: p.dataUrl, lieu }) as Promise<LectureDuFrigo>
+      const r = await callFunction('frigo', { image: p.dataUrl, lieu: choisi }) as LectureDuFrigo
+      // Un lieu absent ou inconnu prend celui qu'on a choisi : aucune ligne ne doit manquer d'une carte.
+      return normaliseLieux(r, choisi)
     },
     onSuccess: r => {
       setLecture(r)
@@ -145,7 +147,7 @@ export function Photo({ retour, va }: { retour: () => void; va: (v: string) => v
                   {LIEUX.map((l, i) => (
                     <button key={l} type="button" role="radio" aria-checked={lieu === l}
                             ref={el => { choix.current[i] = el }}
-                            tabIndex={lieu === l ? 0 : -1}
+                            tabIndex={lieu === l ? 0 : -1} disabled={lit.isPending}
                             onClick={() => setLieu(l)} onKeyDown={e => flecheSurLieu(e, i)}
                             className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-1 text-[14.5px]
                                         font-semibold leading-[1.15] max-[360px]:text-[13.5px]
@@ -159,7 +161,7 @@ export function Photo({ retour, va }: { retour: () => void; va: (v: string) => v
                 <BoutonPhoto
                   texte={<span className="inline-flex items-center gap-3"><IcoAppareil />{lit.isPending ? 'Je regarde…' : 'Prendre la photo'}</span>}
                   disabled={lit.isPending}
-                  onFichier={f => lit.mutate(f)}
+                  onFichier={f => lit.mutate({ fichier: f, lieu })}
                   className={`min-h-[60px] w-full rounded-[20px] text-[18px] font-semibold min-[900px]:max-w-[420px]
                               has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-herbe
                               ${lit.isPending ? '' : 'bg-herbe text-fond'}`} />
@@ -191,13 +193,18 @@ export function Photo({ retour, va }: { retour: () => void; va: (v: string) => v
         </Deux>
       )}
 
+      {/* La lecture s'annonce une fois, à son arrivée : cocher une case ne relit pas le résumé. */}
+      <p role="status" className="sr-only">
+        {lue ? `Lecture terminée : ${lue.articles.length} ${resumeDeLaPhoto(lue.articles.length, cocheesDAvance(lue.articles).size, lue.ms)}.` : ''}
+      </p>
+
       {lue && (
         <Deux rapport="5-7">
           <Colonne>
             {apercu && <Viseur photo={apercu} alt="La photo envoyée" coins={false} />}
 
             <Carte>
-              <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1" aria-live="polite">
+              <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
                 <Chiffre valeur={lue.articles.length} taille={36} couleur="var(--color-herbe)" />
                 <span className="text-[14.5px] text-doux">{resumeDeLaPhoto(lue.articles.length, retenus.size, lue.ms)}</span>
               </div>
@@ -246,8 +253,7 @@ function LigneVue({ a, coche, surBascule }: { a: Vu; coche: boolean; surBascule:
   const devine = estDevine(a)
   const unite = uniteAffichee(a.unite, a.quantite)
   return (
-    <li className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-1.5 border-t border-brume py-2 first:border-t-0
-                   max-[360px]:grid-cols-[40px_minmax(0,1fr)_auto]">
+    <li className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-1.5 border-t border-brume py-2 first:border-t-0">
       <CaseACocher coche={coche} nom={libelle(a)} surBascule={surBascule} />
       <div className="min-w-0">
         <b className={`block text-[16px] font-semibold leading-[1.25] [overflow-wrap:anywhere] ${coche ? '' : 'text-doux'}`}>

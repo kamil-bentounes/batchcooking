@@ -25,6 +25,15 @@ export type Vu = {
 /** En dessous, le modèle a deviné : on le dit, et on ne coche pas d'avance. */
 export const SEUIL_SUR = 0.8
 
+/** Un lieu que le modèle a rendu absent ou inconnu (« cave », rien) prend le lieu choisi : sinon la ligne n'aurait
+    aucune carte à l'écran, et serait pourtant comptée et ajoutée. */
+export const lieuConnu = (lieu: unknown, parDefaut: Lieu): Lieu =>
+  (LIEUX as unknown[]).includes(lieu) ? lieu as Lieu : parDefaut
+
+export function normaliseLieux<T extends { articles: Vu[] }>(lecture: T, choisi: Lieu): T {
+  return { ...lecture, articles: (lecture.articles ?? []).map(a => ({ ...a, lieu: lieuConnu(a.lieu, choisi) })) }
+}
+
 export const libelle = (a: Pick<Vu, 'nom' | 'variete'>) => [a.nom, a.variete].filter(Boolean).join(' ')
 
 export const estDevine = (a: Pick<Vu, 'confiance'>) => !(a.confiance >= SEUIL_SUR)

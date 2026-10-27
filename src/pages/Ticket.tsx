@@ -153,7 +153,8 @@ export function Ticket({ retour, va }: { retour: () => void; va: (v: string) => 
                     <span id="enseigne-du-ticket" className="text-[13.5px] font-medium text-doux">Enseigne</span>
                     <div role="group" aria-labelledby="enseigne-du-ticket" className="flex flex-wrap gap-2">
                       {magasins.map(m => (
-                        <Pilule key={m.id} choisie={magasinId === m.id} surAppui={() => setMagasin(m.id)}>
+                        <Pilule key={m.id} choisie={magasinId === m.id} disabled={lit.isPending}
+                                surAppui={() => setMagasin(m.id)}>
                           {m.name}
                         </Pilule>
                       ))}
@@ -192,6 +193,10 @@ export function Ticket({ retour, va }: { retour: () => void; va: (v: string) => 
           </Colonne>
         </Deux>
       )}
+
+      <p role="status" className="sr-only">
+        {lisible ? `Ticket lu : ${lisible.lignes.length} ${pluriel(lisible.lignes.length, 'ligne')}.` : ''}
+      </p>
 
       {lisible && (
         <Deux rapport="5-7">
@@ -294,7 +299,7 @@ function LigneTicketVue({ r, retenu, ouvert, candidats, surRetient, surOuvre, su
 
   return (
     <li className="border-t border-brume first:border-t-0">
-      <div className="grid grid-cols-[44px_minmax(0,1fr)] items-start gap-1.5 py-1 max-[360px]:grid-cols-[40px_minmax(0,1fr)]">
+      <div className="grid grid-cols-[44px_minmax(0,1fr)] items-start gap-1.5 py-1">
         <CaseACocher coche={retenu} nom={r.ligne.label} surBascule={surRetient} />
 
         <button type="button" onClick={surOuvre} aria-expanded={ouvert}
@@ -318,7 +323,7 @@ function LigneTicketVue({ r, retenu, ouvert, candidats, surRetient, surOuvre, su
       </div>
 
       {ouvert && (
-        <div className="grid gap-2 pb-3 pl-[50px] max-[360px]:pl-[46px]">
+        <div className="grid gap-2 pb-3 pl-[50px]">
           <p className="text-[13.5px] text-doux">Rattacher à :</p>
           <div className="flex flex-wrap gap-2">
             <Pilule choisie={r.article === null} surAppui={() => surAttribue(null)}>rien</Pilule>
