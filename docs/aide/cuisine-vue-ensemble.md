@@ -35,9 +35,9 @@ On choisit les recettes maintenant, on cuisine dimanche, on mange la semaine d�
 3. **Tout est là** : « Voir le plan de dimanche ».
 4. **Session en cours** : « Reprendre la cuisine ».
 5. **Il reste à dresser** : « Dresser les barquettes ».
-6. **La semaine tourne** : « Voir la semaine ». Si un repas est prévu aujourd’hui, l’accueil l’affiche en carte sombre (« Ce soir, pour vous deux ») avec « Je l’ai mangé » et « Changer » — « Je les sors » (« Je le sors » s’il n’y en a qu’une) à la place quand la barquette est au congélateur —, puis « Demain, midi et soir » et « La semaine ». « Changer » ouvre « La semaine » sur ce repas, « La semaine » sous « Demain » sur demain.
+6. **La semaine tourne** : « Voir la semaine ». Si un repas est prévu aujourd’hui, l’accueil l’affiche en carte sombre (« Ce soir, pour vous deux ») avec « Je l’ai mangé » et « Changer » — « Je les sors » (« Je le sors » s’il n’y en a qu’une) à la place quand la barquette est au congélateur —, puis « Demain, midi et soir » et « La semaine ».
 
-« Clore et préparer la semaine prochaine » (dans « Bilan ») referme la semaine : retour à « Rien de prévu ». « Semaine close » ne s’affiche jamais. Une session à reprendre fait titrer « Session interrompue », avec « Reprendre la session interrompue » en gros bouton et « Choisir de nouvelles recettes » en second ; la carte « Cuisine » de l’accueil de Popote le dit aussi.
+« Clore et préparer la semaine prochaine » (dans « Bilan ») referme la semaine : retour à « Rien de prévu ». Une session à reprendre fait titrer « Session interrompue », avec « Reprendre la session interrompue » en gros bouton et « Choisir de nouvelles recettes » en second ; la carte « Cuisine » de l’accueil de Popote le dit aussi.
 
 ## Les règles
 
@@ -49,7 +49,7 @@ On choisit les recettes maintenant, on cuisine dimanche, on mange la semaine d�
 ## Aussi sur l’accueil
 
 - Hors de « La semaine tourne », la carte sombre du repas d’aujourd’hui vient **sous** le gros bouton.
-- En bas, « À manger bientôt », sans titre visible : jusqu’à deux plats qui pressent, un par ligne avec son nombre de barquettes, avec « à manger aujourd'hui », « demain dernier délai », « périmée » ou « à sortir sous N j », quand leur date approche.
+- En bas, « À manger bientôt », sans titre visible : jusqu’à deux plats qui pressent, un par ligne avec son nombre de barquettes, avec « à manger aujourd'hui », « demain dernier délai », « périmée » ou « à sortir sous N j » quand leur date approche.
 - « Envie spéciale ? » invente une recette.
 
 ## Ce que l’appli ne fait pas

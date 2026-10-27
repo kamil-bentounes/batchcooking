@@ -36,18 +36,18 @@ verifie_sur: ff3539b
 Fermé, il parle sans qu’on y touche :
 
 - **L’afficheur** du congélateur : « Ce soir » et ton dîner prévu, ou « Rien de prévu ce soir ». S’ils ne se lisent pas, l’afficheur dit « Indisponible ».
-- **L’aimant** du frigo, un seul : des barquettes congelées à sortir, posées sur ce soir ou sur demain quand l’heure de les sortir est venue (« Sors les 2 wraps : c’est ce soir », « Sors la barquette de burger de feuilles de riz : c’est demain soir » — un libellé d’un seul mot se met au pluriel, sinon l’aimant dit « barquettes de … ») ; sinon des barquettes du frigo périmées (« 2 barquettes de pizza vietnamienne à jeter ») ou qui périment sous 72 heures sans qu’aucun repas les réclame (« 2 barquettes de pizza vietnamienne à prévoir avant jeudi ») ; sinon rien. À urgence égale, le nom du plat décide.
+- **L’aimant** du frigo, un seul : des barquettes congelées à sortir, posées sur ce soir ou sur demain quand l’heure de les sortir est venue (« Sors les 2 wraps : c’est ce soir », « Sors la barquette de burger de feuilles de riz : c’est demain soir ») ; sinon des barquettes du frigo périmées (« 2 barquettes de pizza vietnamienne à jeter ») ou qui périment sous 72 heures sans qu’aucun repas les réclame (« 2 barquettes de pizza vietnamienne à prévoir avant jeudi ») ; sinon rien.
 - **La photo** du plat de demain, s’il en a une.
 
-Touche une porte : elle pivote, puis l’intérieur prend l’écran. Il est alors seul actif : Échap ou « Fermer la porte » le ferme.
+Touche une porte : elle pivote, puis l’intérieur prend l’écran. Échap ou « Fermer la porte » le ferme.
 
 ## Dedans
 
-- **Frigo** : une carte par plat (recette, lieu et état), avec la photo, « ×N » parts, et quand c’est prévu (« mar. midi à mer. midi ») ou le mot d’urgence. Dessous, les ingrédients par étagère (« Laitages et frais », « Viandes et poissons », « Autres »), le « Bac à légumes », « + Ajouter au frigo » et « Photo du frigo ». La quantité d’un ingrédient s’écrit avec son unité accordée (« 3 pots », « 1 pot »).
+- **Frigo** : une carte par plat (recette, lieu et état), avec la photo, « ×N » parts, et quand c’est prévu (« mar. midi à mer. midi ») ou le mot d’urgence. Dessous, les ingrédients par étagère (« Laitages et frais », « Viandes et poissons », « Autres »), le « Bac à légumes », « + Ajouter au frigo » et « Photo du frigo ».
 - **Congélateur** : les plats congelés, le « Tiroir du bas » pour les ingrédients, « + Ajouter au congélateur ».
 - **Le placard** : lien sous le frigo, une liste, « + Ajouter au placard ». « Peser ce qu’on compte à l’unité » est juste dessous.
 
-Le stock se remplit en cochant la liste de courses (le rayon décide du lieu : « Surgelés » au congélateur ; « Frais », « Fruits et légumes », « Boucherie, poissonnerie » au frigo ; le reste au placard ; pas Entretien ni Hygiène), à la main, par photo, et au dressage (« cuisine-on-range »).
+Le stock se remplit en cochant la liste de courses (le rayon décide du lieu : « Surgelés » au congélateur ; « Frais », « Fruits et légumes », « Boucherie, poissonnerie » au frigo ; le reste au placard ; ni Entretien ni Hygiène), à la main, par photo, et au dressage (« cuisine-on-range »).
 
 Touche une carte pour ouvrir sa **fiche** (« cuisine-fiche-plat » : parts, dates, photo ; « cuisine-fiche-plat-gestes » : manger, congeler, sortir, jeter, retirer).
 
@@ -57,4 +57,4 @@ Quantité (« Enregistrer »), lieu (Frigo, Congélateur, Placard : le congélat
 
 ## Ce que l’appli ne fait pas
 
-Le stock n’envoie aucun mail ni notification : seul le rappel « Une barquette va périmer » (voir « rappels-les-sept »), que chacun active lui-même, prévient par mail, et il ne parle que des barquettes. Le stock ne diminue pas quand tu manges : seuls « On range » (ce que la session a pris), « Fini » et la liste de courses le font.
+Seul le rappel « Une barquette va périmer » (voir « rappels-les-sept »), que chacun active lui-même, prévient par mail, et il ne parle que des barquettes. Le stock ne diminue pas quand tu manges : seuls « On range » (ce que la session a pris), « Fini » et la liste de courses le font.

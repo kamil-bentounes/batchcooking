@@ -51,10 +51,10 @@ Un **foyer ami** voit les prénoms et les recettes marquées « partagée ». S�
 
 ## Ce que voient les modèles de langage
 
-Ces appels partent vers un service d’IA extérieur. Voici ce qui part :
+Ces appels partent vers un service d’IA extérieur :
 
-- **photo du frigo** : la photo (réduite avant l’envoi, comme le ticket et l’étiquette) et le lieu ;
-- **ticket** : la photo et l’enseigne si tu l’as choisie ; **étiquette** (« Nos aliments ») : jusqu’à trois photos, envoyées au même service de lecture que le ticket ;
+- **photo du frigo** : la photo (réduite avant l’envoi) et le lieu ;
+- **ticket** : la photo et l’enseigne si tu l’as choisie ; **étiquette** (« Nos aliments ») : jusqu’à trois photos ;
 - **dictée de charges** : le texte, avec la liste type des charges (la voix est transcrite par ton clavier : aucun son n’est envoyé) ;
 - **relecture des charges** : libellés, montants, rythmes, commun ou perso, comptes (nom écrit par toi), enveloppes, date de début ; ni revenus, ni parts, ni prénoms ;
 - **recette inventée** : ton envie (300 caractères), les aliments du stock, des limites chiffrées ; jamais de prénom, de poids ni d’objectif ;
@@ -67,7 +67,7 @@ Aucun appel à un modèle ne lit les revenus ou les prénoms. Rien n’est enreg
 
 ## Exporter
 
-Réglages, ligne « Exporter mes données » (dans la carte du bas) : un fichier « mes-donnees.json » avec **tout ce que le foyer a enregistré**, y compris les données de l’autre (son revenu, par exemple) et les réponses de l’aide que tu as signalées comme fausses. Y figurent aussi tes réglages de rappel et l’historique de tes mails de rappel : les tiens seulement, pas ceux de l’autre.
+Réglages, ligne « Exporter mes données » (dans la carte du bas) : un fichier « mes-donnees.json » avec **tout ce que le foyer a enregistré**, y compris les données de l’autre (son revenu, par exemple) et les réponses de l’aide que tu as signalées comme fausses. Y figurent aussi tes réglages de rappel et l’historique de tes mails de rappel, pas ceux de l’autre.
 
 ## Supprimer
 
