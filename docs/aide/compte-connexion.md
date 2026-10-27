@@ -10,6 +10,8 @@ questions:
   - À quoi sert « Première connexion » ?
 sources:
   - src/pages/SignIn.tsx
+  - src/ui/porte/EcranDeConnexion.tsx
+  - src/ui/porte/modes.ts
   - src/pages/Password.tsx
   - src/pages/Settings.tsx
   - src/pages/Profil.tsx
@@ -19,13 +21,13 @@ sources:
   - src/lib/lien.ts
   - src/pages/Onboarding.tsx
   - supabase/config.toml
-verifie_sur: fc7f6dc
+verifie_sur: 1be569e
 ---
 ## Se connecter
 
-L’écran de connexion s’intitule « On s’y met ? ». Des liens en bas choisissent ce que tu fais (celui du mode en cours est masqué).
+L’écran de connexion montre un frigo (ses aimants sont des exemples, rien de toi) et, sur une feuille, « Popote » et le formulaire. Sur grand écran, le frigo est à gauche. Deux liens en bas choisissent ce que tu fais ; celui du mode en cours devient « J’ai déjà un mot de passe ».
 
-- **« J’ai déjà un mot de passe »** : « Ton e-mail », « Mot de passe », puis « Se connecter ». Si ça échoue : « E-mail ou mot de passe incorrect. »
+- **Mot de passe** (le mode d’arrivée) : « Ton e-mail », « Mot de passe » (« Afficher » le montre en clair, « Cacher » le remasque), puis « Entrer ». Les portes du frigo s’ouvrent pendant l’envoi. Si ça échoue, elles se referment : « E-mail ou mot de passe incorrect. »
 - **« Première connexion »** : à utiliser quand ton compte n’a pas encore de mot de passe. « Recevoir le lien » envoie un lien par mail. Il sert une fois ; ouvre-le depuis le même appareil, puis choisis ton mot de passe.
 - **« Mot de passe oublié »** : « Réinitialiser mon mot de passe » envoie un lien de réinitialisation, valable une heure. L’appli répond « Si un compte existe pour … » : même message avec ou sans compte. Le lien mène droit à l’écran du nouveau mot de passe, qu’on ne peut pas passer.
 
