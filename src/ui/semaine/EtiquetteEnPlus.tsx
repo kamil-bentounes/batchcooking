@@ -25,7 +25,7 @@ import { DELAI_ETIQUETTE_MS, champsDeLEtiquette, phraseDeLaPanne } from '../../l
 import type { LectureEtiquette } from '../../lib/aliments/etiquette.ts'
 import { CONSIGNE_MAX, corpsDeLaLecture } from '../../lib/aliments/consigne.ts'
 import {
-  boutonAjouter, brouillonDeLAliment, calculEnDirect, depuisLaLecture, etiquetteVide, lisLEtiquette, phraseCourteDuCalcul,
+  boutonAjouter, brouillonDeLAliment, calculEnDirect, depuisLaLecture, etiquetteVide, lisLEtiquette,
 } from '../../lib/aliments/en-plus.ts'
 import type { ErreursDeLEtiquette, EtiquetteEnPlus as Champs } from '../../lib/aliments/en-plus.ts'
 import { ecrit } from '../../lib/aliments/calcul.ts'
@@ -247,7 +247,7 @@ export function EtiquetteEnPlus({ cas, photoInitiale, fermer, surFini }: {
       {/* La consigne : un indice facultatif, relu à la demande. */}
       <div className="mx-1 mt-2">
         <label htmlFor={`${id}-consigne`} className="block text-[15px] font-bold">Dis-moi ce que c’est (facultatif)</label>
-        <textarea id={`${id}-consigne`} value={consigne} onChange={ev => setConsigne(ev.target.value)} rows={2} maxLength={CONSIGNE_MAX}
+        <textarea id={`${id}-consigne`} value={consigne} onChange={ev => setConsigne(ev.target.value)} rows={3} maxLength={CONSIGNE_MAX}
                   placeholder="Skyr vanille, pot de 150 g. J’ai mangé le pot entier."
                   className="mt-1.5 w-full resize-none rounded-[14px] bg-surface px-3.5 py-2.5 text-[16px] leading-[1.4] text-encre placeholder:text-doux/70"
                   style={CADRE} />
@@ -327,7 +327,14 @@ export function EtiquetteEnPlus({ cas, photoInitiale, fermer, surFini }: {
                  className="h-12 min-w-0 flex-1 rounded-[14px] bg-surface px-3.5 text-[17px] text-encre"
                  style={erreurs.grammes ? { boxShadow: 'inset 0 0 0 1.5px var(--color-groseille)' } : CADRE} />
           <p aria-live="polite" data-calcul="" className="titre w-[132px] shrink-0 text-[18px] font-semibold leading-[1.2] text-herbe">
-            {calcul ? phraseCourteDuCalcul(calcul) : ''}
+            {calcul && (
+              <>
+                {/* Deux lignes comme la maquette ; la puce n'est lue qu'à voix haute (le texte reste « 96 kcal · 14,3 g prot. »). */}
+                <span className="block">{ecrit(calcul.kcal)} kcal</span>
+                <span className="sr-only"> · </span>
+                <span className="block">{ecrit(calcul.protein)} g prot.</span>
+              </>
+            )}
           </p>
         </div>
         {erreurs.grammes && <p id={`${id}-grammes-erreur`} className="mt-1 text-[13px] text-groseille">{erreurs.grammes}</p>}

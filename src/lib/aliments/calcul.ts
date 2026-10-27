@@ -80,6 +80,8 @@ export function ecrit(n: number): string {
 
 /** « 1 pot (125 g) » : l'unité qu'on mange, et ce qu'elle pèse. */
 export function uniteEtPoids(a: Pick<AlimentLu, 'unite' | 'unite_g'>): string {
+  /* Un aliment au gramme (son unité EST le gramme) : « 100 g », pas « 1 g (100 g) ». */
+  if (/^(g|gr|gramme|grammes)$/i.test(a.unite.trim())) return `${ecrit(Number(a.unite_g))} g`
   return `1 ${a.unite} (${ecrit(Number(a.unite_g))} g)`
 }
 
