@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { animate, useMotionValue, useMotionValueEvent } from 'motion/react'
 import { supabase } from '../lib/supabase'
-import { Page, Groupe, Bouton, Message } from '../ui/kit'
+import { Message } from '../ui/kit'
+import { PageReglages } from '../ui/reglages/coque.tsx'
+import { BoutonCarte, Carte, Picto, Rubrique } from '../ui/reglages/cartes.tsx'
+import { DESSINS } from '../ui/reglages/dessins.tsx'
 
 type Cible = { kcal: number; protein_g: number; fiber_g: number; carb_g: number; fat_g: number }
 const DEFAUT: Cible = { kcal: 2000, protein_g: 150, fiber_g: 30, carb_g: 200, fat_g: 60 }
@@ -28,7 +31,7 @@ function Mesure({ m, valeur, onChange }:
   }, [valeur, mv])
 
   return (
-    <div className="px-5 py-4">
+    <div className="px-[18px] py-4">
       <div className="flex items-baseline gap-2.5">
         <span className={`chiffre text-[2.75rem] leading-none ${m.accent ? 'text-ocre' : 'text-encre'}`}>
           {affiche.toLocaleString('fr-FR')}
@@ -76,34 +79,39 @@ export function Targets({ userId }: { userId: string }) {
   }
 
   return (
-    <Page nav titre="Mes objectifs" chapeau="Ce que tu vises chaque jour. Ta moitié a les siens.">
-      <Groupe>
+    <PageReglages titre="Mes objectifs" actif="objectifs"
+                  chapeau="Ce que tu vises chaque jour. Ta moitié a les siens.">
+      <section className="mb-4 divide-y divide-brume overflow-hidden rounded-[26px] bg-surface shadow-carte"
+               aria-label="Tes objectifs du jour">
         {MESURES.map(m => (
           <Mesure key={m.cle} m={m} valeur={v[m.cle]}
                   onChange={n => setV({ ...v, [m.cle]: n })} />
         ))}
-      </Groupe>
+      </section>
 
-      <div className="mt-6"><Bouton onClick={enregistrer}>Enregistrer</Bouton></div>
+      <BoutonCarte variante="plein" onClick={enregistrer}>Enregistrer</BoutonCarte>
       <Message texte={msg} erreur={err} />
 
-      <section className="mt-12">
-        <h2 className="titre text-xl text-herbe">Ce que tu visais avant</h2>
-        {hist.length === 0
-          ? <p className="mt-2 text-doux">Rien encore. Enregistre un premier objectif.</p>
-          : <ul className="mt-3 space-y-1.5 text-[15px] text-doux">
-              {hist.map(h => (
-                <li key={h.id}>
-                  <time dateTime={h.valid_from}>
-                    {new Date(h.valid_from).toLocaleDateString('fr-FR',
-                      { day: 'numeric', month: 'long' })}
-                  </time>
-                  {' — '}{Number(h.kcal).toLocaleString('fr-FR')} kcal,{' '}
-                  <span className="text-encre">{h.protein_g} g de protéines</span>
-                </li>
-              ))}
-            </ul>}
-      </section>
-    </Page>
+      <div className="mt-6">
+        <Carte>
+          <Rubrique titre="Ce que tu visais avant" picto={<Picto teinte="sable">{DESSINS.courbe}</Picto>}>
+            {hist.length === 0
+              ? <p className="text-[15px] text-doux">Rien encore. Enregistre un premier objectif.</p>
+              : <ul className="space-y-1.5 text-[15px] text-doux">
+                  {hist.map(h => (
+                    <li key={h.id}>
+                      <time dateTime={h.valid_from}>
+                        {new Date(h.valid_from).toLocaleDateString('fr-FR',
+                          { day: 'numeric', month: 'long' })}
+                      </time>
+                      {' — '}{Number(h.kcal).toLocaleString('fr-FR')} kcal,{' '}
+                      <span className="text-encre">{h.protein_g} g de protéines</span>
+                    </li>
+                  ))}
+                </ul>}
+          </Rubrique>
+        </Carte>
+      </div>
+    </PageReglages>
   )
 }

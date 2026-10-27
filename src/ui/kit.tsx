@@ -1,54 +1,14 @@
 import { motion } from 'motion/react'
 import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes } from 'react'
-import { useRoute } from '../lib/route'
 import { Marque } from './coque.tsx'
 
-/*
- * Navigation des écrans HORS cycle : objectifs et réglages, plus la sortie vers
- * l'accueil. Les écrans du cycle ont leur propre coque (`ui/coque.tsx`).
- *
- * ⚠️ Des BOUTONS, pas des `<a href>`.
- *
- *    Ces liens rechargeaient la page. C'est ce rechargement qui a cassé le
- *    correctif de `PASSWORD_RECOVERY` — l'histoire est écrite en toutes lettres
- *    dans `src/App.tsx`. Le reste de l'app navigue en client depuis toujours ;
- *    cette barre était la seule exception, et elle a coûté un bug de sécurité.
- */
-function Nav() {
-  const { ici, va } = useRoute()
-  const lien = (vers: string, texte: ReactNode) => (
-    <button type="button" onClick={() => va(vers)}
-            aria-current={ici === vers ? 'page' : undefined}
-            className={`py-2 min-h-11 transition-colors inline-flex items-center gap-2
-                        ${ici === vers ? 'text-encre' : 'text-doux hover:text-encre'}`}>
-      {texte}
-    </button>
-  )
-  return (
-    <nav className="mx-auto w-full max-w-lg flex gap-6 text-[15px] mb-8">
-      {/* L'accueil de la CUISINE : on arrive ici depuis elle, pas depuis le
-          choix entre univers. Le hub se rejoint par sa marque. */}
-      {lien('/cuisine-accueil', <>
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"
-             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
-          <path d="M10 3.5 5.5 8 10 12.5" />
-        </svg>
-        Accueil
-      </>)}
-      {lien('/objectifs', 'Objectifs')}
-      {lien('/reglages', 'Réglages')}
-    </nav>
-  )
-}
-
-export function Page({ titre, chapeau, centre, nav, marque, children }:
-  { titre: string; chapeau?: string; centre?: boolean; nav?: boolean
+export function Page({ titre, chapeau, centre, marque, children }:
+  { titre: string; chapeau?: string; centre?: boolean
     marque?: boolean; children: ReactNode }) {
   return (
     <main className={`min-h-dvh px-5 ${centre
       ? 'grid place-items-center py-10'
       : 'py-8 sm:py-14'}`}>
-      {nav && <Nav />}
       <div className="mx-auto w-full max-w-lg">
         {/* La marque, sur les écrans d'ENTRÉE. On y arrive depuis un mail qui
             parle de Popote, et on atterrissait sur une page anonyme : rien ne

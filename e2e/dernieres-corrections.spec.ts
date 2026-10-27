@@ -39,7 +39,9 @@ async function connecte(page: Page, email = foyer.email) {
 test('Réglages : « Dans le foyer : Kamil, Thauba »', async ({ page }) => {
   await connecte(page)
   await page.goto('/reglages')
-  await expect(page.getByText(/^Dans le foyer : Kamil, Thauba$/)).toBeVisible({ timeout: 15_000 })
+  /* Depuis la refonte, les membres sont des pastilles à initiale, dans une liste que « dans le foyer » nomme. */
+  const membres = page.getByRole('list', { name: 'dans le foyer' })
+  await expect(membres.getByRole('listitem')).toHaveText(['KKamil', 'TThauba'], { timeout: 15_000 })
 })
 
 test('« Mes charges » : une charge de 2031 est listée avec sa date, hors du total', async ({ page }) => {
