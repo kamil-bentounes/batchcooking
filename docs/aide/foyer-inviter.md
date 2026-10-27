@@ -16,7 +16,7 @@ sources:
   - supabase/functions/accept-invite/index.ts
   - supabase/migrations/0071_invitation_trente_jours.sql
   - supabase/migrations/0089_le_lien_suffit.sql
-verifie_sur: 0021cf9
+verifie_sur: aeed691
 ---
 ## Ce que fait l’appli
 
@@ -24,11 +24,11 @@ Inviter, c’est créer un lien. **Aucun e-mail n’est envoyé** : c’est toi 
 
 ## Comment faire
 
-Trois chemins mènent au même endroit, la section « Inviter » des réglages :
+Trois chemins mènent au même endroit, la carte « Inviter » des réglages :
 
 - sur l’accueil de Popote, la carte « Inviter quelqu’un. » (elle n’apparaît que tant que tu es seul(e) dans le foyer) ;
 - dans les réglages du budget, le bouton « Inviter quelqu’un » (même condition) ;
-- sur l’accueil de la cuisine, le rond avec ton initiale en haut à droite ouvre « Réglages » ; descends jusqu’à « Inviter ».
+- sur l’accueil de la cuisine, le rond avec ton initiale en haut à droite ouvre « Réglages » ; « Inviter » est la première carte.
 
 Puis :
 

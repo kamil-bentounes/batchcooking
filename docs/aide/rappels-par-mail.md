@@ -17,7 +17,7 @@ sources:
   - supabase/functions/rappels/index.ts
   - supabase/functions/_shared/rappels/mails.ts
   - supabase/functions/_shared/rappels/service.ts
-verifie_sur: 0021cf9
+verifie_sur: aeed691
 ---
 ## Ce que fait l’appli
 
@@ -25,7 +25,7 @@ Elle t’envoie des mails de la part de « Popote », à l’adresse avec laquel
 
 ## Où les régler
 
-« Réglages », section « Les rappels par mail », bouton « Régler mes rappels ». L’écran « Les rappels par mail » a une carte par rappel : son moment, une phrase qui dit quand il part, un interrupteur (« Activé » ou « Coupé ») et « M’envoyer un exemple ». L’interrupteur agit tout de suite ; il est grisé le temps que la demande parte, et si elle échoue il revient à l’état d’avant.
+« Réglages », carte « Les rappels par mail », bouton « Régler mes rappels ». L’écran « Les rappels par mail » a une carte par rappel : son moment, une phrase qui dit quand il part, un interrupteur (« Activé » ou « Coupé ») et « M’envoyer un exemple ». L’interrupteur agit tout de suite ; il est grisé le temps que la demande parte, et si elle échoue il revient à l’état d’avant.
 
 ## Chacun les siens
 

@@ -26,7 +26,7 @@ sources:
   - src/pages/Settings.tsx
   - supabase/functions/etiquette/index.ts
   - supabase/migrations/0124_nos_aliments.sql
-verifie_sur: 0021cf9
+verifie_sur: aeed691
 ---
 ## Ce que fait l’appli
 
@@ -34,7 +34,7 @@ Un repère comme « Yaourt » (60 kcal, 4 g de protéines) est un ordre de grand
 
 ## Où
 
-« Réglages », section **« Nos aliments »**, bouton « Ouvrir nos aliments ». Ou, dans la feuille de choix d’un repas de la semaine, section « Autre chose » : « Ajouter un aliment à nous… » ou « Ajouter ou modifier nos aliments ». Le retour rouvre la feuille là où tu l’avais laissée.
+« Réglages », carte **« Nos aliments »**, bouton « Ouvrir nos aliments ». Ou, dans la feuille de choix d’un repas de la semaine, section « Autre chose » : « Ajouter un aliment à nous… » ou « Ajouter ou modifier nos aliments ». Le retour rouvre la feuille là où tu l’avais laissée.
 
 ## Créer un aliment
 

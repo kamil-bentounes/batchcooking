@@ -18,7 +18,7 @@ sources:
   - supabase/migrations/0035_amis.sql
   - supabase/migrations/0037_cuisiner_ensemble.sql
   - supabase/migrations/0038_convive_frontiere.sql
-verifie_sur: fc7f6dc
+verifie_sur: aeed691
 ---
 ## Ce que fait l’appli
 
@@ -26,7 +26,7 @@ Deux foyers peuvent devenir **amis** : ils échangent des recettes, et l’un pe
 
 ## Devenir amis
 
-1. « Réglages », section « Vos amis » : « Inviter un foyer ». Un lien apparaît (« Invitation en attente, valable jusqu’au … »).
+1. « Réglages », carte « Vos amis » : « Inviter un foyer ». Un lien apparaît (« Invitation en attente, valable jusqu’au … »).
 2. « Copier le lien » et envoie-le ; « Annuler » le retire.
 3. L’autre foyer l’ouvre (il lui faut déjà un foyer et un mot de passe) : « Devenir amis ? », puis « Accepter » ou « Non merci ».
 
@@ -34,7 +34,7 @@ Le lien vaut **7 jours** et ne sert qu’une fois (« Ce lien a déjà servi. »
 
 ## Les règles
 
-- L’amitié est dans les deux sens : « rompre » (avec confirmation : « Ne plus partager avec … ? ») la coupe pour les deux, et les recettes partagées cessent d’être visibles des deux côtés. Les invitations à cuisiner entre ces deux foyers cessent aussi.
+- L’amitié est dans les deux sens : « Rompre » (avec confirmation : « Ne plus partager avec … ? ») la coupe pour les deux, et les recettes partagées cessent d’être visibles des deux côtés. Les invitations à cuisiner entre ces deux foyers cessent aussi.
 - Un foyer ami est nommé par les prénoms de ses membres.
 - Un foyer ami voit les recettes marquées **« partagée »**, avec ton prénom : « Partagée par … » dans « Choisir ». Les recettes « publiques » sont vues par tous les foyers, amis ou non.
 - Tu choisis la visibilité en collant une recette (« Qui peut la voir » : « Nous deux », « Nos amis » ou « Tout le monde »). Une recette inventée reste privée.

@@ -13,6 +13,7 @@ questions:
   - Peut-on revoir mes anciens objectifs ?
 sources:
   - src/pages/Targets.tsx
+  - src/ui/reglages/coque.tsx
   - src/lib/donnees/foyer.ts
   - src/pages/Dressage.tsx
   - src/pages/Hub.tsx
@@ -21,11 +22,11 @@ sources:
   - src/lib/nutrition/portions.ts
   - src/pages/Accueil.tsx
   - supabase/migrations/0005_policies.sql
-verifie_sur: fc7f6dc
+verifie_sur: aeed691
 ---
 ## Ce que fait l’écran
 
-« Mes objectifs » fixe ce que tu vises **chaque jour** : calories, protéines, fibres, glucides, lipides. Chacun a les siens (« Ta moitié a les siens »). Tu y vas par « Objectifs » dans le menu du haut de « Réglages » et de « Mes objectifs », par le bandeau « Fixe tes objectifs. » de l’accueil de Popote (si ton prénom et ton revenu sont posés ; sinon c’est « Complète ton profil. »), ou par le bouton « Fixe tes objectifs » du dressage (quand c’est toi qui n’en as pas).
+« Mes objectifs » fixe ce que tu vises **chaque jour** : calories, protéines, fibres, glucides, lipides. Chacun a les siens (« Ta moitié a les siens »). Tu y vas par « Objectifs » dans le sélecteur « Objectifs | Réglages » en haut de « Réglages » et de « Mes objectifs », par le bandeau « Fixe tes objectifs. » de l’accueil de Popote (si ton prénom et ton revenu sont posés ; sinon c’est « Complète ton profil. »), ou par le bouton « Fixe tes objectifs » du dressage (quand c’est toi qui n’en as pas).
 
 ## Comment faire
 

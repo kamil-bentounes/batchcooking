@@ -19,7 +19,7 @@ sources:
   - src/lib/lien.ts
   - src/pages/Onboarding.tsx
   - supabase/config.toml
-verifie_sur: fc7f6dc
+verifie_sur: aeed691
 ---
 ## Se connecter
 
@@ -33,11 +33,11 @@ Un lien trop vieux ou déjà utilisé affiche « Ce lien a expiré ou a déjà s
 
 ## Choisir ou changer son mot de passe
 
-Il faut **8 caractères au moins**. Pour le changer (« Réglages », en haut à gauche, ramène en arrière) : accueil de la cuisine, rond avec ton initiale (« Réglages »), section « Ton mot de passe », « Changer mon mot de passe ». Écris-le dans « Mot de passe », puis « Enregistrer ». Refus possibles : « C’est déjà ton mot de passe : choisis-en un autre. » ou « Ce mot de passe est trop facile à deviner : allonge-le, ou mélange lettres et chiffres. »
+Il faut **8 caractères au moins**. Pour le changer (« Réglages », en haut à gauche, ramène en arrière) : accueil de la cuisine, rond avec ton initiale (« Réglages »), la ligne « Changer mon mot de passe » (dans la carte du bas). Écris-le dans « Mot de passe », puis « Enregistrer ». Refus possibles : « C’est déjà ton mot de passe : choisis-en un autre. » ou « Ce mot de passe est trop facile à deviner : allonge-le, ou mélange lettres et chiffres. »
 
 ## Se déconnecter
 
-« Me déconnecter » dans les réglages (section « Te déconnecter »), « Me déconnecter » en bas de ton profil (le rond de l’accueil de Popote ; une fois ton revenu posé), et « Ce n’est pas moi » sur un lien d’invitation. Ces déconnexions valent pour **cet appareil seulement**, les autres restent connectés. Seul « Se déconnecter » de l’écran « Il te faut une invitation » ferme tous les appareils. Sans réseau, elle peut échouer (« La déconnexion n’a pas abouti… »).
+« Me déconnecter » dans les réglages (ligne « Me déconnecter », dans la carte du bas), « Me déconnecter » en bas de ton profil (le rond de l’accueil de Popote ; une fois ton revenu posé), et « Ce n’est pas moi » sur un lien d’invitation. Ces déconnexions valent pour **cet appareil seulement**, les autres restent connectés. Seul « Se déconnecter » de l’écran « Il te faut une invitation » ferme tous les appareils. Sans réseau, elle peut échouer (« La déconnexion n’a pas abouti… »).
 
 ## Quand la session expire
 
