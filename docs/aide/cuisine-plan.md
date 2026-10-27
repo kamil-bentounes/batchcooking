@@ -27,12 +27,12 @@ verifie_sur: 9504cf2
 
 ## Ce que dit l’écran
 
-- Sous « Le plan » : « Pour la cuisine du dimanche 25 octobre, à deux » (« à 3 »… selon les membres du foyer ; rien si tu es seul).
+- Sous « Le plan » : « Pour la cuisine du dimanche 25 octobre, à deux » (« à 3 »… selon le foyer ; rien si tu es seul).
 - En très grand : le temps **en cuisine**, puis trois chiffres : « X les mains prises » (le temps où quelqu’un a les mains occupées ; une cuisson au four dure mais n’occupe personne), « X d’attente » et « N actions pour une personne » (ou « N personnes » : les membres du foyer).
 - « Puis X de repos, sans toi » : repos compté à part.
-- « Au menu » : les photos des recettes retenues, en bande qui défile de côté.
-- « Dans l’ordre » : un geste par ligne, avec l’heure où il commence, sa durée et une barre posée sur toute la session. Un point (•) marque les gestes qui fixent la durée.
-- « Les appareils » : une barre par appareil, pleine quand il travaille.
+- « Au menu » : les photos des recettes retenues.
+- « Dans l’ordre » : un geste par ligne, avec son heure de début, sa durée et sa barre. Un point (•) marque les gestes qui fixent la durée.
+- « Les appareils » : quand chacun travaille.
 
 ## L’équipement du jour
 
