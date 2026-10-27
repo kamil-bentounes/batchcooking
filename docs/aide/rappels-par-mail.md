@@ -16,7 +16,8 @@ sources:
   - supabase/migrations/0126_rappels.sql
   - supabase/functions/rappels/index.ts
   - supabase/functions/_shared/rappels/mails.ts
-verifie_sur: 1b57e94
+  - supabase/functions/_shared/rappels/service.ts
+verifie_sur: 1d6efe2
 ---
 ## Ce que fait l’appli
 
@@ -24,7 +25,7 @@ Elle t’envoie des mails de la part de « Popote », à l’adresse avec laquel
 
 ## Où les régler
 
-« Réglages », section « Les rappels par mail », bouton « Régler mes rappels ». L’écran « Les rappels par mail » a une carte par rappel : son moment, une phrase qui dit quand il part, un interrupteur (« Activé » ou « Coupé ») et « M’envoyer un exemple ». L’interrupteur agit tout de suite.
+« Réglages », section « Les rappels par mail », bouton « Régler mes rappels ». L’écran « Les rappels par mail » a une carte par rappel : son moment, une phrase qui dit quand il part, un interrupteur (« Activé » ou « Coupé ») et « M’envoyer un exemple ». L’interrupteur agit tout de suite ; il est grisé le temps que la demande parte, et si elle échoue il revient à l’état d’avant.
 
 ## Chacun les siens
 
@@ -32,7 +33,7 @@ Tes réglages sont à toi seul. L’autre personne du foyer ne voit pas les tien
 
 ## Tester
 
-« M’envoyer un exemple » envoie UN mail d’exemple, avec « [Exemple] » devant le sujet, à ton adresse seulement. Les données sont inventées ; il ne compte pour rien et n’empêche aucun vrai rappel de partir.
+« M’envoyer un exemple » envoie UN mail d’exemple, avec « [Exemple] » devant le sujet, à ton adresse seulement. Les données sont inventées ; il ne compte pour rien et n’empêche aucun vrai rappel de partir. Un seul exemple par rappel et par heure : un second, dans la même heure, répond « Tu as déjà demandé cet exemple pendant cette heure ».
 
 ## Si rien n’arrive
 
