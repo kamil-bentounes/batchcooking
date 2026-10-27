@@ -5,8 +5,8 @@
  * égal l'ordre de `CATEGORIES` (D74) — comme le tableau de bord du mois type.
  */
 import { CATEGORIES, NOM_DU_MODE, infoCategorie, type Categorie, type Mode } from './categories.ts'
-import { departDeLaCharge, enVigueur } from './charges.ts'
-import { montant } from './mois.ts'
+import { departDeLaCharge, pourquoiElleNeComptePas } from './charges.ts'
+import { estLaCeMois, montant } from './mois.ts'
 
 export type Filtre = 'tout' | 'commun' | 'moi'
 
@@ -55,6 +55,12 @@ export function comptesDesFiltres<C extends { participants: string[] }>(charges:
   return { tout: charges.length, commun: duFiltre(charges, 'commun', moi).length, moi: duFiltre(charges, 'moi', moi).length }
 }
 
+/** Ceux qui sont dans le foyer CE mois-là (arrivée au plus tard le dernier jour du mois) : ce que `parts_du_foyer`
+    rend au mois type. Une arrivée inconnue ne cache personne. */
+export function presentsAuMois(membres: { id: string; entre_le?: string | null }[], mois: string): Set<string> {
+  return new Set(membres.filter(m => estLaCeMois(m, mois)).map(m => m.id))
+}
+
 export type GroupeDeCharges<C> = {
   cle: Categorie; nom: string; clair: string; sombre: string
   /** Ce que la catégorie pèse par mois, au mois demandé : une charge qui n'a pas commencé n'y compte pas. */
@@ -67,21 +73,27 @@ export type GroupeDeCharges<C> = {
  * qui pèse autant par mois), puis l'ordre alphabétique.
  */
 export function rangeParCategorie<C extends { libelle: string; montant_cents: number; periodicite: string
-  categorie: string; debut: string }>(charges: C[], mois: string): GroupeDeCharges<C>[] {
+  categorie: string; debut: string; participants: string[] }>(
+  charges: C[], mois: string, presents: ReadonlySet<string>): GroupeDeCharges<C>[] {
+  const compte = (x: C) => pourquoiElleNeComptePas(x, mois, presents) === null
   const groupes = CATEGORIES.map(c => {
     const lignes = charges.filter(x => infoCategorie(x.categorie).cle === c.cle).sort((a, z) =>
-      Number(enVigueur(z, mois)) - Number(enVigueur(a, mois))
+      Number(compte(z)) - Number(compte(a))
       || parMois(z) - parMois(a) || z.montant_cents - a.montant_cents || a.libelle.localeCompare(z.libelle, 'fr'))
-    const total = lignes.filter(x => enVigueur(x, mois)).reduce((t, x) => t + parMois(x), 0)
+    const total = lignes.filter(compte).reduce((t, x) => t + parMois(x), 0)
     return { cle: c.cle, nom: c.nom, clair: c.clair, sombre: c.sombre, total, lignes }
   }).filter(g => g.lignes.length > 0)
   /* `sort` est stable : à total égal, l'ordre de `CATEGORIES` reste. */
   return groupes.sort((a, z) => z.total - a.total)
 }
 
-/** Ce que pèsent des charges par mois, au mois demandé : celles qui n'ont pas commencé n'y comptent pas. */
-export function totalDuMois(charges: { montant_cents: number; periodicite: string; debut: string }[], mois: string): number {
-  return charges.filter(c => enVigueur(c, mois)).reduce((t, c) => t + parMois(c), 0)
+/** Ce que pèsent des charges par mois, au mois demandé — le total du mois type : celles qui n'ont pas commencé, ou
+    dont aucun participant n'est encore là, n'y comptent pas. */
+export function totalDuMois(
+  charges: { montant_cents: number; periodicite: string; debut: string; participants: string[] }[],
+  mois: string, presents: ReadonlySet<string>,
+): number {
+  return charges.filter(c => pourquoiElleNeComptePas(c, mois, presents) === null).reduce((t, c) => t + parMois(c), 0)
 }
 
 /** La façon, dite en minuscules sous le nom — rien pour « Fixe », qui est le cas ordinaire. */
@@ -99,7 +111,7 @@ export function ceQuElleCouteParMois(c: { montant_cents: number; periodicite: st
  * il est une pastille à part : c'est la seule chose de la ligne qui demande un geste.
  */
 export function sousTitreDeLaLigne(c: ChargeDeListe, o: {
-  prenoms: Map<string, string>; mois: string; moi: string
+  prenoms: Map<string, string>; mois: string; moi: string; presents: ReadonlySet<string>
 }): string {
   const nom = (u: string) => o.prenoms.get(u) ?? '?'
   const qui = c.participants.length > 1 ? listeDeNoms(dansLOrdreDuFoyer(c.participants, o.prenoms.keys()).map(nom))
@@ -111,6 +123,9 @@ export function sousTitreDeLaLigne(c: ChargeDeListe, o: {
     c.cle === 'moitie' ? 'moitié-moitié' : c.cle === 'prorata' ? 'au prorata' : null,
     faconDeLaLigne(c.mode),
     departDeLaCharge(c, o.mois),
+    /* Personne de ceux qui la paient n'est encore dans le foyer : elle est grisée et hors du total, comme dans le
+       tableau de toutes les charges. */
+    pourquoiElleNeComptePas(c, o.mois, o.presents) === 'arrivee' ? 'pas encore dans le foyer' : null,
     /* « en attente du foyer » ne disait pas ce qui est attendu : c'est une charge marquée commune alors qu'on
        est encore seul — elle attend quelqu'un. */
     c.commun && c.participants.length === 1 ? 'partagée dès que quelqu’un arrive' : null,

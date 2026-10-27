@@ -10,7 +10,7 @@ import type { ReactNode } from 'react'
 import { Erreur } from '../coque.tsx'
 import type { Charge, Compte } from '../../lib/donnees/budget.ts'
 import { prenomDe } from '../../lib/donnees/foyer.ts'
-import { debutDuChamp, enVigueur, peutCorriger, plancherDuDebut } from '../../lib/budget/charges.ts'
+import { debutDuChamp, peutCorriger, plancherDuDebut, pourquoiElleNeComptePas } from '../../lib/budget/charges.ts'
 import { ceQuElleCouteParMois, dansLOrdreDuFoyer, sousTitreDeLaLigne } from '../../lib/budget/charges-liste.ts'
 import { montant } from '../../lib/budget/mois.ts'
 import { maintenant } from '../../lib/horloge.ts'
@@ -29,15 +29,17 @@ function Geste({ ton, children, ...p }: { ton: 'herbe' | 'ocre' | 'encre'; child
   return <button type="button" {...p} className={`${GESTE} ${couleur}`}>{children}</button>
 }
 
-export function LigneDeCharge({ c, mois, moi, foyerId, membres, prenoms, comptes, g, dit }: {
+export function LigneDeCharge({ c, mois, moi, foyerId, membres, prenoms, presents, arrivee, comptes, g, dit }: {
   /** Ce que le dernier geste de CETTE ligne a annoncé (« corrigée, 2 mois refaits »). */
   dit: string | null
   c: Charge; foyerId: string; mois: string; moi: string; membres: Membre[]; prenoms: Map<string, string>
+  /** Ceux qui sont dans le foyer ce mois-là, et l'arrivée de qui regarde : une charge dont personne n'est là ne compte pas. */
+  presents: ReadonlySet<string>; arrivee: string | null | undefined
   comptes: Compte[] | undefined; g: Gestes
 }) {
   const ouvert = g.ouverte?.id === c.id
   const vue = ouvert ? g.ouverte!.vue : null
-  const plusTard = !enVigueur(c, mois)
+  const plusTard = pourquoiElleNeComptePas(c, mois, presents) !== null
   const parMois = ceQuElleCouteParMois(c)
   const compteParDefaut = comptes?.find(x => x.genre === 'commun')?.id ?? comptes?.[0]?.id ?? null
 
@@ -51,7 +53,7 @@ export function LigneDeCharge({ c, mois, moi, foyerId, membres, prenoms, comptes
             {c.libelle}
           </span>
           <span className="block mt-0.5 text-[13.5px] leading-snug text-doux">
-            {sousTitreDeLaLigne(c, { prenoms, mois, moi })}
+            {sousTitreDeLaLigne(c, { prenoms, mois, moi, presents })}
           </span>
           {(c.participants.length > 0 || !c.compte_id) && (
             <span className="mt-2 flex items-center gap-2.5 flex-wrap">
@@ -75,8 +77,7 @@ export function LigneDeCharge({ c, mois, moi, foyerId, membres, prenoms, comptes
           {/* Rattacher après coup : une charge née de la dictée, ou d'avant que le formulaire ne demande le
               compte, n'avait aucun moyen d'en recevoir un — et sans compte, elle ne produit pas de virement. */}
           {!c.compte_id && compteParDefaut && (
-            <Geste ton="ocre" disabled={g.rattache.isPending}
-                   onClick={() => g.rattache.mutate({ id: c.id, compteId: compteParDefaut })}>
+            <Geste ton="ocre" disabled={g.occupee(c.id)} onClick={() => g.rattacher(c, compteParDefaut)}>
               <Lien />Rattacher
             </Geste>
           )}
@@ -94,32 +95,31 @@ export function LigneDeCharge({ c, mois, moi, foyerId, membres, prenoms, comptes
               <Personnes />Changer qui participe
             </Geste>
           )}
-          <Geste ton="encre" aria-label={`Retirer ${c.libelle}`} disabled={g.retire.isPending}
+          <Geste ton="encre" aria-label={`Retirer ${c.libelle}`} disabled={g.occupee(c.id)}
                  onClick={() => {
                    if (!confirm(`Retirer « ${c.libelle} » ? Elle disparaîtra de tous les mois.`)) return
-                   g.retirer(c)
+                   void g.retirer(c)
                  }}>
             <Corbeille />Retirer
           </Geste>
         </div>
       )}
 
-      {ouvert && vue === 'corriger' && <Correction c={c} g={g} />}
+      {ouvert && vue === 'corriger' && <Correction c={c} g={g} arrivee={arrivee} />}
 
       {ouvert && vue === 'qui' && (
         <div id={`gestes-${c.id}`} role="group" aria-label={`Qui participe à ${c.libelle}`}
              className="mb-2 rounded-[18px] bg-fond p-3.5">
           <p className="text-[13.5px] font-medium text-doux">Changer qui participe</p>
           <div className="mt-2 flex gap-2 flex-wrap items-center">
-            {membres.map(m => {
+            {membres.map((m, i) => {
               const dedans = c.participants.includes(m.id)
               return (
                 <button key={m.id} type="button" role="checkbox" aria-checked={dedans}
-                        disabled={g.majQui.isPending}
-                        onClick={() => g.majQui.mutate({
-                          chargeId: c.id, foyerId,
-                          participants: dedans ? c.participants.filter(x => x !== m.id) : [...c.participants, m.id],
-                        })}
+                        data-qui-premier={i === 0 ? c.id : undefined}
+                        disabled={g.occupee(c.id)}
+                        onClick={() => void g.majParticipants(c, foyerId,
+                          dedans ? c.participants.filter(x => x !== m.id) : [...c.participants, m.id])}
                         className={`${PILULE} ${dedans ? 'bg-herbe text-fond' : FILET} disabled:opacity-60`}>
                   {dedans && <Coche />}{prenomDe(m.display_name)}
                 </button>
@@ -140,19 +140,19 @@ export function LigneDeCharge({ c, mois, moi, foyerId, membres, prenoms, comptes
 }
 
 /** « Corriger », déplié dans la ligne : les mêmes champs que l'ajout, et les mêmes règles. */
-function Correction({ c, g }: { c: Charge; g: Gestes }) {
+function Correction({ c, g, arrivee }: { c: Charge; g: Gestes; arrivee: string | null | undefined }) {
   const { f, change } = g
   /* Les mêmes règles que l'ajout : le plafond de 1 000 000 €, et un départ vidé ne part pas comme « -01 ». */
   const { pret, cents, refusMontant, refusDebut, refusLibelle } = peutCorriger({
     libelle: f.libelle, montant: f.montant, mode: f.mode, debut: f.debut,
-    garde: c.debut, plancher: plancherDuDebut(maintenant()) })
-  const occupe = g.corrige.isPending || g.changeCategorie.isPending
+    garde: c.debut, plancher: plancherDuDebut(maintenant()), arrivee })
+  const occupe = g.occupee(c.id)
   return (
     <div id={`gestes-${c.id}`} role="group" aria-label={`Corriger ${c.libelle}`}
          className="mb-2 rounded-[18px] bg-fond p-3.5 grid grid-cols-[minmax(0,1fr)] gap-4">
       <label className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
         <span className="text-[14px] font-semibold">Son nom</span>
-        <input value={f.libelle} onChange={e => change({ libelle: e.target.value })} className={CHAMP} />
+        <input value={f.libelle} data-champ-nom={c.id} onChange={e => change({ libelle: e.target.value })} className={CHAMP} />
         {refusLibelle && <span role="alert" className="text-[14px] font-semibold text-groseille">{refusLibelle}</span>}
       </label>
       <label className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
@@ -183,12 +183,11 @@ function Correction({ c, g }: { c: Charge; g: Gestes }) {
       )}
       {/* Ce que ça touche, dit AVANT : un mois confirmé garde ce qu'on a réellement payé, il ne se réécrit pas. */}
       <p className="text-[13.5px] text-doux">Les mois déjà confirmés gardent leur montant. Les autres se refont.</p>
-      <Erreur de={g.erreurDuFormulaire(c.id)} />
       <div className="flex items-center gap-2.5 flex-wrap">
-        <button type="button" disabled={!pret || occupe} onClick={() => g.enregistre(c, cents ?? 0)}
+        <button type="button" disabled={!pret || occupe} onClick={() => void g.enregistre(c, cents ?? 0)}
                 className="min-h-12 px-[18px] rounded-2xl bg-herbe text-fond text-[16px] font-semibold
                            disabled:bg-brume disabled:text-encre">
-          {g.corrige.isPending ? 'Je corrige…' : 'Enregistrer'}
+          {occupe ? 'Je corrige…' : 'Enregistrer'}
         </button>
         <button type="button" onClick={() => g.reviens(c, 'corriger')}
                 className="min-h-11 px-3 text-[15px] font-semibold text-herbe">Annuler</button>

@@ -4,7 +4,7 @@
  * figer — l'écran, lui, n'a pas de banc de composants.
  */
 import { infoCategorie, NOM_DU_MODE, type Categorie, type Mode } from './categories.ts'
-import { montant, nomDuMois } from './mois.ts'
+import { montant, moisDeDepart, nomDuMois } from './mois.ts'
 import { lisLeMontant } from './feuilles.ts'
 import type { Retrait } from '../donnees/budget.ts'
 
@@ -24,6 +24,20 @@ export function enVigueur(c: { debut: string }, mois: string): boolean {
 export function departDeLaCharge(c: { debut: string }, mois: string): string | null {
   if (enVigueur(c, mois)) return null
   return `commence en ${nomDuMois(c.debut)} ${c.debut.slice(0, 4)}`
+}
+
+/**
+ * Pourquoi une charge ne compte PAS ce mois-là, ou null si elle compte. UN seul prédicat, pour la liste des charges
+ * comme pour le mois type et le tableau de toutes les charges :
+ * - `debut` : elle commence plus tard ;
+ * - `arrivee` : aucun de ses participants n'est encore dans le foyer — la base ne lui crée alors aucune ligne (0098).
+ * `presents` : ceux qui sont dans le foyer CE mois-là. Le départ passe avant l'arrivée, comme dans le mois type.
+ */
+export function pourquoiElleNeComptePas(
+  c: { debut: string; participants: string[] }, mois: string, presents: ReadonlySet<string>,
+): 'debut' | 'arrivee' | null {
+  if (!enVigueur(c, mois)) return 'debut'
+  return c.participants.some(q => presents.has(q)) ? null : 'arrivee'
 }
 
 /**
@@ -127,12 +141,18 @@ export function plancherDuDebut(maintenant: Date): string {
  * avant le plancher — corriger un libellé ne doit pas obliger à réécrire une date que la
  * base a posée —, mais tout AUTRE départ passe le plancher.
  */
-export function lisLeDebut(debut: string, o: { plancher: string; garde?: string }):
+export function lisLeDebut(debut: string, o: { plancher: string; garde?: string; arrivee?: string | null }):
   { valide: boolean; refus: string | null } {
   if (!/^\d{4}-\d{2}-01$/.test(debut)) return { valide: false, refus: 'Choisis le mois où elle commence.' }
   if (debut !== o.garde && debut < o.plancher) {
     return { valide: false,
              refus: `Pas avant ${nomDuMois(o.plancher)} ${o.plancher.slice(0, 4)}.` }
+  }
+  /* Rien ne court avant l'arrivée de qui agit (`moisDeDepart`, la règle de l'ajout) : une charge qui démarre avant
+     elle fait porter toute la part à celui qui est déjà là. Un départ DÉJÀ posé (`garde`) reste accepté. */
+  const depart = moisDeDepart(o.arrivee, debut)
+  if (debut !== o.garde && depart !== debut) {
+    return { valide: false, refus: `Pas avant ton arrivée, en ${nomDuMois(depart)} ${depart.slice(0, 4)}.` }
   }
   return { valide: true, refus: null }
 }
@@ -166,11 +186,13 @@ export function peutPoser(o: { libelle: string; montant: string; qui: number; de
  */
 export function peutCorriger(o: {
   libelle: string; montant: string; mode: Mode; debut: string; garde: string; plancher: string
+  /** L'arrivée de qui corrige : rien ne court avant elle. */
+  arrivee?: string | null
 }): { pret: boolean; cents: number | null; refusMontant: string | null; refusDebut: string | null
       refusLibelle: string | null } {
   const m = lisLeMontant(o.montant, { zeroOk: false })
   const d = o.mode === 'mis_de_cote'
-    ? lisLeDebut(o.debut, { plancher: o.plancher, garde: o.garde })
+    ? lisLeDebut(o.debut, { plancher: o.plancher, garde: o.garde, arrivee: o.arrivee })
     : { valide: true, refus: null }
   const refusLibelle = refusDuLibelle(o.libelle)
   return { pret: o.libelle.trim() !== '' && refusLibelle === null && m.valide && d.valide,

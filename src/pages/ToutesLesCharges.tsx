@@ -214,7 +214,7 @@ export function ToutesLesCharges({ userId, retour, categorie, qui }: {
                           {l.pourquoi === 'arrivee' && ' · pas encore dans le foyer'}
                         </span>
                       </span>
-                      {ids.map(q => <Cellule key={q} cents={l.parts[q] ?? 0} />)}
+                      {ids.map(q => <Cellule key={q} cents={l.parts[q] ?? 0} doux={l.plusTard} />)}
                       <Cellule cents={l.mensuel} doux />
                     </div>
                   ))}

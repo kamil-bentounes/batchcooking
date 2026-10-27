@@ -16,16 +16,18 @@ import { useState } from 'react'
 import { Dictee } from './Dictee.tsx'
 import { RevueCharges } from './RevueCharges.tsx'
 import { Attente, Erreur, Vide } from '../ui/coque.tsx'
+import { BoutonAide } from '../ui/Aide.tsx'
 import { useFoyer, prenomDe } from '../lib/donnees/foyer.ts'
 import {
   useCharges, useCatalogue, useAjouteCharge, useComptes, euros, moisDe, type Charge,
 } from '../lib/donnees/budget.ts'
-import { categorieDeLArticle, modeDeLArticle, type Categorie, type Mode } from '../lib/budget/categories.ts'
-import { communeDeLaCharge, enVigueur, phraseDuTotal, debutDuChamp, peutPoser, periodiciteDeLaFacon,
+import { categorieDeLArticle, infoCategorie, modeDeLArticle, type Categorie, type Mode } from '../lib/budget/categories.ts'
+import { communeDeLaCharge, pourquoiElleNeComptePas, phraseDuTotal, debutDuChamp, peutPoser, periodiciteDeLaFacon,
          plancherDuDebut, retireesEncoreAReg, type Rythme } from '../lib/budget/charges.ts'
 import {
-  comptesDesFiltres, duFiltre, phraseDeLArrivee, rangeParCategorie, totalDuMois, type Filtre,
+  comptesDesFiltres, duFiltre, phraseDeLArrivee, presentsAuMois, rangeParCategorie, totalDuMois, type Filtre,
 } from '../lib/budget/charges-liste.ts'
+import { lisOuvertes, retiens } from '../lib/budget/ouvertes.ts'
 import { moisDeDepart, nomDuMois } from '../lib/budget/mois.ts'
 import { maintenant } from '../lib/horloge.ts'
 import { FeuilleMiseDeCote } from '../ui/budget/FeuilleMiseDeCote.tsx'
@@ -267,14 +269,23 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   const [dit, setAnnonce] = useState<Annonce>(null)
   const dis = (texte: string | null, id?: string) => setAnnonce(texte === null ? null : { texte, id: id ?? null })
   const [ajout, setAjout] = useState<Depart | undefined>()
-  const { data: foyer } = useFoyer()
+  const { data: foyer, error: erreurFoyer } = useFoyer()
   const charges = useCharges()
   const { data: catalogue = [] } = useCatalogue()
   const ajouteUne = useAjouteCharge()
   const comptes = useComptes()
   /* La feuille d'une charge retirée qui attend encore une facture (§ 3.4). */
   const [feuille, setFeuille] = useState<Charge | null>(null)
-  const g = useGestes({ charges: charges.data ?? [], dis })
+  /* Les catégories repliées, par appareil. Tenues ICI : une ligne corrigée peut entrer dans une catégorie repliée, et
+     c'est la page qui la rouvre pour qu'on voie où elle est allée. */
+  const [ouvertes, setOuvertes] = useState<Record<string, boolean>>(() => lisOuvertes())
+  const cleDe = (cle: string) => `charges:${cle}`
+  const estOuverte = (cle: string) => ouvertes[cleDe(cle)] ?? true
+  const metOuverte = (cle: string, ouverte: boolean) => {
+    retiens(cleDe(cle), ouverte)
+    setOuvertes(o => ({ ...o, [cleDe(cle)]: ouverte }))
+  }
+  const g = useGestes({ charges: charges.data ?? [], dis, ouvreLaCategorie: cle => metOuverte(cle, true) })
   /* Le compte commun, pour la dictée : elle ne demande pas où débiter, et une
      charge sans compte ne produit pas de virement. */
   const compteParDefaut = (comptes.data ?? [])
@@ -289,6 +300,10 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
      propose entre par la même porte que ce qu'on tape. */
   if (dictee) {
     return (
+      <>
+      {/* Le « ? » flottant est masqué sur /charges (l'en-tête de la liste porte le sien) : la dictée n'a pas d'en-tête
+          à elle, elle reprend donc la place du flottant. */}
+      <div className="fixed right-3 top-[max(0.25rem,env(safe-area-inset-top))] z-30"><BoutonAide /></div>
       <Dictee retour={() => setDictee(false)} surRetenues={async lignes => {
         /* ⚠️ Cette promesse était lancée sans être attendue ni rattrapée : un
            libellé trop long ou un montant démesuré faisait lever `ou()`, la
@@ -341,9 +356,9 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
         dis(`${posees} charge${posees > 1 ? 's' : ''} ajoutée${posees > 1 ? 's' : ''}.`)
         setDictee(false)
       }} />
+      </>
     )
   }
-
 
   if (ajout !== undefined) {
     return (
@@ -372,9 +387,13 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   const courant = moisDe()
   const mois = moisDeDepart(moi?.entre_le, courant)
   const avantLArrivee = mois > courant
-  const groupes = rangeParCategorie(vues, mois)
-  const total = totalDuMois(vues, mois)
-  const enCours = vues.filter(c => enVigueur(c, mois))
+  /* Le total et les catégories sont ceux du MOIS TYPE : une charge qui commence plus tard, ou dont personne n'est
+     encore dans le foyer ce mois-là, n'y compte pas (`pourquoiElleNeComptePas`, le même prédicat partout). Thauba,
+     arrivée en janvier, ne voit pas dans son total les charges de Kamil seul tant qu'il n'est pas là. */
+  const presents = presentsAuMois(membres, mois)
+  const groupes = rangeParCategorie(vues, mois, presents)
+  const total = totalDuMois(vues, mois, presents)
+  const enCours = vues.filter(c => pourquoiElleNeComptePas(c, mois, presents) === null)
   /* Ce que le MOIS ne demandera pas de virer : une charge qu'on paie depuis son
      propre compte ne crée pas de dette — `virements()` l'écarte, à raison.
      Mais les deux écrans affichaient alors deux totaux différents sans qu'un
@@ -382,10 +401,12 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
   const sienPropre = new Set((comptes.data ?? [])
     .filter(c => c.genre === 'perso' && c.titulaire_id === userId).map(c => c.id))
   const avance = totalDuMois(enCours.filter(c => c.compte_id && sienPropre.has(c.compte_id)
-    && c.participants.length === 1 && c.participants[0] === userId), mois)
+    && c.participants.length === 1 && c.participants[0] === userId), mois, presents)
 
   /* Rien ne s'affirme avant la lecture : « 0,00 € par mois » le temps du chargement n'était pas un total. */
-  const lu = !charges.isPending && foyer !== undefined
+  /* Lu : les charges ET le foyer sont revenus. Une lecture en échec n'est pas « 0 € par mois » : elle ne montre
+     aucun chiffre, et dit sa panne. */
+  const lu = charges.data !== undefined && !!foyer
   const phrase = phraseDuTotal({
     lu, total: euros(total), avance: avance > 0 ? euros(avance) : null, pourToi: filtre === 'moi',
   })
@@ -393,7 +414,8 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
 
   /* Elles disparaissent le 31 décembre de l'année qui suit leur retrait (§ 3.7). */
   const retirees = retireesEncoreAReg(charges.data ?? [], maintenant().getFullYear())
-  const surUneLigne = dit?.id && vues.some(c => c.id === dit.id) ? dit.id : null
+  /* Sur sa ligne tant qu'elle est RENDUE (sa catégorie ouverte) ; sinon en tête, où on la voit. */
+  const surUneLigne = dit?.id && vues.some(c => c.id === dit.id && estOuverte(infoCategorie(c.categorie).cle)) ? dit.id : null
 
   return (
     <main className="min-h-dvh px-4 pb-16 min-[900px]:px-8 min-[900px]:pb-14">
@@ -414,10 +436,11 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                 quatre écrans au-dessus du bouton qu'on vient de toucher, ne se voit pas : on croit que rien ne
                 s'est passé, et on retouche. */}
             <Erreur de={charges.error} />
+            <Erreur de={foyer ? null : erreurFoyer} />
             {dit && !surUneLigne && (
               <p role="status" className="rounded-2xl bg-frais-fond px-3.5 py-3 text-[14.5px] text-frais-encre">{dit.texte}</p>
             )}
-            {!lu && !charges.error && <Attente />}
+            {!lu && !charges.error && !erreurFoyer && <Attente />}
             {lu && (
               <>
                 <Total total={total} phrase={phrase} groupes={groupes} pourToi={filtre === 'moi'} />
@@ -439,10 +462,12 @@ export function Charges({ userId, retour }: { userId: string; retour: () => void
                         texte="Ajoute-les depuis le catalogue : on ne se souvient pas de ses charges, on les reconnaît." />
                 ) : groupes.map(gr => (
                   <CategorieDeCharges key={gr.cle} cle={gr.cle} nom={gr.nom} clair={gr.clair}
-                                      total={gr.total} nLignes={gr.lignes.length}>
+                                      total={gr.total} nLignes={gr.lignes.length}
+                                      ouverte={estOuverte(gr.cle)} change={() => metOuverte(gr.cle, !estOuverte(gr.cle))}>
                     {gr.lignes.map(c => (
                       <LigneDeCharge key={c.id} c={c} mois={mois} moi={userId} foyerId={foyer?.id ?? ''}
-                                     membres={membres} prenoms={prenoms} comptes={comptes.data} g={g}
+                                     membres={membres} prenoms={prenoms} presents={presents} arrivee={moi?.entre_le}
+                                     comptes={comptes.data} g={g}
                                      dit={surUneLigne === c.id ? dit!.texte : null} />
                     ))}
                   </CategorieDeCharges>

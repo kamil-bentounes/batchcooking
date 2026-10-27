@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { departDeLaCharge, enVigueur, ceQuiChange, communeDeLaCharge, debutDuChamp, ditLaCorrection, lisLeDebut, peutCorriger, peutPoser,
+import { departDeLaCharge, enVigueur, ceQuiChange, communeDeLaCharge, debutDuChamp, ditLaCorrection, lisLeDebut, peutCorriger, peutPoser, pourquoiElleNeComptePas,
          periodiciteDeLaFacon, phraseDuTotal, plancherDuDebut, retireesEncoreAReg, sousTitreDeLaFacon,
          suiteDuRetrait, texteDeLaRetiree } from './charges.ts'
 import { montant } from './mois.ts'
@@ -279,5 +279,46 @@ describe('phraseDuTotal : un total qu’on n’a pas lu n’est pas zéro', () =
   it('ajoute ce qu’on paie de son propre compte, seulement s’il y en a', () => {
     expect(phraseDuTotal({ lu: true, total: '2 964,00 €', avance: '86,00 €', pourToi: false }))
       .toBe('2 964,00 € par mois pour le foyer, une fois tout ramené au mois. Dont 86,00 € que tu paies depuis ton propre compte.')
+  })
+})
+
+describe('pourquoiElleNeComptePas — un seul prédicat pour la liste, le mois type et le tableau', () => {
+  const c = (debut: string, participants: string[]) => ({ debut, participants })
+  const presents = new Set(['thauba'])
+  it('elle compte : en vigueur, et l’un de ses participants est là', () => {
+    expect(pourquoiElleNeComptePas(c('2026-01-01', ['thauba']), '2026-10-01', presents)).toBeNull()
+    expect(pourquoiElleNeComptePas(c('2026-01-01', ['kamil', 'thauba']), '2026-10-01', presents)).toBeNull()
+  })
+  it('« arrivee » : aucun participant n’est encore là (la charge de Kamil seul, vue par Thauba en octobre)', () => {
+    expect(pourquoiElleNeComptePas(c('2026-01-01', ['kamil']), '2026-10-01', presents)).toBe('arrivee')
+    expect(pourquoiElleNeComptePas(c('2026-01-01', []), '2026-10-01', presents)).toBe('arrivee')
+  })
+  it('« debut » passe avant « arrivee »', () => {
+    expect(pourquoiElleNeComptePas(c('2031-01-01', ['kamil']), '2026-10-01', presents)).toBe('debut')
+  })
+})
+
+describe('un départ ne précède pas l’arrivée de qui corrige', () => {
+  const plancher = '2025-01-01'
+  it('refuse une date avant l’arrivée, avec sa phrase ; accepte l’arrivée et après', () => {
+    const r = lisLeDebut('2026-10-01', { plancher, arrivee: '2026-11-01' })
+    expect(r.valide).toBe(false)
+    expect(r.refus).toBe('Pas avant ton arrivée, en novembre 2026.')
+    expect(lisLeDebut('2026-11-01', { plancher, arrivee: '2026-11-01' }).valide).toBe(true)
+    expect(lisLeDebut('2027-01-01', { plancher, arrivee: '2026-11-15' }).valide).toBe(true)
+  })
+  it('sans arrivée connue, rien ne change', () => {
+    expect(lisLeDebut('2026-01-01', { plancher, arrivee: null }).valide).toBe(true)
+    expect(lisLeDebut('2026-01-01', { plancher }).valide).toBe(true)
+  })
+  it('le départ déjà posé reste accepté, même avant l’arrivée (corriger un nom ne le réécrit pas)', () => {
+    expect(lisLeDebut('2026-01-01', { plancher, garde: '2026-01-01', arrivee: '2026-11-01' }).valide).toBe(true)
+    expect(lisLeDebut('2026-02-01', { plancher, garde: '2026-01-01', arrivee: '2026-11-01' }).valide).toBe(false)
+  })
+  it('peutCorriger bloque une mise de côté qui démarrerait avant l’arrivée, pas une autre façon', () => {
+    const base = { libelle: 'Taxe', montant: '1200', mode: 'mis_de_cote' as const, debut: '2026-10-01',
+                   garde: '2026-12-01', plancher, arrivee: '2026-11-01' }
+    expect(peutCorriger(base)).toMatchObject({ pret: false, refusDebut: 'Pas avant ton arrivée, en novembre 2026.' })
+    expect(peutCorriger({ ...base, mode: 'fixe' }).pret).toBe(true)
   })
 })

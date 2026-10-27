@@ -7,6 +7,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { MOT_DE_PASSE, amorce, db, efface } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
+import { ouvreLaLigne } from './aides-charges.ts'
 
 let foyer: Foyer
 test.beforeAll(() => {
@@ -230,4 +231,221 @@ test('à 320 px, ni défilement de côté, ni cible de moins de 44 px dans la li
   await page.goto('/toutes-les-charges')
   await expect(page.getByRole('region', { name: 'Les charges' })).toBeVisible({ timeout: 15_000 })
   expect(await debordement(), 'le tableau déborde à 320 px').toBeLessThanOrEqual(0)
+})
+
+/* ── Ce que la revue adverse du 27/10 a trouvé ──────────────────────────────────────────────────────── */
+
+/** Le premier du mois prochain (AAAA-MM-01), son nom (« novembre ») et le mois courant (AAAA-MM). */
+function mois() {
+  const d = new Date()
+  const p = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+  const deux = (n: number) => String(n).padStart(2, '0')
+  return {
+    prochain: `${p.getFullYear()}-${deux(p.getMonth() + 1)}-01`,
+    nom: p.toLocaleDateString('fr-FR', { month: 'long' }), annee: p.getFullYear(),
+    courant: `${d.getFullYear()}-${deux(d.getMonth() + 1)}`,
+  }
+}
+
+test('une correction lente ne referme pas le panneau d’une autre ligne, ni ne lui prend son focus ni sa saisie', async ({ page }) => {
+  foyer = await amorce()
+  await connecte(page, foyer.email)
+  await page.goto('/charges')
+  let libere!: () => void
+  const porte = new Promise<void>(r => { libere = r })
+  await page.route('**/rest/v1/rpc/corrige_la_charge', async route => { await porte; await route.continue() })
+
+  /* A : « Internet » est corrigée — la base répond lentement. */
+  await ouvreLaLigne(page, 'Internet')
+  const a = ligne(page, 'Internet')
+  await a.getByRole('button', { name: 'Corriger Internet' }).click()
+  await a.getByLabel('Montant de Internet').fill('40')
+  await a.getByRole('button', { name: 'Enregistrer', exact: true }).click()
+  await expect(a.getByRole('button', { name: 'Je corrige…' })).toBeDisabled()
+
+  /* B : pendant ce temps, on ouvre « Électricité » et on y tape. */
+  await ouvreLaLigne(page, 'Électricité')
+  const b = ligne(page, 'Électricité')
+  await b.getByRole('button', { name: 'Corriger Électricité' }).click()
+  const nomDeB = b.getByLabel('Son nom')
+  await nomDeB.fill('Électricité du soir')
+  await expect(nomDeB).toBeFocused()
+
+  libere()
+  await expect(a.getByRole('status')).toContainText('« Internet » corrigée', { timeout: 15_000 })
+  /* Le panneau de B est resté ouvert, avec sa saisie, et le focus n'a pas bougé. */
+  await expect(nomDeB).toHaveValue('Électricité du soir')
+  await expect(nomDeB).toBeFocused()
+  await expect(a.getByLabel('Montant de Internet'), 'le panneau de A est resté ouvert').toHaveCount(0)
+})
+
+test('l’échec d’une correction lente se lit sur SA ligne, même quand on a ouvert une autre', async ({ page }) => {
+  foyer = await amorce()
+  await connecte(page, foyer.email)
+  await page.goto('/charges')
+  let libere!: () => void
+  const porte = new Promise<void>(r => { libere = r })
+  await page.route('**/rest/v1/rpc/corrige_la_charge', async route => {
+    await porte
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Refus lent de test' }) })
+  })
+
+  await ouvreLaLigne(page, 'Internet')
+  const a = ligne(page, 'Internet')
+  await a.getByRole('button', { name: 'Corriger Internet' }).click()
+  await a.getByLabel('Montant de Internet').fill('40')
+  await a.getByRole('button', { name: 'Enregistrer', exact: true }).click()
+  await ouvreLaLigne(page, 'Électricité')          // le panneau de A se referme
+  await expect(a.getByLabel('Montant de Internet')).toHaveCount(0)
+
+  libere()
+  await expect(a.getByRole('alert')).toContainText('Refus lent de test', { timeout: 15_000 })
+  await expect(ligne(page, 'Électricité').getByRole('alert')).toHaveCount(0)
+  await expect(page.getByRole('alert')).toHaveCount(1)
+  /* La ligne B est restée ouverte. */
+  await expect(ligne(page, 'Électricité').getByRole('button', { name: 'Corriger Électricité' })).toBeVisible()
+})
+
+test('le grand total est celui du mois type : Thauba, présente, ne compte pas ce que Kamil paie seul avant d’arriver', async ({ page }) => {
+  foyer = await amorce()
+  const { prochain } = mois()
+  /* Kamil n'arrive que le mois prochain ; Thauba est là depuis janvier. */
+  await db.from('user_profile').update({ entre_le: prochain }).eq('id', foyer.userId)
+  await connecte(page, foyer.elleEmail)
+  await page.goto('/charges')
+
+  /* 3 917 € : tout ce que Thauba partage ou paie seule (Internet 37, Électricité 50, Courses 800, Restaurant 260,
+     Pharmacie 20, copropriété 100, crédit 1 580, impôt 1 070) ; sans le forfait de Kamil (19,90) ni son entretien auto. */
+  const phrase = page.getByText(/par mois pour le foyer, une fois tout ramené au mois/)
+  await expect(phrase).toBeVisible({ timeout: 15_000 })
+  await expect(phrase).toHaveText(/^3\s917,00 €/)
+  /* La ligne de Kamil seul est grisée, et dit pourquoi. */
+  await expect(ligne(page, 'Forfait mobile')).toContainText('pas encore dans le foyer')
+  await expect(ligne(page, 'Entretien auto')).toContainText('pas encore dans le foyer')
+  await expect(ligne(page, 'Internet')).not.toContainText('pas encore dans le foyer')
+  await expect(page.getByRole('region', { name: 'Catégorie Abonnements' }).getByRole('button', { name: /Abonnements.*0 €/ })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Catégorie Auto' }).getByRole('button', { name: /Auto.*0 €/ })).toBeVisible()
+
+  /* Et c'est le total du mois type : le tableau de toutes les charges, pour le même mois. */
+  await page.goto('/toutes-les-charges')
+  const total = page.getByRole('row').filter({ hasText: 'Total par mois' })
+  await expect(total).toBeVisible({ timeout: 15_000 })
+  await expect(total.getByRole('cell').last()).toHaveText(/^3\s917 €$/)
+})
+
+test('le focus suit les gestes : le nom à l’ouverture de « Corriger », la première pastille, la ligne d’après « Retirer »', async ({ page }) => {
+  foyer = await amorce()
+  await connecte(page, foyer.email)
+  await page.goto('/charges')
+  page.on('dialog', d => { void d.accept() })
+
+  const internet = await ouvreLaLigne(page, 'Internet')
+  await internet.getByRole('button', { name: 'Corriger Internet' }).click()
+  await expect(internet.getByLabel('Son nom')).toBeFocused()
+  await internet.getByRole('button', { name: 'Annuler' }).click()
+  await expect(internet.getByRole('button', { name: 'Corriger Internet' })).toBeFocused()
+
+  await internet.getByRole('button', { name: 'Changer qui participe' }).click()
+  await expect(internet.getByRole('checkbox', { name: 'Kamil' })).toBeFocused()
+  await internet.getByRole('button', { name: 'Fermer' }).click()
+  await expect(internet.getByRole('button', { name: 'Changer qui participe' })).toBeFocused()
+
+  /* « Rattacher » : le bouton disparaît, le focus revient à la ligne. */
+  const copro = await ouvreLaLigne(page, 'Charges de copropriété du bâtiment B')
+  await copro.getByRole('button', { name: 'Rattacher' }).click()
+  await expect(copro.getByRole('button', { name: 'Rattacher' })).toHaveCount(0, { timeout: 15_000 })
+  await expect(copro.locator('[data-ligne]')).toBeFocused()
+
+  /* « Retirer » : la ligne s'en va, le focus passe à la suivante (Électricité est avant Internet, par mois). */
+  const elec = await ouvreLaLigne(page, 'Électricité')
+  await elec.getByRole('button', { name: 'Retirer Électricité' }).click()
+  await expect(ligne(page, 'Électricité')).toHaveCount(0, { timeout: 15_000 })
+  await expect(ligne(page, 'Internet').locator('[data-ligne]')).toBeFocused()
+  /* La dernière de sa catégorie : le focus va à l'en-tête de la catégorie. */
+  const forfait = await ouvreLaLigne(page, 'Forfait mobile')
+  await forfait.getByRole('button', { name: 'Retirer Forfait mobile' }).click()
+  await expect(ligne(page, 'Forfait mobile')).toHaveCount(0, { timeout: 15_000 })
+  await expect(page.getByRole('group', { name: 'Filtrer' }).getByRole('button').first()).toBeFocused()
+})
+
+test('une correction qui range la ligne dans une catégorie repliée la rouvre, et le dit sur la ligne', async ({ page }) => {
+  foyer = await amorce()
+  await connecte(page, foyer.email)
+  await page.goto('/charges')
+  const sante = page.getByRole('region', { name: 'Catégorie Santé' })
+  const entete = sante.locator('button[aria-expanded]').first()
+  await expect(entete).toBeVisible({ timeout: 15_000 })
+  await entete.click()
+  await expect(entete).toHaveAttribute('aria-expanded', 'false')
+
+  const internet = await ouvreLaLigne(page, 'Internet')
+  await internet.getByRole('button', { name: 'Corriger Internet' }).click()
+  await internet.getByRole('radiogroup', { name: 'Catégorie de Internet' }).getByRole('radio', { name: 'Santé' }).click()
+  await internet.getByRole('button', { name: 'Enregistrer', exact: true }).click()
+
+  await expect(entete, 'la catégorie d’arrivée est restée repliée').toHaveAttribute('aria-expanded', 'true', { timeout: 15_000 })
+  await expect(sante.locator('[data-charge]').filter({ hasText: 'Internet' }).getByRole('status'))
+    .toContainText('« Internet » rangée dans Santé.')
+})
+
+test('des charges illisibles ne montrent aucun chiffre : l’erreur, et pas « 0,00 € »', async ({ page }) => {
+  foyer = await amorce()
+  await connecte(page, foyer.email)
+  await page.route('**/rest/v1/charge?*', route => route.request().method() === 'GET'
+    ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Lecture refusée de test' }) })
+    : route.continue())
+  await page.goto('/charges')
+  await expect(page.getByRole('alert').first()).toContainText('Lecture refusée de test', { timeout: 30_000 })
+  await expect(page.getByText(/par mois pour le foyer/)).toHaveCount(0)
+  await expect(page.getByText(/0,00 €/)).toHaveCount(0)
+  await expect(page.getByText('Un instant…')).toHaveCount(0)
+})
+
+test('la dictée garde un « ? » : le flottant est masqué sur les charges', async ({ page }) => {
+  foyer = await amorce()
+  await connecte(page, foyer.email)
+  await page.goto('/charges')
+  await page.getByRole('button', { name: /dicter mes charges/i }).click()
+  await expect(page.getByRole('button', { name: 'Poser une question à l’aide' })).toHaveCount(1, { timeout: 15_000 })
+  await expect(page.getByRole('button', { name: 'Poser une question à l’aide' })).toBeVisible()
+})
+
+test('corriger ne fait pas démarrer une charge avant l’arrivée : le départ est refusé, avec sa phrase', async ({ page }) => {
+  foyer = await amorce()
+  const { prochain, nom, annee, courant } = mois()
+  await db.from('user_profile').update({ entre_le: prochain }).eq('id', foyer.userId)
+  await db.from('charge').update({ debut: prochain }).eq('household_id', foyer.householdId)
+  await connecte(page, foyer.email)
+  await page.goto('/charges')
+
+  const entretien = await ouvreLaLigne(page, 'Entretien auto')
+  await entretien.getByRole('button', { name: 'Corriger Entretien auto' }).click()
+  const depuis = entretien.getByLabel('Depuis quand court Entretien auto')
+  await expect(depuis).toHaveValue(prochain.slice(0, 7))
+  await depuis.fill(courant)
+  await expect(entretien.getByRole('alert')).toContainText(`Pas avant ton arrivée, en ${nom} ${annee}.`)
+  await expect(entretien.getByRole('button', { name: 'Enregistrer', exact: true })).toBeDisabled()
+  /* À l'arrivée, ou après : accepté. */
+  await depuis.fill(prochain.slice(0, 7))
+  await expect(entretien.getByRole('alert')).toHaveCount(0)
+  await expect(entretien.getByRole('button', { name: 'Enregistrer', exact: true })).toBeEnabled()
+})
+
+test('« Toutes nos charges » : une ligne qui ne compte pas a aussi ses montants grisés', async ({ page }) => {
+  foyer = await amorce()
+  const { data: c } = await db.from('charge').insert({
+    household_id: foyer.householdId, libelle: 'Piscine du jardin', montant_cents: 10_000, periodicite: 'mensuel',
+    mode: 'fixe', categorie: 'autre', debut: '2031-01-01', commun: true }).select().single()
+  await db.from('charge_participant').insert([foyer.userId, foyer.elleId].map(p => ({
+    charge_id: c!.id, user_profile_id: p, household_id: foyer.householdId })))
+  await connecte(page, foyer.email)
+  await page.goto('/toutes-les-charges')
+  const piscine = page.getByRole('row').filter({ hasText: 'Piscine du jardin' })
+  await expect(piscine).toContainText('commence plus tard', { timeout: 15_000 })
+  const normale = page.getByRole('row').filter({ hasText: 'Internet' }).first()
+  const couleur = (l: typeof piscine) => l.getByRole('cell').evaluateAll(cs => cs.map(c => getComputedStyle(c).color))
+  const doux = 'rgb(93, 110, 98)'
+  expect(await couleur(piscine)).toEqual([doux, doux, doux])
+  /* Une ligne qui compte garde l'encre pour ce que chacun paie. */
+  expect((await couleur(normale))[0]).not.toBe(doux)
 })

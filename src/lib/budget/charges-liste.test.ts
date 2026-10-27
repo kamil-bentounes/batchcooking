@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { moisType, type ChargeDuMoisType } from './mois-type.ts'
 import {
   ceQuElleCouteParMois, comptesDesFiltres, dansLOrdreDuFoyer, duFiltre, faconDeLaLigne, listeDeNoms, parMois, phraseDeLArrivee,
-  rangeParCategorie, sousTitreDeLaLigne, totalDuMois, type ChargeDeListe,
+  presentsAuMois, rangeParCategorie, sousTitreDeLaLigne, totalDuMois, type ChargeDeListe,
 } from './charges-liste.ts'
 
 const charge = (o: Partial<ChargeDeListe> & { id: string }): ChargeDeListe => ({
@@ -11,7 +12,8 @@ const charge = (o: Partial<ChargeDeListe> & { id: string }): ChargeDeListe => ({
 const prenoms = new Map([['k', 'Kamil'], ['t', 'Thauba']])
 /* `toLocaleString('fr-FR')` sépare les milliers d'une espace fine insécable : on la lit comme une espace. */
 const lis = (s: string | null) => s?.replace(/[\u202f\u00a0]/g, ' ') ?? null
-const ligne = (c: ChargeDeListe, mois = '2026-11-01', moi = 'k') => lis(sousTitreDeLaLigne(c, { prenoms, mois, moi }))
+const tous = new Set(['k', 't'])
+const ligne = (c: ChargeDeListe, mois = '2026-11-01', moi = 'k', presents: ReadonlySet<string> = tous) => lis(sousTitreDeLaLigne(c, { prenoms, mois, moi, presents }))
 
 describe('le mois d’une charge', () => {
   it('ramène le trimestre au tiers et l’année au douzième', () => {
@@ -49,7 +51,7 @@ describe('le rangement par catégorie', () => {
     charge({ id: 'plus-tard', categorie: 'maison', montant_cents: 999_999, debut: '2031-01-01' }),
     charge({ id: 'inconnue', categorie: 'n_importe_quoi', montant_cents: 500 }),
   ]
-  const g = rangeParCategorie(cs, '2026-11-01')
+  const g = rangeParCategorie(cs, '2026-11-01', tous)
   it('met la plus lourde d’abord', () => {
     expect(g.map(x => x.cle)).toEqual(['maison', 'vie_courante', 'autre'])
   })
@@ -66,13 +68,13 @@ describe('le rangement par catégorie', () => {
     const egal = rangeParCategorie([
       charge({ id: 'x', categorie: 'sante', montant_cents: 100 }),
       charge({ id: 'y', categorie: 'vie_courante', montant_cents: 100 }),
-    ], '2026-11-01')
+    ], '2026-11-01', tous)
     expect(egal.map(x => x.cle)).toEqual(['vie_courante', 'sante'])
   })
   it('le total d’un mois est celui de ce qui court', () => {
-    expect(totalDuMois(cs, '2026-11-01')).toBe(1_000 + 58_000 + 10_000 + 50_000 + 500)
+    expect(totalDuMois(cs, '2026-11-01', tous)).toBe(1_000 + 58_000 + 10_000 + 50_000 + 500)
     /* Avant le départ de la charge de 2031, elle ne compte pas ; à partir de là, si. */
-    expect(totalDuMois(cs, '2031-01-01')).toBe(1_000 + 58_000 + 10_000 + 50_000 + 500 + 999_999)
+    expect(totalDuMois(cs, '2031-01-01', tous)).toBe(1_000 + 58_000 + 10_000 + 50_000 + 500 + 999_999)
   })
 })
 
@@ -129,5 +131,55 @@ describe('petits textes', () => {
   it('la phrase d’arrivée n’existe qu’avant l’arrivée', () => {
     expect(phraseDeLArrivee({ avant: false, nomDuMois: 'novembre' })).toBeNull()
     expect(phraseDeLArrivee({ avant: true, nomDuMois: 'novembre' })).toContain('en novembre')
+  })
+})
+
+describe('le total suit le mois type', () => {
+  const membres = [{ id: 'k', entre_le: '2026-11-01' }, { id: 't', entre_le: '2026-01-01' }, { id: 'x', entre_le: null }]
+  it('presentsAuMois : arrivé avant la fin du mois, ou sans date d’arrivée', () => {
+    expect([...presentsAuMois(membres, '2026-10-01')].sort()).toEqual(['t', 'x'])
+    expect([...presentsAuMois(membres, '2026-11-01')].sort()).toEqual(['k', 't', 'x'])
+  })
+
+  const cs: ChargeDeListe[] = [
+    charge({ id: 'commune', participants: ['k', 't'], montant_cents: 50_000 }),
+    charge({ id: 'kamil', participants: ['k'], montant_cents: 30_000, commun: false }),
+    charge({ id: 'thauba', participants: ['t'], montant_cents: 20_000, commun: false, categorie: 'sante' }),
+    charge({ id: 'annuelle', participants: ['k', 't'], montant_cents: 120_000, periodicite: 'annuel', mode: 'mis_de_cote' }),
+    charge({ id: 'lointaine', participants: ['t'], montant_cents: 99_900, debut: '2031-01-01', commun: false }),
+    charge({ id: 'sans-date', participants: ['x'], montant_cents: 12_345, commun: false }),
+    charge({ id: 'personne', participants: [], montant_cents: 777, commun: false }),
+  ]
+  const typeDe = (mois: string) => {
+    const presents = presentsAuMois(membres, mois)
+    const foyer = Object.fromEntries([...presents].map(q => [q, 5000]))
+    return moisType({
+      charges: cs.map(c => ({ ...c, archive_le: null }) as ChargeDuMoisType), membres: membres.map(m => m.id), revenus: [], mois,
+      parts: { foyer, prorata: foyer, moitie: foyer },
+    })
+  }
+
+  for (const mois of ['2026-10-01', '2026-11-01', '2031-01-01']) {
+    it(`le grand total vaut celui du mois type en ${mois.slice(0, 7)}, et chaque catégorie aussi`, () => {
+      const presents = presentsAuMois(membres, mois)
+      const type = typeDe(mois)
+      expect(totalDuMois(cs, mois, presents)).toBe(type.total)
+      const groupes = rangeParCategorie(cs, mois, presents)
+      expect(Object.fromEntries(groupes.map(g => [g.cle, g.total])))
+        .toEqual(Object.fromEntries(type.categories.map(g => [g.cle, g.total])))
+    })
+  }
+
+  it('Thauba seule présente en octobre : la charge de Kamil seul ne compte pas, et la ligne le dit', () => {
+    const presents = presentsAuMois(membres, '2026-10-01')
+    const kamil = cs.find(c => c.id === 'kamil')!
+    expect(totalDuMois([kamil], '2026-10-01', presents)).toBe(0)
+    expect(ligne(kamil, '2026-10-01', 't', presents)).toContain('pas encore dans le foyer')
+    /* Le même mois, une charge où elle est présente n'en dit rien. */
+    expect(ligne(cs[0], '2026-10-01', 't', presents)).not.toContain('pas encore dans le foyer')
+  })
+
+  it('une charge sans participant ne compte pas non plus (le mois type n’en crée aucune ligne)', () => {
+    expect(totalDuMois([cs.find(c => c.id === 'personne')!], '2026-11-01', presentsAuMois(membres, '2026-11-01'))).toBe(0)
   })
 })

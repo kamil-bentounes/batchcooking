@@ -1,21 +1,19 @@
 /**
  * Une catégorie des charges : sa photo, sa pastille, son nom, le nombre de lignes, son total par mois.
- * Ouverte d'office ; ce qu'on a replié se retient par appareil (comme l'écran du mois, sous d'autres clés).
+ * Ouverte d'office ; ce qu'on a replié se retient par appareil (`ouvertesDesCharges`, sous des clés à elles).
  */
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { eurosRonds } from '../../lib/donnees/budget.ts'
-import { bascule, lisOuvertes } from '../../lib/budget/ouvertes.ts'
 import { Photo } from '../budget/Photo.tsx'
 import { Chevron } from './icones.tsx'
 
-export function CategorieDeCharges({ cle, nom, clair, total, nLignes, children }: {
-  cle: string; nom: string; clair: string; total: number; nLignes: number; children: ReactNode
+export function CategorieDeCharges({ cle, nom, clair, total, nLignes, ouverte, change, children }: {
+  cle: string; nom: string; clair: string; total: number; nLignes: number
+  /** Tenue par la page : rouvrir une catégorie (une ligne corrigée y entre) ne se fait pas depuis elle. */
+  ouverte: boolean; change: () => void; children: ReactNode
 }) {
-  const [ouverte, setOuverte] = useState(() => lisOuvertes()[`charges:${cle}`] ?? true)
-  /* On retient hors de la mise à jour : un effet de bord dans `setOuverte(o => …)` tournerait deux fois en mode strict. */
-  const change = () => setOuverte(bascule(`charges:${cle}`, ouverte))
   return (
-    <section aria-label={`Catégorie ${nom}`} data-total={total} className="rounded-[22px] bg-surface shadow-carte">
+    <section aria-label={`Catégorie ${nom}`} data-cle={cle} data-total={total} className="rounded-[22px] bg-surface shadow-carte">
       <button type="button" onClick={change} aria-expanded={ouverte}
               className="w-full min-h-[76px] px-3.5 py-3 flex items-center gap-3 max-[380px]:gap-2.5 text-left rounded-[22px]">
         <Photo categorie={cle} taille={54} />
