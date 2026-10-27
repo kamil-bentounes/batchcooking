@@ -53,14 +53,14 @@ export function Bandeau({ jours, points, index, surChoix }: {
     if (p) setAGauche(p.scrollLeft > 8)
   }, [index])
   return (
-    <div className="relative">
-      {aGauche && (
-        <span aria-hidden="true" data-plus-ancien=""
-              className="pointer-events-none absolute left-0 top-1/2 z-10 -mt-3.5 w-3 text-[22px] leading-none text-doux">‹</span>
-      )}
+    /* Le « ‹ » a sa propre gouttière, à gauche : il ne passe jamais sur une puce. Le bandeau défile à droite de lui, et
+       sort de l'écran à droite. */
+    <div className="mt-5 flex items-center">
+      <span aria-hidden="true" data-plus-ancien={aGauche ? '' : undefined}
+            className="w-5 shrink-0 select-none text-center text-[22px] leading-none text-doux">{aGauche ? '‹' : ''}</span>
       <div ref={piste} role="group" aria-label="Choisir le jour" data-bandeau="jours"
            onScroll={ev => setAGauche(ev.currentTarget.scrollLeft > 8)}
-           className="-mx-6 mt-5 overflow-x-auto px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+           className="-mr-6 min-w-0 flex-1 overflow-x-auto pb-1 pr-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex w-max min-w-full gap-1">
         {jours.map((j, i) => {
           const choisi = i === index

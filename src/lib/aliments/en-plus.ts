@@ -14,6 +14,7 @@ import { brouillonVide, lis, lisLeNombre } from './brouillon.ts'
 import type { Brouillon, Erreurs, Valeurs } from './brouillon.ts'
 import { ecrit, pourUneUnite } from './calcul.ts'
 import type { AlimentLu, Pour100g } from './calcul.ts'
+import { nomComparable } from './ordre.ts'
 
 /** Le plus qu'on mange en une fois, en grammes (la borne de l'unité d'un aliment, 0124). */
 export const GRAMMES_MAX = 5000
@@ -162,15 +163,19 @@ export function quantiteParDefaut(a: Pick<AlimentLu, 'unite' | 'unite_g'>, recen
   return { mode: 'unites', n: 1 }
 }
 
-/** Des grammes tapés : le nombre, ou la phrase de ce qui ne va pas. */
+/** Le plus petit poids qu'on écrit : au dixième de gramme (la base refuse 0, et « 0,04 g » s'arrondit à 0). */
+export const GRAMMES_MIN = 0.1
+
+/** Des grammes tapés : le nombre (arrondi au dixième), ou la phrase de ce qui ne va pas. L'arrondi vient AVANT le refus de 0. */
 export function lisLesGrammes(saisie: string): { g: number } | { erreur: string } {
   const n = lisLeNombre(saisie)
   if (n === null) return { erreur: 'Dis combien, en grammes.' }
   if (Number.isNaN(n)) return { erreur: 'Je ne lis pas ce nombre.' }
   if (n < 0) return { erreur: 'Pas de valeur négative.' }
-  if (n === 0) return { erreur: 'Il faut plus de 0 g.' }
   if (n > GRAMMES_MAX) return { erreur: 'Pas plus de 5 000 g.' }
-  return { g: Math.round(n * 10) / 10 }
+  const g = Math.round(n * 10) / 10
+  if (g < GRAMMES_MIN) return { erreur: 'Il faut au moins 0,1 g.' }
+  return { g }
 }
 
 /** Ce que l'aliment dit de lui sur sa pastille : « pot » (à l'unité), « 100 g » (au gramme). */
@@ -214,11 +219,14 @@ export function depuisLaLecture(c: Partial<{
  */
 export function brouillonDeLAliment(e: EtiquetteEnPlus): Brouillon {
   const poids = lisLeNombre(e.poidsUnite)
-  const aUnUnite = poids !== null && Number.isFinite(poids) && poids >= 1
+  /* Un poids lu hors de ce que la base accepte (1 g à 5 kg), ou une unité trop longue : on ne refuse pas — la personne ne peut pas
+     les corriger ici (et un refus sans phrase ne dirait rien) — on garde ce qui est sûr : un aliment au gramme, ou « pot ». */
+  const aUnUnite = poids !== null && Number.isFinite(poids) && poids >= 1 && poids <= GRAMMES_MAX
+  const mot = e.unite.trim()
   return {
     ...brouillonVide(),
     label: e.label, kcal: e.kcal, proteines: e.proteines, glucides: e.glucides, lipides: e.lipides, fibres: e.fibres,
-    unite: aUnUnite ? (e.unite.trim() || 'pot') : 'g',
+    unite: aUnUnite ? (mot !== '' && mot.length <= 20 ? mot : 'pot') : 'g',
     poids: aUnUnite ? e.poidsUnite : '100',
     source: 'etiquette',
   }
@@ -254,7 +262,18 @@ export function lisLEtiquette(e: EtiquetteEnPlus, o: { energieJuste?: boolean } 
 export function calculEnDirect(e: EtiquetteEnPlus): { kcal: number; protein: number } | null {
   const [k, p, g] = [lisLeNombre(e.kcal), lisLeNombre(e.proteines), lisLeNombre(e.grammes)]
   const bon = (n: number | null): n is number => n !== null && Number.isFinite(n) && n >= 0
-  if (!bon(k) || !bon(p) || !bon(g) || g <= 0 || g > GRAMMES_MAX) return null
-  const v = pourUneUnite({ kcal: k, protein: p, carb: 0, fat: 0, fiber: 0 }, g)
+  if (!bon(k) || !bon(p) || !bon(g)) return null
+  const lu = lisLesGrammes(e.grammes)
+  if ('erreur' in lu) return null
+  const v = pourUneUnite({ kcal: k, protein: p, carb: 0, fat: 0, fiber: 0 }, lu.g)
   return { kcal: v.kcal, protein: v.protein }
+}
+
+/**
+ * L'aliment de nos aliments qui porte déjà ce nom, comparé comme la base le fait (accents, casse, apostrophes et espaces
+ * ne comptent pas) : « Garder dans nos aliments » le réutilise au lieu d'en insérer un second, que l'unicité du nom refuserait.
+ */
+export function alimentDeMemeNom<A extends { id: string; label: string }>(liste: readonly A[], label: string): A | null {
+  const n = nomComparable(label)
+  return n === '' ? null : (liste.find(a => nomComparable(a.label) === n) ?? null)
 }

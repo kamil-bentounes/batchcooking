@@ -4,7 +4,7 @@
  * « La semaine » choisit le midi et le soir ; ce qui reste — le petit déjeuner, la collation, le yaourt de
  * « en plus » — s'écrit ici, en un geste, comme avant.
  */
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Erreur } from '../coque.tsx'
 import { NOM_REPAS, useAjouteExtra, useSupprimeExtra } from '../../lib/donnees/barquettes.ts'
 import type { Case, Repas } from '../../lib/donnees/barquettes.ts'
@@ -71,6 +71,8 @@ export function EnPlus({ cas, frequents, nosAliments = [], userId, deployeParDef
   const [photo, setPhoto] = useState<{ n: number; url: string } | null>(null)
   const [erreurPhoto, setErreurPhoto] = useState('')
   const boutonPhoto = useRef<HTMLInputElement>(null)
+  /* Les pastilles de nos aliments : l'ajout ferme le panneau qui portait le focus, qui revient alors à la pastille. */
+  const pastilles = useRef(new Map<string, HTMLButtonElement>())
 
   /* Un repère (ou une habitude) qu'un de nos aliments remplace — nommé dans son formulaire (« Remplace le repère »),
      ou de même nom — ne se glisse plus à côté : c'est le nôtre, avec ses vrais chiffres. */
@@ -140,7 +142,7 @@ export function EnPlus({ cas, frequents, nosAliments = [], userId, deployeParDef
       <Erreur de={supprime.error} />
 
       {!ouvert ? (
-        <button onClick={() => setOuvert(true)}
+        <button onClick={() => setOuvert(true)} data-en-plus=""
                 className="inline-flex min-h-11 items-center text-[13px] text-doux underline underline-offset-2">
           + ce que j’ai mangé en plus
         </button>
@@ -162,6 +164,7 @@ export function EnPlus({ cas, frequents, nosAliments = [], userId, deployeParDef
               <div className="flex gap-2 flex-wrap">
                 {nosAliments.map(a => (
                   <button key={a.id} type="button" onClick={() => setChoisi(c => (c === a.id ? null : a.id))}
+                          ref={el => { if (el) pastilles.current.set(a.id, el); else pastilles.current.delete(a.id) }}
                           aria-pressed={choisi === a.id}
                           className="min-h-11 px-3.5 rounded-full bg-sable text-[14px] inline-flex items-center gap-2"
                           style={choisi === a.id ? { boxShadow: 'inset 0 0 0 2px var(--color-herbe)' } : undefined}>
@@ -175,7 +178,10 @@ export function EnPlus({ cas, frequents, nosAliments = [], userId, deployeParDef
                 <div className="mt-2.5">
                   <QuantiteDeLAliment key={alimentChoisi.id} aliment={alimentChoisi} moi={userId}
                                       bouton={boutonAjouter(mot.au)} enCours={ajoute.isPending}
-                                      surAjoute={q => geste({ cas: laCase, ...extraDeLaQuantite(alimentChoisi, q) }, () => setChoisi(null))} />
+                                      surAjoute={q => geste({ cas: laCase, ...extraDeLaQuantite(alimentChoisi, q) }, () => {
+                                        setChoisi(null)
+                                        setTimeout(() => pastilles.current.get(alimentChoisi.id)?.focus(), 0)
+                                      })} />
                 </div>
               )}
             </div>
@@ -274,6 +280,19 @@ export function HorsBarquette({ jour: j, userId, frequents, nosAliments, dejaLa,
   enCours?: boolean
 }) {
   const [moment, setMoment] = useState<Repas | null>(null)
+  /* Le moment dont le panneau vient de se fermer : le focus qu'il portait est perdu avec lui, et revient à la carte du moment
+     (« + ce que j'ai mangé en plus »), qui paraît quand la case a été relue, ou au bouton qui l'avait ouvert (« annuler »). */
+  const rendre = useRef<{ moment: Repas; carte: boolean } | null>(null)
+  const ferme = (carte: boolean) => { if (moment) rendre.current = { moment, carte }; setMoment(null) }
+  const etatDesCases = dejaLa.map(c => `${c.id}:${c.extras.length}:${c.state}`).join()
+  useEffect(() => {
+    const o = rendre.current
+    if (!o || moment !== null) return
+    const cible = o.carte
+      ? document.querySelector<HTMLElement>(`[data-moment="${o.moment}"] [data-en-plus]`)
+      : document.querySelector<HTMLElement>(`[data-ouvre-moment="${o.moment}"]`)
+    if (cible) { cible.focus(); rendre.current = null }
+  }, [moment, etatDesCases])
   /* Une case VIDE (ce que laissait « retirer » le dernier extra) ne prend pas la place du moment : on peut y noter. */
   const pris = new Set(dejaLa.filter(c => !caseVide(c as unknown as CaseLue)).map(c => c.meal))
   const libres = MOMENTS_EN_PLUS.filter(r => !pris.has(r))
@@ -285,7 +304,7 @@ export function HorsBarquette({ jour: j, userId, frequents, nosAliments, dejaLa,
         <div className="flex gap-2 flex-wrap items-center">
           <span className="text-[13px] text-doux">Mangé sans barquette ?</span>
           {libres.map(r => (
-            <button key={r} onClick={() => setMoment(r)}
+            <button key={r} onClick={() => setMoment(r)} data-ouvre-moment={r}
                     className="px-3 min-h-11 inline-flex items-center rounded-full bg-brume/50 text-[13px]
                                hover:bg-brume transition-colors">
               {NOM_REPAS[r]}
@@ -296,19 +315,19 @@ export function HorsBarquette({ jour: j, userId, frequents, nosAliments, dejaLa,
         <div className="rounded-[16px] bg-brume/25 p-3.5">
           <div className="flex items-baseline justify-between mb-2">
             <span className="text-[14px]">{NOM_REPAS[moment]}</span>
-            <button onClick={() => setMoment(null)}
+            <button onClick={() => ferme(false)}
                     className="inline-flex min-h-11 items-center text-[13px] text-doux underline underline-offset-2">
               annuler
             </button>
           </div>
           {surSaute && (moment === 'petit_dejeuner' || moment === 'collation') && (
-            <button type="button" disabled={enCours} onClick={() => { surSaute(moment); setMoment(null) }}
+            <button type="button" disabled={enCours} onClick={() => { surSaute(moment); ferme(true) }}
                     className="mb-2 inline-flex min-h-11 items-center rounded-full bg-brume/50 px-3.5 text-[14px] disabled:opacity-60">
               {moment === 'collation' ? 'Je saute la collation' : 'Je saute le petit déjeuner'}
             </button>
           )}
           <EnPlus frequents={frequents} nosAliments={nosAliments} userId={userId} deployeParDefaut
-                  surAjoute={() => setMoment(null)}
+                  surAjoute={() => ferme(true)}
                   cas={{
                     // Une case seulement AFFICHÉE : elle n'existe en base que
                     // si l'on y met quelque chose.

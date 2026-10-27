@@ -6,7 +6,7 @@
  * tous les journaux alimentaires échouent : personne ne saisit ses repas
  * pendant trois mois.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ou, supabase } from '../supabase.ts'
 import type { Insertion, Ligne } from '../supabase.ts'
 // Le calendrier et la répartition sont du calcul pur : ils vivent dans
@@ -98,6 +98,9 @@ export function useSemaine(du: Date, jours = 7) {
       }
       return cases.map(c => ({ ...c, portion: portionVivante(c), extras: parCase.get(c.id) ?? [] }))
     },
+    /* À minuit la fenêtre glisse d'un jour, donc la clé change : sans cela l'écran repasse en attente et ce qu'on est en
+       train de noter (une feuille, une saisie) disparaît le temps de la relecture. */
+    placeholderData: keepPreviousData,
     staleTime: 10_000,
   })
 }

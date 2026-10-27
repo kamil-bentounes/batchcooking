@@ -28,7 +28,7 @@ Dans « en plus » (voir « cuisine-semaine-en-plus »), appuyer sur un de nos a
 
 - **Un aliment à l’unité** : un compteur **« − 2 pots + »**, avec les grammes dessous (« 250 g »). Il commence à un pot, ou au même nombre que la dernière fois si c’était un nombre entier de pots (jusqu’à 20). **« ou en grammes »** passe aux grammes ; **« ou en pots »** revient.
 - **Un aliment au gramme** (son unité est le gramme) ou **« en grammes »** : tes **quantités récentes** pour cet aliment, les trois dernières différentes (« 30 g », « 60 g »), et **« Autre »** pour taper. Sans historique, le champ est là d’emblée. La dernière quantité est déjà choisie : deux gestes, l’aliment puis « Ajouter ».
-- Refus : « Dis combien, en grammes. », « Je ne lis pas ce nombre. », « Pas de valeur négative. », « Il faut plus de 0 g. », « Pas plus de 5 000 g. »
+- Refus : « Dis combien, en grammes. », « Je ne lis pas ce nombre. », « Pas de valeur négative. », « Il faut au moins 0,1 g. », « Pas plus de 5 000 g. »
 
 Le calcul s’affiche (« 114 kcal · 3 g de protéines »), puis **« Ajouter au soir »**. La ligne dit la quantité : « Yaourt nature × 2 pots », « Céréales, 30 g ». Les valeurs écrites sont **une copie** : corriger l’aliment demain ne change pas le bilan d’hier. Dans la feuille de choix d’un repas, le même panneau a pour bouton « Choisir pour le soir » (« Noter pour le soir » sur un jour passé).
 

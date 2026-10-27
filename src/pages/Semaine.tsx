@@ -38,7 +38,7 @@ import {
   MOMENTS_EN_PLUS, REPAS_CHOISIS, MOT_DU_REPAS, caseVide, cartesDuRepas, contenuDe, couleurDuPoint, indexDAujourdhui, joursDuBandeau,
   lisLAdresse, messageDeLiberation, titreDeLaFeuille,
 } from '../lib/choix.ts'
-import type { CaseLue, Carte, PointDuJour, RepasChoisi } from '../lib/choix.ts'
+import type { CaseLue, Carte, JourDuBandeau, PointDuJour, RepasChoisi } from '../lib/choix.ts'
 import { maintenant } from '../lib/horloge.ts'
 import { useJourLocal } from '../lib/jour-local.ts'
 
@@ -83,8 +83,9 @@ export function Semaine({ userId, va, remplace }: {
   const [choisiExplicite, setChoisiExplicite] = useState<string | null>(() => (demande.index === auj ? null : jours[demande.index].jour))
   const choisiJour = choisiExplicite ?? jours[auj].jour
   const index = Math.max(0, jours.findIndex(j => j.jour === choisiJour))
-  /** La feuille ouverte : le repas, et pour qui « Pour » commence. */
-  const [feuille, setFeuille] = useState<{ repas: RepasChoisi; pour: 'tous' | string } | null>(null)
+  /** La feuille ouverte : le jour (figé à l'ouverture : passé minuit, « aujourd'hui » change, pas ce qu'on est en train de noter),
+      le repas, et pour qui « Pour » commence. */
+  const [feuille, setFeuille] = useState<{ jour: JourDuBandeau; repas: RepasChoisi; pour: 'tous' | string } | null>(null)
   const [message, setMessage] = useState('')
   /* Le bouton exact qui a ouvert la feuille (le repas, et la clé de sa carte) : c'est lui qui reprend le focus une fois
      la feuille refermée (une ref : pas de rendu en plus). */
@@ -106,7 +107,8 @@ export function Semaine({ userId, va, remplace }: {
     const { cartes, sansChoix } = cartesDuRepas(les as unknown as CaseLue[], membres, userId)
     const mienne = cartes.find(c => c.personnes.includes(userId))
     rendreLeFocus.current = { repas: demande.repas, cle: mienne?.cle ?? 'vide' }
-    setFeuille({ repas: demande.repas, pour: pourDeLaCarte(mienne, sansChoix, membres.length) })
+    const j = jours[demande.index]
+    setFeuille({ jour: j, repas: demande.repas, pour: pourDeLaCarte(mienne, sansChoix, membres.length, j.passe, userId) })
   }, [demande, membres, isPending, cases, jours, userId])
 
   /* Le focus revient au bouton exact qui a ouvert la feuille. Après un choix il peut avoir changé (« + Choisir » est
@@ -149,7 +151,7 @@ export function Semaine({ userId, va, remplace }: {
     choisit.reset()
     setMessage('')
     rendreLeFocus.current = { repas, cle }
-    setFeuille({ repas, pour })
+    setFeuille({ jour: jourChoisi, repas, pour })
   }
   const ferme = () => {
     setFeuille(null)
@@ -160,7 +162,7 @@ export function Semaine({ userId, va, remplace }: {
     if (!feuille || enVol.current) return
     enVol.current = true
     try {
-      const r = await choisit.mutateAsync({ jour: jourChoisi.jour, repas: feuille.repas, personnes, choix })
+      const r = await choisit.mutateAsync({ jour: feuille.jour.jour, repas: feuille.repas, personnes, choix })
       setMessage(messageDeLiberation(r.liberees))
       ferme()
     } catch { /* l'erreur est dite dans la feuille (`choisit.error`) */ } finally { enVol.current = false }
@@ -177,7 +179,7 @@ export function Semaine({ userId, va, remplace }: {
   }))
 
   const dejaMange = feuille
-    ? duJour(jourChoisi.jour, feuille.repas).filter(c => c.state === 'mange').map(c => c.user_profile_id)
+    ? duJour(feuille.jour.jour, feuille.repas).filter(c => c.state === 'mange').map(c => c.user_profile_id)
     : []
   const mesCasesDuJour = lues.filter(c => c.day === jourChoisi.jour && c.user_profile_id === userId)
 
@@ -234,7 +236,7 @@ export function Semaine({ userId, va, remplace }: {
                       <CarteDuRepas key={carte.cle} carte={carte} membres={membres} moi={userId} jour={jourChoisi.jour} repas={m}
                                     photo={c.genre === 'plat' ? photoDe(c.recipeId) : null}
                                     maintenant={now} rappelActif={rappelActif}
-                                    surChange={() => ouvre(m, pourDeLaCarte(carte, sansChoix, membres.length), carte.cle)}
+                                    surChange={() => ouvre(m, pourDeLaCarte(carte, sansChoix, membres.length, jourChoisi.passe, userId), carte.cle)}
                                     surMange={surMange} enCours={mange.isPending} passe={jourChoisi.passe}
                                     enPlus={mienne && c.genre === 'plat'
                                       ? <EnPlus cas={laMienne!} frequents={frequents} nosAliments={aliments} userId={userId} /> : null} />
@@ -243,7 +245,7 @@ export function Semaine({ userId, va, remplace }: {
                   {(cartes.length === 0 || sansChoix.length > 0) && (
                     <CarteVide repas={m} passe={jourChoisi.passe}
                                pour={cartes.length > 0 ? { ids: sansChoix, membres, moi: userId } : undefined}
-                               surOuvre={() => ouvre(m, pourDeLaCarte(undefined, sansChoix, membres.length), 'vide')} />
+                               surOuvre={() => ouvre(m, pourDeLaCarte(undefined, sansChoix, membres.length, jourChoisi.passe, userId), 'vide')} />
                   )}
                 </div>
               </div>
@@ -259,7 +261,7 @@ export function Semaine({ userId, va, remplace }: {
             /* Une case vide (ce que laissait « retirer » le dernier extra) ne se montre pas : elle n'est rien. */
             if (!c || caseVide(c)) return null
             return (
-              <div key={moment} className="mt-2 rounded-2xl bg-brume/25 p-3.5">
+              <div key={moment} data-moment={moment} className="mt-2 rounded-2xl bg-brume/25 p-3.5">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-[14px]">{NOM_REPAS[moment]}{c.portion ? ` · ${nomCourt(c.portion.label)}` : ''}{c.state === 'saute' ? ' · sauté' : ''}</span>
                   {c.state === 'saute' && (
@@ -283,8 +285,8 @@ export function Semaine({ userId, va, remplace }: {
       <FeuilleDeChoix
         ouverte={feuille !== null}
         fermer={ferme}
-        titre={feuille ? titreDeLaFeuille(jourChoisi, feuille.repas) : 'Choisir un repas'}
-        repas={feuille?.repas ?? 'diner'} jour={jourChoisi.jour} membres={membres}
+        titre={feuille ? titreDeLaFeuille(feuille.jour, feuille.repas) : 'Choisir un repas'}
+        repas={feuille?.repas ?? 'diner'} jour={(feuille?.jour ?? jourChoisi).jour} membres={membres}
         pourInitial={feuille?.pour ?? 'tous'} dejaMange={dejaMange} moi={userId}
         groupes={groupes} prevus={lesPrevus ?? null} maintenant={now} photoDe={photoDe} frequents={frequents}
         lectures={{
@@ -293,7 +295,7 @@ export function Semaine({ userId, va, remplace }: {
           prevus: { enCours: lesPrevus === undefined && !erreurPrevus, erreur: erreurPrevus },
         }}
         nosAliments={nosAliments} alimentsEnPanne={alimentsEnPanne}
-        versNosAliments={() => feuille && va(`/aliments?depuis=semaine&jour=${jourChoisi.jour}&repas=${feuille.repas}`)}
+        versNosAliments={() => feuille && va(`/aliments?depuis=semaine&jour=${feuille.jour.jour}&repas=${feuille.repas}`)}
         enCours={choisit.isPending} erreur={choisit.error} surChoix={choisi} />
     </Ecran>
   )
@@ -305,8 +307,14 @@ function ordreDeLecture(les: CaseLue[], membres: { id: string }[], moi: string):
   return [...les].sort((a, b) => rang(a.user_profile_id) - rang(b.user_profile_id))
 }
 
-/** Pour qui la feuille commence : ceux de la carte qu'on change, ou ceux qui n'ont encore rien. */
-function pourDeLaCarte(carte: Carte | undefined, sansChoix: string[], nbMembres: number): 'tous' | string {
+/**
+ * Pour qui la feuille commence : ceux de la carte qu'on change, ou ceux qui n'ont encore rien. Sur un jour PASSÉ, « moi » :
+ * un appui note mangé et consomme la barquette — on n'agit jamais au nom de l'autre ; « Vous deux » reste un choix explicite.
+ */
+function pourDeLaCarte(
+  carte: Carte | undefined, sansChoix: string[], nbMembres: number, passe = false, moi = '',
+): 'tous' | string {
+  if (passe && moi !== '') return moi
   const ids = carte ? carte.personnes : sansChoix
   return ids.length === 1 && nbMembres > 1 ? ids[0] : 'tous'
 }

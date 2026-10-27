@@ -10,7 +10,8 @@
 --     « mangé » d'un coup, à l'heure du repas (8 h, 12 h, 16 h, 19 h à Paris, jamais dans le futur : la
 --     contrainte `meal_slot_mange_date` veut une date), et la barquette posée sort du stock
 --     (`tg_meal_slot_consomme`, comme pour « Je l'ai mangé »). « On saute ce repas » reste « sauté ». Au-delà de sept
---     jours : refusé. Un jour d'aujourd'hui ou à venir se comporte comme avant (0125).
+--     jours : refusé. Un jour d'aujourd'hui ou à venir se comporte comme avant (0125). « Passé » se juge contre la date de la
+--     base AUSSI (`least(p_today, aujourdhui())`) : `p_today` vient du client.
 --  2. UN EXTRA D'UN JOUR PASSÉ N'EST PAS « PLANIFIÉ » : `planifie` vaut faux, c'est une note après coup.
 --  3. `meal_extra.aliment_id` : l'aliment à nous (`aliment`, 0124) dont l'extra est une COPIE. Ce n'est pas une
 --     référence de valeurs (corriger l'aliment demain ne réécrit pas le bilan d'hier) : elle ne sert qu'à retrouver
@@ -109,7 +110,9 @@ begin
   end if;
 
   v_cycle := public.current_cycle();
-  v_passe := p_day < p_today;
+  -- `p_today` vient du client (à un jour près de Paris) : un jour n'est « passé » que s'il l'est aussi pour la base. Un
+  -- `p_today` en avance d'un jour ne fait pas noter mangé le repas d'aujourd'hui.
+  v_passe := p_day < least(p_today, public.aujourdhui());
   -- L'heure du repas, à Paris : celle de `frigo.ts` (`HEURE_DU_REPAS`).
   v_moment := (p_day::timestamp + make_interval(hours => case p_meal
                 when 'petit_dejeuner' then 8 when 'dejeuner' then 12 when 'collation' then 16 else 19 end))

@@ -214,6 +214,16 @@ test('le bandeau remonte de sept jours et s’ouvre sur aujourd’hui, hier visi
   const auj = (await jourBouton(page, 0).boundingBox())!
   expect(hier.x).toBeLessThan(auj.x)
   await expect(page.locator('[data-plus-ancien]'), 'des jours plus anciens à gauche').toBeVisible()
+  /* Le « ‹ » a sa gouttière : il ne recouvre aucune puce du bandeau (à 390 px comme à 320 px). */
+  for (const largeur of [390, 320]) {
+    await page.setViewportSize({ width: largeur, height: 800 })
+    const chev = (await page.locator('[data-plus-ancien]').boundingBox())!
+    const piste = (await page.locator('[data-bandeau="jours"]').boundingBox())!
+    expect(chev.x + chev.width, `« ‹ » déborde sur le bandeau à ${largeur} px`).toBeLessThanOrEqual(piste.x + 0.5)
+    /* Le bandeau coupe ses puces à son bord gauche (il défile dans son cadre) : ce qui est visible commence après le « ‹ ». */
+    expect(await page.locator('[data-bandeau="jours"]').evaluate(el => getComputedStyle(el).overflowX)).toBe('auto')
+  }
+  await page.setViewportSize({ width: 390, height: 844 })
   expect(await debordement(page)).toBeLessThanOrEqual(0)
   expect(hier.width).toBeGreaterThanOrEqual(43.5)
   /* Aujourd'hui garde ses cartes : rien de passé. */
@@ -259,6 +269,10 @@ test('hier : un jour passé se dessine, se dit, et son midi vide se note avec un
   const f = feuille(page, `${semaineDe(-1)} midi`)
   await expect(f).toBeVisible()
   await expect(f.getByText('Un jour passé : ce que tu choisis est noté mangé')).toBeVisible()
+  /* « Pour » commence sur MOI : un appui note mangé et consomme la barquette, on n'agit pas au nom de l'autre. */
+  await expect(f.getByRole('button', { name: 'Kamil' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(f.getByRole('button', { name: 'Vous deux' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(f.getByRole('button', { name: 'Thauba' })).toHaveAttribute('aria-pressed', 'false')
   const frigo = f.getByRole('region', { name: 'Au frigo' })
   await expect(frigo.getByRole('button', { name: /Lasagnes/ })).toContainText('sort du frigo')
   await expect(f.getByRole('region', { name: 'Au congélateur' })).toContainText('sort du congélateur')
@@ -269,22 +283,56 @@ test('hier : un jour passé se dessine, se dit, et son midi vide se note avec un
   await frigo.getByRole('button', { name: /Lasagnes/ }).click()
   await expect(f).toBeHidden({ timeout: 10_000 })
 
-  /* La carte dit « mangé » : le repas a eu lieu. */
-  await expect(midi).toContainText('Du frigo, pour vous deux · mangé')
+  /* La carte dit « mangé » pour moi ; Thauba n'a rien : sa carte reste vide, à noter par lui ou en son nom, nommé. */
+  await expect(midi).toContainText('Du frigo, pour Kamil · mangé')
   await expect(midi.getByRole('button', { name: 'Je l’ai mangé' })).toHaveCount(0)
+  await expect(midi.getByRole('button', { name: '+ Noter ce que Thauba a mangé ce midi' })).toBeVisible()
   await expect(points(page, -1).first()).toHaveAttribute('data-point', 'frigo')
 
-  /* La base : les deux cases d'hier midi sont mangées, avec une heure ; deux barquettes sont consommées. */
+  /* La base : SEULE ma case d'hier midi est mangée, avec une heure ; SEULE ma barquette est consommée. */
+  const c = (await caseDe(foyer.userId, HIER(), 'dejeuner'))!
+  expect(c.state).toBe('mange')
+  expect(c.eaten_at).not.toBeNull()
+  expect(new Date(c.eaten_at!).getTime()).toBeLessThanOrEqual(Date.now())
+  expect(await caseDe(foyer.elleId, HIER(), 'dejeuner'), 'Thauba n’a pas de case : on n’a rien noté en son nom').toBeUndefined()
+  const lasagnes = await portions(LASAGNES)
+  expect(lasagnes.filter(p => p.state === 'mangee').map(p => p.id), 'une seule barquette sortie du stock : la mienne').toEqual([c.portion_id])
+  expect(lasagnes.filter(p => p.state === 'au_frais'), 'trois restent au frigo').toHaveLength(3)
+})
+
+test('« Vous deux » sur un jour passé reste un choix explicite : les deux cases, les deux barquettes', async ({ page }) => {
+  test.setTimeout(120_000)
+  await connecte(page)
+  await page.goto('/semaine')
+  await jourBouton(page, -3).click()
+  await repas(page, 'dejeuner').getByRole('button', { name: '+ Noter ce que j’ai mangé ce midi' }).click()
+  const f = feuille(page, `${semaineDe(-3)} midi`)
+  await expect(f.getByRole('button', { name: 'Kamil' })).toHaveAttribute('aria-pressed', 'true')
+  await f.getByRole('button', { name: 'Vous deux' }).click()
+  await expect(f.getByRole('button', { name: 'Vous deux' })).toHaveAttribute('aria-pressed', 'true')
+  await f.getByRole('region', { name: 'Au frigo' }).getByRole('button', { name: /Lasagnes/ }).click()
+  await expect(f).toBeHidden({ timeout: 10_000 })
+  const jour = jourLocal(-3)
   for (const qui of [foyer.userId, foyer.elleId]) {
-    const c = (await caseDe(qui, HIER(), 'dejeuner'))!
+    const c = (await caseDe(qui, jour, 'dejeuner'))!
     expect(c.state).toBe('mange')
-    expect(c.eaten_at).not.toBeNull()
-    expect(new Date(c.eaten_at!).getTime()).toBeLessThanOrEqual(Date.now())
     expect((await db.from('portion').select('state').eq('id', c.portion_id!).single()).data!.state).toBe('mangee')
   }
-  const lasagnes = await portions(LASAGNES)
-  expect(lasagnes.filter(p => p.state === 'mangee'), 'deux barquettes sorties du stock').toHaveLength(2)
-  expect(lasagnes.filter(p => p.state === 'au_frais'), 'deux restent au frigo').toHaveLength(2)
+  expect((await portions(LASAGNES)).filter(p => p.state === 'mangee'), '1 d’hier midi + 2 d’il y a trois jours').toHaveLength(3)
+})
+
+test('à deux, sur un jour passé : la carte vide de l’autre se note en son nom, nommé, sans toucher à ma case', async ({ page }) => {
+  test.setTimeout(120_000)
+  await connecte(page)
+  await page.goto('/semaine')
+  await jourBouton(page, -1).click()
+  /* Hier midi : j'ai mangé, Thauba pas noté. Sa carte vide ouvre la feuille sur ELLE (je n'ai plus rien à noter). */
+  await repas(page, 'dejeuner').getByRole('button', { name: '+ Noter ce que Thauba a mangé ce midi' }).click()
+  const f = feuille(page, `${semaineDe(-1)} midi`)
+  await expect(f.getByRole('button', { name: 'Thauba' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(f.getByRole('button', { name: 'Kamil' })).toBeDisabled()
+  await page.keyboard.press('Escape')
+  await expect(f).toBeHidden()
 })
 
 test('on peut toujours laisser un repas vide, passé ou à venir', async ({ page }) => {
@@ -444,6 +492,8 @@ test('la quantité de nos aliments : deux pots de yaourt, puis 30 g de céréale
 
   await combienY.getByRole('button', { name: 'Ajouter au soir' }).click()
   await expect(combienY).toHaveCount(0, { timeout: 10_000 })
+  /* Le panneau qui portait le focus a disparu : il revient à la pastille de l'aliment, pas au vide. */
+  await expect(pYaourt).toBeFocused()
   await expect(soir).toContainText('Yaourt nature × 2 pots · 190 kcal · 25 g de protéines')
   const ex = (await extrasDe(HIER(), 'diner')).find(e => e.label === `${YAOURT} × 2 pots`)!
   const al = (await alimentDe(YAOURT))!
@@ -471,6 +521,10 @@ test('la quantité de nos aliments : deux pots de yaourt, puis 30 g de céréale
   await autre.fill('-5')
   await combienC.getByRole('button', { name: 'Ajouter au soir' }).click()
   await expect(combienC.getByText('Pas de valeur négative.')).toBeVisible()
+  await autre.fill('0,04')
+  await combienC.getByRole('button', { name: 'Ajouter au soir' }).click()
+  await expect(combienC.getByText('Il faut au moins 0,1 g.')).toBeVisible()
+  await expect(autre).toHaveAttribute('aria-invalid', 'true')
   await autre.fill('trente')
   await combienC.getByRole('button', { name: 'Ajouter au soir' }).click()
   await expect(combienC.getByText('Je ne lis pas ce nombre.')).toBeVisible()
@@ -535,14 +589,14 @@ test('depuis la feuille d’un repas : le même panneau « combien ? », et le r
   await combien.getByRole('button', { name: 'Noter pour le midi' }).click()
   await expect(f).toBeHidden({ timeout: 10_000 })
   const jour = jourLocal(-2)
-  for (const qui of [foyer.userId, foyer.elleId]) {
-    const c = (await caseDe(qui, jour, 'dejeuner'))!
-    expect(c.state, 'un repas passé : ce qu’on y choisit est mangé').toBe('mange')
-    const [e] = await extrasDe(jour, 'dejeuner', qui)
-    expect(e.label).toBe(`${YAOURT} × ${n} pots`)
-    expect(e.aliment_id).toBe((await alimentDe(YAOURT))!.id)
-    expect(e.planifie).toBe(false)
-  }
+  /* Pour moi seul (la feuille d'un jour passé commence sur moi) : Thauba n'a rien. */
+  const c = (await caseDe(foyer.userId, jour, 'dejeuner'))!
+  expect(c.state, 'un repas passé : ce qu’on y choisit est mangé').toBe('mange')
+  const [e] = await extrasDe(jour, 'dejeuner', foyer.userId)
+  expect(e.label).toBe(`${YAOURT} × ${n} pots`)
+  expect(e.aliment_id).toBe((await alimentDe(YAOURT))!.id)
+  expect(e.planifie).toBe(false)
+  expect(await caseDe(foyer.elleId, jour, 'dejeuner'), 'rien n’est noté au nom de Thauba').toBeUndefined()
   await expect(repas(page, 'dejeuner')).toContainText(`${YAOURT} × ${n} pots`)
 })
 
@@ -697,4 +751,110 @@ test('l’étiquette en panne : le message de la fonction, « Réessayer », et 
   await page.keyboard.press('Escape')
   await expect(f).toBeHidden()
   expect((await extras()).length).toBe(avant)
+})
+
+test('le focus ne tombe pas sur le vide : après un ajout dans un moment hors barquette, il revient à sa carte ; « annuler » à son bouton', async ({ page }) => {
+  test.setTimeout(120_000)
+  await connecte(page)
+  await page.goto('/semaine')
+  await jourBouton(page, -1).click()
+  const autres = page.getByRole('region', { name: 'Autres moments' })
+  /* « annuler » : le focus revient au bouton « Collation » qui avait ouvert le panneau. */
+  await autres.getByRole('button', { name: 'Collation', exact: true }).click()
+  await autres.getByRole('button', { name: 'annuler' }).click()
+  await expect(autres.getByRole('button', { name: 'Collation', exact: true })).toBeFocused()
+  /* Un ajout : le panneau se ferme, la carte de la collation paraît, et « + ce que j'ai mangé en plus » a le focus. */
+  await autres.getByRole('button', { name: 'Collation', exact: true }).click()
+  await autres.getByLabel('Quoi', { exact: true }).fill('Compote')
+  await autres.getByLabel('Calories', { exact: true }).fill('80')
+  await autres.getByLabel('Protéines, en g', { exact: true }).fill('1')
+  await autres.getByRole('button', { name: 'Ajouter à la collation' }).click()
+  await expect(page.locator('[data-moment="collation"] [data-en-plus]')).toBeFocused({ timeout: 10_000 })
+  expect((await extrasDe(HIER(), 'collation')).map(e => e.label)).toEqual(['Compote'])
+})
+
+test('un nom déjà pris dans nos aliments : « Le garder » réutilise cet aliment, l’extra s’écrit', async ({ page }) => {
+  test.setTimeout(120_000)
+  await connecte(page)
+  await page.goto('/semaine')
+  /* L'étiquette lit « CÉRÉALES » (autre casse) : le nom, comparé comme la base, existe déjà dans nos aliments. */
+  await etiquetteRepond(page, () => ({ status: 200, body: { ...SKYR, nom: 'CEREALES', poids_g: null, unite: null, kcal_100g: 380, proteines_100g: 10, glucides_100g: 70, lipides_100g: 5, fibres_100g: 8 } }))
+  const avant = (await db.from('aliment').select('id').eq('household_id', foyer.householdId)).data!.length
+  const cereales = (await alimentDe(CEREALES))!
+  /* Le midi d'il y a trois jours porte les lasagnes (« Vous deux », plus haut) : « en plus » s'y offre. */
+  await jourBouton(page, -3).click()
+  const carte = repas(page, 'dejeuner').getByRole('group', { name: /^Midi : / })
+  await carte.getByRole('button', { name: '+ ce que j’ai mangé en plus' }).click()
+  await carte.getByRole('group', { name: 'En plus du midi' }).locator('input[type=file]')
+    .setInputFiles({ name: 'etiquette.jpg', mimeType: 'image/jpeg', buffer: await unePhoto(page) })
+  const f = feuille(page, 'L’étiquette, en plus du midi')
+  await expect(f.locator('[data-lu]')).toContainText('380 kcal', { timeout: 15_000 })
+  await f.getByLabel('J’en ai mangé, en grammes').fill('40')
+  await expect(f.getByRole('checkbox', { name: /Le garder dans nos aliments/ })).toBeChecked()
+  await expect(f.locator('[data-deja]')).toContainText('est déjà dans nos aliments : c’est lui qui est utilisé')
+  await f.getByRole('button', { name: 'Ajouter au midi' }).click()
+  await expect(f).toBeHidden({ timeout: 15_000 })
+  const ex = (await extrasDe(jourLocal(-3), 'dejeuner')).filter(e => e.label === 'CEREALES, 40 g')
+  expect(ex, 'l’extra est écrit').toHaveLength(1)
+  expect(ex[0].aliment_id, 'lié à l’aliment qui existait').toBe(cereales.id)
+  expect((await db.from('aliment').select('id').eq('household_id', foyer.householdId)).data, 'aucun aliment de plus').toHaveLength(avant)
+})
+
+test('« Relire avec cette consigne » garde ce qu’on a corrigé à la main (le nom, un chiffre, les grammes)', async ({ page }) => {
+  test.setTimeout(120_000)
+  await connecte(page)
+  await page.goto('/semaine')
+  const recus = await etiquetteRepond(page, () => ({ status: 200, body: SKYR }))
+  await jourBouton(page, -1).click()
+  const soir = repas(page, 'diner')
+  await soir.getByRole('button', { name: '+ ce que j’ai mangé en plus' }).click()
+  await soir.getByRole('group', { name: 'En plus du soir' }).locator('input[type=file]')
+    .setInputFiles({ name: 'etiquette.jpg', mimeType: 'image/jpeg', buffer: await unePhoto(page) })
+  const f = feuille(page, 'L’étiquette, en plus du soir')
+  await expect(f.locator('[data-lu]')).toContainText('64 kcal', { timeout: 15_000 })
+  await f.getByRole('button', { name: 'Corriger' }).click()
+  await f.getByLabel('Son nom').fill('Skyr maison')
+  await f.getByLabel('Calories').fill('70')
+  await f.getByLabel('J’en ai mangé, en grammes').fill('100')
+  await f.getByLabel('Dis-moi ce que c’est (facultatif)').fill('Skyr vanille, pot de 150 g')
+  await f.getByRole('button', { name: 'Relire avec cette consigne' }).click()
+  await expect.poll(() => recus.length, { timeout: 10_000 }).toBe(2)
+  await expect(f.getByText('Je n’ai pas modifié ce que tu avais corrigé : le nom, les calories, les grammes.')).toBeVisible()
+  await expect(f.getByLabel('Son nom')).toHaveValue('Skyr maison')
+  await expect(f.getByLabel('Calories')).toHaveValue('70')
+  await expect(f.getByLabel('J’en ai mangé, en grammes')).toHaveValue('100')
+  /* Ce qui n'a pas été corrigé vient de la nouvelle lecture. */
+  await expect(f.getByLabel('Protéines')).toHaveValue('9,5')
+  await page.keyboard.press('Escape')
+  await expect(f).toBeHidden()
+})
+
+test('minuit pendant qu’on note : la feuille reste ouverte, et le repas écrit est celui qu’on notait', async ({ page }) => {
+  test.setTimeout(120_000)
+  await connecte(page)
+  await page.goto('/semaine')
+  await expect(jourBouton(page, 0)).toHaveAttribute('aria-pressed', 'true', { timeout: 20_000 })
+  await repas(page, 'dejeuner').getByRole('button', { name: '+ Choisir le midi' }).click()
+  const f = feuille(page, `${semaineDe(0)} midi`)
+  await expect(f).toBeVisible()
+  /* La relecture de la semaine (sa fenêtre glisse d'un jour : une nouvelle clé) est lente : pendant ce temps, l'écran ne doit
+     pas repasser en attente. */
+  await page.route('**/rest/v1/meal_slot?*', async route => { await new Promise(r => setTimeout(r, 2500)); await route.continue() })
+  /* Minuit passe : l'horloge du banc avance d'un jour, la page se rallume. */
+  await page.evaluate(() => {
+    const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(0, 5, 0, 0)
+    localStorage.setItem('popote.maintenant', d.toISOString())
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await page.waitForTimeout(600)
+  await expect(f, 'la feuille a disparu pendant la relecture').toBeVisible({ timeout: 300 })
+  await expect(jourBouton(page, 1)).toContainText('auj.', { timeout: 10_000 })
+  /* La feuille ne s'est pas refermée, ne s'est pas décalée sur demain, et l'écran n'est pas repassé en attente. */
+  await expect(f).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'La semaine', level: 1 })).toBeVisible()
+  await f.getByRole('region', { name: 'Autre chose' }).getByRole('button', { name: /On saute ce repas/ }).click()
+  await expect(f).toBeHidden({ timeout: 10_000 })
+  const jour = jourLocal(0)
+  expect((await caseDe(foyer.userId, jour, 'dejeuner'))!.state, 'le repas noté est celui d’avant minuit').toBe('saute')
+  expect(await caseDe(foyer.userId, jourLocal(1), 'dejeuner'), 'rien n’est écrit sur demain').toBeUndefined()
 })

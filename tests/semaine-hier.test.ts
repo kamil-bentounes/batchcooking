@@ -238,7 +238,7 @@ describe('meal_extra.aliment_id : une copie, jamais une référence de valeurs',
   it('l’aliment d’un autre foyer est refusé (par la fonction comme en écriture directe), rien n’est écrit', async () => {
     const chezLautre = await unAliment(autre.householdId)
     const r = await choisit(HIER(), 'diner', { type: 'repere', label: 'Skyr', kcal: 96, protein_g: 14, aliment_id: chezLautre.id })
-    expect(r.error).not.toBeNull()
+    expect(r.error?.message).toMatch(/aliment_id désigne quelque chose qui n.est pas au foyer/)
     expect(await caseDe(HIER(), 'diner'), 'la case a été écrite malgré le refus').toBeNull()
 
     const { data: s } = await kamil.client.from('meal_slot').insert({
@@ -247,12 +247,13 @@ describe('meal_extra.aliment_id : une copie, jamais une référence de valeurs',
     const direct = await kamil.client.from('meal_extra').insert({
       household_id: kamil.householdId, meal_slot_id: s!.id, label: 'Skyr', kcal: 96, protein_g: 14, aliment_id: chezLautre.id,
     })
-    expect(direct.error?.message).toMatch(/pas au foyer/)
+    expect(direct.error?.message).toMatch(/aliment_id désigne quelque chose qui n.est pas au foyer/)
   })
 
   it('les quantités récentes se lisent par aliment, pour la personne', async () => {
     const al = await unAliment()
-    for (const [jour, g] of [[jourDans(-3), 30], [jourDans(-2), 60], [HIER(), 30]] as const) {
+    /* 30, 60, 45 : trois valeurs DIFFÉRENTES, pour que l'ordre se voie (un palindrome passerait à l'envers). */
+    for (const [jour, g] of [[jourDans(-3), 30], [jourDans(-2), 60], [HIER(), 45]] as const) {
       expect((await choisit(jour, 'collation', {
         type: 'repere', label: `Céréales, ${g} g`, grams: g, kcal: g * 3.8, protein_g: g * 0.1, aliment_id: al.id,
       })).error).toBeNull()
@@ -262,8 +263,57 @@ describe('meal_extra.aliment_id : une copie, jamais une référence de valeurs',
       .eq('aliment_id', al.id).eq('meal_slot.user_profile_id', kamil.userId)
       .not('grams', 'is', null).order('created_at', { ascending: false }).limit(20)
     expect(lu.error).toBeNull()
-    expect(lu.data!.map(x => Number(x.grams))).toEqual([30, 60, 30])
+    expect(lu.data!.map(x => Number(x.grams))).toEqual([45, 60, 30])
     const autrui = await autre.client.from('meal_extra').select('id').eq('aliment_id', al.id)
     expect(autrui.data).toEqual([])
+  })
+})
+
+describe('un jour est « passé » pour la base aussi, pas seulement pour le client (p_today)', () => {
+  const dateDeLAppareil = (jour: string, meal: string, choix: object, today: string) =>
+    kamil.client.rpc('choisir_un_repas', { p_day: jour, p_meal: meal, p_users: [kamil.userId], p_today: today, p_choix: choix })
+
+  it('un p_today en avance d’un jour ne fait pas noter mangé le repas d’aujourd’hui : il reste prévu, planifié', async () => {
+    const label = nouveauPlat()
+    const [a] = await parts(label, 1)
+    const r = await dateDeLAppareil(aujourdhui(), 'diner', lePlat(label), jourDans(1))
+    expect(r.error).toBeNull()
+    const c = (await caseDe(aujourdhui(), 'diner'))!
+    expect(c.state).toBe('prevu')
+    expect(c.eaten_at).toBeNull()
+    expect(await etat(a.id), 'la barquette n’est pas consommée').toBe('au_frais')
+    const e = await dateDeLAppareil(aujourdhui(), 'collation', { type: 'repere', label: 'Yaourt', kcal: 95, protein_g: 12 }, jourDans(1))
+    expect(e.error).toBeNull()
+    const cc = (await caseDe(aujourdhui(), 'collation'))!
+    expect(cc.state).toBe('prevu')
+    expect((await extrasDe(cc.id))[0].planifie).toBe(true)
+  })
+
+  it('un p_today en retard d’un jour ne rend pas « passé » un repas qui ne l’est pas : le repas d’hier reste noté mangé avec le bon p_today', async () => {
+    const label = nouveauPlat()
+    await parts(label, 1)
+    /* p_today = hier (appareil en retard d'un jour) : hier n'est pas avant « aujourd'hui » selon lui, donc pas mangé. */
+    expect((await dateDeLAppareil(HIER(), 'diner', lePlat(label), HIER())).error).toBeNull()
+    expect((await caseDe(HIER(), 'diner'))!.state).toBe('prevu')
+  })
+})
+
+describe('re-choisir le même plat sur un repas passé', () => {
+  it('encore « prévu » : une seule barquette est consommée, celle de la case (pas deux)', async () => {
+    const label = nouveauPlat()
+    const [a, b] = await parts(label, 2)
+    expect((await db.from('meal_slot').insert({
+      household_id: kamil.householdId, user_profile_id: kamil.userId, day: HIER(), meal: 'diner', state: 'prevu', portion_id: a.id,
+    })).error).toBeNull()
+    const r = await choisit(HIER(), 'diner', lePlat(label))
+    expect(r.error).toBeNull()
+    const c = (await caseDe(HIER(), 'diner'))!
+    expect(c.state).toBe('mange')
+    expect(c.portion_id, 'changer pour le même plat reprend la barquette de la case').toBe(a.id)
+    expect(await etat(a.id)).toBe('mangee')
+    expect(await etat(b.id), 'l’autre barquette n’est pas touchée').toBe('au_frais')
+    expect(r.data.liberees, 'rien n’est lâché').toEqual([])
+    const { data: mangees } = await db.from('portion').select('id').eq('household_id', kamil.householdId).eq('label', label).eq('state', 'mangee')
+    expect(mangees).toHaveLength(1)
   })
 })

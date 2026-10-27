@@ -18,14 +18,14 @@ import { prepare } from '../../lib/photo.ts'
 import { photoEnFrancais } from '../../lib/reseau.ts'
 import { useAjouteExtra } from '../../lib/donnees/barquettes.ts'
 import type { Case } from '../../lib/donnees/barquettes.ts'
-import { useEnregistreAliment } from '../../lib/donnees/aliments.ts'
+import { useAliments, useEnregistreAliment } from '../../lib/donnees/aliments.ts'
 import type { Aliment } from '../../lib/donnees/aliments.ts'
 import { douteSurLEnergie, lisLeNombre, phraseDuDoute } from '../../lib/aliments/brouillon.ts'
 import { DELAI_ETIQUETTE_MS, champsDeLEtiquette, phraseDeLaPanne } from '../../lib/aliments/etiquette.ts'
 import type { LectureEtiquette } from '../../lib/aliments/etiquette.ts'
 import { CONSIGNE_MAX, corpsDeLaLecture } from '../../lib/aliments/consigne.ts'
 import {
-  boutonAjouter, brouillonDeLAliment, calculEnDirect, depuisLaLecture, etiquetteVide, lisLEtiquette,
+  alimentDeMemeNom, boutonAjouter, brouillonDeLAliment, calculEnDirect, depuisLaLecture, etiquetteVide, lisLEtiquette,
 } from '../../lib/aliments/en-plus.ts'
 import type { ErreursDeLEtiquette, EtiquetteEnPlus as Champs } from '../../lib/aliments/en-plus.ts'
 import { ecrit } from '../../lib/aliments/calcul.ts'
@@ -79,6 +79,12 @@ function Zone({ id, nom, valeur, surChange, erreur, unite, inputMode = 'decimal'
 
 const MAX_PHOTOS = 3
 
+/** Les champs qu'une lecture remplit et qu'une correction protège, dits comme on les nomme à l'écran. */
+const NOM_DU_CHAMP: Partial<Record<keyof Champs, string>> = {
+  label: 'le nom', kcal: 'les calories', proteines: 'les protéines', glucides: 'les glucides', lipides: 'les lipides',
+  fibres: 'les fibres', grammes: 'les grammes',
+}
+
 export function EtiquetteEnPlus({ cas, photoInitiale, fermer, surFini }: {
   /** La case du moment, réelle ou seulement affichée (elle se crée à l'ajout). */
   cas: Pick<Case, 'id' | 'user_profile_id' | 'day' | 'meal'>
@@ -103,13 +109,17 @@ export function EtiquetteEnPlus({ cas, photoInitiale, fermer, surFini }: {
   const [erreurPhoto, setErreurPhoto] = useState('')
 
   const enregistre = useEnregistreAliment()
+  const lectureAliments = useAliments()
   const ajoute = useAjouteExtra()
   /* La lecture qui compte est la dernière : une photo reprise pendant qu'une autre se lit ne laisse pas l'ancienne
      réponse écraser la nouvelle. */
   const lectures = useRef(0)
   const demarre = useRef(false)
-  /* Ce que la personne a tapé elle-même : une nouvelle lecture ne le remplace pas (les grammes mangés). */
-  const grammesTapes = useRef(false)
+  /* Ce que la personne a tapé ou corrigé elle-même (le nom, un chiffre, les grammes mangés) : une nouvelle lecture
+     (« Relire avec cette consigne », une autre photo) ne le remplace pas. Vidé, un champ n'est plus « tapé ». */
+  const tapes = useRef(new Set<keyof Champs>())
+  const eActuel = useRef(e)
+  useEffect(() => { eActuel.current = e })
   /* L'aliment déjà créé par un essai dont l'ajout a échoué : un second essai ne le recrée pas (le nom est unique). */
   const dejaCree = useRef<{ aliment: Aliment; signature: string } | null>(null)
   /* Un ajout à la fois : un double toucher n'écrit pas deux fois. */
@@ -132,14 +142,23 @@ export function EtiquetteEnPlus({ cas, photoInitiale, fermer, surFini }: {
         setCorrige(true)
         return
       }
-      setE(avant => {
-        const lu = depuisLaLecture(champs)
-        return { ...lu, grammes: grammesTapes.current ? avant.grammes : lu.grammes }
+      const lu = depuisLaLecture(champs)
+      const avant = eActuel.current
+      const gardes = [...tapes.current]
+      /* Ce qui a été corrigé à la main reste ; ce que la lecture aurait dit d'autre se dit, une fois. */
+      const ecartes = gardes.filter(c => NOM_DU_CHAMP[c] && lu[c] !== '' && lu[c] !== avant[c]).map(c => NOM_DU_CHAMP[c])
+      setE(a => {
+        const n = { ...lu }
+        for (const c of tapes.current) n[c] = a[c]
+        return n
       })
       setErreurs({})
       setJustes(null)
-      setCorrige(false)
-      setLecture({ etat: 'fait', notes, lu: true, calculDuPoids })
+      setCorrige(c => c && gardes.some(g => g !== 'grammes'))
+      setLecture({
+        etat: 'fait', lu: true, calculDuPoids,
+        notes: ecartes.length > 0 ? [...notes, `Je n’ai pas modifié ce que tu avais corrigé : ${ecartes.join(', ')}.`] : notes,
+      })
     } catch (err) {
       if (moi !== lectures.current) return
       lectures.current += 1
@@ -163,7 +182,8 @@ export function EtiquetteEnPlus({ cas, photoInitiale, fermer, surFini }: {
   }
 
   const pose = (c: keyof Champs) => (v: string) => {
-    if (c === 'grammes') grammesTapes.current = v.trim() !== ''
+    if (v.trim() === '') tapes.current.delete(c)
+    else tapes.current.add(c)
     setE(p => ({ ...p, [c]: v }))
     setErreurs(x => ({ ...x, [c]: undefined, energie: undefined, macros: undefined }))
     setJustes(null)
@@ -174,6 +194,7 @@ export function EtiquetteEnPlus({ cas, photoInitiale, fermer, surFini }: {
   const energieJuste = justes === empreinte
   const doute = douteSurLEnergie(brouillonDeLAliment(e))
   const nom = e.label.replace(/\s+/g, ' ').trim()
+  const existant = alimentDeMemeNom(lectureAliments.data ?? [], nom)
   const lectureEnCours = lecture.etat === 'en-cours'
 
   async function ajouter() {
@@ -194,12 +215,19 @@ export function EtiquetteEnPlus({ cas, photoInitiale, fermer, surFini }: {
     try {
       let alimentId: string | null = null
       if (garder) {
-        const signature = JSON.stringify(r.aliment)
-        const deja = dejaCree.current
-        const aliment = deja && deja.signature === signature ? deja.aliment
-          : await enregistre.mutateAsync({ id: deja?.aliment.id, valeurs: r.aliment })
-        dejaCree.current = { aliment, signature }
-        alimentId = aliment.id
+        /* Le nom existe déjà dans nos aliments : on le réutilise (son id), on n'en insère pas un second — l'unicité du nom le
+           refuserait, et l'extra ne serait jamais écrit. La liste se relit si elle n'est pas arrivée. */
+        const liste = lectureAliments.data ?? (await lectureAliments.refetch()).data ?? []
+        const memeNom = alimentDeMemeNom(liste, r.aliment.label)
+        if (memeNom) alimentId = memeNom.id
+        else {
+          const signature = JSON.stringify(r.aliment)
+          const deja = dejaCree.current
+          const aliment = deja && deja.signature === signature ? deja.aliment
+            : await enregistre.mutateAsync({ id: deja?.aliment.id, valeurs: r.aliment })
+          dejaCree.current = { aliment, signature }
+          alimentId = aliment.id
+        }
       }
       await ajoute.mutateAsync({ cas, ...r.extra, alimentId })
       surFini?.()
@@ -345,6 +373,11 @@ export function EtiquetteEnPlus({ cas, photoInitiale, fermer, surFini }: {
                className="mt-0.5 size-6 shrink-0 accent-[var(--color-herbe)]" />
         <span>Le garder dans nos aliments, sous « {nom || '…'} »</span>
       </label>
+      {garder && existant && (
+        <p data-deja="" className="mx-1 text-[13px] leading-[1.45] text-doux">
+          « {existant.label} » est déjà dans nos aliments : c’est lui qui est utilisé, ses valeurs ne changent pas.
+        </p>
+      )}
 
       {panne && <div className="mx-1"><Erreur de={panne} /></div>}
       <button type="button" onClick={ajouter} disabled={enCours || lectureEnCours}

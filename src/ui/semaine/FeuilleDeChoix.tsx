@@ -155,7 +155,10 @@ function Contenu({
   const peutManger = membres.filter(m => !dejaMange.includes(m.id))
   /* « Vous deux » n'a de sens que pour tout le foyer, et personne n'en a encore mangé ce repas. */
   const tousPossible = membres.length > 1 && dejaMange.length === 0
-  const choisi = pour === 'tous' && !tousPossible ? (peutManger[0]?.id ?? 'tous') : pour
+  /* « Pour » commence sur quelqu'un qui n'a pas encore mangé ce repas : ma case d'un jour passé déjà notée, la feuille passe
+     à la personne qui reste (nommée à l'écran), jamais sur une ligne grisée. */
+  const choisi = pour === 'tous' && !tousPossible ? (peutManger[0]?.id ?? 'tous')
+    : pour !== 'tous' && dejaMange.includes(pour) ? (peutManger[0]?.id ?? pour) : pour
   const personnes = personnesDuChoix(choisi, membres).filter(id => !dejaMange.includes(id))
   const cible: Cible = { jour, repas, personnes }
 

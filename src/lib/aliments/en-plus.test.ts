@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  auGramme, brouillonDeLAliment, calculEnDirect, choixDeLaQuantite, depuisLaLecture, etiquetteVide, extraDeLaQuantite,
+  alimentDeMemeNom, auGramme, brouillonDeLAliment, calculEnDirect, choixDeLaQuantite, depuisLaLecture, etiquetteVide, extraDeLaQuantite,
   grammesDe, libelleDeLaQuantite, lisLEtiquette, lisLaSaisieAMain, lisLesGrammes, motDeLaPastille, phraseCourteDuCalcul,
   phraseDuCalcul, pluriel, premierChampRefuse, quantiteParDefaut, quantitesRecentes, valeursDeLaQuantite,
 } from './en-plus.ts'
@@ -60,7 +60,7 @@ describe('la saisie à la main', () => {
 })
 
 describe('la quantité : des unités', () => {
-  it('2 pots de 125 g : 250 g, 152 kcal, 20 g de protéines', () => {
+  it('2 pots de 125 g : 250 g, 190 kcal, 25 g de protéines', () => {
     const q = { mode: 'unites', n: 2 } as const
     expect(grammesDe(YAOURT, q)).toBe(250)
     expect(valeursDeLaQuantite(YAOURT, q)).toMatchObject({ kcal: 190, protein: 25 })
@@ -128,9 +128,23 @@ describe('la quantité : des grammes', () => {
     expect(lisLesGrammes('')).toEqual({ erreur: 'Dis combien, en grammes.' })
     expect(lisLesGrammes('trente')).toEqual({ erreur: 'Je ne lis pas ce nombre.' })
     expect(lisLesGrammes('-5')).toEqual({ erreur: 'Pas de valeur négative.' })
-    expect(lisLesGrammes('0')).toEqual({ erreur: 'Il faut plus de 0 g.' })
+    expect(lisLesGrammes('0')).toEqual({ erreur: 'Il faut au moins 0,1 g.' })
     expect(lisLesGrammes('5001')).toEqual({ erreur: 'Pas plus de 5 000 g.' })
     expect(lisLesGrammes('5000')).toEqual({ g: 5000 })
+  })
+  it('l’arrondi au dixième vient AVANT le refus de zéro : « 0,04 g » s’arrondit à 0 et est refusé, avec sa phrase', () => {
+    for (const s of ['0,04', '0.049', '0,01', '0,0001']) {
+      expect(lisLesGrammes(s), s).toEqual({ erreur: 'Il faut au moins 0,1 g.' })
+    }
+    expect(lisLesGrammes('0,05')).toEqual({ g: 0.1 })
+    expect(lisLesGrammes('0,1')).toEqual({ g: 0.1 })
+    expect(lisLesGrammes('12,34')).toEqual({ g: 12.3 })
+  })
+  it('jamais un poids que la base refuserait (grams > 0) : tout ce qui passe est au moins 0,1', () => {
+    for (const s of ['0,04', '0,05', '0,1', '1', '0,0', '-0']) {
+      const r = lisLesGrammes(s)
+      if ('g' in r) expect(r.g, s).toBeGreaterThanOrEqual(0.1)
+    }
   })
 })
 
@@ -231,8 +245,34 @@ describe('l’étiquette photographiée', () => {
     expect(lisLEtiquette(kj, { energieJuste: true }).ok).toBe(true)
   })
   it('l’unité et son poids ne sont jamais refusés ici : la personne ne peut pas les corriger dans cette feuille', () => {
-    const r = lisLEtiquette({ ...etiquetteVide(), label: 'X', kcal: '100', proteines: '5', poidsUnite: '99999', unite: 'x'.repeat(40), grammes: '30' })
-    expect(r.ok || !('unite' in r.erreurs)).toBe(true)
-    if (!r.ok) expect(r.erreurs).not.toHaveProperty('poids')
+    const base = { ...etiquetteVide(), label: 'X', kcal: '100', proteines: '5', grammes: '30' }
+    /* Un poids hors des bornes : on le laisse de côté (aliment au gramme), on ne refuse pas sans rien dire. */
+    const r = lisLEtiquette({ ...base, poidsUnite: '99999', unite: 'pot' })
+    expect(r.ok).toBe(true)
+    expect(r.ok && r.aliment).toMatchObject({ unite: 'g', unite_g: 100 })
+    /* Une unité trop longue : « pot », avec le poids lu. */
+    const r2 = lisLEtiquette({ ...base, poidsUnite: '125', unite: 'x'.repeat(40) })
+    expect(r2.ok).toBe(true)
+    expect(r2.ok && r2.aliment).toMatchObject({ unite: 'pot', unite_g: 125 })
+    /* Jamais un refus sans phrase : quand ça ne passe pas, une phrase au moins est dite. */
+    for (const poidsUnite of ['0', '-3', 'abc', '99999', '']) {
+      const x = lisLEtiquette({ ...base, poidsUnite, unite: 'x'.repeat(40) })
+      expect(x.ok || Object.keys(x.erreurs).length > 0, poidsUnite).toBe(true)
+    }
+  })
+})
+
+describe('un nom déjà pris dans nos aliments', () => {
+  const liste = [YAOURT, CEREALES, { id: 'a-skyr', label: 'Skyr Danone' }]
+  it('se retrouve comme la base compare : accents, casse, apostrophes et espaces ne comptent pas', () => {
+    expect(alimentDeMemeNom(liste, 'Céréales')?.id).toBe('a-cereales')
+    expect(alimentDeMemeNom(liste, '  CEREALES ')?.id).toBe('a-cereales')
+    expect(alimentDeMemeNom(liste, 'yaourt   nature')?.id).toBe('a-yaourt')
+    expect(alimentDeMemeNom([{ id: 'x', label: 'L’œuf dur' }], 'L\'œuf dur')?.id).toBe('x')
+  })
+  it('un autre nom, ou un nom vide, ne trouve rien', () => {
+    expect(alimentDeMemeNom(liste, 'Yaourt grec')).toBeNull()
+    expect(alimentDeMemeNom(liste, '   ')).toBeNull()
+    expect(alimentDeMemeNom([], 'Céréales')).toBeNull()
   })
 })
