@@ -66,11 +66,11 @@ function Pastille({ r, actif }: { r: RappelDecrit; actif: boolean }) {
   )
 }
 
-/** Un interrupteur : 44 px de haut, annoncé comme tel (`role="switch"`), avec son nom. */
-function Interrupteur({ nom, actif, surBascule }: { nom: string; actif: boolean; surBascule: () => void }) {
+/** Un interrupteur : 44 px de haut, annoncé comme tel (`role="switch"`), avec son nom. Désactivé pendant l'envoi. */
+function Interrupteur({ nom, actif, envoi, surBascule }: { nom: string; actif: boolean; envoi: boolean; surBascule: () => void }) {
   return (
-    <button type="button" role="switch" aria-checked={actif} aria-label={nom} onClick={surBascule}
-            className="flex h-11 w-[52px] shrink-0 items-center justify-center">
+    <button type="button" role="switch" aria-checked={actif} aria-label={nom} onClick={surBascule} disabled={envoi}
+            className="flex h-11 w-[52px] shrink-0 items-center justify-center disabled:opacity-60">
       <span className={`relative block h-7 w-[46px] rounded-full transition-colors ${actif ? 'bg-herbe' : 'bg-[#C9D1C4]'}`}>
         <span className="absolute top-[3px] block h-[22px] w-[22px] rounded-full bg-white transition-[left] duration-150"
               style={{ left: actif ? 21 : 3, boxShadow: '0 1px 3px rgba(28, 43, 35, 0.3)' }} />
@@ -173,8 +173,8 @@ export function Rappels({ userId, retour }: { userId: string; retour: () => void
                           </span>
                         </div>
                       </div>
-                      <Interrupteur nom={r.nom} actif={actif}
-                                    surBascule={() => bascule.mutate({ type: r.type, actif: !actif })} />
+                      <Interrupteur nom={r.nom} actif={actif} envoi={bascule.isPending}
+                                    surBascule={() => { if (!bascule.isPending) bascule.mutate({ type: r.type, actif: !actif }) }} />
                     </div>
                     <p className="mt-3 text-[13px] leading-[1.45] text-doux">{r.quand}</p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3">

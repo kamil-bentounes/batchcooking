@@ -41,7 +41,7 @@ const OUVRE_APRES_MS = 620
 const FERME_APRES_MS = 280
 
 export function Frigo({ userId, va }: { userId: string; va: (v: string) => void }) {
-  const { data: barquettes = [], isPending: chargeParts, error: erreurParts } = useBarquettes()
+  const { data: barquettes = [], isPending: chargeParts, error: erreurParts, data: partsLues, refetch: relisLesParts } = useBarquettes()
   const { data: lesPrevus, isPending: chargePrevus, error: erreurPrevus } = usePrevus()
   /* `null` tant que les repas ne sont pas lus (chargement, erreur) : ni « rien de prévu ce soir », ni une part
      « libre » que des repas réclament peut-être, ni un geste qui s'en fierait. */
@@ -120,6 +120,8 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
     setSorties(null)
     window.history.replaceState(null, '', window.location.pathname)
   }
+  /* Le frigo n'a pas pu être lu : la feuille se ferme, mais le lien n'est PAS consommé (il reste dans l'adresse). */
+  const reporteLesSorties = () => setSorties(null)
 
   const groupeOuvert = groupes.find(g => g.cle === ficheCle) ?? null
   const ingredientOuvert = ingredients.find(i => i.id === ingredientId) ?? null
@@ -205,7 +207,9 @@ export function Frigo({ userId, va }: { userId: string; va: (v: string) => void 
                         surAjoute={() => setAjout('congelateur')} />
 
       {/* Le lien « C'est fait » d'un mail : sortir ces barquettes du congélateur, après confirmation. */}
-      <SortirParLien ids={sorties} barquettes={barquettes} chargement={chargeParts} surFerme={finiLesSorties} />
+      <SortirParLien ids={sorties} barquettes={barquettes} chargement={chargeParts}
+                     erreur={partsLues === undefined ? erreurParts : null} reessayer={() => { void relisLesParts() }}
+                     surFerme={finiLesSorties} surReporte={reporteLesSorties} />
 
       {/* La fiche d'un plat. */}
       <Feuille ouverte={!!groupeOuvert} fermer={() => setFicheCle(null)} titre={groupeOuvert?.label ?? 'Plat'}>

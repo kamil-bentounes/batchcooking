@@ -15,12 +15,18 @@ import { detailDeSortie, phraseDApresSortie, questionDeSortie, sortablesDuLien }
 import type { Part } from '../../lib/frigo.ts'
 import { groupeLesParts } from '../../lib/frigo.ts'
 
-export function SortirParLien({ ids, barquettes, chargement, surFerme }: {
+export function SortirParLien({ ids, barquettes, chargement, erreur, reessayer, surFerme, surReporte }: {
   /** Les identifiants du lien ; `null` : le lien n'en portait pas, la feuille reste fermée. */
   ids: string[] | null
   barquettes: Part[]
   chargement: boolean
+  /** Le frigo n'a pas pu être LU : on ne sait pas ce qui est au congélateur, on ne dit donc ni « rien à sortir » ni
+   *  « oui je les sors ». Le lien n'est pas consommé : il reste dans l'adresse, et se rouvre. */
+  erreur: unknown
+  reessayer: () => void
   surFerme: () => void
+  /** « Plus tard » depuis l'erreur : la feuille se ferme, le lien reste dans l'adresse. */
+  surReporte: () => void
 }) {
   const sort = useSortDuCongelo()
   /** Ce qui a été dit une fois les barquettes sorties : les barquettes n'étant plus au congélateur, on le fige. */
@@ -38,7 +44,10 @@ export function SortirParLien({ ids, barquettes, chargement, surFerme }: {
     } catch { /* l'erreur est dite dans la feuille (`sort.error`) */ }
   }
 
+  const illisible = fait === null && !!erreur && !chargement
+
   const titre = fait !== null ? 'C’est fait'
+    : illisible ? 'Je n’ai pas pu lire ton frigo'
     : chargement ? 'Un instant'
       : asortir.length === 0 ? 'Rien à sortir'
         : questionDeSortie(asortir)
@@ -53,6 +62,23 @@ export function SortirParLien({ ids, barquettes, chargement, surFerme }: {
             <button type="button" onClick={surFerme}
                     className="min-h-12 w-full rounded-[14px] bg-herbe text-[15px] font-medium text-fond">
               Fermer
+            </button>
+          </div>
+        </>
+      ) : illisible ? (
+        <>
+          <p role="alert" className="mx-1 mt-2 text-[15px] leading-[1.45]">
+            Rien n’a été sorti du congélateur. Le lien reste valable : réessaie, ou reviens plus tard.
+          </p>
+          <Erreur de={erreur} />
+          <div className="mx-1 mt-4 flex gap-2.5">
+            <button type="button" onClick={reessayer}
+                    className="min-h-12 grow rounded-[14px] bg-herbe text-[15px] font-medium text-fond">
+              Réessayer
+            </button>
+            <button type="button" onClick={surReporte}
+                    className="min-h-12 grow rounded-[14px] border border-herbe text-[15px] text-herbe">
+              Plus tard
             </button>
           </div>
         </>

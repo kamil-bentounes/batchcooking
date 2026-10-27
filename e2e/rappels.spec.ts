@@ -170,11 +170,11 @@ test('chacun règle les siens : on ne voit pas ceux de l’autre membre, et on n
 })
 
 test('/frigo?sortir=… demande confirmation, puis sort les barquettes ; le reste est ignoré', async ({ page }) => {
-  const wraps = [await unePortion(foyer.householdId, { label: 'Wraps poulet', lieu: 'congelateur' }),
-    await unePortion(foyer.householdId, { label: 'Wraps poulet', lieu: 'congelateur' }),
-    await unePortion(foyer.householdId, { label: 'Wraps poulet', lieu: 'congelateur' })]
+  const wraps = [await unePortion(foyer.householdId, { label: 'Wrap', lieu: 'congelateur' }),
+    await unePortion(foyer.householdId, { label: 'Wrap', lieu: 'congelateur' }),
+    await unePortion(foyer.householdId, { label: 'Wrap', lieu: 'congelateur' })]
   const dejaAuFrigo = await unePortion(foyer.householdId, { label: 'Soupe', lieu: 'frigo' })
-  const dUnAutreFoyer = await unePortion(autreFoyer, { label: 'Wraps poulet', lieu: 'congelateur' })
+  const dUnAutreFoyer = await unePortion(autreFoyer, { label: 'Wrap', lieu: 'congelateur' })
   const inconnue = randomUUID()
   const ids = [...wraps.map(w => w.id), dejaAuFrigo.id, dUnAutreFoyer.id, inconnue, 'pas-un-id']
 
@@ -242,8 +242,8 @@ test('le bandeau de la semaine suit le réglage', async ({ page }) => {
   // Deux wraps congelés posés sur le dîner d'après-demain+1, un par personne.
   const j = 3
   const jour = jourLocal(j)
-  const wrapK = await unePortion(foyer.householdId, { label: 'Wraps poulet', lieu: 'congelateur' })
-  const wrapE = await unePortion(foyer.householdId, { label: 'Wraps poulet', lieu: 'congelateur' })
+  const wrapK = await unePortion(foyer.householdId, { label: 'Wrap', lieu: 'congelateur' })
+  const wrapE = await unePortion(foyer.householdId, { label: 'Wrap', lieu: 'congelateur' })
   const poses = await db.from('meal_slot').insert([
     { household_id: foyer.householdId, user_profile_id: foyer.userId, day: jour, meal: 'diner', portion_id: wrapK.id, state: 'prevu' },
     { household_id: foyer.householdId, user_profile_id: foyer.elleId, day: jour, meal: 'diner', portion_id: wrapE.id, state: 'prevu' },
@@ -280,6 +280,7 @@ test('le bandeau de la semaine suit le réglage', async ({ page }) => {
 test('« M’envoyer un exemple » appelle la fonction avec le type, et dit le résultat', async ({ page }) => {
   const appels: unknown[] = []
   let panne = false
+  let limite = false
   await page.route('**/functions/v1/rappels', async route => {
     const cors = {
       'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS',
@@ -287,6 +288,7 @@ test('« M’envoyer un exemple » appelle la fonction avec le type, et dit le r
     const req = route.request()
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors })
     appels.push(req.postDataJSON())
+    if (limite) return route.fulfill({ status: 429, headers: cors, contentType: 'text/plain', body: 'Tu as déjà demandé cet exemple pendant cette heure. Réessaie dans un moment : un exemple par rappel et par heure.' })
     if (panne) return route.fulfill({ status: 502, headers: cors, contentType: 'text/plain', body: 'Le mail n’a pas pu partir. Réessaie dans un instant.' })
     return route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: '{"ok":true}' })
   })
@@ -302,9 +304,81 @@ test('« M’envoyer un exemple » appelle la fonction avec le type, et dit le r
   await page.getByRole('button', { name: 'M’envoyer un exemple : Noter les dépenses' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Le mail n’a pas pu partir' })).toBeVisible()
   expect(appels).toEqual([{ essai: 'cloturer_le_mois' }, { essai: 'noter_les_depenses' }])
+  // Un exemple par rappel et par heure : le 429 de la fonction est dit en français.
+  limite = true
+  await page.getByRole('button', { name: 'M’envoyer un exemple : Choisir les repas' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Tu as déjà demandé cet exemple pendant cette heure' })).toBeVisible()
   // Un exemple n'écrit rien : ni réglage, ni « envoyé ».
   const envoyes = await db.from('rappel_envoye').select('*').in('user_id', [foyer.userId, foyer.elleId])
   expect(envoyes.data).toEqual([])
+})
+
+test('un libellé de plusieurs mots : « barquettes de … », jamais un « s » collé au premier mot', async ({ page }) => {
+  const a = await unePortion(foyer.householdId, { label: 'Petit salé aux lentilles', lieu: 'congelateur' })
+  const b = await unePortion(foyer.householdId, { label: 'Petit salé aux lentilles', lieu: 'congelateur' })
+  await connecte(page, foyer.email)
+  await page.goto(`/frigo?sortir=${a.id},${b.id}`)
+  await expect(page.getByRole('dialog', { name: 'Sortir 2 barquettes de petit salé aux lentilles du congélateur ?' })).toBeVisible()
+  await db.from('portion').delete().in('id', [a.id, b.id])
+})
+
+test('le frigo illisible : « Je n’ai pas pu lire ton frigo », le lien n’est pas consommé, « Réessayer » le reprend', async ({ page }) => {
+  const w = await unePortion(foyer.householdId, { label: 'Wrap', lieu: 'congelateur' })
+  await connecte(page, foyer.email)
+  let panne = true
+  await page.route('**/rest/v1/portion*', async route => {
+    if (panne && route.request().method() === 'GET') {
+      return route.fulfill({ status: 500, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '{"message":"boum"}' })
+    }
+    return route.continue()
+  })
+  await page.goto(`/frigo?sortir=${w.id}`)
+  const feuille = page.getByRole('dialog', { name: 'Je n’ai pas pu lire ton frigo' })
+  await expect(feuille).toBeVisible({ timeout: 20_000 })
+  await expect(feuille).toContainText('Rien n’a été sorti')
+  await expect(feuille).not.toContainText('Rien à sortir')
+  await expect(feuille.getByRole('button', { name: 'Oui, je les sors' })).toHaveCount(0)
+  await capture(page, '12-frigo-illisible')
+  // Le lien n'est PAS consommé : il est encore dans l'adresse, et la barquette n'a pas bougé.
+  await expect(page).toHaveURL(new RegExp(`/frigo\\?sortir=${w.id}`))
+  expect((await db.from('portion').select('location').eq('id', w.id).single()).data).toEqual({ location: 'congelateur' })
+
+  // « Plus tard » : la feuille se ferme, le lien reste dans l'adresse.
+  await feuille.getByRole('button', { name: 'Plus tard' }).click()
+  await expect(feuille).toBeHidden()
+  await expect(page).toHaveURL(new RegExp(`\\?sortir=${w.id}`))
+
+  // Le réseau revient, la page rechargée pose la question.
+  panne = false
+  await page.reload()
+  await expect(page.getByRole('dialog', { name: 'Sortir 1 wrap du congélateur ?' })).toBeVisible()
+  await db.from('portion').delete().eq('id', w.id)
+})
+
+test('l’interrupteur est désactivé pendant l’envoi ; si la base refuse, il revient à l’état d’avant', async ({ page }) => {
+  await connecte(page, foyer.email)
+  await page.goto('/rappels')
+  const sw = page.getByRole('switch', { name: 'Choisir les repas' })
+  const autre = page.getByRole('switch', { name: 'Noter les dépenses' })
+  await expect(sw).toHaveAttribute('aria-checked', /true|false/)
+  const avant = await sw.getAttribute('aria-checked')
+  let ecritures = 0
+  await page.route('**/rest/v1/rappel_reglage*', async route => {
+    if (route.request().method() !== 'POST') return route.continue()
+    ecritures++
+    await new Promise(r => setTimeout(r, 1200))
+    return route.fulfill({ status: 500, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '{"message":"refusé"}' })
+  })
+  await sw.click()
+  // Pendant l'envoi : l'état demandé s'affiche, et plus rien ne se bascule.
+  await expect(sw).toBeDisabled()
+  await expect(autre).toBeDisabled()
+  await expect(sw).toHaveAttribute('aria-checked', avant === 'true' ? 'false' : 'true')
+  await capture(page, '13-interrupteur-pendant-l-envoi')
+  // La base refuse : le rappel retrouve l'état d'avant sa demande, et se réactive.
+  await expect(sw).toBeEnabled({ timeout: 10_000 })
+  await expect(sw).toHaveAttribute('aria-checked', avant!)
+  expect(ecritures, 'une seule écriture : le second clic n’a rien lancé').toBe(1)
 })
 
 for (const largeur of [390, 320]) {
@@ -319,7 +393,7 @@ for (const largeur of [390, 320]) {
     expect(await ciblesPetites(page), 'cibles de moins de 44 px').toEqual([])
 
     // La confirmation du frigo, à la même largeur.
-    const wrap = await unePortion(foyer.householdId, { label: 'Wraps poulet', lieu: 'congelateur' })
+    const wrap = await unePortion(foyer.householdId, { label: 'Wrap', lieu: 'congelateur' })
     await page.goto(`/frigo?sortir=${wrap.id}`)
     await expect(page.getByRole('dialog', { name: 'Sortir 1 wrap du congélateur ?' })).toBeVisible()
     await capture(page, `11-frigo-confirmation-${largeur}`)

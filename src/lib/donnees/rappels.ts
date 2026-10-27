@@ -6,7 +6,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { callFunction, ou, supabase } from '../supabase.ts'
-import { TYPES_DE_RAPPEL, estUnType } from '../rappels.ts'
+import { DELAI_ESSAI_CLIENT_MS, TYPES_DE_RAPPEL, estUnType } from '../rappels.ts'
 import type { TypeDeRappel } from '../rappels.ts'
 
 export const CLE_RAPPELS = ['rappels', 'reglages'] as const
@@ -35,7 +35,11 @@ export function useRappelActif(type: TypeDeRappel): boolean {
   return useReglagesRappels().data?.[type] === true
 }
 
-/** Activer ou couper un rappel. L'écran change tout de suite, et revient en arrière si la base refuse. */
+/**
+ * Activer ou couper un rappel. L'écran change tout de suite ; si la base refuse, CE rappel retrouve l'état d'avant sa
+ * demande (les autres gardent le leur : on ne remet pas tout le cache à un instant ancien). L'interrupteur est
+ * désactivé pendant l'envoi : une seconde demande n'écrase pas la première.
+ */
 export function useBasculeRappel(userId: string) {
   const qc = useQueryClient()
   return useMutation({
@@ -45,11 +49,13 @@ export function useBasculeRappel(userId: string) {
     },
     onMutate: async ({ type, actif }) => {
       await qc.cancelQueries({ queryKey: CLE_RAPPELS })
-      const avant = qc.getQueryData<Reglages>(CLE_RAPPELS)
-      qc.setQueryData<Reglages>(CLE_RAPPELS, { ...(avant ?? tousCoupes()), [type]: actif })
-      return { avant }
+      const avant = qc.getQueryData<Reglages>(CLE_RAPPELS)?.[type] ?? false
+      qc.setQueryData<Reglages>(CLE_RAPPELS, { ...(qc.getQueryData<Reglages>(CLE_RAPPELS) ?? tousCoupes()), [type]: actif })
+      return { type, avant }
     },
-    onError: (_e, _v, ctx) => { if (ctx?.avant) qc.setQueryData(CLE_RAPPELS, ctx.avant) },
+    onError: (_e, _v, ctx) => {
+      if (ctx) qc.setQueryData<Reglages>(CLE_RAPPELS, { ...(qc.getQueryData<Reglages>(CLE_RAPPELS) ?? tousCoupes()), [ctx.type]: ctx.avant })
+    },
     onSettled: () => qc.invalidateQueries({ queryKey: CLE_RAPPELS }),
   })
 }
@@ -57,6 +63,6 @@ export function useBasculeRappel(userId: string) {
 /** « M'envoyer un exemple » : UN mail d'exemple, à mon adresse de connexion et à personne d'autre. */
 export function useEssaiRappel() {
   return useMutation({
-    mutationFn: async (type: TypeDeRappel) => callFunction('rappels', { essai: type }, 30_000),
+    mutationFn: async (type: TypeDeRappel) => callFunction('rappels', { essai: type }, DELAI_ESSAI_CLIENT_MS),
   })
 }

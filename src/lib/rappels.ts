@@ -5,7 +5,7 @@
  * Les sept types et leurs moments sont ceux de la base (`rappels_a_envoyer`, 0126) et des mails
  * (`supabase/functions/_shared/rappels/`). `tests/rappels-mails.test.ts` vérifie que la liste est la même.
  */
-import { groupeLesParts, nomCourt } from './frigo.ts'
+import { groupeLesParts } from './frigo.ts'
 import type { Groupe, Part } from './frigo.ts'
 
 export const TYPES_DE_RAPPEL = [
@@ -67,6 +67,13 @@ export const RAPPELS: RappelDecrit[] = [
   },
 ]
 
+/**
+ * Le temps que l'écran attend « M'envoyer un exemple » : AU MOINS celui que la fonction se donne
+ * (`DELAI_ESSAI_MS`, supabase/functions/_shared/rappels/service.ts) — sinon l'écran dirait « pas de réseau » d'un mail
+ * qui part. `tests/rappels-service.test.ts` garde l'inégalité.
+ */
+export const DELAI_ESSAI_CLIENT_MS = 30_000
+
 export const estUnType = (t: unknown): t is TypeDeRappel =>
   typeof t === 'string' && (TYPES_DE_RAPPEL as readonly string[]).includes(t)
 
@@ -107,18 +114,28 @@ export function sortablesDuLien<P extends Part>(ids: string[], barquettes: P[]):
 }
 
 /**
- * Le mot d'un plat, accordé : « burger » → « burgers » ; « wraps » reste « wraps » et devient « wrap » quand il n'y en a
- * qu'un (le nom d'un plat est souvent au pluriel : « Wraps poulet »). Le même accord que celui des mails
- * (`supabase/functions/_shared/rappels/texte.ts`) : « 1 wraps » ne se lit nulle part.
+ * Combien de parts d'un plat, et de quoi : « 2 wraps », « 1 wrap » quand le libellé est UN mot (« Wrap », « Burger »),
+ * « 2 barquettes de petit salé aux lentilles », « 1 barquette de … » sinon. C'est la règle de `partsDuPlat` du frigo
+ * (« Petit salé » ne devient jamais « petits ») ET celle des mails (`supabase/functions/_shared/rappels/texte.ts`,
+ * dont `tests/rappels-mails.test.ts` éprouve les mêmes cas) ; ici, à une élision près (« d’agneau »).
  */
-export function motDuLot(label: string, n: number): string {
-  const mot = nomCourt(label).split(/\s+/)[0].toLowerCase()
-  if (n > 1) return !/[sxz]$/.test(mot) ? `${mot}s` : mot
-  return /[epltrn]s$/.test(mot) && mot.length > 3 ? mot.slice(0, -1) : mot
+function plurielDuMot(mot: string): string {
+  if (/[sxz]$/.test(mot)) return mot
+  if (/(?:eau|au)$/.test(mot)) return `${mot}x`
+  return `${mot}s`
+}
+const sansProteinee = (label: string) => label.trim().replace(/\s+prot[ée]in[ée]e?s?$/i, '')
+const unSeulMot = (label: string) => !/[\s-]/.test(sansProteinee(label))
+export function partsDuPlat(label: string, n: number): string {
+  const nom = sansProteinee(label)
+  if (unSeulMot(label)) return `${n} ${n > 1 ? plurielDuMot(nom.toLowerCase()) : nom.toLowerCase()}`
+  const bas = nom.replace(/^\p{Lu}/u, c => c.toLowerCase())
+  const de = /^[aeiouyàâäéèêëîïôöùûü]/i.test(bas) ? 'd’' : 'de '
+  return n > 1 ? `${n} barquettes ${de}${bas}` : `1 barquette ${de}${bas}`
 }
 
 /** « 4 wraps », « 1 wrap » : combien, de quoi, pour un groupe de barquettes. */
-const quoi = (g: Groupe, n: number) => `${n} ${motDuLot(g.label, n)}`
+const quoi = (g: Groupe, n: number) => partsDuPlat(g.label, n)
 
 /** « Sortir 4 wraps du congélateur ? » ; plusieurs plats : « Sortir 6 barquettes du congélateur ? ». */
 export function questionDeSortie(parts: Part[]): string {

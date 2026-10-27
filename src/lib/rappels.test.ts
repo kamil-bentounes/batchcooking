@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  MAXIMUM_SORTIES, RAPPELS, TYPES_DE_RAPPEL, detailDeSortie, estUnType, lisLesSorties, motDuLot, phraseDApresSortie,
-  questionDeSortie, sortablesDuLien,
+  MAXIMUM_SORTIES, RAPPELS, TYPES_DE_RAPPEL, DELAI_ESSAI_CLIENT_MS, detailDeSortie, estUnType, lisLesSorties, partsDuPlat,
+  phraseDApresSortie, questionDeSortie, sortablesDuLien,
 } from './rappels.ts'
 import type { Part } from './frigo.ts'
 
@@ -100,30 +100,51 @@ describe('sortablesDuLien : ce qu’on peut vraiment sortir', () => {
 })
 
 describe('les phrases de la confirmation', () => {
-  it('« Sortir 4 wraps du congélateur ? »', () => {
-    expect(questionDeSortie([part(1), part(2), part(3), part(4)])).toBe('Sortir 4 wraps du congélateur\u00a0?')
-    expect(questionDeSortie([part(1)])).toBe('Sortir 1 wrap du congélateur\u00a0?')
-    expect(questionDeSortie([part(1, { label: 'Burger de feuilles de riz' }), part(2, { label: 'Burger de feuilles de riz' })]))
-      .toBe('Sortir 2 burgers du congélateur\u00a0?')
+  const wrap = (n: number, o: Partial<Part> = {}) => part(n, { label: 'Wrap', ...o })
+
+  it('« Sortir 4 wraps du congélateur ? » : un libellé d’un seul mot prend le pluriel simple', () => {
+    expect(questionDeSortie([wrap(1), wrap(2), wrap(3), wrap(4)])).toBe('Sortir 4 wraps du congélateur\u00a0?')
+    expect(questionDeSortie([wrap(1)])).toBe('Sortir 1 wrap du congélateur\u00a0?')
+  })
+
+  it('plusieurs mots : « 2 barquettes de … », jamais un « s » collé au premier mot', () => {
+    expect(questionDeSortie([part(1, { label: 'Petit salé aux lentilles' }), part(2, { label: 'Petit salé aux lentilles' })]))
+      .toBe('Sortir 2 barquettes de petit salé aux lentilles du congélateur\u00a0?')
+    expect(questionDeSortie([part(1, { label: 'Burger de feuilles de riz' })]))
+      .toBe('Sortir 1 barquette de burger de feuilles de riz du congélateur\u00a0?')
+    expect(questionDeSortie([part(1)])).toBe('Sortir 1 barquette de wraps poulet du congélateur\u00a0?')
   })
 
   it('plusieurs plats : on compte les barquettes, et le détail dit lesquelles', () => {
-    const lot = [part(1), part(2), part(3, { label: 'Lasagnes au saumon' })]
+    const lot = [wrap(1), wrap(2), part(3, { label: 'Lasagnes au saumon' })]
     expect(questionDeSortie(lot)).toBe('Sortir 3 barquettes du congélateur\u00a0?')
-    expect(detailDeSortie(lot)).toBe('1 lasagne, 2 wraps')
+    expect(detailDeSortie(lot)).toBe('1 barquette de lasagnes au saumon, 2 wraps')
   })
 
   it('après : « 4 wraps sont au frigo, à manger dans les 24 heures. »', () => {
-    expect(phraseDApresSortie([part(1), part(2), part(3), part(4)])).toBe('4 wraps sont au frigo, à manger dans les 24 heures.')
-    expect(phraseDApresSortie([part(1)])).toBe('1 wrap est au frigo, à manger dans les 24 heures.')
-    expect(phraseDApresSortie([part(1), part(2, { label: 'Pizza' })])).toBe('2 barquettes sont au frigo, à manger dans les 24 heures.')
+    expect(phraseDApresSortie([wrap(1), wrap(2), wrap(3), wrap(4)])).toBe('4 wraps sont au frigo, à manger dans les 24 heures.')
+    expect(phraseDApresSortie([wrap(1)])).toBe('1 wrap est au frigo, à manger dans les 24 heures.')
+    expect(phraseDApresSortie([wrap(1), part(2, { label: 'Pizza' })])).toBe('2 barquettes sont au frigo, à manger dans les 24 heures.')
   })
 
-  it('l’accord du mot du plat', () => {
-    expect(motDuLot('Wraps poulet', 1)).toBe('wrap')
-    expect(motDuLot('Wraps poulet', 3)).toBe('wraps')
-    expect(motDuLot('Pizza vietnamienne', 2)).toBe('pizzas')
-    expect(motDuLot('Pois chiches', 1)).toBe('pois')
-    expect(motDuLot('Riz', 2)).toBe('riz')
+  it('l’accord : la règle de `partsDuPlat`, mêmes cas que le frigo et que les mails', () => {
+    expect(partsDuPlat('Wrap', 2)).toBe('2 wraps')
+    expect(partsDuPlat('Wrap', 1)).toBe('1 wrap')
+    expect(partsDuPlat('Burger', 3)).toBe('3 burgers')
+    expect(partsDuPlat('Pizzas', 2)).toBe('2 pizzas')
+    expect(partsDuPlat('Gâteau', 2)).toBe('2 gâteaux')
+    expect(partsDuPlat('Tuyau', 2)).toBe('2 tuyaux')
+    expect(partsDuPlat('Couscous', 2)).toBe('2 couscous')
+    expect(partsDuPlat('Petit salé aux lentilles', 3)).toBe('3 barquettes de petit salé aux lentilles')
+    expect(partsDuPlat('Pâtes au pesto', 2)).toBe('2 barquettes de pâtes au pesto')
+    expect(partsDuPlat('Bœuf bourguignon', 1)).toBe('1 barquette de bœuf bourguignon')
+    expect(partsDuPlat('Agneau aux olives', 2)).toBe('2 barquettes d’agneau aux olives')
+    expect(partsDuPlat('Pizza vietnamienne protéinée', 2)).toBe('2 barquettes de pizza vietnamienne')
+  })
+})
+
+describe('le délai de l’essai', () => {
+  it('l’écran attend plus que la fonction ne s’accorde', () => {
+    expect(DELAI_ESSAI_CLIENT_MS).toBeGreaterThanOrEqual(20_000)
   })
 })
