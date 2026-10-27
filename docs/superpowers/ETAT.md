@@ -44,6 +44,24 @@ high** : c'est sa demande, notée en mémoire sous `agents-en-sonnet-high`.
 - **Tests** : `npm test` 4 028 verts, les 30 specs e2e vertes sur le port 4173 avec `supabase functions serve`.
 - **Suite** : les maquettes de Dressage, Charges, Photo/Ticket/Peser et Épargne, et celle de l'annulation d'un « Je l'ai mangé » (Kamil est d'accord), en cours dans `~/PERSO/sauvegardes-popote/maquettes-4-ecrans-2026-10-27/`.
 
+## En ligne le 27/10/2026 (livraison 3) : les quatre écrans et l'annulation
+
+- **Écrans refaits d'après les maquettes validées** (`~/PERSO/sauvegardes-popote/maquettes-4-ecrans-2026-10-27/`) :
+  - le Dressage (Dresser puis Ranger) ;
+  - les Charges : rangées par catégorie, gestes au toucher, calées sur le mois d'arrivée avant le 1er novembre, total égal au mois type ;
+  - Photo du frigo, Ticket et Peser (seuil de 3 pesées, ou 5 sans poids de référence) ;
+  - l'Épargne, avec un voile sous le titre posé sur la photo.
+- **Annuler « Je l'ai mangé »** : un bandeau de 6 s, puis « Pas mangé ? Annuler » avec confirmation dans la carte, dans la semaine, le hub et l'accueil de la cuisine. Un « autre chose » planifié ne compte au bilan qu'une fois mangé : la règle « jour passé » est retirée.
+- **Prod** :
+  - 0129 appliquée (`annule_mange`, `portion.etat_avant_mangee`, événement `remise`), après sauvegarde (`~/PERSO/sauvegardes-popote/2026-10-27-livraison-3/`) et répétition à blanc ; 30 parts, 31 repas et 35 lignes de stock intacts ;
+  - fonction `aide` redéployée ;
+  - site : `index-TSKhuf8t.js` ;
+  - `main` et `feat/budget-refait` poussés à 0796c59.
+- **Vérifié** :
+  - une revue adverse par chantier, chaque défaut corrigé ;
+  - `npm test` : 4 157 verts ; lint à 0 ;
+  - les 34 specs e2e vertes sur le port 4173. Trois échecs au premier passage : le contraste du repère d'étapes du dressage et le focus après le retrait d'une charge, corrigés ; un banc de `derniers-constats`, instable, vert en trois reprises.
+
 ## Reprendre ici
 
 1. `main` est à 49cca8d (les recettes), poussé. Le Budget se code sur **`feat/budget-refait`**.
