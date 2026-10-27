@@ -145,6 +145,16 @@ test.describe('à 320 px', () => {
       await expect(page).toHaveURL(/\/magasin$/)
       // Laissé seul, il se désarme.
       await expect(rentrer).toBeVisible({ timeout: 9_000 })
+      /* Armé à 3, un article coché puis décoché revient à 3 : l'ancien armement ne ressert pas (revue du 27/10). */
+      await rentrer.click()
+      await expect(arme).toBeVisible()
+      const article = page.getByRole('checkbox').first()
+      await article.click()
+      await expect(article).toHaveAttribute('aria-checked', 'true')
+      await article.click()
+      await expect(article).toHaveAttribute('aria-checked', 'false')
+      await expect(rentrer, 'l’armement d’avant le coché resservait').toBeVisible()
+      await expect(arme).toHaveCount(0)
       await rentrer.click()
       await expect(arme).toBeVisible()
       await arme.click()

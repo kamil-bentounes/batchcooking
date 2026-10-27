@@ -53,7 +53,9 @@ export function fragmentRepare(hash: string): string | null {
  * se garde pas : ce n'est pas à nous de le rejouer après la connexion.
  */
 const PARAMETRES_DE_RETOUR = ['sortir', 'jour', 'repas', 'depuis', 'nouveau'] as const
-const VALEUR_DE_RETOUR = /^[\w,.:-]{1,400}$/
+/* 1 500 : le mail « Sors N barquettes » met un identifiant par barquette dans `sortir`, jusqu'à `MAXIMUM_SORTIES`
+   (40 × 36 caractères et leurs virgules). À 400, onze barquettes se perdaient sans un mot (revue du 27/10). */
+const VALEUR_DE_RETOUR = /^[\w,.:-]{1,1500}$/
 const CHEMIN_INTERNE = /^\/[a-z0-9][\w-]*(\/[\w-]+)*$/i
 
 /**
@@ -88,18 +90,34 @@ export function garderLeRetour(vers: string, stock?: Stock, maintenant = Date.no
   } catch { /* le retour se perd, la connexion non */ }
 }
 
-/** Rend le retour gardé, UNE fois, s'il est récent et toujours un chemin interne valide ; sinon `null`. */
-export function prendreLeRetour(stock?: Stock, maintenant = Date.now()): string | null {
+/**
+ * Rend le retour gardé, UNE fois, s'il est récent, toujours un chemin interne valide, et gardé pour l'écran où l'on
+ * arrive (`ici`) ; sinon `null`.
+ *
+ * - Un retour gardé pour `/frigo` ne se rejoue pas sur une connexion faite depuis `/` ou `/budget` : on l'a ouvert
+ *   puis abandonné, il est jeté (revue du 27/10).
+ * - Un onglet qui est DÉJÀ à cette adresse (`recherche` identique) n'a rien à rejouer : il ne le prend pas, et le
+ *   laisse à l'onglet du lien de connexion par mail, qui arrive sur le chemin seul. L'heure fait le ménage.
+ */
+export function prendreLeRetour(ici: string, recherche: string, stock?: Stock, maintenant = Date.now()): string | null {
+  let s: Stock | undefined
   try {
-    const s = stock ?? window.localStorage
+    s = stock ?? window.localStorage
     const brut = s.getItem(CLE_DU_RETOUR)
     if (brut === null) return null
-    s.removeItem(CLE_DU_RETOUR)
     const { vers, a } = JSON.parse(brut) as { vers?: unknown; a?: unknown }
-    if (typeof vers !== 'string' || typeof a !== 'number') return null
-    if (maintenant - a > DUREE_DU_RETOUR_MS || maintenant < a) return null
+    const jette = () => { s!.removeItem(CLE_DU_RETOUR); return null }
+    if (typeof vers !== 'string' || typeof a !== 'number') return jette()
+    if (maintenant - a > DUREE_DU_RETOUR_MS || maintenant < a) return jette()
     const i = vers.indexOf('?')
     // Relu à la sortie comme à l'entrée : le stockage n'est pas une source de confiance.
-    return i > 0 && retourApresConnexion(vers.slice(0, i), vers.slice(i)) === vers ? vers : null
-  } catch { return null }
+    if (i <= 0 || retourApresConnexion(vers.slice(0, i), vers.slice(i)) !== vers) return jette()
+    if (vers.slice(0, i) !== ici) return jette()
+    if (retourApresConnexion(ici, recherche) === vers) return null
+    s.removeItem(CLE_DU_RETOUR)
+    return vers
+  } catch {
+    try { s?.removeItem(CLE_DU_RETOUR) } catch { /* rien à faire de plus */ }
+    return null
+  }
 }

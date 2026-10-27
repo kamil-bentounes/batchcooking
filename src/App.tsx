@@ -68,6 +68,9 @@ export default function App() {
   const [perdue, setPerdue] = useState(false)
   const sessionRef = useRef<Session | null>(null)
   const { ici, va, remplace, retour } = useRoute()
+  /* Lu par `relire`, qui ne change pas à chaque écran : le retour gardé ne se rejoue que sur l'écran où l'on arrive. */
+  const iciRef = useRef(ici)
+  useEffect(() => { iciRef.current = ici }, [ici])
 
   /* Ce que la relecture a appris, écrit d'un coup (voir `relire`). */
   const applique = useCallback((r: {
@@ -98,7 +101,7 @@ export default function App() {
        mais un lien de connexion par e-mail renvoie sur le chemin SEUL, et la requête se perdait. On la remet
        avant que l'écran se monte : `Frigo` lit sa requête une fois, au montage. */
     if (r.session && !r.ratee) {
-      const retour = prendreLeRetour()
+      const retour = prendreLeRetour(iciRef.current, window.location.search)
       if (retour) remplace(retour)
     }
     sessionRef.current = r.session

@@ -5,7 +5,7 @@
  * main sur le chariot. D'où les cibles larges, l'ordre des rayons appris du
  * geste, et une sortie par enseigne — on ne fait pas trois magasins d'un trait.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Attente, BarreAction, Erreur, Passage, Principal, Surface, Vide,
 } from '../ui/coque.tsx'
@@ -63,6 +63,16 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
   const [armeA, setArmeA] = useState<number | null>(null)
   // Armé POUR ce nombre d'articles : qu'on en coche ou qu'on en ajoute un, le bouton redemande.
   const arme = armeA === restants
+  /* Et il ne se réarme pas tout seul : armé à 3, un article coché puis décoché revenait à 3, et l'ancien armement
+     resservait (revue du 27/10). Tout changement du nombre le désarme. */
+  const [restantsVus, setRestantsVus] = useState(restants)
+  if (restantsVus !== restants) {
+    setRestantsVus(restants)
+    setArmeA(null)
+  }
+  /* Le second appui part, puis le libellé redevient « Rentrer sans les N » pendant les sorties : deux appuis de plus
+     relançaient `termine` en parallèle. Une seule rentrée à la fois. */
+  const rentre = useRef(false)
   useEffect(() => {
     if (armeA === null) return
     const t = setTimeout(() => setArmeA(null), DELAI_ARME_MS)
@@ -70,13 +80,18 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
   }, [armeA])
 
   async function termine() {
-    if (!cycle) return
+    if (!cycle || rentre.current) return
+    rentre.current = true
     setArmeA(null)
-    for (const s of sorties) {
-      if (s.storeId) await sortie.mutateAsync({ cycleId: cycle.id, storeId: s.storeId })
+    try {
+      for (const s of sorties) {
+        if (s.storeId) await sortie.mutateAsync({ cycleId: cycle.id, storeId: s.storeId })
+      }
+      await change.mutateAsync({ id: cycle.id, vers: 'pret' })
+      va('/plan')
+    } finally {
+      rentre.current = false
     }
-    await change.mutateAsync({ id: cycle.id, vers: 'pret' })
-    va('/plan')
   }
 
   if (!cycle) {
@@ -106,7 +121,7 @@ export function Magasin({ retour, va }: { retour: () => void; va: (v: string) =>
           </div>
         )}
         <Principal onClick={() => (restants > 0 && !arme ? setArmeA(restants) : termine())}
-                   disabled={change.isPending || articles.length === 0}>
+                   disabled={change.isPending || sortie.isPending || articles.length === 0}>
           {restants === 0 ? 'J’ai tout, rentrons'
             : arme
               ? (restants === 1 ? 'Oui, rentrer sans cet article' : `Oui, rentrer sans les ${restants}`)

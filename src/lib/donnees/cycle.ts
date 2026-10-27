@@ -190,6 +190,11 @@ export function useRecettesDuCycle(cycleId: string | undefined) {
 
 const CLE_ECRITURE_PARTS = ['cycle_recipe'] as const
 
+/* Le temps d'une rafale, la dernière valeur que la base a CONFIRMÉE, par recette (`cycle:recette`). C'est elle qui
+   revient quand l'écriture échoue et que la relecture échoue aussi (réseau coupé) : sans elle, l'écran gardait un
+   chiffre optimiste que la base n'a jamais eu (revue du 27/10 : affiché 5, base 4). */
+const confirmees = new Map<string, { cycleId: string; recipeId: string; parts: number }>()
+
 export function useChoisitRecette() {
   const qc = useQueryClient()
   return useMutation({
@@ -215,15 +220,32 @@ export function useChoisitRecette() {
       /* Le cache d'abord, de façon synchrone : l'appui suivant le relit (`Choisir`) avant que l'écran
          ait eu le temps de se redessiner. */
       const annule = qc.cancelQueries({ queryKey: cle })
+      const k = `${cycleId}:${recipeId}`
+      const avant = qc.getQueryData<RecetteChoisie[]>(cle)?.find(r => r.recipe_id === recipeId)?.servings
+      if (!confirmees.has(k) && avant !== undefined) confirmees.set(k, { cycleId, recipeId, parts: avant })
       qc.setQueryData<RecetteChoisie[]>(cle, l => (l ? avecLesParts(l, recipeId, parts) : l))
       await annule
+    },
+    onSuccess: (ligne, { cycleId, recipeId }) => {
+      confirmees.set(`${cycleId}:${recipeId}`, { cycleId, recipeId, parts: ligne.servings })
+    },
+    /* La dernière écriture de la file a échoué : chaque recette de la rafale revient à ce que la base a confirmé,
+       avant la relecture. Si la relecture passe, elle a le dernier mot ; si elle échoue aussi, l'écran dit vrai. */
+    onError: () => {
+      if (qc.isMutating({ mutationKey: CLE_ECRITURE_PARTS }) > 1) return
+      for (const { cycleId, recipeId, parts } of confirmees.values()) {
+        qc.setQueryData<RecetteChoisie[]>(CLE.recettesDuCycle(cycleId),
+          l => (l ? avecLesParts(l, recipeId, parts) : l))
+      }
     },
     /* Réussie OU ratée, la base fait foi : en cas d'erreur le chiffre revient à sa valeur. Mais pas
        entre deux appuis rapides — relire la base alors qu'une écriture attend ferait revenir le
        chiffre en arrière, et le troisième appui repartirait de la mauvaise valeur. */
-    onSettled: () => (qc.isMutating({ mutationKey: CLE_ECRITURE_PARTS }) <= 1
-      ? qc.invalidateQueries({ predicate: q => garderLeCatalogue(q.queryKey) })
-      : undefined),
+    onSettled: () => {
+      if (qc.isMutating({ mutationKey: CLE_ECRITURE_PARTS }) > 1) return undefined
+      confirmees.clear()
+      return qc.invalidateQueries({ predicate: q => garderLeCatalogue(q.queryKey) })
+    },
   })
 }
 
@@ -232,6 +254,10 @@ export function useRetireRecette() {
   return useMutation({
     mutationFn: async (id: string) =>
       ou(await supabase.from('cycle_recipe').delete().eq('id', id).select()),
-    onSuccess: () => qc.invalidateQueries({ predicate: q => garderLeCatalogue(q.queryKey) }),
+    /* Une écriture de parts en vol relira elle-même, à la dernière de sa file : relire ici, avant que la base l'ait
+       reçue, ramenait le chiffre en arrière (deux « + » donnaient 5 au lieu de 6, revue du 27/10). */
+    onSuccess: () => (qc.isMutating({ mutationKey: CLE_ECRITURE_PARTS }) > 0
+      ? undefined
+      : qc.invalidateQueries({ predicate: q => garderLeCatalogue(q.queryKey) })),
   })
 }
