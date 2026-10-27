@@ -67,7 +67,7 @@ Aucun appel à un modèle ne lit les revenus ou les prénoms. Rien n’est enreg
 
 ## Exporter
 
-Réglages, « Tes données », « Exporter mes données » : un fichier « mes-donnees.json » avec **tout ce que le foyer a enregistré**, y compris les données de l’autre (son revenu, par exemple) et les réponses de l’aide que tu as signalées comme fausses. Y figurent aussi tes réglages de rappel et l’historique de tes mails de rappel : les tiens seulement, pas ceux de l’autre.
+Réglages, ligne « Exporter mes données » (dans la carte du bas) : un fichier « mes-donnees.json » avec **tout ce que le foyer a enregistré**, y compris les données de l’autre (son revenu, par exemple) et les réponses de l’aide que tu as signalées comme fausses. Y figurent aussi tes réglages de rappel et l’historique de tes mails de rappel : les tiens seulement, pas ceux de l’autre.
 
 ## Supprimer
 

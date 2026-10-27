@@ -25,7 +25,7 @@ Elle t’envoie des mails de la part de « Popote », à l’adresse avec laquel
 
 ## Où les régler
 
-« Réglages », section « Les rappels par mail », bouton « Régler mes rappels ». L’écran « Les rappels par mail » a une carte par rappel : son moment, une phrase qui dit quand il part, un interrupteur (« Activé » ou « Coupé ») et « M’envoyer un exemple ». L’interrupteur agit tout de suite ; il est grisé le temps que la demande parte, et si elle échoue il revient à l’état d’avant.
+« Réglages », carte « Les rappels par mail », bouton « Régler mes rappels ». L’écran « Les rappels par mail » a une carte par rappel : son moment, une phrase qui dit quand il part, un interrupteur (« Activé » ou « Coupé ») et « M’envoyer un exemple ». L’interrupteur agit tout de suite ; il est grisé le temps que la demande parte, et si elle échoue il revient à l’état d’avant.
 
 ## Chacun les siens
 

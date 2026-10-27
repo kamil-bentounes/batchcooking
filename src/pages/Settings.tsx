@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { supabase, callFunction, deconnecte } from '../lib/supabase'
 import { lienDeploye } from '../lib/route.ts'
-import { ceuxDuFoyer, useCreeMagasin, useFoyer, useMagasins, useSupprimeMagasin } from '../lib/donnees/foyer.ts'
+import { initialeDe, prenomDe, useCreeMagasin, useFoyer, useMagasins, useSupprimeMagasin } from '../lib/donnees/foyer.ts'
 import { useAmis, useInviteAmi, useRompAmitie } from '../lib/donnees/amis.ts'
 import { Attente, Erreur } from '../ui/coque.tsx'
-import { Page, Groupe, Bouton, Champ, Message } from '../ui/kit'
+import { Message } from '../ui/kit'
+import { PageReglages } from '../ui/reglages/coque.tsx'
+import { BoutonCarte, Carte, Ligne, Picto, Rubrique, Saisie } from '../ui/reglages/cartes.tsx'
+import { DESSINS } from '../ui/reglages/dessins.tsx'
 
 /** La section sous laquelle le dernier message s'affiche. */
 type Zone = 'plafond' | 'courses' | 'inviter' | 'deconnexion' | 'donnees'
@@ -112,176 +115,161 @@ export function Settings({ va }: { va: (v: string) => void }) {
     await supabase.auth.signOut(); window.location.href = import.meta.env.BASE_URL
   }
 
+  const montant = (n: number | null) =>
+    n === null ? '—' : n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const idMembres = useId()
+
   return (
-    <Page nav titre="Réglages">
-      <section>
-        {/* « Budget IA » : deux mots techniques pour dire une dépense. Le
-            sous-titre disait déjà la bonne chose ; le titre le contredisait. */}
-        <h2 className="titre text-xl text-herbe">Ce que coûtent les photos</h2>
-        <p className="mt-1 text-doux text-[15px]">
-          Ce qu’on s’autorise à dépenser par mois pour lire une photo du frigo ou un ticket.
-        </p>
-        <div className="mt-4"><Groupe>
-          <div className="px-5 py-4 flex items-baseline gap-2.5">
-            <span className="chiffre text-[2.25rem] leading-none">
-              {reste === null ? '—' : reste.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-            <span className="text-doux text-[15px]">€</span>
-            <span className="ml-auto text-doux text-[15px]">restants ce mois-ci</span>
+    <PageReglages titre="Réglages" actif="reglages">
+      {/* « Inviter » d'abord : c'est le geste du premier soir, et le seul qui engage quelqu'un d'autre. */}
+      <Carte id="inviter">
+        <Rubrique titre="Inviter" picto={<Picto teinte="frais">{DESSINS.foyer}</Picto>}>
+          {(foyer?.membres.length ?? 0) > 0 && (
+            <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
+              <ul aria-labelledby={idMembres} className="contents">
+                {foyer!.membres.map((m, rang) => (
+                  <li key={m.id} className="inline-flex h-10 items-center gap-2 rounded-full bg-piste pl-1.5 pr-3.5 font-semibold">
+                    <span aria-hidden="true"
+                          className={`grid h-7 w-7 place-items-center rounded-full text-[14px] text-white ${AVATARS[rang % AVATARS.length]}`}>
+                      {initialeDe(m.display_name)}
+                    </span>
+                    {prenomDe(m.display_name)}
+                  </li>
+                ))}
+              </ul>
+              <span id={idMembres} className="text-[13px] text-doux">dans le foyer</span>
+            </div>
+          )}
+          <p className="mb-3.5 text-[14px] leading-[1.45] text-doux">
+            Tu obtiens un lien à lui envoyer, par SMS, WhatsApp ou mail. Il vaut
+            trente jours et sert une fois : elle y choisit son mot de passe et
+            rejoint le foyer, avec ses propres objectifs.
+          </p>
+          <div className="space-y-3">
+            <Saisie label="Son e-mail" type="email" value={invite} placeholder="elle@exemple.fr"
+                    picto={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
+                                strokeLinecap="round" strokeLinejoin="round">{DESSINS.courriel}</svg>}
+                    onChange={e => setInvite(e.target.value)} />
+            <BoutonCarte variante={invite.trim() && !invitant ? 'plein' : 'calme'} onClick={inviter}
+                         disabled={!invite.trim() || invitant}>
+              {invitant ? 'Un instant…' : 'Créer l’invitation'}
+            </BoutonCarte>
           </div>
-          <div className="px-5 py-4 space-y-4">
-            <Champ label="Plafond mensuel (€)" type="number" step="0.5" min="0" value={plafond}
-                   onChange={e => setPlafond(Number(e.target.value))} />
-            <Bouton variante="discret" onClick={enregistrerPlafond}>Enregistrer le plafond</Bouton>
-          </div>
-        </Groupe></div>
-        {ici('plafond')}
-      </section>
-
-      <section className="mt-12">
-        <h2 className="titre text-xl text-herbe">Budget des courses</h2>
-        <p className="mt-1 text-doux text-[15px]">
-          Le repère du bilan. Laisse vide si tu n’en veux pas : l’app affichera
-          ce qui est sorti du compte, sans jauge et sans jugement.
-        </p>
-        <div className="mt-4 space-y-4">
-          <Champ label="Par mois (€)" type="number" step="10" min="0" value={courses}
-                 placeholder="320"
-                 onChange={e => setCourses(e.target.value)} />
-          <Bouton variante="discret" onClick={enregistrerCourses}>
-            Enregistrer le budget
-          </Bouton>
-        </div>
-        {ici('courses')}
-      </section>
-
-      <section id="inviter" className="mt-12">
-        <h2 className="titre text-xl text-herbe">Inviter</h2>
-        {ceuxDuFoyer(foyer?.membres) && (
-          <p className="mt-1 text-[15px] font-semibold">{ceuxDuFoyer(foyer?.membres)}</p>
-        )}
-        <p className="mt-1 text-doux text-[15px]">
-          Tu obtiens un lien à lui envoyer, par SMS, WhatsApp ou mail. Il vaut
-          trente jours et sert une fois : elle y choisit son mot de passe et
-          rejoint le foyer, avec ses propres objectifs.
-        </p>
-        <div className="mt-4 space-y-4">
-          <Champ label="Son e-mail" type="email" value={invite} placeholder="elle@exemple.fr"
-                 onChange={e => setInvite(e.target.value)} />
-          <Bouton onClick={inviter} disabled={!invite.trim() || invitant}>
-            {invitant ? 'Un instant…' : 'Créer l’invitation'}
-          </Bouton>
           {ici('inviter')}
           {lien && (
-            <div className="rounded-xl border border-brume bg-surface p-4">
-              <p className="text-doux text-[15px]">Son lien, valable 30 jours :</p>
+            <div className="mt-4 rounded-2xl bg-fond p-4">
+              <p className="text-[14px] text-doux">Son lien, valable 30 jours :</p>
               <p className="mt-2 break-all text-[15px] text-encre">{lien}</p>
-              <div className="mt-3 flex gap-5">
+              <div className="mt-2 flex gap-2">
                 {/* Le partage du téléphone : SMS, WhatsApp, mail, en un geste. */}
                 {typeof navigator.share === 'function' && (
-                  <button
+                  <button type="button"
                     onClick={() => navigator.share({ title: 'Popote',
                       text: 'Rejoins notre foyer sur Popote :', url: lien }).catch(() => {})}
-                    className="text-herbe underline underline-offset-4">
+                    className="min-h-11 px-2 font-semibold text-herbe underline underline-offset-4">
                     Partager
                   </button>
                 )}
-                <button
+                <button type="button"
                   onClick={() => { navigator.clipboard.writeText(lien); dire('inviter', 'Lien copié.') }}
-                  className="text-herbe underline underline-offset-4">
+                  className="min-h-11 px-2 font-semibold text-herbe underline underline-offset-4">
                   Copier le lien
                 </button>
               </div>
             </div>
           )}
+        </Rubrique>
+      </Carte>
+
+      {/* Le budget des courses et les magasins : deux réglages de la liste, une seule carte. */}
+      <Carte>
+        <Rubrique titre="Budget des courses" picto={<Picto teinte="sable">{DESSINS.euro}</Picto>}
+                  texte={<>Le repère du bilan. Laisse vide si tu n’en veux pas : l’app affichera
+                    ce qui est sorti du compte, sans jauge et sans jugement.</>}>
+          <div className="flex items-end gap-2.5">
+            <Saisie label="Par mois (€)" unite="€" type="number" step="10" min="0" value={courses}
+                    placeholder="320" onChange={e => setCourses(e.target.value)} />
+            <BoutonCarte court onClick={enregistrerCourses} aria-label="Enregistrer le budget" className="h-14">
+              Enregistrer
+            </BoutonCarte>
+          </div>
+          {ici('courses')}
+        </Rubrique>
+        <Rubrique titre="Tes magasins" picto={<Picto teinte="congel">{DESSINS.magasin}</Picto>}
+                  texte="Chaque article porte son enseigne, et la liste se scinde par magasin.">
+          <Magasins />
+        </Rubrique>
+      </Carte>
+
+      <Carte>
+        <Rubrique titre="Nos aliments" picto={<Picto teinte="sable">{DESSINS.aliments}</Picto>}
+                  texte="Notre yaourt, notre skyr, notre pain, avec les vraies valeurs de l’étiquette. La semaine les propose avant les repères, en un geste.">
+          <BoutonCarte variante="contour" onClick={() => va('/aliments')}>Ouvrir nos aliments</BoutonCarte>
+        </Rubrique>
+      </Carte>
+
+      <Carte>
+        {/* Le plafond ne bloque rien (voir `limites`) : il dit ce qu'on s'autorise. */}
+        <Rubrique titre="Ce que coûtent les photos" picto={<Picto>{DESSINS.photo}</Picto>}
+                  texte="Ce qu’on s’autorise à dépenser par mois pour lire une photo du frigo ou un ticket.">
+          <p className="mb-3.5 flex flex-wrap items-baseline gap-x-2">
+            <span className="chiffre text-[44px] font-semibold leading-none">{montant(reste)} €</span>
+            <span className="text-[14px] text-doux">restants ce mois-ci</span>
+          </p>
+          <div className="flex items-end gap-2.5">
+            <Saisie label="Plafond mensuel (€)" unite="€" type="number" step="0.5" min="0" value={plafond}
+                    onChange={e => setPlafond(Number(e.target.value))} />
+            <BoutonCarte court onClick={enregistrerPlafond} aria-label="Enregistrer le plafond" className="h-14">
+              Enregistrer
+            </BoutonCarte>
+          </div>
+          {ici('plafond')}
+        </Rubrique>
+      </Carte>
+
+      <Carte>
+        <Rubrique titre="Vos amis" picto={<Picto teinte="frais">{DESSINS.amis}</Picto>}
+                  texte="D’autres foyers, avec qui échanger des recettes. Seules celles que vous marquez « partagée » circulent : vos courses, vos barquettes et vos objectifs ne sortent jamais d’ici.">
+          <Amis />
+        </Rubrique>
+      </Carte>
+
+      <Carte>
+        <Rubrique titre="Les rappels par mail" picto={<Picto>{DESSINS.rappels}</Picto>}
+                  texte="Décongeler, une barquette qui va périmer, noter les dépenses, clôturer le mois : un mail quand il y a quelque chose à faire. Chacun règle les siens, et tout est coupé tant que tu n’as rien activé.">
+          <BoutonCarte variante="contour" onClick={() => va('/rappels')}>Régler mes rappels</BoutonCarte>
+        </Rubrique>
+      </Carte>
+
+      {/* Les gestes rares : trois lignes d'une même carte. Le mot de passe ouvre son écran ; l'export et la
+          déconnexion agissent sur place, et leur message se lit juste dessous. On ne POUVAIT pas se déconnecter
+          avant : aucun bouton, nulle part, une fois dans un foyer. Qui s'était connecté sur le téléphone de
+          l'autre y restait. */}
+      <Carte label="Ton compte">
+        <div className="divide-y divide-brume">
+          <Ligne picto={<Picto>{DESSINS.cle}</Picto>} texte="Changer mon mot de passe"
+                 onClick={() => va('/motdepasse')} />
+          <Ligne picto={<Picto>{DESSINS.telecharger}</Picto>} texte="Exporter mes données" onClick={exporter} />
+          <Ligne picto={<Picto>{DESSINS.sortie}</Picto>} chevron={false}
+                 texte={sortie ? 'Un instant…' : 'Me déconnecter'} onClick={deconnecter} disabled={sortie} />
         </div>
-      </section>
+        {(zone === 'deconnexion' || zone === 'donnees') && msg && (
+          <div className="px-[18px] pb-4">{ici(zone)}</div>
+        )}
+      </Carte>
 
-      <section className="mt-12">
-        <h2 className="titre text-xl text-herbe">Vos amis</h2>
-        <p className="mt-1 text-doux text-[15px]">
-          D’autres foyers, avec qui échanger des recettes. Seules celles que
-          vous marquez « partagée » circulent — vos courses, vos barquettes et
-          vos objectifs ne sortent jamais d’ici.
-        </p>
-        <Amis />
-      </section>
-
-      <section className="mt-12">
-        <h2 className="titre text-xl text-herbe">Nos aliments</h2>
-        <p className="mt-1 text-doux text-[15px]">
-          Votre yaourt, votre skyr, votre pain, avec les vraies valeurs de l’étiquette. La semaine les propose avant
-          les repères, en un geste.
-        </p>
-        <div className="mt-4">
-          <Bouton variante="discret" onClick={() => va('/aliments')}>Ouvrir nos aliments</Bouton>
-        </div>
-      </section>
-
-      <section className="mt-12">
-        <h2 className="titre text-xl text-herbe">Tes magasins</h2>
-        <p className="mt-1 text-doux text-[15px]">
-          Chaque article porte son enseigne, et la liste se scinde par magasin.
-        </p>
-        <Magasins />
-      </section>
-
-      <section className="mt-12">
-        <h2 className="titre text-xl text-herbe">Les rappels par mail</h2>
-        <p className="mt-1 text-doux text-[15px]">
-          Décongeler, une barquette qui va périmer, noter les dépenses, clôturer le mois : un mail quand il y a quelque
-          chose à faire. Chacun règle les siens, et tout est coupé tant que tu n’as rien activé.
-        </p>
-        <div className="mt-4">
-          <Bouton variante="discret" onClick={() => va('/rappels')}>
-            Régler mes rappels
-          </Bouton>
-        </div>
-      </section>
-
-      <section className="mt-12">
-        <h2 className="titre text-xl text-herbe">Ton mot de passe</h2>
-        <p className="mt-1 text-doux text-[15px]">
-          Celui qui te fait entrer. Le changer prend dix secondes.
-        </p>
-        <div className="mt-4">
-          <Bouton variante="discret" onClick={() => va('/motdepasse')}>
-            Changer mon mot de passe
-          </Bouton>
-        </div>
-      </section>
-
-      {/* On ne pouvait PAS se déconnecter : aucun bouton, nulle part, une fois
-          dans un foyer. Qui s'était connecté sur le téléphone de l'autre y
-          restait. */}
-      <section className="mt-12">
-        <h2 className="titre text-xl text-herbe">Te déconnecter</h2>
-        <p className="mt-1 text-doux text-[15px]">
-          Sur cet appareil seulement. Tu reviens avec ton e-mail et ton mot de passe.
-        </p>
-        <div className="mt-4">
-          <Bouton variante="discret" onClick={deconnecter} disabled={sortie}>
-            {sortie ? 'Un instant…' : 'Me déconnecter'}
-          </Bouton>
-        </div>
-        {ici('deconnexion')}
-      </section>
-
-      <section className="mt-12">
-        <h2 className="titre text-xl text-herbe">Tes données</h2>
-        <p className="mt-1 text-doux text-[15px]">
-          Tout ce que le foyer a enregistré, dans un fichier. Ou plus rien du tout.
-        </p>
-        <div className="mt-4 space-y-3">
-          <Bouton variante="discret" onClick={exporter}>Exporter mes données</Bouton>
-          <Bouton variante="danger" onClick={supprimer}>Supprimer mon compte</Bouton>
-        </div>
-        {ici('donnees')}
-      </section>
-
-    </Page>
+      <p className="mt-2 text-center">
+        <button type="button" onClick={supprimer}
+                className="inline-flex min-h-11 items-center px-4 font-semibold text-groseille hover:underline">
+          Supprimer mon compte
+        </button>
+      </p>
+    </PageReglages>
   )
 }
+
+/** La couleur de l'avatar suit l'ORDRE DU FOYER, comme dans le bilan : Thauba reste ocre où qu'elle ouvre l'écran. */
+const AVATARS = ['bg-herbe', 'bg-ocre', 'bg-congel-encre', 'bg-encre']
 
 /**
  * Les magasins du foyer.
@@ -298,16 +286,18 @@ function Magasins() {
   const [refus, setRefus] = useState<string | null>(null)
 
   return (
-    <div className="mt-4">
+    <div>
       {magasins.length > 0 && (
-        <ul className="divide-y divide-brume/70">
+        <ul>
           {magasins.map(m => (
-            <li key={m.id} className="flex items-center gap-3 py-2">
-              <span className="grow text-[15px]">
-                {m.name}
-                {m.is_default && <span className="text-doux text-[13px]"> · par défaut</span>}
-              </span>
-              <button onClick={() => {
+            <li key={m.id} className="flex min-h-12 flex-wrap items-center gap-x-3">
+              <span className="text-[17px] font-semibold">{m.name}</span>
+              {m.is_default && (
+                <span className="whitespace-nowrap rounded-xl bg-frais-fond px-2.5 py-[3px] text-[13px] font-semibold text-frais-encre">
+                  par défaut
+                </span>
+              )}
+              <button type="button" aria-label={`Retirer ${m.name}`} onClick={() => {
                         if (confirm(`Retirer ${m.name} ? Les articles qui le portent`
                                   + ` deviennent « sans magasin ».`)) {
                           setRefus(null)
@@ -319,25 +309,23 @@ function Magasins() {
                           })
                         }
                       }}
-                      className="h-11 px-3 text-[14px] underline underline-offset-2">
-                retirer
+                      className="ml-auto min-h-11 px-2 text-[15px] font-semibold text-herbe hover:underline">
+                Retirer
               </button>
             </li>
           ))}
         </ul>
       )}
       {refus && <p role="alert" className="mt-2 text-[14px] text-groseille">{refus}</p>}
-      <form className="mt-3 flex gap-2" onSubmit={e => {
+      <form className="mt-1.5 flex gap-2.5" onSubmit={e => {
         e.preventDefault()
         if (nom.trim()) {
           cree.mutate({ nom, parDefaut: magasins.length === 0 },
             { onSuccess: () => setNom('') })
         }
       }}>
-        <input value={nom} onChange={e => setNom(e.target.value)} placeholder="Lidl"
-               className="grow rounded-xl border border-brume bg-fond px-4 py-2.5
-                          outline-none focus:border-herbe" />
-        <button className="px-5 rounded-xl bg-herbe text-fond text-[15px]">Ajouter</button>
+        <Saisie aria-label="Nom du nouveau magasin" value={nom} onChange={e => setNom(e.target.value)} placeholder="Lidl" />
+        <BoutonCarte type="submit" variante="plein" court className="h-14">Ajouter</BoutonCarte>
       </form>
     </div>
   )
@@ -361,21 +349,21 @@ function Amis() {
   const attente = liens.filter(l => l.enAttente && !l.expire)
 
   return (
-    <div className="mt-4">
+    <div>
       {isPending ? <Attente /> : (
         <>
           {amis.length > 0 && (
             <ul className="divide-y divide-brume/70">
               {amis.map(l => (
-                <li key={l.id} className="flex items-center gap-3 py-2.5">
-                  <span className="grow text-[15px]">{l.nom}</span>
-                  <button onClick={() => {
+                <li key={l.id} className="flex min-h-12 items-center gap-3">
+                  <span className="grow text-[17px] font-semibold">{l.nom}</span>
+                  <button type="button" aria-label={`Rompre avec ${l.nom}`} onClick={() => {
                             if (confirm(`Ne plus partager avec ${l.nom} ? `
                                       + `Vos recettes partagées cessent d’être visibles `
                                       + `des deux côtés.`)) romp.mutate(l.id)
                           }}
-                          className="h-11 px-3 text-[14px] underline underline-offset-2">
-                    rompre
+                          className="min-h-11 px-2 text-[15px] font-semibold text-herbe hover:underline">
+                    Rompre
                   </button>
                 </li>
               ))}
@@ -383,24 +371,24 @@ function Amis() {
           )}
 
           {attente.length > 0 && (
-            <div className="mt-3 space-y-3">
+            <div className="mb-3 space-y-3">
               {attente.map(l => (
-                <div key={l.id} className="rounded-xl border border-brume bg-surface p-4">
-                  <p className="text-doux text-[14px]">
+                <div key={l.id} className="rounded-2xl bg-fond p-4">
+                  <p className="text-[14px] text-doux">
                     Invitation en attente, valable jusqu’au{' '}
                     {new Date(l.expire_le).toLocaleDateString('fr-FR')}
                   </p>
                   <p className="mt-2 break-all text-[14px] text-encre">{l.lien}</p>
-                  <div className="mt-3 flex gap-4">
-                    <button onClick={() => {
+                  <div className="mt-2 flex gap-2">
+                    <button type="button" onClick={() => {
                               navigator.clipboard.writeText(l.lien)
                               setCopie(l.id)
                             }}
-                            className="text-herbe underline underline-offset-4 text-[14px]">
+                            className="min-h-11 px-2 text-[14px] font-semibold text-herbe underline underline-offset-4">
                       {copie === l.id ? 'Lien copié' : 'Copier le lien'}
                     </button>
-                    <button onClick={() => romp.mutate(l.id)}
-                            className="text-doux underline underline-offset-4 text-[14px]">
+                    <button type="button" onClick={() => romp.mutate(l.id)}
+                            className="min-h-11 px-2 text-[14px] text-doux underline underline-offset-4">
                       Annuler
                     </button>
                   </div>
@@ -410,14 +398,14 @@ function Amis() {
           )}
 
           {amis.length === 0 && attente.length === 0 && (
-            <p className="text-doux text-[15px]">Aucun ami pour l’instant.</p>
+            <p className="mb-3 text-[14px] text-doux">Aucun ami pour l’instant.</p>
           )}
 
-          <div className="mt-4">
-            <Bouton variante="discret" onClick={() => invite.mutate()}
-                    disabled={invite.isPending}>
+          <div className={amis.length > 0 ? 'mt-3' : ''}>
+            <BoutonCarte variante="contour" onClick={() => invite.mutate()}
+                         disabled={invite.isPending}>
               {invite.isPending ? 'Un instant…' : 'Inviter un foyer'}
-            </Bouton>
+            </BoutonCarte>
             <Erreur de={invite.error ?? romp.error} />
           </div>
         </>
