@@ -10,6 +10,7 @@ import { MOT_DE_PASSE, amorce, efface, db } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
 import { releve } from './couverture.ts'
 import { ouvreLaCategorie } from './aides-budget.ts'
+import { ouvreLaLigne, ouvreLeCatalogue } from './aides-charges.ts'
 
 let foyer: Foyer
 test.beforeAll(async () => { foyer = await amorce() })
@@ -146,6 +147,7 @@ test.describe('l’écran du mois', () => {
   test('Mes charges : la catégorie et la façon viennent de l’article', async ({ page }) => {
     await connecte(page)
     await page.goto('/charges')
+    await ouvreLeCatalogue(page, 'Vie courante')
     await page.getByRole('button', { name: 'Courses', exact: true }).click()
     await expect(page.getByRole('radiogroup', { name: 'Catégorie' })
       .getByRole('radio', { name: 'Vie courante' })).toHaveAttribute('aria-checked', 'true')
@@ -154,6 +156,7 @@ test.describe('l’écran du mois', () => {
     await prend(page, '07-charge-courses')
 
     await page.getByRole('button', { name: 'Les charges' }).click()
+    await ouvreLeCatalogue(page, 'Logement')
     await page.getByRole('button', { name: 'Taxe foncière', exact: true }).click()
     await expect(page.getByRole('radiogroup', { name: 'Catégorie' })
       .getByRole('radio', { name: 'Maison' })).toHaveAttribute('aria-checked', 'true')
@@ -168,6 +171,7 @@ test.describe('l’écran du mois', () => {
       const annonces: string[] = []
       page.on('dialog', d => { annonces.push(d.message()); void d.accept() })
 
+      await ouvreLaLigne(page, 'Courses')
       await page.getByRole('button', { name: 'Retirer Courses' }).click()
       await expect(page.getByText(/« Courses » retirée/)).toBeVisible({ timeout: 15_000 })
       expect(annonces).toEqual(['Retirer « Courses » ? Elle disparaîtra de tous les mois.',
@@ -175,6 +179,7 @@ test.describe('l’écran du mois', () => {
 
       /* L'Entretien a une facture (le test d'avant) : il s'archive, et sa feuille
          reste à portée — sa prochaine facture arrivera après son retrait. */
+      await ouvreLaLigne(page, 'Entretien auto')
       await page.getByRole('button', { name: 'Retirer Entretien auto' }).click()
       await expect(page.getByText(/« Entretien auto » retirée/)).toBeVisible({ timeout: 15_000 })
       await expect(page.getByText('Retirées, encore à régler')).toBeVisible()

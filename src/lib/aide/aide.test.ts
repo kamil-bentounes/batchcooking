@@ -59,8 +59,8 @@ describe('typographie', () => {
 
 describe('les écrans de l’aide', () => {
   it('les trois entrées portent le « ? » dans leur en-tête, le mois précis aussi', () => {
-    for (const r of ['/', '/budget', '/cuisine-accueil', '/budget/2026-10']) expect(aLeBoutonDansSonEntete(r)).toBe(true)
-    for (const r of ['/charges', '/reglages', '/profil', '/cloture/2026-09', '/budget-reglages']) expect(aLeBoutonDansSonEntete(r)).toBe(false)
+    for (const r of ['/', '/budget', '/cuisine-accueil', '/budget/2026-10', '/charges', '/toutes-les-charges', '/toutes-les-charges/maison']) expect(aLeBoutonDansSonEntete(r)).toBe(true)
+    for (const r of ['/reglages', '/profil', '/cloture/2026-09', '/budget-reglages']) expect(aLeBoutonDansSonEntete(r)).toBe(false)
   })
   it('une adresse inconnue ou à barre finale tombe sur le hub : son « ? » d’en-tête suffit', () => {
     for (const r of ['/budget/', '/inconnue', '/cloture/2026-13', '/budget/2026-13']) expect(aLeBoutonDansSonEntete(r)).toBe(true)

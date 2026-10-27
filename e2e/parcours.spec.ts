@@ -21,6 +21,7 @@ import { MOT_DE_PASSE, amorce, efface } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
 import { releve } from './couverture.ts'
 import { ouvreLaCategorie } from './aides-budget.ts'
+import { ligneDeCharge, ouvreLaLigne, ouvreLeCatalogue } from './aides-charges.ts'
 
 let foyer: Foyer
 
@@ -433,10 +434,11 @@ test.describe('le budget, du vide jusqu’au chiffre', () => {
 
     // Une charge, depuis le catalogue.
     await page.goto('/charges')
+    await ouvreLeCatalogue(page, 'Logement')
     await page.getByRole('button', { name: 'Internet', exact: true }).click()
     await page.getByLabel(/combien/i).fill('37')
     await page.getByRole('button', { name: /ajouter cette charge/i }).click()
-    await expect(page.getByText(/37,00/).first()).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/^37 € par mois/).first()).toBeVisible({ timeout: 15_000 })
     await capture(page, 'clic-19-charge-posee')
 
     /* Et le mois doit l'annoncer : ce qui reste, sur le revenu qu'on vient de
@@ -457,7 +459,7 @@ test.describe('le budget, du vide jusqu’au chiffre', () => {
        interroge donc la charge qu'on vient de poser, elle seule : c'est elle
        que le défaut d'origine laissait sans compte. */
     await page.goto('/charges')
-    const ligne = page.getByText(/^37,00 € par mois/).first()
+    const ligne = ligneDeCharge(page, 'Internet')
     await expect(ligne).toBeVisible({ timeout: 15_000 })
     await expect(ligne, 'une charge posée par l’écran ne porte pas de compte')
       .not.toContainText('sans compte')
@@ -479,12 +481,14 @@ test.describe('le budget, du vide jusqu’au chiffre', () => {
     await page.goto('/charges')
     /* « Gaz », pas « Internet » : l'amorce en sème déjà un, et deux charges du
        même nom rendent les deux boutons « Corriger » indiscernables. */
+    await ouvreLeCatalogue(page, 'Logement')
     await page.getByRole('button', { name: 'Gaz', exact: true }).click()
     await page.getByLabel(/combien/i).fill('3700')   // au lieu de 37
     await page.getByRole('button', { name: /ajouter cette charge/i }).click()
-    await expect(page.getByText(/3\s?700,00/).first()).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/^3\s?700 € par mois/).first()).toBeVisible({ timeout: 15_000 })
     await capture(page, 'clic-21-charge-fausse')
 
+    await ouvreLaLigne(page, 'Gaz')
     await page.getByRole('button', { name: 'Corriger Gaz' }).click()
     const montant = page.getByLabel('Montant de Gaz')
     await expect(montant).toHaveValue('3700')
@@ -493,8 +497,8 @@ test.describe('le budget, du vide jusqu’au chiffre', () => {
     await page.getByRole('button', { name: 'Enregistrer', exact: true }).click()
 
     await expect(page.getByText(/corrigée/)).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByText(/37,00 € par mois/).first()).toBeVisible()
-    await expect(page.getByText(/3\s?700,00/),
+    await expect(page.getByText(/^37 € par mois/).first()).toBeVisible()
+    await expect(page.getByText(/3\s?700 €/),
       'le montant faux est resté dans la liste').toHaveCount(0)
     await capture(page, 'clic-23-charge-corrigee')
 
@@ -543,7 +547,7 @@ test.describe('le budget, du vide jusqu’au chiffre', () => {
     await connecte(page)
 
     await page.goto('/charges')
-    await page.getByRole('button', { name: /dicte tout/i }).click()
+    await page.getByRole('button', { name: /dicter mes charges/i }).click()
     await page.getByRole('textbox').first().fill('la taxe foncière 1450 et internet 37')
     await page.getByRole('button', { name: /range|j’écoute|c’est dit/i }).first().click()
 
