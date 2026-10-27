@@ -15,7 +15,8 @@ import { MOT_DE_PASSE, amorce, efface, db } from './amorce.ts'
 import type { Foyer } from './amorce.ts'
 
 const CAPTURES = process.env.CAPTURES_DRESSAGE ?? '.shots/dressage'
-const TAILLES = [{ nom: '390', w: 390, h: 844 }, { nom: '320', w: 320, h: 700 }, { nom: '1440', w: 1440, h: 900 }]
+const TAILLES = [{ nom: '390', w: 390, h: 844 }, { nom: '320', w: 320, h: 700 }, { nom: '900', w: 900, h: 900 },
+  { nom: '1000', w: 1000, h: 900 }, { nom: '1440', w: 1440, h: 900 }]
 
 /** Une photo de plat, servie par la route : l'adresse n'existe pas, l'image oui. */
 const PHOTO = 'https://photos.exemple.test/dahl.svg'
@@ -53,6 +54,8 @@ async function foyerADresser(): Promise<Foyer> {
     { recipe_id: poulet, ordinal: 3, raw_text: '75 cl de lait', food_id: lait, qty: 750, unit: 'ml', grams_reference: 750 },
   ])
   await db.from('recipe').update({ image_url: PHOTO }).eq('id', dahl)
+  /* 20 barquettes de Dahl : « 10 × 115 g », la ligne la plus large de la planche. */
+  await db.from('cycle_recipe').update({ servings: 20 }).eq('cycle_id', f.cycleId).eq('recipe_id', dahl)
   /* Ce que la session prend : les poireaux et les tortillas du Dahl, le lait du poulet. */
   await db.from('stock_item').insert([
     { household_id: f.householdId, label: 'Poireaux', food_id: poireau, quantity: 1500, unit: 'g', location: 'frigo' },
@@ -108,6 +111,18 @@ async function tientEnLargeur(page: Page, ou: string) {
   const largeurs = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, fenetre: window.innerWidth }))
   expect(largeurs.doc, `${ou} : défilement horizontal`).toBeLessThanOrEqual(largeurs.fenetre)
 }
+/** Rien ne dépasse de sa carte : chaque descendant d'une carte reste dans le cadre de celle-ci. */
+async function rienNeDepasseDesCartes(page: Page, ou: string) {
+  const sorties = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('main section[aria-label]')].flatMap(carte => {
+    const c = carte.getBoundingClientRect()
+    return [...carte.querySelectorAll<HTMLElement>('*')]
+      .filter(e => e.getClientRects().length > 0)
+      .filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > c.right + 0.5 || r.left < c.left - 0.5) })
+      .map(e => `${carte.getAttribute('aria-label')} : ${(e.textContent ?? '').trim().slice(0, 30)} dépasse de ${Math.round(e.getBoundingClientRect().right - c.right)} px`)
+  }))
+  expect(sorties, `${ou} : du contenu sort de sa carte`).toEqual([])
+}
+
 async function ciblesAssezGrandes(page: Page, ou: string) {
   const petits = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('button, input, a[href]')]
     .map(e => ({ e, r: e.getBoundingClientRect() }))
@@ -129,7 +144,7 @@ test.describe('sur un téléphone', () => {
     const titre = page.getByRole('heading', { level: 1 })
     await expect(titre).toHaveText(/^Dresse\s+\d+\s+barquettes$/, { timeout: 20_000 })
     const total = Number((await titre.innerText()).match(/\d+/)![0])
-    expect(total, '4 + 4 + 6 parts à dresser').toBe(14)
+    expect(total, '20 + 4 + 6 parts à dresser').toBe(30)
     await expect(page.getByText('Remplis chacune au poids indiqué : c’est ce qui rend les parts justes.')).toBeVisible()
 
     /* Le repère d'étapes : « Dresser » est l'étape en cours. */
@@ -141,13 +156,13 @@ test.describe('sur un téléphone', () => {
     /* Une rangée de compteurs, un par recette, dans l'ordre du cycle. */
     const compteurs = page.getByRole('list', { name: 'Barquettes par recette' }).getByRole('listitem')
     await expect(compteurs).toHaveCount(3)
-    await expect(compteurs.nth(0)).toHaveAccessibleName('4 barquettes de Dahl de lentilles corail')
+    await expect(compteurs.nth(0)).toHaveAccessibleName('20 barquettes de Dahl de lentilles corail')
     await expect(compteurs.nth(2)).toHaveAccessibleName('6 barquettes de Wrap du jour')
     await expect(compteurs.nth(0)).toContainText('Dahl')
 
     /* Une carte par recette : la photo quand elle en a une, la pastille neutre sinon. */
     const dahl = page.getByRole('region', { name: 'Dahl de lentilles corail' })
-    await expect(dahl.getByText('4 barquettes à remplir')).toBeVisible()
+    await expect(dahl.getByText('20 barquettes à remplir')).toBeVisible()
     await expect(dahl.locator('img')).toHaveCount(1)
     await expect(dahl.locator('img')).toHaveAttribute('src', PHOTO)
     const poulet = page.getByRole('region', { name: 'Poulet rôti aux herbes' })
@@ -155,7 +170,7 @@ test.describe('sur un téléphone', () => {
     await expect(poulet.locator('[data-photo="neutre"]')).toHaveCount(1)
 
     /* Une ligne par personne : la pastille, « n × g », « pour … », les kcal et les protéines. */
-    await expect(dahl.getByText(/^2 × \d+ g$/)).toHaveCount(2)
+    await expect(dahl.getByText(/^10 × \d+ g$/)).toHaveCount(2)
     await expect(dahl.getByText('pour Kamil', { exact: true })).toBeVisible()
     await expect(dahl.getByText('pour Thauba · parts égales', { exact: true })).toBeVisible()
     await expect(dahl.getByText(/^\d+ kcal$/)).toHaveCount(2)
@@ -187,6 +202,7 @@ test.describe('sur un téléphone', () => {
     for (const t of TAILLES.slice(1)) {
       await page.setViewportSize({ width: t.w, height: t.h })
       await tientEnLargeur(page, `dresser à ${t.nom}`)
+      await rienNeDepasseDesCartes(page, `dresser à ${t.nom}`)
     }
   })
 
@@ -202,13 +218,13 @@ test.describe('sur un téléphone', () => {
     const etapes = page.getByRole('list', { name: 'Étapes du dressage' }).getByRole('listitem')
     await expect(etapes.nth(1)).toHaveAttribute('aria-current', 'step')
     await expect(etapes.nth(0)).not.toHaveAttribute('aria-current', 'step')
-    await expect(page.getByText('14 barquettes pour vous deux. Choisis ce qui reste au frigo : le reste part au congélateur.')).toBeVisible()
+    await expect(page.getByText('30 barquettes pour vous deux. Choisis ce qui reste au frigo : le reste part au congélateur.')).toBeVisible()
 
     /* Les deux compteurs, en valeur : 8 au frigo (quatre jours à deux), le reste au congélateur. */
     const tuiles = page.locator('section.sur-encre')
     await expect(tuiles.getByText('au frigo', { exact: true })).toBeVisible()
     await expect(tuiles.locator('b', { hasText: /^8$/ })).toBeVisible()
-    await expect(tuiles.locator('b', { hasText: /^6$/ })).toBeVisible()
+    await expect(tuiles.locator('b', { hasText: /^22$/ })).toBeVisible()
     await expect(tuiles.getByText('au congélateur', { exact: true })).toBeVisible()
 
     /* Rangé le … avec « Modifier » ; la photo de la recette suit sur sa carte. */
@@ -220,8 +236,9 @@ test.describe('sur un téléphone', () => {
 
     /* Les compteurs suivent les « − » et « + » : une de moins au frigo sur le Dahl, puis on la remet. */
     await page.getByRole('region', { name: 'Dahl de lentilles corail' }).getByRole('button', { name: 'Une de moins au frigo' }).click()
-    /* 14 barquettes : 7 au frigo et 7 au congélateur. */
-    await expect(tuiles.locator('b', { hasText: /^7$/ })).toHaveCount(2)
+    /* 30 barquettes : 7 au frigo et 23 au congélateur. */
+    await expect(tuiles.locator('b', { hasText: /^7$/ })).toHaveCount(1)
+    await expect(tuiles.locator('b', { hasText: /^23$/ })).toHaveCount(1)
     await page.getByRole('region', { name: 'Dahl de lentilles corail' }).getByRole('button', { name: 'Une de plus au frigo' }).click()
 
     /* La session a pris : les pastilles, puis le reste du frigo. */
@@ -233,12 +250,32 @@ test.describe('sur un téléphone', () => {
     for (const t of TAILLES.slice(1)) {
       await page.setViewportSize({ width: t.w, height: t.h })
       await tientEnLargeur(page, `ranger à ${t.nom}`)
+      await rienNeDepasseDesCartes(page, `ranger à ${t.nom}`)
     }
 
     /* Le retour mène au dressage, le focus sur son titre. */
     await page.setViewportSize({ width: 390, height: 844 })
     await page.getByRole('button', { name: 'Dressage', exact: true }).click()
-    await expect(page.getByRole('heading', { level: 1, name: /^Dresse\s+14 barquettes$/ })).toBeFocused()
+    await expect(page.getByRole('heading', { level: 1, name: /^Dresse\s+30 barquettes$/ })).toBeFocused()
+  })
+
+  test('quitter l’écran pendant « Je range… » : la fin de l’envoi ne ramène pas à la semaine', async ({ page }) => {
+    test.setTimeout(120_000)
+    const f = await foyerADresser()
+    await connecte(page, f.email)
+    /* La base répond lentement : on a le temps de partir ailleurs. */
+    await page.route(/range_la_session/, async route => { await new Promise(r => setTimeout(r, 3_000)); await route.continue() })
+    await page.goto('/dressage')
+    await page.getByRole('button', { name: 'C’est dressé' }).click()
+    await page.getByRole('button', { name: /^Ranger / }).click()
+    await expect(page.getByRole('button', { name: 'Je range…' })).toBeVisible()
+    await page.getByRole('button', { name: 'Mon profil' }).click()
+    await expect(page).toHaveURL(/\/profil$/)
+    await page.waitForTimeout(5_000)
+    await expect(page, 'la fin de l’envoi a ramené de force à la semaine').toHaveURL(/\/profil$/)
+    /* Le rangement, lui, a bien eu lieu. */
+    const { data: parts } = await db.from('portion').select('id').eq('cycle_id', f.cycleId)
+    expect(parts!.length).toBeGreaterThan(0)
   })
 
   test('Thauba ouvre l’écran : elle apprend qu’elle est dressée à parts égales, et le bouton mène à ses objectifs', async ({ page }) => {

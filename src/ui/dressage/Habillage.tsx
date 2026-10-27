@@ -186,7 +186,7 @@ type Ton = 'sable' | 'frais' | 'erreur'
 const TONS: Record<Ton, string> = {
   sable: 'bg-sable text-encre [&>svg]:text-ocre',
   frais: 'bg-frais-fond text-frais-encre [&>svg]:text-frais-encre',
-  erreur: 'bg-[#F6DEDA] text-[#7E2A1E] [&>svg]:text-groseille',
+  erreur: 'bg-erreur-fond text-erreur-encre [&>svg]:text-groseille',
 }
 
 /** Un avis : un picto et une phrase, sur sable (ça demande ses mains), vert (c'est bon) ou rouge (c'est bloqué). */

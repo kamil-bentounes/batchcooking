@@ -147,6 +147,13 @@ export function Ranger({ cycle, decoupes, membres, userId, retour, va }: {
 }) {
   const range = useRangeLaSession()
   const [enCours, setEnCours] = useState(false)
+  /* Vrai tant que l'écran est là : si on l'a quitté pendant « Je range… » (profil, aide, retour), la fin de
+     l'envoi ne ramène pas de force à la semaine. */
+  const present = useRef(true)
+  useEffect(() => {
+    present.current = true
+    return () => { present.current = false }
+  }, [])
   const [erreur, setErreur] = useState<unknown>(null)
 
   /* Ce que la base a DÉJÀ : si le rangement a eu lieu (un autre téléphone, un premier appui dont la réponse
@@ -268,7 +275,7 @@ export function Ranger({ cycle, decoupes, membres, userId, retour, va }: {
         restes: retirer ? corrections(prises, restes) : {},
       })
       /* Le geste suivant : choisir ce qu'on mange chaque jour. Rien n'est distribué tout seul. */
-      va('/semaine')
+      if (present.current) va('/semaine')
     } catch (e) {
       setErreur(e)
     } finally {
@@ -468,7 +475,7 @@ export function Ranger({ cycle, decoupes, membres, userId, retour, va }: {
         recettes={
           <div className="flex flex-col gap-3 min-[900px]:gap-5">
             {/* Une carte par recette ─────────────────────────────────────────── */}
-            <div className="grid gap-3 min-[900px]:grid-cols-2 min-[900px]:items-start min-[900px]:gap-5">
+            <div className="grid gap-3 min-[900px]:gap-5 min-[1200px]:grid-cols-2 min-[1200px]:items-start">
               {lectureSeule
                 ? plusRanges.map(p => (
                     <CartePlat key={p.recipeId ?? p.titre} titre={p.titre} photo={p.recipeId ? photoDe.get(p.recipeId) : null}

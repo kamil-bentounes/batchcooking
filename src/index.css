@@ -16,6 +16,8 @@
                                   seize fois avant d'exister ici. */
   --color-brume:     #DCE2D6;  /* filets et séparateurs */
   --color-groseille: #B3402F;  /* erreurs seulement */
+  --color-erreur-fond:  #F6DEDA;  /* l'encart d'erreur : une panne, un blocage */
+  --color-erreur-encre: #7E2A1E;  /* son texte : 7,3:1 sur le fond ci-dessus */
   --color-piste:     #E4E9E1;  /* le fond des jauges, des filtres, des pastilles, des pictos (§ 6.1) */
   --color-sable:     #F6EAD2;  /* le fond de ce qui demande tes mains */
 

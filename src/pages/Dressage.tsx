@@ -152,7 +152,7 @@ export function Dressage({ va, retour, userId }: { va: (v: string) => void; reto
           </>
         ) : undefined}
         recettes={
-          <div className="grid gap-3 min-[900px]:grid-cols-2 min-[900px]:items-start min-[900px]:gap-5">
+          <div className="grid gap-3 min-[900px]:gap-5 min-[1200px]:grid-cols-2 min-[1200px]:items-start">
             {decoupes.map(({ recette, repartition }) => (
               <Lot key={recette.recipeId} recette={recette} repartition={repartition}
                    nomDe={nomDe} rangDe={rangDe} />
