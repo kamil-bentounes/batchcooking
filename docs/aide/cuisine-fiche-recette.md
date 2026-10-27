@@ -18,7 +18,7 @@ sources:
   - scripts/recalcule.mjs
   - src/lib/donnees/importer.ts
   - src/pages/Inventer.tsx
-verifie_sur: d61ae46
+verifie_sur: 9504cf2
 ---
 ## Ce que fait l’appli
 

@@ -15,7 +15,7 @@ sources:
   - src/lib/nutrition/macros.ts
   - src/lib/donnees/recettes.ts
   - src/lib/donnees/foyer.ts
-verifie_sur: 7409ab5
+verifie_sur: 9504cf2
 ---
 ## Ce que fait l’appli
 

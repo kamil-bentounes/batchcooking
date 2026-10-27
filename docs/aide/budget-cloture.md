@@ -19,7 +19,7 @@ sources:
   - src/ui/budget/EtapeReste.tsx
   - src/ui/budget/VueReste.tsx
   - supabase/migrations/0108_budget_cloture.sql
-verifie_sur: bd10d8c
+verifie_sur: 9504cf2
 ---
 Aucune étape n'est obligatoire. Les conditions sont dans la page « Quand clôturer ».
 

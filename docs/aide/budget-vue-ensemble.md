@@ -23,7 +23,7 @@ sources:
   - supabase/migrations/0102_budget_mois_suivis.sql
   - supabase/migrations/0108_budget_cloture.sql
   - supabase/migrations/0114_budget_donnees.sql
-verifie_sur: 02dd873
+verifie_sur: 9504cf2
 ---
 Popote tient aussi le budget du foyer. L'accueil a deux cartes : « Cuisine » et « Budget ». La carte « Budget » donne le chiffre qui compte : ce qu'il te reste ce mois-ci.
 

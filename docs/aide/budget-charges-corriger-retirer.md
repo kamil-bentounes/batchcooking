@@ -15,7 +15,7 @@ sources:
   - supabase/migrations/0096_budget_facon.sql
   - supabase/migrations/0110_budget_corrige.sql
   - supabase/migrations/0111_budget_retire.sql
-verifie_sur: 02dd873
+verifie_sur: 9504cf2
 ---
 Sur chaque ligne de la page « Les charges », sous le nom : « Corriger », « Retirer », et selon le cas « Rattacher » ou « Changer qui participe ».
 

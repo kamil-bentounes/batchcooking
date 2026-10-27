@@ -17,7 +17,7 @@ sources:
   - src/lib/budget/ecran.ts
   - src/lib/horloge.ts
   - src/ui/budget/MoisType.tsx
-verifie_sur: fd13da7
+verifie_sur: 9504cf2
 ---
 L'écran du mois s'ouvre depuis la carte « Budget » de l'accueil. Il montre un mois à la fois : le mois en cours au départ.
 
