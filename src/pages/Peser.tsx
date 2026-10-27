@@ -169,7 +169,7 @@ function Aliment({ a, cycleId, ouvert, surOuvre }: {
           ? '-mx-3.5 my-1.5 rounded-[20px] bg-fond p-3.5'
           : 'border-t border-brume first:border-t-0 [[data-ouvert=true]+&]:border-t-0'}>
       <button type="button" onClick={surOuvre} aria-expanded={ouvert}
-              className={`grid w-full min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 text-left
+              className={`grid w-full min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-left max-[360px]:grid-cols-[minmax(0,1fr)]
                           ${ouvert ? '' : 'py-3.5'}`}>
         <span className="min-w-0">
           <b className="block text-[17px] font-semibold">{a.nom}</b>
