@@ -65,7 +65,11 @@ type BoutonCarteProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>,
   court?: boolean
 }
 
-/** Les boutons de la maquette : 48 px, `plein` herbe, `calme` piste, `contour` filet brume. */
+/**
+ * Les boutons de la maquette : 48 px, `plein` herbe, `calme` piste, `contour` filet brume.
+ * Désactivé, il passe au filet : `doux` sur `piste` ne fait que 4,4:1 (la maquette le grisait sur piste), `doux`
+ * sur `surface` en fait 5,3.
+ */
 export function BoutonCarte({ variante = 'calme', court, className = '', ...rest }: BoutonCarteProps) {
   const style = {
     plein: 'bg-herbe text-white hover:bg-encre',
@@ -76,7 +80,8 @@ export function BoutonCarte({ variante = 'calme', court, className = '', ...rest
   return (
     <button type="button" {...rest}
             className={`min-h-12 rounded-2xl px-3.5 min-[360px]:px-5 text-[15.5px] font-semibold transition-colors
-                        disabled:cursor-not-allowed disabled:bg-piste disabled:text-doux
+                        disabled:cursor-not-allowed disabled:bg-surface disabled:text-doux disabled:ring-[1.5px]
+                        disabled:ring-inset disabled:ring-brume
                         ${court ? 'shrink-0' : 'w-full'} ${style} ${className}`} />
   )
 }
