@@ -76,8 +76,12 @@ test('une arrivée au mois prochain : « Commence en … », pas de porte, et le
   await connecte(page, foyer.email)
 
   /* Le hub. */
-  await expect(page.getByText(`Commence en ${nom}`)).toBeVisible()
-  await expect(page.getByText(/Il te reste|Ajoute ton revenu|Rien de posé/)).toHaveCount(0)
+  /* Le hub : sans charge posée, « Commence en … » et le compte à rebours jusqu'au premier mois. */
+  const budget = page.locator('[data-tuile="budget"]')
+  await expect(budget.getByText(`Commence en ${nom}`)).toBeVisible()
+  await expect(budget.locator('[data-pastille="budget"]'), 'au téléphone, la pastille compte les jours')
+    .toHaveText(/^(Dans \d+ jours|Demain)$/)
+  await expect(budget.getByText(/Il te reste|Ajoute ton revenu|Rien de posé/)).toHaveCount(0)
   await page.screenshot({ path: '.shots/inviter/03-hub-avant-arrivee.png', fullPage: true })
 
   /* L'écran du mois : une phrase, aucune porte qui daterait le mois courant. */
@@ -115,8 +119,11 @@ test('une arrivée au mois prochain : « Commence en … », pas de porte, et le
 
   /* Et le hub dit toujours la même chose : aucun reste plein, aucun « à clôturer ». */
   await page.goto('/')
-  await expect(page.getByText(`Commence en ${nom}`)).toBeVisible()
-  await expect(page.getByText(/Il te reste|à clôturer/)).toHaveCount(0)
+  /* Une charge posée : le mois type de l'arrivée prend la place de « Commence en … ». */
+  const tuile = page.locator('[data-tuile="budget"]')
+  await expect(tuile.getByText(/de charges, chaque mois|pour toi, chaque mois|il te manque, chaque mois/)).toBeVisible()
+  await expect(tuile.locator('[data-pastille="budget"]')).toHaveText(/^(Dans \d+ jours|Demain)$/)
+  await expect(tuile.getByText(/en octobre|en novembre|à clôturer/)).toHaveCount(0)
 })
 
 /* Relecture adverse du 23/10 : la date tapée à la main (ou celle de la dictée) ne devait pas ouvrir un mois

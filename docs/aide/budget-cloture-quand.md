@@ -17,7 +17,7 @@ sources:
   - src/pages/Cloture.tsx
   - src/lib/budget/cloture.ts
   - supabase/migrations/0108_budget_cloture.sql
-verifie_sur: 9504cf2
+verifie_sur: a1cd902
 ---
 Clôturer un mois, c'est le fermer une fois fini. Cette page dit quand c'est possible et quand Popote te le rappelle.
 
@@ -42,6 +42,6 @@ Entre le filtre et les catégories, un seul bandeau à la fois. Il n'y en a jama
 
 Les bandeaux « … est fini » n'apparaissent que si tu avais un revenu ce mois-là et que tu étais déjà dans le foyer. Le bouton mène à la page de clôture.
 
-## Sur la carte Budget de l'accueil
+## Sur la tuile Budget de l'accueil
 
 La ligne « Septembre est à clôturer » apparaît dans les mêmes conditions : le mois précédent n'est pas clôturé, tu y avais un revenu, tu étais là. Seul le mois précédent compte sur l'accueil ; les mois plus anciens non clôturés se retrouvent en les ouvrant un par un dans l'écran du mois.
