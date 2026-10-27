@@ -20,7 +20,7 @@ sources:
   - supabase/functions/etiquette/index.ts
   - supabase/functions/_shared/consigne.ts
   - supabase/migrations/0128_semaine_hier.sql
-verifie_sur: b730eb1
+verifie_sur: 99e3953
 ---
 ## Combien ?
 

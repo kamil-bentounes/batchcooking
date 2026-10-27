@@ -14,7 +14,7 @@ sources:
   - src/lib/jour-local.ts
   - src/pages/Semaine.tsx
   - supabase/migrations/0125_semaine_corrections.sql
-verifie_sur: b730eb1
+verifie_sur: 99e3953
 ---
 ## Ce que fait l’appli
 
