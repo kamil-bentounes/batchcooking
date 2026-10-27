@@ -15,11 +15,9 @@
  *  · l'écart entre la somme des lignes et le total imprimé est affiché en
  *    clair — c'est la façon la plus rapide de repérer une ligne manquée.
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import {
-  BoutonPhoto, Chiffre, Erreur, Passage, Principal, Secondaire, Surface, Vide,
-} from '../ui/coque.tsx'
+import { BoutonPhoto, Chiffre, Erreur, Principal } from '../ui/coque.tsx'
 import { callFunction } from '../lib/supabase.ts'
 import { prepare } from '../lib/photo.ts'
 import { useCycle } from '../lib/donnees/cycle.ts'
@@ -29,8 +27,11 @@ import { useEnregistreTicket } from '../lib/donnees/prix.ts'
 import type { TicketLu } from '../lib/donnees/prix.ts'
 import { SEUIL_SUR, poidsDuLibelle, rapproche } from '../lib/prix.ts'
 import type { ArticleListe, Rapprochement } from '../lib/prix.ts'
-
-const euros = (n: number) => `${n.toFixed(2).replace('.', ',')} €`
+import {
+  Astuce, BoutonDoux, Carte, CaseACocher, Colonne, Deux, Echec, EnteteDeCarte, IcoAlerte,
+  IcoRecu, Lecture, PassageLarge, Pilule, Puce, TicketDessine, TicketPhotographie, Titre,
+} from '../ui/saisies/Cadre.tsx'
+import { dateFr, ecartDit, euros, pluriel, quotaDit } from '../ui/saisies/lecture.ts'
 
 export function Ticket({ retour, va }: { retour: () => void; va: (v: string) => void }) {
   const { data: cycle } = useCycle()
@@ -77,6 +78,7 @@ export function Ticket({ retour, va }: { retour: () => void; va: (v: string) => 
     onSuccess: t => {
       setLu(t)
       setAttribue(new Map())
+      setOuvert(null)
       // On coche d'avance tout ce que le modèle a lu nettement — y compris ce
       // qui n'est pas sur la liste : un prix de sacs poubelle vaut d'être
       // appris même si personne ne les avait notés.
@@ -92,143 +94,192 @@ export function Ticket({ retour, va }: { retour: () => void; va: (v: string) => 
   const sommeRetenue = Math.round(retenu.reduce((s, r) => s + r.ligne.price_eur, 0) * 100) / 100
   const rattaches = retenu.filter(r => r.article !== null).length
 
-  async function valide() {
-    await enregistre.mutateAsync({
-      cycleId: cycle?.id ?? null,
-      storeId: magasinId,
-      date: lu?.date ?? null,
-      total,
-      brut: lu,
-      rapprochements: lignes,
-      retenus,
-    })
-    va('/magasin')
+  function reprend() {
+    setLu(null)
+    setApercu(null)
+    setRetenus(new Set())
+    setAttribue(new Map())
+    setOuvert(null)
+    lit.reset()
+    enregistre.reset()
   }
 
+  /* `isPending` ne se met à jour qu'au rendu suivant : un double appui rapide passait entre les deux. */
+  const enCours = useRef(false)
+  async function valide() {
+    if (enCours.current || enregistre.isPending) return
+    enCours.current = true
+    try {
+      await enregistre.mutateAsync({
+        cycleId: cycle?.id ?? null,
+        storeId: magasinId,
+        date: lu?.date ?? null,
+        total,
+        brut: lu,
+        rapprochements: lignes,
+        retenus,
+      })
+      va('/magasin')
+    } catch {
+      // L'erreur s'affiche sous le bouton ; on peut réessayer.
+      enCours.current = false
+    }
+  }
+
+  const illisible = lu !== null && !lu.lisible
+  const lisible = lu?.lisible ? lu : null
+  const nomEnseigne = lisible
+    ? lisible.enseigne ?? magasins.find(m => m.id === magasinId)?.name ?? 'Enseigne inconnue'
+    : ''
+  const ecart = lisible ? ecartDit(lisible.ecart) : null
+
   return (
-    <Passage retour={retour} retourTexte="La liste">
-      <h1 className="titre text-[40px]">Le ticket</h1>
-      <p className="mt-3.5 text-[15px] text-doux max-w-[36ch]">
-        Photographie-le et l’app apprend ce que coûte chaque produit, chez cette
-        enseigne. La liste suivante s’estimera toute seule.
+    <PassageLarge retour={retour} retourTexte="La liste">
+      {lisible ? (
+        <Titre>Le ticket lu</Titre>
+      ) : (
+        <Titre sous="Photographie-le et l’app apprend ce que coûte chaque produit, chez cette enseigne. La liste suivante s’estimera toute seule.">
+          Le ticket
+        </Titre>
+      )}
+
+      {!lisible && (
+        <Deux rapport="1-1">
+          <Colonne>
+            {!illisible && (
+              <Carte className="grid gap-3.5">
+                {magasins.length > 0 && (
+                  <>
+                    <span id="enseigne-du-ticket" className="text-[13.5px] font-medium text-doux">Enseigne</span>
+                    <div role="group" aria-labelledby="enseigne-du-ticket" className="flex flex-wrap gap-2">
+                      {magasins.map(m => (
+                        <Pilule key={m.id} choisie={magasinId === m.id} disabled={lit.isPending}
+                                surAppui={() => setMagasin(m.id)}>
+                          {m.name}
+                        </Pilule>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                <BoutonPhoto
+                  texte={<span className="inline-flex items-center gap-3"><IcoRecu />{lit.isPending ? 'Je lis…' : 'Photographier le ticket'}</span>}
+                  disabled={lit.isPending}
+                  onFichier={f => lit.mutate(f)}
+                  className={`min-h-[60px] w-full rounded-[20px] text-[18px] font-semibold min-[900px]:max-w-[420px]
+                              has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-herbe
+                              ${lit.isPending ? '' : 'bg-herbe text-fond'}`} />
+                <Erreur de={lit.error} />
+              </Carte>
+            )}
+
+            {!illisible && (
+              <Astuce>
+                <b>À plat, bien éclairé, de haut.</b> Si le ticket est long, photographie-le en deux fois : deux tickets
+                valent mieux qu’un dont le bas est coupé.
+              </Astuce>
+            )}
+
+            <div aria-live="polite">
+              {lit.isPending && <Lecture texte="Je lis… une vingtaine de secondes." />}
+              {illisible && (
+                <Echec texte={lu.commentaire ?? 'La photo ne montre pas un ticket lisible.'} surReprise={reprend} />
+              )}
+            </div>
+          </Colonne>
+
+          <Colonne>
+            {apercu ? <TicketPhotographie src={apercu} /> : <TicketDessine />}
+          </Colonne>
+        </Deux>
+      )}
+
+      <p role="status" className="sr-only">
+        {lisible ? `Ticket lu : ${lisible.lignes.length} ${pluriel(lisible.lignes.length, 'ligne')}.` : ''}
       </p>
 
-      {!lu && (
-        <>
-          {magasins.length > 1 && (
-            <div className="mt-7">
-              <h2 className="text-[14px] text-doux">Enseigne</h2>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {magasins.map(m => (
-                  <button key={m.id} onClick={() => setMagasin(m.id)}
-                          aria-pressed={magasinId === m.id}
-                          className={`h-[42px] px-4 rounded-[14px] text-[15px] transition-colors
-                            ${magasinId === m.id ? 'bg-herbe text-fond' : 'bg-brume/50'}`}>
-                    {m.name}
-                  </button>
-                ))}
+      {lisible && (
+        <Deux rapport="5-7">
+          <Colonne>
+            <Carte>
+              <div className="flex items-center gap-3.5">
+                <span className="grid size-[52px] shrink-0 place-items-center rounded-2xl bg-sable text-ocre"><IcoRecu taille={28} /></span>
+                <div className="min-w-0 flex-1">
+                  <b className="block text-[17px] font-semibold [overflow-wrap:anywhere]">{nomEnseigne}</b>
+                  {lisible.date && <span className="text-[13.5px] text-doux">{dateFr(lisible.date)}</span>}
+                </div>
+                {total !== null && (
+                  <span className="whitespace-nowrap">
+                    <Chiffre valeur={euros(total)} taille={32} />
+                  </span>
+                )}
               </div>
-            </div>
-          )}
 
-          <BoutonPhoto texte={lit.isPending ? 'Je lis…' : 'Photographier le ticket'}
-                       disabled={lit.isPending}
-                       onFichier={f => lit.mutate(f)} />
-
-          {lit.isPending && (
-            <p className="mt-6 text-[15px] text-doux">Je lis… une vingtaine de secondes.</p>
-          )}
-          <Erreur de={lit.error} />
-
-          <p className="mt-8 text-[13px] text-doux leading-relaxed">
-            À plat, bien éclairé, de haut. Si le ticket est long, photographie-le
-            en deux fois : deux tickets valent mieux qu’un dont le bas est coupé.
-          </p>
-        </>
-      )}
-
-      {lu && !lu.lisible && (
-        <>
-          <Vide titre="Je n’ai rien su lire"
-                texte={lu.commentaire ?? 'La photo ne montre pas un ticket lisible.'} />
-          <Secondaire onClick={() => { setLu(null); setApercu(null) }}>
-            Reprendre une photo
-          </Secondaire>
-        </>
-      )}
-
-      {lu?.lisible && (
-        <>
-          <Surface className="mt-6">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[15px]">
-                {lu.enseigne ?? magasins.find(m => m.id === magasinId)?.name ?? 'Enseigne inconnue'}
-                {lu.date && <span className="text-doux"> · {lu.date}</span>}
-              </span>
-              {total !== null && <Chiffre valeur={total} unite="€" taille={22} />}
-            </div>
-            <p className="mt-2 text-[13px] text-doux leading-relaxed">
-              {lignes.length} ligne{lignes.length > 1 ? 's' : ''} lue
-              {lignes.length > 1 ? 's' : ''} · {rattaches} rattachée
-              {rattaches > 1 ? 's' : ''} à la liste
-              {/* L'écart est LA mesure de qualité de la lecture : une ligne
-                  manquée se voit ici avant de se voir en relisant le papier. */}
-              {lu.ecart !== null && Math.abs(lu.ecart) >= 0.01 && (
-                <span style={{ color: 'var(--color-ocre)' }}>
-                  {' · '}écart de {euros(Math.abs(lu.ecart))} avec le total imprimé
-                </span>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <Puce>{lignes.length} {pluriel(lignes.length, 'ligne')} {pluriel(lignes.length, 'lue')}</Puce>
+                <Puce ton="frais">{rattaches} {pluriel(rattaches, 'rattachée')} à la liste</Puce>
+                {/* L'écart est LA mesure de qualité de la lecture : une ligne manquée se voit ici avant de se voir
+                    en relisant le papier. */}
+                {ecart && <Puce ton="sable"><IcoAlerte taille={15} />{ecart}</Puce>}
+                {/* On le dit plutôt que de corriger en silence : une correction invisible est une correction qu'on
+                    ne peut pas démentir. */}
+                {lisible.remisesDeduites && <Puce>remises déduites</Puce>}
+              </div>
+              {ecart && (
+                <p className="mt-2.5 text-[13.5px] leading-[1.4] text-doux">
+                  L’écart est la mesure de la lecture : une ligne manquée se voit ici avant de se voir sur le papier.
+                </p>
               )}
-              {/* On le dit plutôt que de corriger en silence : une correction
-                  invisible est une correction qu'on ne peut pas démentir. */}
-              {lu.remisesDeduites && ' · remises déduites'}
-            </p>
-          </Surface>
+              {lisible.commentaire && (
+                <p className="mt-2.5 text-[13.5px] leading-[1.4] text-doux">{lisible.commentaire}</p>
+              )}
+            </Carte>
 
-          <ul className="mt-5 divide-y divide-brume/70">
-            {lignes.map((r, i) => (
-              <LigneTicketVue
-                key={i}
-                r={r}
-                retenu={retenus.has(i)}
-                ouvert={ouvert === i}
-                candidats={candidats}
-                surRetient={() => setRetenus(s => {
-                  const n = new Set(s)
-                  if (n.has(i)) n.delete(i); else n.add(i)
-                  return n
-                })}
-                surOuvre={() => setOuvert(ouvert === i ? null : i)}
-                surAttribue={id => {
-                  setAttribue(m => new Map(m).set(i, id))
-                  setOuvert(null)
-                }} />
-            ))}
-          </ul>
+            {apercu && <TicketPhotographie src={apercu} />}
 
-          {apercu && (
-            <img src={apercu} alt="Le ticket photographié"
-                 className="mt-6 w-full rounded-[18px]" />
-          )}
+            <div className="grid gap-2">
+              <Principal onClick={valide} disabled={enregistre.isPending || retenus.size === 0}>
+                {enregistre.isPending
+                  ? 'J’enregistre…'
+                  : `Enregistrer ${retenus.size} ${pluriel(retenus.size, 'ligne')} · ${euros(sommeRetenue)}`}
+              </Principal>
+              <Erreur de={enregistre.error} />
+              <BoutonDoux onClick={reprend} disabled={enregistre.isPending}>Reprendre une photo</BoutonDoux>
+              {quotaDit(lisible.restantes, 'ticket') && (
+                <p className="text-center text-[13.5px] text-doux">{quotaDit(lisible.restantes, 'ticket')}</p>
+              )}
+            </div>
+          </Colonne>
 
-          <div className="mt-8">
-            <Principal onClick={valide}
-                       disabled={enregistre.isPending || retenus.size === 0}>
-              {enregistre.isPending
-                ? 'J’enregistre…'
-                : `Enregistrer ${retenus.size} ligne${retenus.size > 1 ? 's' : ''} · ${euros(sommeRetenue)}`}
-            </Principal>
-            <Erreur de={enregistre.error} />
-            <Secondaire onClick={() => { setLu(null); setApercu(null) }}>
-              Reprendre une photo
-            </Secondaire>
-            <p className="mt-2 text-center text-[13px] text-doux">
-              {lu.restantes} ticket{lu.restantes > 1 ? 's' : ''} restant
-              {lu.restantes > 1 ? 's' : ''} ce mois-ci.
-            </p>
-          </div>
-        </>
+          <Colonne>
+            <Carte aria-label="Les lignes">
+              <EnteteDeCarte titre="Les lignes"
+                             droite={<span className="text-[13.5px] text-doux">Touche une ligne pour la rattacher ailleurs</span>} />
+              <ul className="grid">
+                {lignes.map((r, i) => (
+                  <LigneTicketVue
+                    key={i}
+                    r={r}
+                    retenu={retenus.has(i)}
+                    ouvert={ouvert === i}
+                    candidats={candidats}
+                    surRetient={() => setRetenus(s => {
+                      const n = new Set(s)
+                      if (n.has(i)) n.delete(i); else n.add(i)
+                      return n
+                    })}
+                    surOuvre={() => setOuvert(ouvert === i ? null : i)}
+                    surAttribue={id => {
+                      setAttribue(m => new Map(m).set(i, id))
+                      setOuvert(null)
+                    }} />
+                ))}
+              </ul>
+            </Carte>
+          </Colonne>
+        </Deux>
       )}
-    </Passage>
+    </PassageLarge>
   )
 }
 
@@ -247,56 +298,39 @@ function LigneTicketVue({ r, retenu, ouvert, candidats, surRetient, surOuvre, su
     : { quantite: Number(r.ligne.quantity), unite: r.ligne.unit ?? 'u' }
 
   return (
-    <li>
-      <div className="flex items-start gap-3 py-1">
-        <button role="checkbox" aria-checked={retenu} aria-label={r.ligne.label}
-                onClick={surRetient}
-                className="w-11 h-11 grid place-items-center shrink-0">
-          <span className={`w-[22px] h-[22px] rounded-[7px] border-2 grid place-items-center
-                            ${retenu ? 'bg-herbe border-herbe' : 'border-brume'}`}>
-            {retenu && (
-              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#F2F4EF"
-                   strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                <path d="M2.5 7.5 5.5 10.5 11.5 3.5" />
-              </svg>
-            )}
-          </span>
-        </button>
+    <li className="border-t border-brume first:border-t-0">
+      <div className="grid grid-cols-[44px_minmax(0,1fr)] items-start gap-1.5 py-1">
+        <CaseACocher coche={retenu} nom={r.ligne.label} surBascule={surRetient} />
 
-        <button onClick={surOuvre} className="grow py-2.5 text-left">
-          <span className="flex items-baseline justify-between gap-3">
+        <button type="button" onClick={surOuvre} aria-expanded={ouvert}
+                className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2.5 py-1 text-left">
+          <span className="min-w-0">
             {/* Le libellé de caisse, tel qu'imprimé : c'est lui qui permettra
                 de reconnaître le produit au ticket suivant. */}
-            <span className="text-[15px]">{r.ligne.label}</span>
-            <span className="text-[15px] font-medium shrink-0">{euros(r.ligne.price_eur)}</span>
+            <b className={`block text-[16px] font-semibold leading-[1.25] [overflow-wrap:anywhere] ${retenu ? '' : 'text-doux'}`}>
+              {r.ligne.label}
+            </b>
+            <span className="mt-0.5 block text-[13px] leading-[1.35] text-doux">
+              {poids && `${poids.quantite} ${poids.unite} · `}
+              {r.article
+                ? <>sur la liste : {r.article.label}</>
+                : <i>pas sur la liste : le prix s’apprend quand même</i>}
+              {devine && <span className="whitespace-nowrap font-semibold text-ocre">{' · '}deviné, à vérifier</span>}
+            </span>
           </span>
-          <span className="block text-[13px] text-doux mt-0.5">
-            {poids && `${poids.quantite} ${poids.unite} · `}
-            {r.article
-              ? <>sur la liste : {r.article.label}</>
-              : <span className="italic">pas sur la liste — le prix s’apprend quand même</span>}
-            {devine && (
-              <span style={{ color: 'var(--color-ocre)' }}>{' · '}deviné, à vérifier</span>
-            )}
-          </span>
+          <span className="chiffre whitespace-nowrap text-[18px] font-semibold">{euros(r.ligne.price_eur)}</span>
         </button>
       </div>
 
       {ouvert && (
-        <div className="pb-4 pl-11">
-          <p className="text-[13px] text-doux">Rattacher à :</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button onClick={() => surAttribue(null)}
-                    className={`h-11 px-3 rounded-[12px] text-[14px]
-                      ${r.article === null ? 'bg-herbe text-fond' : 'bg-brume/50'}`}>
-              rien
-            </button>
+        <div className="grid gap-2 pb-3 pl-[50px]">
+          <p className="text-[13.5px] text-doux">Rattacher à :</p>
+          <div className="flex flex-wrap gap-2">
+            <Pilule choisie={r.article === null} surAppui={() => surAttribue(null)}>rien</Pilule>
             {candidats.map(a => (
-              <button key={a.id} onClick={() => surAttribue(a.id)}
-                      className={`h-11 px-3 rounded-[12px] text-[14px]
-                        ${r.article?.id === a.id ? 'bg-herbe text-fond' : 'bg-brume/50'}`}>
+              <Pilule key={a.id} choisie={r.article?.id === a.id} surAppui={() => surAttribue(a.id)}>
                 {a.label}
-              </button>
+              </Pilule>
             ))}
           </div>
         </div>

@@ -186,7 +186,7 @@ export function Secondaire({ children, ...rest }: React.ComponentProps<'button'>
  * l'appareil photo sur téléphone.
  */
 export function BoutonPhoto({ texte, onFichier, disabled = false, className }: {
-  texte: string
+  texte: ReactNode
   onFichier: (f: File) => void
   disabled?: boolean
   /** Pour l'habiller autrement — une vignette dans une rangée, par exemple.

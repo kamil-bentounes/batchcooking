@@ -16,7 +16,7 @@ sources:
   - src/lib/donnees/pesee.ts
   - src/lib/donnees/courses.ts
   - supabase/migrations/0025_pesee.sql
-verifie_sur: ff3539b
+verifie_sur: bf28243
 ---
 ## Ce que fait l’appli
 
@@ -25,15 +25,15 @@ verifie_sur: ff3539b
 ## Comment faire
 
 1. Sous le frigo, « Peser ce qu’on compte à l’unité ». La liste vient des recettes retenues de la semaine ; les aliments les plus utilisés passent d’abord.
-2. Touche un aliment. Chaque ligne montre un exemple de recette (« 2 oignons ») et un poids de référence : « on compte 110 g en attendant », ou « aucun poids de référence ».
+2. La carte sombre compte les aliments « à connaître ». Touche un aliment de « À peser » : chaque ligne montre un exemple de recette (« 2 oignons »), un poids de référence (« on compte 110 g en attendant », ou « aucun poids de référence ») et trois points qui se remplissent.
 3. Remplis « Combien » et « Pèsent, en grammes ». Pèse ce que tu mets dedans (oignon épluché, poivron épépiné).
 4. « Enregistrer · encore N après » (« Enregistrer · la dernière » pour la dernière).
 
 ## Les règles
 
-- Il faut **3 pesées retenues** pour qu’un poids prime sur la référence, ou **5 si l’aliment n’a pas de référence**. Avant la première, la ligne dit « 2 recettes » ; ensuite l’avancement : « 2 sur 3 ».
+- Il faut **3 pesées retenues** pour qu’un poids prime sur la référence, ou **5 si l’aliment n’a pas de référence**. Les points disent l’avancement : « 0 sur 3 » avant la première (« 0 sur 5 » sans référence), « 2 sur 3 » après deux. Avant la première pesée, la ligne dit aussi « 2 recettes » : c’est ce qui classe les aliments. L’en-tête de « À peser » dit « trois pesées par aliment », et « cinq sans poids de référence » quand les deux cas se mêlent.
 - Le poids retenu est la **médiane** des pesées retenues.
-- Une pesée est **écartée** si le poids d’une unité est sous 0,4 fois ou au-dessus de 2,5 fois la référence. L’écran te prévient avant d’enregistrer : « … cette pesée ne sera pas retenue. » Exemple : référence 110 g, accepté de 44 à 275 g ; 1 200 g pour un oignon, non. Une pesée écartée reste listée, mais ne compte pas.
+- Une pesée est **écartée** si le poids d’une unité est sous 0,4 fois ou au-dessus de 2,5 fois la référence. Le champ passe au rouge et l’écran te prévient avant d’enregistrer : « … cette pesée ne sera pas retenue. » Exemple : référence 110 g, accepté de 44 à 275 g ; 1 200 g pour un oignon, non. Une pesée écartée reste listée, mais ne compte pas.
 - Sans référence, rien n’est écarté.
 - Une fois connu, l’aliment quitte la liste.
 
@@ -47,4 +47,4 @@ Sous un aliment ouvert, chaque pesée est listée (« 2 pour 236 g (118 g l’un
 
 ## Ce que l’appli ne fait pas
 
-« Rien à peser » : toutes les recettes de la semaine se convertissent déjà en grammes, ou aucune n’est retenue. Sans semaine ouverte : « Choisis des recettes… ». Il n’existe pas aujourd’hui d’effet de ces pesées sur les calories des recettes (seule la liste de courses lit les poids appris).
+« Rien à peser » : toutes les recettes de la semaine se convertissent déjà en grammes, ou aucune n’est retenue. Sans semaine ouverte : « Choisis des recettes : ce sont elles qui disent quoi peser. » Il n’existe pas aujourd’hui d’effet de ces pesées sur les calories des recettes (seule la liste de courses lit les poids appris).
