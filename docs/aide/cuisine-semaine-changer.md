@@ -34,7 +34,7 @@ Quand tu changes, l’ancienne barquette est lâchée, et l’appli le dit : « 
 
 ## Manger
 
-**« Je l’ai mangé »** apparaît aujourd’hui sur ta carte, pour un plat comme pour « Autre chose » : la barquette est marquée mangée et quitte le frigo. Un repas que quelqu’un a mangé ne se change plus pour cette personne.
+**« Je l’ai mangé »** apparaît aujourd’hui, et sur un jour passé (voir « cuisine-semaine-hier »), sur ta carte, pour un plat comme pour « Autre chose » : la barquette est marquée mangée et quitte le frigo. Un repas que quelqu’un a mangé ne se change plus pour cette personne.
 
 ## Un plat congelé
 

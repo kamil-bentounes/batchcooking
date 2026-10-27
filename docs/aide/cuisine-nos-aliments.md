@@ -28,7 +28,7 @@ verifie_sur: 545fd1b
 ---
 ## Ce que fait l’appli
 
-Un repère comme « Yaourt » (60 kcal, 4 g de protéines) est un ordre de grandeur. **« Nos aliments »** range ce que vous mangez vraiment, avec les valeurs de l’étiquette : le foyer en a une liste commune. La semaine et « en plus » les proposent **avant** les repères, en un geste : une unité (un pot, une part…).
+Un repère comme « Yaourt » (60 kcal, 4 g de protéines) est un ordre de grandeur. **« Nos aliments »** range ce que vous mangez vraiment, avec les valeurs de l’étiquette : le foyer en a une liste commune. La semaine et « en plus » les proposent **avant** les repères : un appui demande **combien** (deux pots, 30 g : voir « cuisine-semaine-en-plus-quantite »).
 
 ## Où
 
@@ -42,7 +42,7 @@ Le champ **« Remplace le repère »** (facultatif) est proposé d’après le p
 
 ## Les utiliser
 
-Un geste = une unité, avec ces valeurs, pour chaque personne visée. Dans la semaine : « Autre chose ». Dans « en plus » : « Nos aliments ». Ils comptent dans le bilan du jour comme un repère.
+Un appui ouvre « combien ? », puis la quantité s’écrit avec ces valeurs, pour chaque personne visée. Dans la semaine : « Autre chose ». Dans « en plus » : « Nos aliments ». Un aliment dont l’unité est le gramme (« g ») se pèse ; les autres se comptent (« 2 pots »). Ils comptent dans le bilan du jour comme un repère.
 
 ## Modifier, retirer
 
