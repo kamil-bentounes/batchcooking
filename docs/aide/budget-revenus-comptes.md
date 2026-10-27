@@ -20,7 +20,7 @@ sources:
   - supabase/migrations/0076_apres_la_regularisation.sql
   - supabase/migrations/0106_budget_factures.sql
   - supabase/migrations/0114_budget_donnees.sql
-verifie_sur: 02a9f37
+verifie_sur: 81ce416
 ---
 Tout se pose dans « Réglages du budget » : le bouton « Revenus » de l’écran du mois.
 
@@ -44,7 +44,7 @@ Section « Les revenus » : tape ton net mensuel après impôt dans « Mon net m
 Section « Les comptes » (« Un par vrai compte bancaire : chaque charge note de quel compte elle est payée. »). Suggestions : « Compte joint », « Mon compte courant », « Livret A », « LDDS ». Choisis le genre (« Commun », « Le mien » ou « Épargne »), puis « Ajouter ce compte ».
 
 - « Ranger » retire un compte des listes sans effacer ce qu’il a payé ; refusé tant que des charges ou poches l’utilisent (« Ce compte porte encore 1 charge(s). Rattache-les ailleurs d'abord. »).
-- À l’ajout d’une charge, « Payée depuis » propose les comptes ; le compte commun est choisi d’office (sinon le premier). Une charge sans compte affiche « sans compte » et un bouton « Rattacher ».
+- À l’ajout d’une charge, « Payée depuis » propose les comptes ; le compte commun est choisi d’office (sinon le premier). Une charge sans compte affiche « sans compte » ; en touchant sa ligne, « Rattacher » apparaît.
 - Aucun écran n’affiche aujourd’hui de virement entre vous : le compte est un renseignement sur la charge.
 
 ## Les enveloppes

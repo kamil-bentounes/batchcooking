@@ -10,6 +10,7 @@ questions:
   - Je ne trouve pas ma charge dans la liste, que faire ?
 sources:
   - src/pages/Charges.tsx
+  - src/ui/charges/Catalogue.tsx
   - src/lib/budget/charges.ts
   - src/lib/budget/categories.ts
   - src/lib/budget/feuilles.ts
@@ -19,13 +20,13 @@ sources:
   - supabase/migrations/0085_ce_quon_reconnait.sql
   - supabase/migrations/0096_budget_facon.sql
   - supabase/migrations/0098_budget_lignes_nees.sql
-verifie_sur: 02a9f37
+verifie_sur: 81ce416
 ---
-Une charge est une dépense qui revient (loyer, assurance, taxe foncière). Tu les poses toutes au même endroit : le bouton « Mes charges » de l’écran du mois ouvre la page « Les charges ».
+Une charge est une dépense qui revient (loyer, assurance, taxe foncière). Le bouton « Mes charges » de l’écran du mois ouvre la page « Les charges » : tu y poses toutes tes charges.
 
 ## Comment faire
 
-1. Cherche dans le catalogue (champ « Chercher — « assurance », « mobile »… ») et touche la ligne. Rien ne correspond ? Touche « Autre chose », tout en bas.
+1. Dans « Ou une par une », cherche (champ « Chercher : « assurance », « mobile »… ») ou ouvre une rubrique (Logement, Auto, Abonnements…), puis touche la ligne. Rien ne correspond ? Touche « Autre chose », sous les rubriques.
 2. Remplis « Quoi » (80 caractères au plus) et « Combien (€) », au-dessus de 0 € et au plus 1 000 000 €. C’est le montant de la période : 1 450 € pour une taxe foncière annuelle, pas 120 €.
 3. Choisis « Catégorie » : Vie courante, Maison, Crédits, Auto, Abonnements, Santé, Impôts ou Autre. Le catalogue la propose selon la section.
 4. Choisis « Comment elle se paie » :
@@ -44,10 +45,11 @@ Une charge trimestrielle ou annuelle est toujours « Mise de côté ». Les troi
 
 ## Le catalogue
 
-Chaque ligne arrive préremplie : rythme, façon, catégorie, partage. « Taxe foncière » est annuelle et commune, « Électricité » est une facture chaque mois, « Courses » se dépense au fil du mois. Tu peux tout changer avant d’ajouter.
+Le catalogue est rangé par rubrique : la première est ouverte, les autres se déplient d’un toucher, et une recherche ouvre celles qui répondent. Chaque ligne arrive préremplie : rythme, façon, catégorie, partage. « Taxe foncière » est annuelle et commune, « Électricité » est une facture chaque mois, « Courses » se dépense au fil du mois. Tu peux tout changer avant d’ajouter.
 
 ## À savoir
 
 - Il n’y a que trois rythmes : par mois, par trimestre, par an. Rien pour « tous les deux ans ».
 - Dès l’ajout, les mois écoulés depuis la date « Elle court depuis » reçoivent leur ligne, sauf les mois clôturés et ceux d’avant l’arrivée des participants.
-- Le total en haut de la page ramène tout au mois et ne compte que les charges déjà en vigueur ce mois-ci.
+- Le total en haut de la page ramène tout au mois et ne compte que les charges déjà en vigueur ce mois-là. Les charges sont rangées par catégorie, avec le total de chacune.
+- Avant ton arrivée dans le foyer, la page se cale sur ton mois d’arrivée : elle le dit en haut, et les montants sont ceux de ce mois-là.

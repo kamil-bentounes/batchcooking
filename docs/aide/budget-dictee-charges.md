@@ -17,9 +17,9 @@ sources:
   - supabase/functions/revue-charges/index.ts
   - supabase/functions/revue-charges/prompt.ts
   - supabase/migrations/0027_ecriture_croisee.sql
-verifie_sur: 02a9f37
+verifie_sur: 81ce416
 ---
-« Dicte tout, je range » (page « Les charges ») pose plusieurs charges à partir de ce que tu racontes. Le modèle propose, tu valides. Rien n’est enregistré tant que tu n’as pas touché « Ajouter N charges ».
+« Dicte tout, je range » (page « Les charges », bouton « Dicter mes charges ») pose plusieurs charges à partir de ce que tu racontes. Le modèle propose, tu valides. Rien n’est enregistré tant que tu n’as pas touché « Ajouter N charges ».
 
 ## Comment faire
 
@@ -45,4 +45,4 @@ Sont cochées d’office les lignes sûres (confiance d’au moins 0,7) avec un 
 
 ## « Vérifier mes charges »
 
-Ce bouton, en haut de la liste (dès qu’il y a une charge), fait relire tes charges : doublons (« Deux fois la même chose »), montants qui détonnent (« À vérifier »), postes courants oubliés (« Tu n’en as pas parlé »). Il ne corrige rien. Il envoie au modèle, pour chaque charge, libellé, montant, rythme, commun ou perso, fixe ou variable, compte et date de début ; jamais les revenus ni les prénoms. Quota séparé : 30 relectures par mois.
+Ce bouton, à côté de « Dicte tout, je range » (dès qu’il y a une charge), fait relire tes charges : doublons (« Deux fois la même chose »), montants qui détonnent (« À vérifier »), postes courants oubliés (« Tu n’en as pas parlé »). Il ne corrige rien. Il envoie au modèle, pour chaque charge, libellé, montant, rythme, commun ou perso, fixe ou variable, compte et date de début ; jamais les revenus ni les prénoms. Quota séparé : 30 relectures par mois.
