@@ -24,7 +24,7 @@ sources:
   - supabase/migrations/0123_choisir_un_repas.sql
   - supabase/migrations/0125_semaine_corrections.sql
   - src/lib/peremption.ts
-verifie_sur: 0021cf9
+verifie_sur: fc7f6dc
 ---
 ## Ce que fait l’appli
 
