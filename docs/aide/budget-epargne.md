@@ -21,7 +21,7 @@ sources:
   - src/lib/budget/mois.ts
   - supabase/migrations/0054_enveloppes_et_epargne.sql
   - supabase/migrations/0116_budget_plancher_epargne.sql
-verifie_sur: 9504cf2
+verifie_sur: bc3b2b6
 ---
 L’épargne se range dans des poches. Le bouton « Épargne » de l’écran du mois ouvre la page « L’épargne », comme la carte de chaque poche.
 
