@@ -5,7 +5,7 @@
  * Les sept types et leurs moments sont ceux de la base (`rappels_a_envoyer`, 0126) et des mails
  * (`supabase/functions/_shared/rappels/`). `tests/rappels-mails.test.ts` vérifie que la liste est la même.
  */
-import { groupeLesParts } from './frigo.ts'
+import { groupeLesParts, partsDuPlat } from './frigo.ts'
 import type { Groupe, Part } from './frigo.ts'
 
 export const TYPES_DE_RAPPEL = [
@@ -111,27 +111,6 @@ export function sortablesDuLien<P extends Part>(ids: string[], barquettes: P[]):
   const asortir = barquettes.filter(p =>
     voulus.has(p.id.toLowerCase()) && p.location === 'congelateur' && p.state === 'au_frais')
   return { asortir, ignores: ids.length - asortir.length }
-}
-
-/**
- * Combien de parts d'un plat, et de quoi : « 2 wraps », « 1 wrap » quand le libellé est UN mot (« Wrap », « Burger »),
- * « 2 barquettes de petit salé aux lentilles », « 1 barquette de … » sinon. C'est la règle de `partsDuPlat` du frigo
- * (« Petit salé » ne devient jamais « petits ») ET celle des mails (`supabase/functions/_shared/rappels/texte.ts`,
- * dont `tests/rappels-mails.test.ts` éprouve les mêmes cas) ; ici, à une élision près (« d’agneau »).
- */
-function plurielDuMot(mot: string): string {
-  if (/[sxz]$/.test(mot)) return mot
-  if (/(?:eau|au)$/.test(mot)) return `${mot}x`
-  return `${mot}s`
-}
-const sansProteinee = (label: string) => label.trim().replace(/\s+prot[ée]in[ée]e?s?$/i, '')
-const unSeulMot = (label: string) => !/[\s-]/.test(sansProteinee(label))
-export function partsDuPlat(label: string, n: number): string {
-  const nom = sansProteinee(label)
-  if (unSeulMot(label)) return `${n} ${n > 1 ? plurielDuMot(nom.toLowerCase()) : nom.toLowerCase()}`
-  const bas = nom.replace(/^\p{Lu}/u, c => c.toLowerCase())
-  const de = /^[aeiouyàâäéèêëîïôöùûü]/i.test(bas) ? 'd’' : 'de '
-  return n > 1 ? `${n} barquettes ${de}${bas}` : `1 barquette ${de}${bas}`
 }
 
 /** « 4 wraps », « 1 wrap » : combien, de quoi, pour un groupe de barquettes. */

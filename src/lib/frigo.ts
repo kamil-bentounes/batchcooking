@@ -85,8 +85,8 @@ export const unSeulMot = (label: string): boolean => !/[\s-]/.test(sansProteinee
  * Combien de parts d'un plat, et de quoi : « 2 wraps », « 1 wrap » quand le libellé est UN mot (« Wrap », « Burger »),
  * qu'on sait mettre au pluriel ; « 2 barquettes de petit salé aux lentilles », « 1 barquette de … » sinon. Mettre
  * un « s » au premier mot d'un libellé qui en compte plusieurs disait « les petits retournent au frigo » (petit salé),
- * « 2 pot-au-feus », « 2 gâteaus » (gâteau de patates douces). `defini` : « les 2 wraps », « les 2 barquettes de … »,
- * « la barquette de … » (une seule part d'un plat qui n'a pas un seul mot) ; une part d'un mot seul reste « 1 wrap ».
+ * « 2 pot-au-feus », « 2 gâteaus » (gâteau de patates douces). Devant une voyelle : « d’agneau ».
+ * `defini` : « les 2 wraps », « les 2 barquettes de … », « la barquette de … » (une seule part d'un plat qui n'a pas un seul mot) ; une part d'un mot seul reste « 1 wrap ».
  */
 export function partsDuPlat(label: string, n: number, defini = false): string {
   const nom = sansProteinee(label)
@@ -95,9 +95,10 @@ export function partsDuPlat(label: string, n: number, defini = false): string {
     const mot = nom.toLowerCase()
     return `${les}${n} ${n > 1 ? plurielDuMot(mot) : mot}`
   }
-  const de = nom.replace(/^\p{Lu}/u, c => c.toLowerCase())
-  if (n > 1) return `${les}${n} barquettes de ${de}`
-  return defini ? `la barquette de ${de}` : `1 barquette de ${de}`
+  const bas = nom.replace(/^\p{Lu}/u, c => c.toLowerCase())
+  const de = /^[aeiouyàâäéèêëîïôöùûü]/i.test(bas) ? 'd’' : 'de '
+  if (n > 1) return `${les}${n} barquettes ${de}${bas}`
+  return defini ? `la barquette ${de}${bas}` : `1 barquette ${de}${bas}`
 }
 
 // ── Les groupes ─────────────────────────────────────────────────────────────

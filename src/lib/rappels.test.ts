@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  MAXIMUM_SORTIES, RAPPELS, TYPES_DE_RAPPEL, DELAI_ESSAI_CLIENT_MS, detailDeSortie, estUnType, lisLesSorties, partsDuPlat,
+  MAXIMUM_SORTIES, RAPPELS, TYPES_DE_RAPPEL, DELAI_ESSAI_CLIENT_MS, detailDeSortie, estUnType, lisLesSorties,
   phraseDApresSortie, questionDeSortie, sortablesDuLien,
 } from './rappels.ts'
 import type { Part } from './frigo.ts'
@@ -125,21 +125,6 @@ describe('les phrases de la confirmation', () => {
     expect(phraseDApresSortie([wrap(1), wrap(2), wrap(3), wrap(4)])).toBe('4 wraps sont au frigo, à manger dans les 24 heures.')
     expect(phraseDApresSortie([wrap(1)])).toBe('1 wrap est au frigo, à manger dans les 24 heures.')
     expect(phraseDApresSortie([wrap(1), part(2, { label: 'Pizza' })])).toBe('2 barquettes sont au frigo, à manger dans les 24 heures.')
-  })
-
-  it('l’accord : la règle de `partsDuPlat`, mêmes cas que le frigo et que les mails', () => {
-    expect(partsDuPlat('Wrap', 2)).toBe('2 wraps')
-    expect(partsDuPlat('Wrap', 1)).toBe('1 wrap')
-    expect(partsDuPlat('Burger', 3)).toBe('3 burgers')
-    expect(partsDuPlat('Pizzas', 2)).toBe('2 pizzas')
-    expect(partsDuPlat('Gâteau', 2)).toBe('2 gâteaux')
-    expect(partsDuPlat('Tuyau', 2)).toBe('2 tuyaux')
-    expect(partsDuPlat('Couscous', 2)).toBe('2 couscous')
-    expect(partsDuPlat('Petit salé aux lentilles', 3)).toBe('3 barquettes de petit salé aux lentilles')
-    expect(partsDuPlat('Pâtes au pesto', 2)).toBe('2 barquettes de pâtes au pesto')
-    expect(partsDuPlat('Bœuf bourguignon', 1)).toBe('1 barquette de bœuf bourguignon')
-    expect(partsDuPlat('Agneau aux olives', 2)).toBe('2 barquettes d’agneau aux olives')
-    expect(partsDuPlat('Pizza vietnamienne protéinée', 2)).toBe('2 barquettes de pizza vietnamienne')
   })
 })
 

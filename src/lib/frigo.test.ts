@@ -61,6 +61,10 @@ describe('les noms', () => {
     }
     expect(partsDuPlat('Pizza vietnamienne protéinée', 2)).toBe('2 barquettes de pizza vietnamienne')
   })
+  it('devant une voyelle, l’élision : « d’agneau », jamais « de agneau »', () => {
+    expect(partsDuPlat('Agneau aux olives', 2)).toBe('2 barquettes d’agneau aux olives')
+    expect(partsDuPlat('Agneau aux olives', 1, true)).toBe('la barquette d’agneau aux olives')
+  })
 })
 
 describe('les plats : le regroupement', () => {

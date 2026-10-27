@@ -55,8 +55,8 @@ function de(mot: string): string {
  * « 2 pot-au-feus », « 2 gâteaus ». `defini` : « les 2 wraps », « les 2 barquettes de … », « la barquette de … » (une
  * seule part d'un plat qui n'a pas un seul mot) ; une part d'un mot seul reste « 1 wrap ».
  *
- * C'est LA règle de `partsDuPlat` (src/lib/frigo.ts du dépôt principal, mêmes cas de test), à une élision près :
- * « d’agneau » plutôt que « de agneau ». Le bundle d'une fonction ne contient que son dossier : on la copie.
+ * C'est LA règle de `partsDuPlat` (src/lib/frigo.ts), mot pour mot. Le bundle d'une fonction ne contient que son
+ * dossier : on la copie, et `src/lib/accord-au-nombre.test.ts` fait répondre les deux copies aux mêmes libellés.
  */
 export function partsDuPlat(label: string, n: number, defini = false): string {
   const nom = sansProteinee(label)
